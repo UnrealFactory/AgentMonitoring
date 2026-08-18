@@ -1697,17 +1697,23 @@
   display: flex;
   align-items: center;
   min-width: 0;
+  /* `auto` basis, not 0: when the strip runs out of room the three stops give up
+     width in proportion to what they are carrying, instead of two of them collapsing
+     to nothing and painting their text over the neighbour's (BUG-0007). */
+  flex: 0 1 auto;
 }
 
 .strip-step:not(:first-child) {
-  flex: 1;
+  flex: 1 1 auto;
 }
 
 .strip-node {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex: none;
+  /* shrinkable: whatever the step is given, the node lives inside it */
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .strip-dot {
@@ -1746,6 +1752,9 @@
   font-weight: var(--weight-medium);
   color: var(--text-primary);
   letter-spacing: var(--tracking-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .is-pending .strip-label {
@@ -1756,13 +1765,23 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
+  min-width: 0;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
 }
 
+/* The date is the fact a reader cannot reconstruct, so it never gives up a pixel; the
+   agent name ellipsises instead (and carries its full text in a tooltip). */
+.strip-meta time {
+  flex: none;
+}
+
 .strip-who {
   color: var(--text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* the connector carries the elapsed time between two moments */
@@ -2806,6 +2825,11 @@ kbd {
   border-radius: var(--radius-xs);
   background: rgba(255, 255, 255, 0.055);
   color: #ccd1e0;
+  /* These records are full of paths and test names with no spaces in them
+     (`relay-api/tests/deliveries_list.rs::lists_deliveries_with_an_in_flight_attempt`).
+     A token like that is one unbreakable word: it leaves the column and the card cuts it
+     in half. Wrapped, the reader loses nothing. */
+  overflow-wrap: anywhere;
 }
 
 .prose pre {
@@ -2853,11 +2877,14 @@ strong .ref-inline {
   font-weight: var(--weight-medium);
 }
 
+/* Inside a block, code is the exception to the wrapping above: a line break there would be
+   a change to the code, so the block scrolls instead (`.prose pre` is `overflow-x: auto`). */
 .prose pre code {
   padding: 0;
   background: none;
   box-shadow: none;
   color: var(--text-primary);
+  overflow-wrap: normal;
 }
 
 .prose blockquote {
@@ -2904,6 +2931,18 @@ strong .ref-inline {
 }
 
 /* --- narrow windows ------------------------------------------------------- */
+
+/* The bug strip's three stops each carry a name and a date. Side by side they need
+   ~228px per stop; below that the name starts losing letters, so before it gets there
+   the two facts stack and each gets the stop's full width. Vertical space is the
+   cheaper currency here. */
+@media (max-width: 1260px) {
+  .strip-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+}
 
 @media (max-width: 1100px) {
   .detail-layout {

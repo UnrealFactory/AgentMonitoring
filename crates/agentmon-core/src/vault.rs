@@ -178,8 +178,15 @@ impl Vault {
         let mut out: Vec<WorklogSummary> = Vec::new();
         for path in record_files(&dir, "WORK-")? {
             let detail = self.parse_worklog(&path)?;
+            let mut parts: Vec<&str> = vec![&detail.what, &detail.why, &detail.how];
+            parts.extend(detail.updates.iter().map(|u| u.body.as_str()));
+            if let Some(o) = &detail.outcome {
+                parts.push(o);
+            }
+            parts.extend(detail.extra_sections.iter().map(|s| s.body.as_str()));
             out.push(WorklogSummary {
                 excerpt: body::excerpt(&detail.what, 180),
+                search_text: body::search_text(&parts),
                 update_count: detail.updates.len(),
                 last_activity: detail.last_activity.clone(),
                 meta: detail.meta,
@@ -255,8 +262,19 @@ impl Vault {
         let mut out: Vec<BugSummary> = Vec::new();
         for path in record_files(&dir, "BUG-")? {
             let detail = self.parse_bug(&path)?;
+            let mut parts: Vec<&str> = vec![&detail.report];
+            for c in &detail.comments {
+                // the commenter's name too: a bug is often remembered by who answered on it
+                parts.push(&c.agent);
+                parts.push(&c.body);
+            }
+            if let Some(r) = &detail.resolution {
+                parts.push(r);
+            }
+            parts.extend(detail.extra_sections.iter().map(|s| s.body.as_str()));
             out.push(BugSummary {
                 excerpt: body::excerpt(&detail.report, 180),
+                search_text: body::search_text(&parts),
                 comment_count: detail.comments.len(),
                 last_activity: detail.last_activity.clone(),
                 meta: detail.meta,
@@ -566,6 +584,25 @@ mod tests {
             for b in &bugs {
                 let detail = vault.bug(&p.slug, &b.meta.id).expect("bug detail");
                 assert!(!detail.report.trim().is_empty(), "{} has ## Report", b.meta.id);
+                // The board searches `search_text`, so it must carry the whole record:
+                // the thread and the fix, not only the excerpt the row prints.
+                for part in detail
+                    .comments
+                    .iter()
+                    .map(|c| c.body.as_str())
+                    .chain(detail.resolution.as_deref())
+                {
+                    if let Some(word) = part
+                        .split_whitespace()
+                        .find(|w| w.len() > 6 && w.chars().all(|c| c.is_ascii_alphanumeric()))
+                    {
+                        assert!(
+                            b.search_text.contains(word),
+                            "{}: search_text is missing '{word}' from the record body",
+                            b.meta.id
+                        );
+                    }
+                }
             }
             vault.status(&p.slug).expect("status snapshot");
         }

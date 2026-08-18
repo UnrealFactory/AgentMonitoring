@@ -28,13 +28,10 @@
  * Detail screens are shot twice: `work-detail.png` at the window size (what a human sees)
  * and `work-detail-full.png` with the whole record in one image (what a reviewer reads).
  */
-import { spawn } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
-import { dirname, isAbsolute, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { isAbsolute, join } from "node:path";
 import { chromium } from "playwright";
-
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+import { ensureServer, repoRoot as root, stopServer } from "./dev-server.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -96,7 +93,6 @@ const WANT_RECORDS = (value("--record", process.env.SHOT_RECORD) || "")
   .split(",")
   .map((s) => s.trim().toUpperCase())
   .filter(Boolean);
-const BOOT_TIMEOUT_MS = 90_000;
 
 /**
  * The app scrolls inside `.main`, so the document is always exactly one viewport tall and
@@ -112,63 +108,6 @@ const FULL_PAGE_CSS = `
 `;
 
 const log = (...m) => console.log("[screenshot]", ...m);
-
-/** Is a vault-api server already answering on ORIGIN? */
-async function ping() {
-  try {
-    const res = await fetch(`${ORIGIN}/vault-api/vault`, { signal: AbortSignal.timeout(1500) });
-    return res.ok ? await res.json() : null;
-  } catch {
-    return null;
-  }
-}
-
-async function waitForServer(child) {
-  const deadline = Date.now() + BOOT_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    if (child && child.exitCode !== null) {
-      throw new Error(`dev server exited early with code ${child.exitCode}`);
-    }
-    const info = await ping();
-    if (info) return info;
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  throw new Error(`vault API did not answer on ${ORIGIN} within ${BOOT_TIMEOUT_MS / 1000}s`);
-}
-
-function startServer() {
-  // Run vite's entry directly: no shell, no .cmd wrapper, one process to kill.
-  // --port overrides the config's fixed 5173, so parallel runs each get their own.
-  const child = spawn(
-    process.execPath,
-    [join(root, "node_modules", "vite", "bin", "vite.js"), "--port", String(PORT), "--strictPort"],
-    {
-      cwd: root,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, FORCE_COLOR: "0" },
-    },
-  );
-  child.stdout.on("data", (d) => process.env.DEBUG_SERVER && process.stdout.write(`  vite| ${d}`));
-  child.stderr.on("data", (d) => process.stderr.write(`  vite| ${d}`));
-  return child;
-}
-
-/** Kill the dev server and wait for it to actually go, so exiting is not a race. */
-function stopServer(child) {
-  return new Promise((resolve) => {
-    if (!child || child.exitCode !== null) return resolve();
-    const done = setTimeout(resolve, 5_000);
-    child.once("exit", () => {
-      clearTimeout(done);
-      resolve();
-    });
-    if (process.platform === "win32") {
-      spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
-    } else {
-      child.kill("SIGTERM");
-    }
-  });
-}
 
 const api = async (path) => {
   const res = await fetch(`${ORIGIN}/vault-api${path}`);
@@ -211,18 +150,14 @@ let failed = false;
 try {
   mkdirSync(shotsDir, { recursive: true });
 
-  const running = await ping();
-  if (running) {
-    log(`using the server already listening on ${ORIGIN}`);
-  } else if (args.includes("--url")) {
-    throw new Error(`nothing is serving ${ORIGIN}`);
-  } else {
-    log("starting vite dev server…");
-    server = startServer();
-  }
-
-  const vault = running ?? (await waitForServer(server));
-  log(`vault: ${vault.name} (${vault.path})`);
+  const started = await ensureServer({
+    origin: ORIGIN,
+    port: PORT,
+    requireRunning: args.includes("--url"),
+    log,
+  });
+  server = started.server;
+  log(`vault: ${started.vault.name} (${started.vault.path})`);
 
   const projects = await api("/projects");
   if (!projects.length) throw new Error("the vault has no projects — nothing to screenshot");

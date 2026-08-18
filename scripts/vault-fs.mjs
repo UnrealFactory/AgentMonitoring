@@ -210,6 +210,19 @@ function stripInline(text) {
     .replace(/`/g, "");
 }
 
+// Twin of search_text() in agentmon-core/src/body.rs: every word a reader can read in the
+// record, flattened to one line. Section headings are left out — "## Report" is furniture,
+// and a search where "report" matches every bug is no search at all.
+function searchText(parts) {
+  return parts
+    .filter(Boolean)
+    .map((p) => stripInline(String(p)))
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ");
+}
+
 function excerpt(text, maxChars = 180) {
   const para =
     (text || "")
@@ -401,7 +414,19 @@ export function createVaultReader(vaultDir) {
       const out = recordFiles(join(projectDir(slug), "worklogs"), "WORK-").map((p) => {
         const d = parseWorklog(p);
         const { what, why, how, updates, outcome, extraSections, body, ...meta } = d;
-        return { ...meta, excerpt: excerpt(what), updateCount: updates.length };
+        return {
+          ...meta,
+          excerpt: excerpt(what),
+          searchText: searchText([
+            what,
+            why,
+            how,
+            ...updates.map((u) => u.body),
+            outcome,
+            ...extraSections.map((s) => s.body),
+          ]),
+          updateCount: updates.length,
+        };
       });
       out.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity) || b.id.localeCompare(a.id));
       return out;
@@ -418,7 +443,18 @@ export function createVaultReader(vaultDir) {
       const out = recordFiles(join(projectDir(slug), "bugs"), "BUG-").map((p) => {
         const d = parseBug(p);
         const { report, comments, resolution, extraSections, body, ...meta } = d;
-        return { ...meta, excerpt: excerpt(report), commentCount: comments.length };
+        return {
+          ...meta,
+          excerpt: excerpt(report),
+          searchText: searchText([
+            report,
+            // the commenter's name too: a bug is often remembered by who answered on it
+            ...comments.flatMap((c) => [c.agent, c.body]),
+            resolution,
+            ...extraSections.map((s) => s.body),
+          ]),
+          commentCount: comments.length,
+        };
       });
       out.sort(
         (a, b) =>

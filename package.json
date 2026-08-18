@@ -15,7 +15,8 @@
     "smoke": "node scripts/markdown-smoke.mjs",
     "check:clipping": "node scripts/check-clipping.mjs",
     "capture-refs": "node scripts/capture-refs.mjs",
-    "progress": "node scripts/build-progress.mjs"
+    "progress": "node scripts/build-progress.mjs",
+    "check:urlstate": "node scripts/check-urlstate.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

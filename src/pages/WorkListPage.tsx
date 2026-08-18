@@ -1,17 +1,21 @@
 /**
  * Every work record in the project, as a dense keyboard-driven list.
  *
- * Filtering is client-side and instant: the vault is small enough to hold in memory and
- * a round trip per keystroke would feel like a website. Rows are grouped by status so
- * "what is happening right now" is always the first thing on the screen.
+ * Filtering is client-side and instant (the vault is small enough to hold in memory and a
+ * round trip per keystroke would feel like a website) and lives in the URL, so Back out of
+ * a record returns to the list as it was left and a filtered view can be linked to. Rows
+ * are grouped by status so "what is happening right now" is always the first thing on the
+ * screen. Search reads the whole record — What, Why, How, every update and the outcome —
+ * not just the line the row shows.
  */
-import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useProjectSlug } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
+import { useUrlFilters } from "../lib/useUrlFilters";
 import { Select } from "../components/Select";
 import {
   AgentChip,
@@ -30,14 +34,17 @@ const STATUS_TEXT: Record<string, string> = { all: "All", ...WORK_STATUS_LABEL }
 const GROUP_ORDER: WorkStatus[] = ["in_progress", "done", "abandoned"];
 const MAX_TAGS = 3;
 
+/** Filters, and their defaults; anything at its default stays out of the URL. */
+const DEFAULTS = { status: "all", agent: "all", tag: "all", q: "" };
+const ALLOWED = { status: ["all", ...GROUP_ORDER] } as const;
+
 export function WorkListPage() {
   const slug = useProjectSlug()!;
   const { data, error, loading, reload } = useAsync(() => api.listWorklogs(slug), [slug]);
 
-  const [status, setStatus] = useState<WorkStatus | "all">("all");
-  const [agent, setAgent] = useState("all");
-  const [tag, setTag] = useState("all");
-  const [query, setQuery] = useState("");
+  const { values, set, reset, isDirty } = useUrlFilters(DEFAULTS, ALLOWED);
+  const status = values.status as WorkStatus | "all";
+  const { agent, tag, q: query } = values;
 
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -56,6 +63,24 @@ export function WorkListPage() {
   const agentWidth = useMemo(() => agentColumnWidth(agents, { chrome: 26, min: 96 }), [agents]);
 
   /**
+   * Search reads the record, not the row: What/Why/How, every update and the outcome
+   * (`searchText`, built by the vault reader), plus the fields the row shows. Lower-cased
+   * once per load rather than once per keystroke.
+   */
+  const haystacks = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const w of works) {
+      map.set(
+        w.id,
+        [w.id, w.title, w.agent, ...w.tags, ...w.files, w.searchText]
+          .join(" ")
+          .toLowerCase()
+      );
+    }
+    return map;
+  }, [works]);
+
+  /**
    * One predicate, with the ability to leave the status dimension out of it (BUG-0005).
    * A count printed *on* a control must count what choosing that control would give, with
    * every other filter still applied — otherwise "Done 9" sits above a Done group of 2 and
@@ -68,15 +93,9 @@ export function WorkListPage() {
       if (tag !== "all" && !w.tags.includes(tag)) return false;
       const q = query.trim().toLowerCase();
       if (!q) return true;
-      return (
-        w.title.toLowerCase().includes(q) ||
-        w.id.toLowerCase().includes(q) ||
-        w.agent.toLowerCase().includes(q) ||
-        w.excerpt.toLowerCase().includes(q) ||
-        w.tags.some((t) => t.toLowerCase().includes(q))
-      );
+      return (haystacks.get(w.id) ?? "").includes(q);
     },
-    [status, agent, tag, query]
+    [status, agent, tag, query, haystacks]
   );
 
   const filtered = useMemo(() => works.filter((w) => matches(w)), [works, matches]);
@@ -99,15 +118,9 @@ export function WorkListPage() {
   );
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
-  const filtersActive = status !== "all" || agent !== "all" || tag !== "all" || query.trim() !== "";
-  const clearFilters = useCallback(() => {
-    setStatus("all");
-    setAgent("all");
-    setTag("all");
-    setQuery("");
-  }, []);
-
-  const clearQuery = useCallback(() => setQuery(""), []);
+  const filtersActive = isDirty();
+  const clearFilters = useCallback(() => reset(), [reset]);
+  const clearQuery = useCallback(() => set("q", ""), [set]);
   const href = useCallback((w: WorklogSummary) => `/p/${slug}/work/${w.id}`, [slug]);
   const { cursor, setCursor, rowRefs } = useListKeyboard({
     items: flat,
@@ -153,7 +166,7 @@ export function WorkListPage() {
               role="tab"
               aria-selected={status === s}
               className={`segment${status === s ? " is-active" : ""}`}
-              onClick={() => setStatus(s)}
+              onClick={() => set("status", s)}
             >
               {STATUS_TEXT[s]}
               <span className="segment-count tabular">{statusCounts[s] ?? 0}</span>
@@ -165,7 +178,7 @@ export function WorkListPage() {
           <Select
             label="Filter by agent"
             value={agent}
-            onChange={setAgent}
+            onChange={(v) => set("agent", v)}
             options={[
               { value: "all", label: "All agents" },
               ...agents.map((a) => ({
@@ -178,7 +191,7 @@ export function WorkListPage() {
           <Select
             label="Filter by tag"
             value={tag}
-            onChange={setTag}
+            onChange={(v) => set("tag", v)}
             options={[
               { value: "all", label: "All tags" },
               ...tags.map((t) => ({
@@ -199,7 +212,7 @@ export function WorkListPage() {
               type="search"
               value={query}
               placeholder="Search work"
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => set("q", e.target.value)}
               aria-label="Search work logs"
             />
             {!query && <kbd className="search-kbd">/</kbd>}
@@ -213,22 +226,22 @@ export function WorkListPage() {
             {pluralize(filtered.length, "match", "matches")}
           </span>
           {status !== "all" && (
-            <button className="filter-chip" onClick={() => setStatus("all")}>
+            <button className="filter-chip" onClick={() => set("status", "all")}>
               Status: {STATUS_TEXT[status]} <span aria-hidden="true">×</span>
             </button>
           )}
           {agent !== "all" && (
-            <button className="filter-chip" onClick={() => setAgent("all")}>
+            <button className="filter-chip" onClick={() => set("agent", "all")}>
               Agent: {agent} <span aria-hidden="true">×</span>
             </button>
           )}
           {tag !== "all" && (
-            <button className="filter-chip" onClick={() => setTag("all")}>
+            <button className="filter-chip" onClick={() => set("tag", "all")}>
               Tag: {tag} <span aria-hidden="true">×</span>
             </button>
           )}
           {query.trim() && (
-            <button className="filter-chip" onClick={() => setQuery("")}>
+            <button className="filter-chip" onClick={clearQuery}>
               “{query.trim()}” <span aria-hidden="true">×</span>
             </button>
           )}
@@ -340,6 +353,9 @@ export function WorkListPage() {
           </div>
 
           <p className="list-hints">
+            <span className="list-hints-left">
+              Sorted by most recent activity within each group.
+            </span>
             <kbd>↑</kbd>
             <kbd>↓</kbd> move · <kbd>↵</kbd> open · <kbd>/</kbd> search
           </p>

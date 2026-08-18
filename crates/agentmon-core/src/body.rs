@@ -335,6 +335,25 @@ fn strip_inline(text: &str) -> String {
     out
 }
 
+/// Everything a reader can read in a record, flattened to one line for searching: the
+/// section bodies with their inline markdown removed and their whitespace collapsed.
+///
+/// Section *headings* are deliberately left out. `## Report` is the app's furniture rather
+/// than the author's words, and a board where typing "report" matches every bug is a board
+/// whose search is useless.
+pub fn search_text(parts: &[&str]) -> String {
+    let mut out = String::new();
+    for part in parts {
+        for word in strip_inline(part).split_whitespace() {
+            if !out.is_empty() {
+                out.push(' ');
+            }
+            out.push_str(word);
+        }
+    }
+    out
+}
+
 /// First paragraph of a section, collapsed to one line and clipped — used for list previews.
 pub fn excerpt(text: &str, max_chars: usize) -> String {
     let para = text
@@ -397,6 +416,21 @@ mod tests {
     fn excerpt_collapses_and_clips() {
         assert_eq!(excerpt("one two\nthree\n\nnext para", 100), "one two three");
         assert!(excerpt(&"word ".repeat(80), 40).ends_with('…'));
+    }
+
+    #[test]
+    fn search_text_flattens_every_part_and_keeps_identifiers() {
+        let flat = search_text(&[
+            "Connections leak.\n\n    SELECT state FROM `pg_stat_activity`;",
+            "",
+            "Fixed by **closing** the pool.",
+        ]);
+        assert_eq!(
+            flat,
+            "Connections leak. SELECT state FROM pg_stat_activity; Fixed by closing the pool."
+        );
+        // the parts are joined, so a phrase never spans two of them by accident
+        assert!(!search_text(&["one", "two"]).contains("onetwo"));
     }
 
     #[test]

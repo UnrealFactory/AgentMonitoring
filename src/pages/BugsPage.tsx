@@ -3,18 +3,26 @@
  * is holding it.
  *
  * It is a triage screen first and an archive second, so the defaults are triage defaults:
- * it opens on Open, sorts open work by severity and then by recency, and puts the severity
- * pill in the first column where the eye lands. Filtering is client-side and instant — the
- * vault is small enough to hold in memory, and a round trip per keystroke would feel like
- * a website rather than an app.
+ * it opens on the bugs that still need somebody, sorts them by severity and then by
+ * recency, and puts the severity pill in the first column where the eye lands. Filtering is
+ * client-side and instant — the vault is small enough to hold in memory, and a round trip
+ * per keystroke would feel like a website rather than an app — but it is *kept* in the URL,
+ * so Back, reload and a pasted link all reproduce the view (see lib/useUrlFilters).
+ *
+ * Two words for two different things, which used to be one word for both: the tabs slice
+ * the board by whether a bug is finished (Open / Resolved / All), and the group headings
+ * name the exact status underneath — an untouched bug is **Unclaimed**, a claimed one is
+ * **In progress**. "Open 5" above a group also called "Open 3" was the reading of the
+ * screen that critics kept getting wrong.
  */
-import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useProjectSlug } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
+import { useUrlFilters } from "../lib/useUrlFilters";
 import { Select } from "../components/Select";
 import {
   BugStatusDot,
@@ -26,13 +34,7 @@ import {
   Skeleton,
   Tag,
 } from "../components/ui";
-import {
-  BUG_STATUS_LABEL,
-  formatDateTimeUtc,
-  formatRelative,
-  pluralize,
-  SEVERITY_LABEL,
-} from "../lib/format";
+import { formatDateTimeUtc, formatRelative, pluralize, SEVERITY_LABEL } from "../lib/format";
 import type { BugStatus, BugSummary, Severity } from "../lib/types";
 
 type Tab = "open" | "resolved" | "all";
@@ -41,23 +43,62 @@ const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];
 const SEVERITY_RANK: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 /** Open first, and inside "open" the ones somebody has already picked up come second. */
 const GROUP_ORDER: BugStatus[] = ["open", "in_progress", "resolved", "closed"];
+/**
+ * Group headings, which say what the *status* is. `open` is spelled "Unclaimed" here
+ * because that is what it means on a board — nobody has picked it up — and because the tab
+ * above already owns the word "Open" for the wider sense of "not finished".
+ */
+const GROUP_LABEL: Record<BugStatus, string> = {
+  open: "Unclaimed",
+  in_progress: "In progress",
+  resolved: "Resolved",
+  closed: "Closed",
+};
 const MAX_LABELS = 2;
 
-const isOpen = (b: BugSummary) => b.status === "open" || b.status === "in_progress";
+/** Filters, and their defaults; anything at its default stays out of the URL. */
+const DEFAULTS = {
+  tab: "open",
+  severity: "all",
+  label: "all",
+  assignee: "all",
+  reporter: "all",
+  q: "",
+};
+const ALLOWED = {
+  tab: ["open", "resolved", "all"],
+  severity: ["all", ...SEVERITIES],
+} as const;
+
+const isOpenStatus = (s: BugStatus) => s === "open" || s === "in_progress";
+const isOpen = (b: BugSummary) => isOpenStatus(b.status);
 
 /** What the row's time column measures: how old, or how long since it was fixed. */
 const rowTime = (b: BugSummary) => (isOpen(b) ? b.created : (b.resolved ?? b.lastActivity));
+
+/**
+ * The footer describes the sort of what is actually on the screen — on the All tab that is
+ * two different sorts, and a note claiming one of them is a note the reader can catch out.
+ */
+function sortNote(groups: { status: BugStatus }[]): string {
+  const open = groups.some((g) => isOpenStatus(g.status));
+  const done = groups.some((g) => !isOpenStatus(g.status));
+  if (open && done) {
+    return "Open bugs sort by severity, then by when they were filed; finished ones by when they were closed.";
+  }
+  if (open) return "Sorted by severity, then by how recently they were filed.";
+  return "Sorted by when they were closed, newest first.";
+}
 
 export function BugsPage() {
   const slug = useProjectSlug()!;
   const { data, error, loading, reload } = useAsync(() => api.listBugs(slug), [slug]);
 
-  const [tab, setTab] = useState<Tab>("open");
-  const [severity, setSeverity] = useState<Severity | "all">("all");
-  const [label, setLabel] = useState("all");
-  const [assignee, setAssignee] = useState("all");
-  const [reporter, setReporter] = useState("all");
-  const [query, setQuery] = useState("");
+  const { values, set, reset, isDirty } = useUrlFilters(DEFAULTS, ALLOWED);
+  const tab = values.tab as Tab;
+  const severity = values.severity as Severity | "all";
+  const { label, assignee, reporter, q: query } = values;
+  const setTab = useCallback((t: Tab) => set("tab", t), [set]);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const bugs = useMemo(() => data ?? [], [data]);
@@ -92,6 +133,25 @@ export function BugsPage() {
   );
 
   /**
+   * Search reaches the whole record, not the row: the report, every comment in the thread
+   * and the resolution (`searchText`, built by the vault reader), plus the fields the row
+   * shows. A reader who remembers `pg_stat_activity` from a bug's repro steps types that,
+   * not the title they have forgotten. Lower-cased once per load rather than per keystroke.
+   */
+  const haystacks = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const b of bugs) {
+      map.set(
+        b.id,
+        [b.id, b.title, b.reporter, b.assignee ?? "", ...b.labels, b.searchText]
+          .join(" ")
+          .toLowerCase()
+      );
+    }
+    return map;
+  }, [bugs]);
+
+  /**
    * One predicate, with the ability to leave one dimension out of it. A count shown *on*
    * a control must not be filtered by that control: "Open 2 / Resolved 6" answers "how
    * many will I see if I switch tabs", and the severity chips count what selecting each
@@ -107,16 +167,9 @@ export function BugsPage() {
       if (reporter !== "all" && b.reporter !== reporter) return false;
       const q = query.trim().toLowerCase();
       if (!q) return true;
-      return (
-        b.title.toLowerCase().includes(q) ||
-        b.id.toLowerCase().includes(q) ||
-        b.excerpt.toLowerCase().includes(q) ||
-        b.reporter.toLowerCase().includes(q) ||
-        (b.assignee ?? "").toLowerCase().includes(q) ||
-        b.labels.some((l) => l.toLowerCase().includes(q))
-      );
+      return (haystacks.get(b.id) ?? "").includes(q);
     },
-    [tab, severity, label, assignee, reporter, query]
+    [tab, severity, label, assignee, reporter, query, haystacks]
   );
 
   const tabCounts = useMemo(() => {
@@ -158,22 +211,13 @@ export function BugsPage() {
   );
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
-  const filtersActive =
-    severity !== "all" ||
-    label !== "all" ||
-    assignee !== "all" ||
-    reporter !== "all" ||
-    query.trim() !== "";
+  /** The tab is not a filter here: it is which half of the board you are looking at. */
+  const filtersActive = isDirty(["tab"]);
 
-  const clearFilters = useCallback(() => {
-    setSeverity("all");
-    setLabel("all");
-    setAssignee("all");
-    setReporter("all");
-    setQuery("");
-  }, []);
+  // The tab survives "clear filters": it is the view, not a filter on it.
+  const clearFilters = useCallback(() => reset(["tab"]), [reset]);
 
-  const clearQuery = useCallback(() => setQuery(""), []);
+  const clearQuery = useCallback(() => set("q", ""), [set]);
   const href = useCallback((b: BugSummary) => `/p/${slug}/bugs/${b.id}`, [slug]);
   const { cursor, setCursor, rowRefs } = useListKeyboard({
     items: flat,
@@ -245,7 +289,7 @@ export function BugsPage() {
           <Select
             label="Filter by severity"
             value={severity}
-            onChange={(v) => setSeverity(v as Severity | "all")}
+            onChange={(v) => set("severity", v)}
             options={[
               { value: "all", label: "All severities" },
               ...SEVERITIES.map((s) => ({
@@ -258,7 +302,7 @@ export function BugsPage() {
           <Select
             label="Filter by label"
             value={label}
-            onChange={setLabel}
+            onChange={(v) => set("label", v)}
             options={[
               { value: "all", label: "All labels" },
               ...labels.map((l) => ({
@@ -271,7 +315,7 @@ export function BugsPage() {
           <Select
             label="Filter by assignee"
             value={assignee}
-            onChange={setAssignee}
+            onChange={(v) => set("assignee", v)}
             options={[
               { value: "all", label: "All assignees" },
               { value: "none", label: "Unassigned", hint: bugs.filter((b) => !b.assignee).length },
@@ -285,7 +329,7 @@ export function BugsPage() {
           <Select
             label="Filter by reporter"
             value={reporter}
-            onChange={setReporter}
+            onChange={(v) => set("reporter", v)}
             options={[
               { value: "all", label: "All reporters" },
               ...reporters.map((r) => ({
@@ -311,7 +355,7 @@ export function BugsPage() {
               type="search"
               value={query}
               placeholder="Search bugs"
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => set("q", e.target.value)}
               aria-label="Search bugs"
             />
             {!query && <kbd className="search-kbd">/</kbd>}
@@ -327,7 +371,7 @@ export function BugsPage() {
               className={`sev-chip sev-chip-${s}${severity === s ? " is-active" : ""}${
                 count === 0 ? " is-zero" : ""
               }`}
-              onClick={() => setSeverity(severity === s ? "all" : s)}
+              onClick={() => set("severity", severity === s ? "all" : s)}
               aria-pressed={severity === s}
               title={`${count} ${SEVERITY_LABEL[s].toLowerCase()} in this tab`}
             >
@@ -345,23 +389,23 @@ export function BugsPage() {
             {pluralize(filtered.length, "match", "matches")}
           </span>
           {severity !== "all" && (
-            <button className="filter-chip" onClick={() => setSeverity("all")}>
+            <button className="filter-chip" onClick={() => set("severity", "all")}>
               Severity: {SEVERITY_LABEL[severity]} <span aria-hidden="true">×</span>
             </button>
           )}
           {label !== "all" && (
-            <button className="filter-chip" onClick={() => setLabel("all")}>
+            <button className="filter-chip" onClick={() => set("label", "all")}>
               Label: {label} <span aria-hidden="true">×</span>
             </button>
           )}
           {assignee !== "all" && (
-            <button className="filter-chip" onClick={() => setAssignee("all")}>
+            <button className="filter-chip" onClick={() => set("assignee", "all")}>
               Assignee: {assignee === "none" ? "unassigned" : assignee}{" "}
               <span aria-hidden="true">×</span>
             </button>
           )}
           {reporter !== "all" && (
-            <button className="filter-chip" onClick={() => setReporter("all")}>
+            <button className="filter-chip" onClick={() => set("reporter", "all")}>
               Reporter: {reporter} <span aria-hidden="true">×</span>
             </button>
           )}
@@ -396,12 +440,13 @@ export function BugsPage() {
               <section className="work-group" key={group.status}>
                 <header className="work-group-head">
                   <BugStatusDot status={group.status} />
-                  <h2 className="work-group-title">{BUG_STATUS_LABEL[group.status]}</h2>
+                  <h2 className="work-group-title">{GROUP_LABEL[group.status]}</h2>
                   <span className="work-group-count tabular">{group.items.length}</span>
-                  {(group.status === "open" || group.status === "in_progress") &&
-                    group.items.length > 1 && (
-                      <span className="work-group-note">severity, then newest</span>
-                    )}
+                  {group.items.length > 1 && (
+                    <span className="work-group-note">
+                      {isOpenStatus(group.status) ? "severity, then newest" : "newest first"}
+                    </span>
+                  )}
                 </header>
                 <ul className="work-rows">
                   {group.items.map((b) => {
@@ -453,11 +498,7 @@ export function BugsPage() {
           </div>
 
           <p className="list-hints">
-            <span className="list-hints-left">
-              {tab === "resolved"
-                ? "Sorted by when they were closed."
-                : "Open bugs sort by severity, then by how recently they were filed."}
-            </span>
+            <span className="list-hints-left">{sortNote(groups)}</span>
             <kbd>↑</kbd>
             <kbd>↓</kbd> move · <kbd>↵</kbd> open · <kbd>/</kbd> search
           </p>

@@ -326,7 +326,11 @@ function StatusStrip({ bug }: { bug: BugDetail }) {
               <span className="strip-meta">
                 {s.ts ? (
                   <>
-                    {s.who && <span className="strip-who">{s.who}</span>}
+                    {s.who && (
+                      <span className="strip-who" title={s.who}>
+                        {s.who}
+                      </span>
+                    )}
                     <time className="tabular" dateTime={s.ts} title={formatDateTimeUtc(s.ts)}>
                       {formatDateTime(s.ts)}
                     </time>
@@ -345,13 +349,21 @@ function StatusStrip({ bug }: { bug: BugDetail }) {
 
 type ThreadEntry =
   | { kind: "claim"; ts: string }
-  | { kind: "comment"; ts: string; agent: string; body: string };
+  | { kind: "comment"; ts: string; agent: string; body: string }
+  /** Where the bug ends up: resolved, closed, or still waiting. */
+  | { kind: "end"; ts: string };
 
 /**
- * The conversation. Comments and the claim are one chronological thread, because that is
- * how it happened: someone answered, someone picked it up, someone came back with numbers.
+ * The conversation. Comments, the claim and the moment the bug was closed are one
+ * chronological thread, because that is how it happened: someone answered, someone picked
+ * it up, someone came back with numbers. A comment written *after* the fix — a correction,
+ * a follow-up — therefore appears after the fix, where its author put it, rather than being
+ * shuffled in front of it by a rail that always ends on the same node.
  */
 function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string | null }) {
+  // An unfinished bug has no closing timestamp, so its end marker sorts last.
+  const endTs = bug.resolved ?? "￿";
+  const rank = (e: ThreadEntry) => (e.kind === "end" ? 1 : 0);
   const entries: ThreadEntry[] = [
     ...(bug.claimed ? [{ kind: "claim" as const, ts: bug.claimed }] : []),
     ...bug.comments.map((c) => ({
@@ -360,7 +372,10 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
       agent: c.agent || "unknown",
       body: c.body,
     })),
-  ].sort((a, b) => a.ts.localeCompare(b.ts));
+    { kind: "end" as const, ts: endTs },
+    // On a tie the end marker goes last: a comment stamped at the same minute as the fix
+    // was written before it, or we cannot tell, and "before" is the safer claim.
+  ].sort((a, b) => a.ts.localeCompare(b.ts) || rank(a) - rank(b));
 
   const endLabel = bug.resolved
     ? `${bug.resolvedBy ?? "An agent"} resolved this bug`
@@ -391,7 +406,7 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
           </div>
         </li>
 
-        {entries.length === 0 && (
+        {bug.comments.length === 0 && !bug.claimed && (
           <li className="trail-node trail-empty">
             <span className="trail-dot trail-dot-muted" aria-hidden="true" />
             <p className="trail-empty-text">
@@ -402,7 +417,30 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
         )}
 
         {entries.map((e, i) =>
-          e.kind === "claim" ? (
+          e.kind === "end" ? (
+            <li className="trail-node trail-edge" key="end">
+              <span className={`trail-dot trail-dot-${endTone}`} aria-hidden="true" />
+              <div className="trail-edge-text">
+                <span className="trail-edge-label">{endLabel}</span>
+                <span className="trail-edge-time tabular">
+                  {/* When the resolution banner follows immediately, it owns the when and
+                      the how long: the thread just hands over to it. If somebody commented
+                      *after* the fix, this node is no longer the last thing in the thread
+                      and has to carry its own date, or the sequence cannot be read. */}
+                  {bug.resolved && bug.resolution && i === entries.length - 1 ? (
+                    <span>the fix is recorded below</span>
+                  ) : bug.resolved ? (
+                    <span title={formatDateTimeUtc(bug.resolved)}>
+                      {formatDateTime(bug.resolved)} · {formatRelative(bug.resolved)} ·{" "}
+                      {formatDuration(bug.created, bug.resolved)} after it was filed
+                    </span>
+                  ) : (
+                    <span>open for {formatDuration(bug.created, null)}</span>
+                  )}
+                </span>
+              </div>
+            </li>
+          ) : e.kind === "claim" ? (
             <li className="trail-node" key={`claim-${e.ts}`}>
               <span className="trail-dot trail-dot-claim" aria-hidden="true" />
               <div className="claim-line">
@@ -438,27 +476,6 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
             </li>
           )
         )}
-
-        <li className="trail-node trail-edge">
-          <span className={`trail-dot trail-dot-${endTone}`} aria-hidden="true" />
-          <div className="trail-edge-text">
-            <span className="trail-edge-label">{endLabel}</span>
-            <span className="trail-edge-time tabular">
-              {/* When the resolution banner follows, it owns the when and the how long:
-                  the thread just hands over to it. */}
-              {bug.resolved && bug.resolution ? (
-                <span>the fix is recorded below</span>
-              ) : bug.resolved ? (
-                <span title={formatDateTimeUtc(bug.resolved)}>
-                  {formatDateTime(bug.resolved)} · {formatRelative(bug.resolved)} ·{" "}
-                  {formatDuration(bug.created, bug.resolved)} after it was filed
-                </span>
-              ) : (
-                <span>open for {formatDuration(bug.created, null)}</span>
-              )}
-            </span>
-          </div>
-        </li>
       </ol>
     </section>
   );

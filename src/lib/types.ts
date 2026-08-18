@@ -81,6 +81,8 @@ interface WorklogMeta {
 export interface WorklogSummary extends WorklogMeta {
   /** First paragraph of `## What`, for list previews. */
   excerpt: string;
+  /** What/Why/How, the updates and the outcome flattened to one line, for search. */
+  searchText: string;
   updateCount: number;
 }
 
@@ -119,6 +121,8 @@ interface BugMeta {
 
 export interface BugSummary extends BugMeta {
   excerpt: string;
+  /** The report, the thread and the resolution flattened to one line, for search. */
+  searchText: string;
   commentCount: number;
 }
 

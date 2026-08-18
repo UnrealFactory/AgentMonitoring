@@ -144,6 +144,10 @@ pub struct WorklogSummary {
     pub meta: Worklog,
     /// First paragraph of `## What`, for one-line previews.
     pub excerpt: String,
+    /// What / Why / How / the updates / the outcome, flattened — so a search on the list
+    /// screens reaches the whole record and not just the line the list happens to show.
+    #[serde(default)]
+    pub search_text: String,
     pub update_count: usize,
     pub last_activity: String,
 }
@@ -254,6 +258,10 @@ pub struct BugSummary {
     #[serde(flatten)]
     pub meta: Bug,
     pub excerpt: String,
+    /// The report, the thread and the resolution, flattened — the board's search reaches
+    /// the whole bug, the way an issue tracker's does.
+    #[serde(default)]
+    pub search_text: String,
     pub comment_count: usize,
     pub last_activity: String,
 }
