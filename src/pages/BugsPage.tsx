@@ -38,6 +38,11 @@ import { formatDateTimeUtc, formatRelative, pluralize, SEVERITY_LABEL } from "..
 import type { BugStatus, BugSummary, Severity } from "../lib/types";
 
 type Tab = "open" | "resolved" | "all";
+/**
+ * The dimensions a filter can slice on — and therefore the ones a count can be *exempt*
+ * from. A count printed on a control must not be filtered by that control (see `matches`).
+ */
+type Dim = "tab" | "severity" | "label" | "assignee" | "reporter";
 
 const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];
 const SEVERITY_RANK: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -105,6 +110,11 @@ export function BugsPage() {
   /** The project's own numbers, ignoring the filters — for the page header. */
   const totalOpen = bugs.filter(isOpen).length;
 
+  /**
+   * The values each menu offers, taken from the whole project rather than the current view:
+   * a menu that drops entries as you filter is a menu that moves under the cursor, and
+   * "quill 0" is a more useful answer than a missing line. The *counts* are scoped (below).
+   */
   const labels = useMemo(
     () => [...new Set(bugs.flatMap((b) => b.labels))].sort((a, b) => a.localeCompare(b)),
     [bugs]
@@ -152,24 +162,39 @@ export function BugsPage() {
   }, [bugs]);
 
   /**
-   * One predicate, with the ability to leave one dimension out of it. A count shown *on*
-   * a control must not be filtered by that control: "Open 2 / Resolved 6" answers "how
-   * many will I see if I switch tabs", and the severity chips count what selecting each
-   * one would give — which is how facet counts work everywhere a human has met them.
+   * One predicate, with the ability to leave one dimension out of it.
+   *
+   * A count shown *on* a control must not be filtered by that control, and must count what
+   * choosing that control would actually put on the screen — every other filter still
+   * applied. "Open 2 / Resolved 6" answers "how many will I see if I switch tabs"; the
+   * severity chips and the severity menu answer "how many if I pick this one". That is how
+   * facet counts work everywhere a human has met them, and the alternative is a control
+   * that promises four rows and delivers one (round 3).
    */
   const matches = useCallback(
-    (b: BugSummary, skip: "tab" | "severity" | null = null) => {
+    (b: BugSummary, skip: Dim | null = null) => {
       if (skip !== "tab" && tab !== "all" && isOpen(b) !== (tab === "open")) return false;
       if (skip !== "severity" && severity !== "all" && b.severity !== severity) return false;
-      if (label !== "all" && !b.labels.includes(label)) return false;
-      if (assignee !== "all" && (b.assignee ?? "") !== (assignee === "none" ? "" : assignee))
+      if (skip !== "label" && label !== "all" && !b.labels.includes(label)) return false;
+      if (
+        skip !== "assignee" &&
+        assignee !== "all" &&
+        (b.assignee ?? "") !== (assignee === "none" ? "" : assignee)
+      )
         return false;
-      if (reporter !== "all" && b.reporter !== reporter) return false;
+      if (skip !== "reporter" && reporter !== "all" && b.reporter !== reporter) return false;
       const q = query.trim().toLowerCase();
       if (!q) return true;
       return (haystacks.get(b.id) ?? "").includes(q);
     },
     [tab, severity, label, assignee, reporter, query, haystacks]
+  );
+
+  /** How many rows picking `value` on `dim` would leave: the one number a menu may print. */
+  const facet = useCallback(
+    (dim: Dim, has: (b: BugSummary) => boolean) =>
+      bugs.filter((b) => has(b) && matches(b, dim)).length,
+    [bugs, matches]
   );
 
   const tabCounts = useMemo(() => {
@@ -178,13 +203,14 @@ export function BugsPage() {
     return { open, resolved: scope.length - open, all: scope.length };
   }, [bugs, matches]);
 
+  /**
+   * One array, two controls: the chip row under the toolbar and the severity menu inside it
+   * are the same four numbers, so they cannot drift apart the way they did in round 3.
+   */
   const severityCounts = useMemo(
     () =>
-      SEVERITIES.map((s) => ({
-        severity: s,
-        count: bugs.filter((b) => b.severity === s && matches(b, "severity")).length,
-      })),
-    [bugs, matches]
+      SEVERITIES.map((s) => ({ severity: s, count: facet("severity", (b) => b.severity === s) })),
+    [facet]
   );
 
   const filtered = useMemo(() => bugs.filter((b) => matches(b)), [bugs, matches]);
@@ -259,6 +285,7 @@ export function BugsPage() {
         <div className="segmented" role="tablist" aria-label="Filter by state">
           <button
             role="tab"
+            data-value="open"
             aria-selected={tab === "open"}
             className={`segment${tab === "open" ? " is-active" : ""}`}
             onClick={() => setTab("open")}
@@ -268,6 +295,7 @@ export function BugsPage() {
           </button>
           <button
             role="tab"
+            data-value="resolved"
             aria-selected={tab === "resolved"}
             className={`segment${tab === "resolved" ? " is-active" : ""}`}
             onClick={() => setTab("resolved")}
@@ -277,6 +305,7 @@ export function BugsPage() {
           </button>
           <button
             role="tab"
+            data-value="all"
             aria-selected={tab === "all"}
             className={`segment${tab === "all" ? " is-active" : ""}`}
             onClick={() => setTab("all")}
@@ -292,10 +321,10 @@ export function BugsPage() {
             onChange={(v) => set("severity", v)}
             options={[
               { value: "all", label: "All severities" },
-              ...SEVERITIES.map((s) => ({
+              ...severityCounts.map(({ severity: s, count }) => ({
                 value: s,
                 label: SEVERITY_LABEL[s],
-                hint: bugs.filter((b) => b.severity === s).length,
+                hint: count,
               })),
             ]}
           />
@@ -308,7 +337,7 @@ export function BugsPage() {
               ...labels.map((l) => ({
                 value: l,
                 label: l,
-                hint: bugs.filter((b) => b.labels.includes(l)).length,
+                hint: facet("label", (b) => b.labels.includes(l)),
               })),
             ]}
           />
@@ -318,11 +347,15 @@ export function BugsPage() {
             onChange={(v) => set("assignee", v)}
             options={[
               { value: "all", label: "All assignees" },
-              { value: "none", label: "Unassigned", hint: bugs.filter((b) => !b.assignee).length },
+              {
+                value: "none",
+                label: "Unassigned",
+                hint: facet("assignee", (b) => !b.assignee),
+              },
               ...assignees.map((a) => ({
                 value: a,
                 label: a,
-                hint: bugs.filter((b) => b.assignee === a).length,
+                hint: facet("assignee", (b) => b.assignee === a),
               })),
             ]}
           />
@@ -335,7 +368,7 @@ export function BugsPage() {
               ...reporters.map((r) => ({
                 value: r,
                 label: r,
-                hint: bugs.filter((b) => b.reporter === r).length,
+                hint: facet("reporter", (b) => b.reporter === r),
               })),
             ]}
           />
@@ -368,6 +401,7 @@ export function BugsPage() {
           {severityCounts.map(({ severity: s, count }) => (
             <button
               key={s}
+              data-value={s}
               className={`sev-chip sev-chip-${s}${severity === s ? " is-active" : ""}${
                 count === 0 ? " is-zero" : ""
               }`}

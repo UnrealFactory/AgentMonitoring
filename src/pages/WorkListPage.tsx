@@ -28,6 +28,9 @@ import {
 import { formatDateTimeUtc, formatRelative, pluralize, WORK_STATUS_LABEL } from "../lib/format";
 import type { WorklogSummary, WorkStatus } from "../lib/types";
 
+/** The dimensions a filter slices on — and therefore the ones a count can be exempt from. */
+type Dim = "status" | "agent" | "tag";
+
 const STATUSES: (WorkStatus | "all")[] = ["all", "in_progress", "done", "abandoned"];
 const STATUS_TEXT: Record<string, string> = { all: "All", ...WORK_STATUS_LABEL };
 /** In progress first: the list answers "what is happening" before "what happened". */
@@ -50,6 +53,10 @@ export function WorkListPage() {
 
   const works = useMemo(() => data ?? [], [data]);
 
+  /**
+   * What the menus offer, taken from the whole project so the list does not shrink under
+   * the cursor as filters change. The counts beside them are scoped to the view (`facet`).
+   */
   const agents = useMemo(
     () => [...new Set(works.map((w) => w.agent))].sort((a, b) => a.localeCompare(b)),
     [works]
@@ -81,16 +88,17 @@ export function WorkListPage() {
   }, [works]);
 
   /**
-   * One predicate, with the ability to leave the status dimension out of it (BUG-0005).
+   * One predicate, with the ability to leave one dimension out of it (BUG-0005).
    * A count printed *on* a control must count what choosing that control would give, with
-   * every other filter still applied — otherwise "Done 9" sits above a Done group of 2 and
-   * the screen states two different numbers for the same set.
+   * every other filter still applied — otherwise "Done 9" sits above a Done group of 2, or
+   * the agent menu offers "nova 4" on a tab holding one of nova's records, and the screen
+   * states two different numbers for the same set.
    */
   const matches = useCallback(
-    (w: WorklogSummary, skipStatus = false) => {
-      if (!skipStatus && status !== "all" && w.status !== status) return false;
-      if (agent !== "all" && w.agent !== agent) return false;
-      if (tag !== "all" && !w.tags.includes(tag)) return false;
+    (w: WorklogSummary, skip: Dim | null = null) => {
+      if (skip !== "status" && status !== "all" && w.status !== status) return false;
+      if (skip !== "agent" && agent !== "all" && w.agent !== agent) return false;
+      if (skip !== "tag" && tag !== "all" && !w.tags.includes(tag)) return false;
       const q = query.trim().toLowerCase();
       if (!q) return true;
       return (haystacks.get(w.id) ?? "").includes(q);
@@ -98,11 +106,18 @@ export function WorkListPage() {
     [status, agent, tag, query, haystacks]
   );
 
+  /** How many rows picking `value` on `dim` would leave: the one number a menu may print. */
+  const facet = useCallback(
+    (dim: Dim, has: (w: WorklogSummary) => boolean) =>
+      works.filter((w) => has(w) && matches(w, dim)).length,
+    [works, matches]
+  );
+
   const filtered = useMemo(() => works.filter((w) => matches(w)), [works, matches]);
 
   /** What each status tab would show if it were the one selected. */
   const statusCounts = useMemo(() => {
-    const scope = works.filter((w) => matches(w, true));
+    const scope = works.filter((w) => matches(w, "status"));
     const counts: Record<string, number> = { all: scope.length };
     for (const s of GROUP_ORDER) counts[s] = scope.filter((w) => w.status === s).length;
     return counts;
@@ -164,6 +179,7 @@ export function WorkListPage() {
             <button
               key={s}
               role="tab"
+              data-value={s}
               aria-selected={status === s}
               className={`segment${status === s ? " is-active" : ""}`}
               onClick={() => set("status", s)}
@@ -184,7 +200,7 @@ export function WorkListPage() {
               ...agents.map((a) => ({
                 value: a,
                 label: a,
-                hint: works.filter((w) => w.agent === a).length,
+                hint: facet("agent", (w) => w.agent === a),
               })),
             ]}
           />
@@ -197,7 +213,7 @@ export function WorkListPage() {
               ...tags.map((t) => ({
                 value: t,
                 label: t,
-                hint: works.filter((w) => w.tags.includes(t)).length,
+                hint: facet("tag", (w) => w.tags.includes(t)),
               })),
             ]}
           />

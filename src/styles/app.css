@@ -809,6 +809,13 @@
   color: var(--text-primary);
 }
 
+/* A facet with nothing behind it in this view: still offered, still choosable, but saying
+   so before the click. Never dimmed while it is the choice or under the cursor — the one
+   line the reader is looking at has to stay legible. */
+.select-option.is-zero:not(.is-selected):not(.is-cursor) {
+  opacity: 0.55;
+}
+
 .select-check {
   display: grid;
   place-items: center;

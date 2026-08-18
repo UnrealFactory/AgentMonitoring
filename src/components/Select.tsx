@@ -8,8 +8,11 @@
  *
  *   ↑ ↓  move        ↵  choose        esc / click outside / tab  close
  *
- * Options carry an optional `hint` (a count, a status dot) shown on the right, and an
- * optional `dot` class for the coloured marker used by severity and status menus.
+ * Options carry an optional `hint` (a count, a status dot) shown on the right. A numeric
+ * hint of 0 dims its row: the option stays — a menu that drops entries as the view narrows
+ * is a menu that moves under the cursor — but it says, before the click, that there is
+ * nothing behind it. What that number must mean is the caller's contract: the rows you get
+ * after choosing it (see BugsPage `facet`, and scripts/check-counts.mjs).
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
@@ -149,10 +152,11 @@ export function Select({
               <button
                 type="button"
                 role="option"
+                data-value={o.value}
                 aria-selected={o.value === value}
                 className={`select-option${i === cursor ? " is-cursor" : ""}${
                   o.value === value ? " is-selected" : ""
-                }`}
+                }${o.hint === 0 ? " is-zero" : ""}`}
                 onClick={() => choose(o.value)}
                 onMouseEnter={() => setCursor(i)}
               >
