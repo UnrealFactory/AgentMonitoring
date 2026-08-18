@@ -1,0 +1,19 @@
+[package]
+name = "agentmon-cli"
+description = "The agent-facing CLI for AgentMonitoring: agents record their work, humans read it in the desktop app."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "agentmon"
+path = "src/main.rs"
+
+[dependencies]
+agentmon-core = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,304 @@
+/* ===========================================================================
+   AgentMonitoring design system — dark-first, Linear-inspired.
+
+   Everything visual in this app comes from here. Rules of the system:
+     * three background layers (app / surface / raised) instead of shadows for depth;
+     * hairline borders at 6–10% white, never solid grey lines;
+     * 13–14px type, -0.01em tracking on headings, tabular numerals for anything
+       a human might compare vertically (ids, counts, timestamps);
+     * one accent (indigo) — status colour is carried by dots and pills, not by
+       painting large areas;
+     * 4px spacing base, 8px rhythm; radii 4/6/8px; instant (120ms) transitions.
+   ======================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* --- surfaces ---------------------------------------------------------- */
+  --bg-app: #0e0f11; /* window background, the floor */
+  --bg-sidebar: #0b0c0e; /* one notch darker than the app: recedes */
+  --bg-surface: #16171a; /* cards, tables, panels */
+  --bg-raised: #1c1d21; /* menus, popovers, hovered rows on surfaces */
+  --bg-inset: #121317; /* code blocks, wells, inputs */
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-active: rgba(255, 255, 255, 0.07);
+  --bg-selected: rgba(94, 106, 210, 0.14);
+  --bg-scrim: rgba(8, 9, 11, 0.72);
+
+  /* --- borders ----------------------------------------------------------- */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-accent: rgba(94, 106, 210, 0.55);
+
+  /* --- text -------------------------------------------------------------- */
+  --text-primary: #e8e9eb;
+  --text-secondary: #8a8f98;
+  --text-tertiary: #62666d;
+  --text-inverse: #0e0f11;
+  --text-link: #9aa3ee;
+
+  /* --- accent ------------------------------------------------------------ */
+  --accent: #5e6ad2;
+  --accent-hover: #6b76de;
+  --accent-active: #525cbf;
+  --accent-text: #a5adf0;
+  --accent-soft: rgba(94, 106, 210, 0.16);
+  --accent-border: rgba(94, 106, 210, 0.4);
+
+  /* --- semantic (status, severity) --------------------------------------- */
+  --green: #4cb782;
+  --green-soft: rgba(76, 183, 130, 0.15);
+  --blue: #4ea7fc;
+  --blue-soft: rgba(78, 167, 252, 0.15);
+  --amber: #f2c94c;
+  --amber-soft: rgba(242, 201, 76, 0.15);
+  --orange: #f2994a;
+  --orange-soft: rgba(242, 153, 74, 0.15);
+  --red: #eb5757;
+  --red-soft: rgba(235, 87, 87, 0.15);
+  --purple: #a78bfa;
+  --purple-soft: rgba(167, 139, 250, 0.15);
+  --grey: #8a8f98;
+  --grey-soft: rgba(138, 143, 152, 0.14);
+
+  /* work status */
+  --status-in-progress: var(--blue);
+  --status-in-progress-soft: var(--blue-soft);
+  --status-done: var(--green);
+  --status-done-soft: var(--green-soft);
+  --status-abandoned: var(--grey);
+  --status-abandoned-soft: var(--grey-soft);
+
+  /* bug status */
+  --status-open: var(--green);
+  --status-open-soft: var(--green-soft);
+  --status-resolved: var(--purple);
+  --status-resolved-soft: var(--purple-soft);
+  --status-closed: var(--grey);
+  --status-closed-soft: var(--grey-soft);
+
+  /* severity */
+  --sev-critical: #ff6b6b;
+  --sev-critical-soft: rgba(255, 107, 107, 0.16);
+  --sev-high: var(--orange);
+  --sev-high-soft: var(--orange-soft);
+  --sev-medium: var(--amber);
+  --sev-medium-soft: var(--amber-soft);
+  --sev-low: var(--grey);
+  --sev-low-soft: var(--grey-soft);
+
+  /* --- typography -------------------------------------------------------- */
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    system-ui, sans-serif;
+  --font-mono: "SFMono-Regular", "JetBrains Mono", "Cascadia Mono", Consolas,
+    "Liberation Mono", Menlo, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --text-3xl: 32px;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.4;
+  --leading-normal: 1.6;
+
+  --weight-normal: 400;
+  --weight-medium: 510;
+  --weight-semibold: 590;
+  --weight-bold: 680;
+
+  --tracking-tight: -0.012em;
+  --tracking-tighter: -0.02em;
+  --tracking-wide: 0.04em;
+
+  /* --- space (4px base, 8px rhythm) -------------------------------------- */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* --- radii ------------------------------------------------------------- */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 999px;
+
+  /* --- elevation --------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+
+  /* --- motion ------------------------------------------------------------ */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 90ms;
+  --duration: 130ms;
+
+  /* --- layout ------------------------------------------------------------ */
+  --sidebar-width: 232px;
+  --content-max: 1240px;
+  --prose-max: 76ch;
+  --header-height: 48px;
+}
+
+/* ===========================================================================
+   Reset / base
+   ======================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-snug);
+  font-weight: var(--weight-normal);
+  font-feature-settings: "cv05" 1, "cv08" 1, "ss03" 1; /* single-storey l, squared g */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* Numbers that get compared vertically must line up. */
+.tabular,
+table,
+time,
+.mono {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* ===========================================================================
+   Focus — always visible, never a browser default halo
+   ======================================================================== */
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: rgba(94, 106, 210, 0.38);
+  color: #fff;
+}
+
+/* ===========================================================================
+   Scrollbars — thin, self-effacing
+   ======================================================================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

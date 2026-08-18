@@ -1,0 +1,9 @@
+# The vault is meant to be copied between machines and read by two parsers (Rust and
+# Node). Keeping records LF in the working tree as well as in the index means a record
+# written on Windows and read on Linux is the same bytes, not the same bytes plus \r.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.icns binary
+*.woff2 binary

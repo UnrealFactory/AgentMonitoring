@@ -1,0 +1,19 @@
+{"ts":"2026-08-18T10:36:00Z","actor":"p0-foundation-builder","type":"project_created","ref":"agent-monitoring","summary":"Created project agent-monitoring — this app's own build history"}
+{"ts":"2026-08-18T10:38:00Z","actor":"p0-foundation-builder","type":"work_started","ref":"WORK-0001","summary":"Scaffold the Tauri 2 workspace and the vault reader in agentmon-core"}
+{"ts":"2026-08-18T10:47:00Z","actor":"p0-foundation-builder","type":"bug_created","ref":"BUG-0001","summary":"agentmon-core fails to compile — per-agent rollup holds two mutable borrows"}
+{"ts":"2026-08-18T10:48:00Z","actor":"p0-foundation-builder","type":"bug_claimed","ref":"BUG-0001","summary":"Claimed BUG-0001 — it blocks every downstream piece"}
+{"ts":"2026-08-18T10:49:00Z","actor":"p0-foundation-builder","type":"bug_commented","ref":"BUG-0001","summary":"Chose a free function over a HashMap rollup; insertion order stays explicit"}
+{"ts":"2026-08-18T10:51:00Z","actor":"p0-foundation-builder","type":"bug_resolved","ref":"BUG-0001","summary":"Replaced the capturing closure with agent_slot(&mut Vec, &str); workspace builds clean"}
+{"ts":"2026-08-18T10:52:00Z","actor":"p0-foundation-builder","type":"work_updated","ref":"WORK-0001","summary":"First green cargo build --workspace: 542 crates, 24.6s, both binaries produced"}
+{"ts":"2026-08-18T10:53:00Z","actor":"p0-foundation-builder","type":"work_done","ref":"WORK-0001","summary":"Vault schema in code, ten Tauri commands, agentmon --help matches the SPEC surface"}
+{"ts":"2026-08-18T10:54:00Z","actor":"p0-foundation-builder","type":"work_started","ref":"WORK-0002","summary":"Design system, app shell and the six screens over a two-transport data layer"}
+{"ts":"2026-08-18T10:58:00Z","actor":"p0-foundation-builder","type":"work_updated","ref":"WORK-0002","summary":"Design tokens and the shell are in: three background layers, hairline borders, tabular numerals"}
+{"ts":"2026-08-18T11:01:00Z","actor":"p0-foundation-builder","type":"work_updated","ref":"WORK-0002","summary":"All six screens render live vault data through the browser transport"}
+{"ts":"2026-08-18T11:02:00Z","actor":"p0-foundation-builder","type":"bug_created","ref":"BUG-0002","summary":"Desktop app shows stale records — the Tauri side does not watch the vault"}
+{"ts":"2026-08-18T11:04:00Z","actor":"p0-foundation-builder","type":"work_updated","ref":"WORK-0002","summary":"Screenshot infrastructure captures every screen with no fixed sleeps"}
+{"ts":"2026-08-18T11:12:00Z","actor":"p0-foundation-builder","type":"bug_created","ref":"BUG-0003","summary":"Record list previews print raw markdown — backticks leak into the work table excerpt"}
+{"ts":"2026-08-18T11:13:00Z","actor":"p0-foundation-builder","type":"bug_claimed","ref":"BUG-0003","summary":"Claimed BUG-0003 — it is in shared parser code both readers call"}
+{"ts":"2026-08-18T11:14:00Z","actor":"p0-foundation-builder","type":"bug_commented","ref":"BUG-0003","summary":"Strip backticks, ** and link syntax only; single * and _ live inside identifiers"}
+{"ts":"2026-08-18T11:16:00Z","actor":"p0-foundation-builder","type":"bug_resolved","ref":"BUG-0003","summary":"strip_inline() in agentmon-core and stripInline() in vault-fs.mjs; excerpts byte-identical on the real vault"}
+{"ts":"2026-08-18T11:19:00Z","actor":"p0-foundation-builder","type":"work_updated","ref":"WORK-0002","summary":"Reference set gains a chart-dense Grafana shot; capture-refs learns --only and a manifest"}
+{"ts":"2026-08-18T11:22:00Z","actor":"p0-foundation-builder","type":"work_done","ref":"WORK-0002","summary":"Foundation verified: npm run build, cargo check/test/build --workspace, doctor clean, six screens shot"}
