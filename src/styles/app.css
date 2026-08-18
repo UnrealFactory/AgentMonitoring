@@ -1969,6 +1969,24 @@ a.rel-row:hover .rel-id {
   box-shadow: inset 0 0 0 1.5px var(--border-strong);
 }
 
+/* Freshness, on the dashboard: filled and haloed while somebody is around, ringed once
+   the record has gone hours without a note, hollow after a day of silence. The word
+   beside every one of these says the same thing, so the dot is never carrying it alone. */
+.sdot-live {
+  background: var(--status-in-progress);
+  box-shadow: 0 0 0 3px var(--status-in-progress-soft);
+}
+
+.sdot-quiet {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--status-in-progress);
+}
+
+.sdot-stale {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-tertiary);
+}
+
 /* the dot inside a segmented tab sits on the text baseline, not above it */
 .segment .sdot {
   margin-right: 1px;
@@ -2495,11 +2513,21 @@ kbd {
 
 /* --- the NOW strip -------------------------------------------------------- */
 
+/* Two columns and a band, not three thirds.
+   What is in flight is sentences — the titles of the open work logs and the opening line
+   of each paragraph of their newest notes — so it takes the wider column; a third of a
+   screen cut every one of those sentences in half. Open bugs sit beside it, and the last
+   twenty-four hours run the full width underneath, where twenty-four hourly bars can be
+   read as a chart instead of a smudge. */
 .now-strip {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   gap: var(--space-3);
   align-items: stretch;
+}
+
+.now-panel-day {
+  grid-column: 1 / -1;
 }
 
 .now-panel {
@@ -2593,10 +2621,18 @@ kbd {
   margin: 0 calc(-1 * var(--space-2));
 }
 
+/* A row is a dot, a title block and a pair of times — and under them, the full width of
+   the row, whatever the record's newest note says. The note gets the whole width rather
+   than the title column's share, because sentences need it and the two times beside it
+   are four words long. */
 .now-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "dot main time"
+    ".   quote quote";
+  align-items: start;
+  column-gap: var(--space-3);
   min-width: 0;
   padding: 6px var(--space-2);
   border-radius: var(--radius);
@@ -2605,6 +2641,24 @@ kbd {
 
 .now-row:hover {
   background: var(--bg-hover);
+}
+
+/* the status dot sits on the title's optical centre, not on the row's */
+.now-row > .sdot {
+  grid-area: dot;
+  margin-top: 5px;
+}
+
+.now-row-main {
+  grid-area: main;
+}
+
+.now-row-time {
+  grid-area: time;
+}
+
+.now-quote {
+  grid-area: quote;
 }
 
 .now-row-main {
@@ -2624,12 +2678,14 @@ kbd {
   text-overflow: ellipsis;
 }
 
+/* Wraps rather than cuts: a severity pill, an id and "unclaimed" are three whole things,
+   and half of any of them is worse than a second line. */
 .now-row-sub {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  gap: 5px var(--space-2);
   min-width: 0;
-  overflow: hidden;
 }
 
 .now-row-id {
@@ -2644,6 +2700,7 @@ kbd {
   align-items: flex-end;
   gap: 2px;
   flex: none;
+  padding-top: 1px;
 }
 
 .now-row-dur {
@@ -2651,6 +2708,25 @@ kbd {
   font-weight: var(--weight-medium);
   color: var(--blue);
   white-space: nowrap;
+}
+
+/* A duration with no word in front of it is a number the reader has to guess at: 13h 23m
+   of what? (round 1 critic). The label is quiet, and it is always there. */
+.now-row-durlabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+  color: var(--text-tertiary);
+}
+
+/* The figure dims with the record it measures: blue while somebody is around, plain text
+   once the log has been sitting untouched for hours, tertiary after a day. */
+.now-row-dur.is-quiet {
+  color: var(--text-secondary);
+}
+
+.now-row-dur.is-stale,
+.now-row-dur.is-bug {
+  color: var(--text-secondary);
 }
 
 /* the same figure on a log that has stopped: how long it took, not how long it has run */
@@ -2662,6 +2738,53 @@ kbd {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
+}
+
+/* A state, not a person: an unclaimed bug wears an outline where an owned one wears an
+   avatar, so "nobody has this" is something the row says rather than something the reader
+   has to notice is missing. */
+.now-flag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  white-space: nowrap;
+}
+
+/* --- the newest note, quoted ---------------------------------------------
+   The opening sentence of each paragraph of the latest update, one line each. The
+   event log only carries a truncated first clause, and "in flight" and "in flight,
+   blocked on another agent, behind a feature flag" are not the same state.
+   ------------------------------------------------------------------------- */
+
+.now-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  margin-top: 5px;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border);
+}
+
+.now-quote-line {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-quote-lead {
+  margin-right: 7px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
 }
 
 .now-more {
@@ -2687,13 +2810,62 @@ kbd {
   cursor: pointer;
 }
 
-/* --- 24-hour strip -------------------------------------------------------- */
+/* --- 24-hour strip --------------------------------------------------------
+   A figure and its chart side by side across the width of the screen: the count
+   on the left, twenty-four hourly bars on the right, wide enough to be read.
+   (After `.now-panel`, whose `display: flex` this overrides.)
+   ------------------------------------------------------------------------- */
+
+.now-panel.now-panel-day {
+  display: grid;
+  grid-template-columns: minmax(0, 230px) minmax(0, 1fr);
+  gap: var(--space-3) var(--space-8);
+  align-items: center;
+}
+
+.day-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.hour-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Named hours, not just a shape: every sixth hour under its own bar, and the hour we are
+   standing in called "now". */
+.hour-axis {
+  position: relative;
+  height: 13px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.hour-tick {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+.hour-scale {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.hour-scale-max {
+  color: var(--text-secondary);
+}
 
 .hour-bars {
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  height: 24px;
+  height: 48px;
 }
 
 .hour-bar {
@@ -2801,6 +2973,21 @@ kbd {
   color: var(--text-secondary);
 }
 
+/* What the range control actually changed. A cumulative line ends at the project's
+   lifetime total whatever the range, so without this the legend read the same at 7 days
+   as at All time and the control looked broken (round 1 critic). */
+.legend-delta {
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-inset);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.legend-delta.is-flat {
+  color: var(--text-tertiary);
+}
+
 .chart {
   display: flex;
   flex-direction: column;
@@ -2836,6 +3023,12 @@ kbd {
   fill: var(--text-tertiary);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+/* The day a clock tick belongs to, under it — printed whenever the day changes, so a
+   week of twelve-hour buckets never reads as an unlabelled "12:00 · 00:00 · 12:00". */
+.chart-tick-date {
+  fill: var(--text-secondary);
 }
 
 /* the 2px ring in the surface colour, so a dot stays legible over its own line */
@@ -3063,7 +3256,7 @@ kbd {
    a fixed block at the right where they line up down the list and can be compared. */
 .day-head {
   display: grid;
-  grid-template-columns: 14px auto minmax(74px, 1fr) 132px 28px minmax(0, 150px);
+  grid-template-columns: 14px auto minmax(74px, 1fr) 132px 28px minmax(0, 104px);
   align-items: center;
   gap: var(--space-3);
   width: 100%;
@@ -3101,7 +3294,16 @@ kbd {
   white-space: nowrap;
 }
 
-/* the day's shape in one 4px bar: how much of it was work, and how much was bugs */
+/* The day's shape in one 4px bar: how busy it was (the bar's length, against the busiest
+   day in the range) and what it was spent on (the segments, keyed by the legend in the
+   card head). It used to draw every day the same length whatever its count, which made
+   one event and six look identical (round 1 critic). */
+.day-mix-track {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .day-mix {
   display: flex;
   gap: 2px;
@@ -3129,14 +3331,21 @@ kbd {
   text-align: right;
 }
 
+/* Who was there that day, as avatars rather than a list of names cut mid-name at 150px
+   ("p4-dashboard-builder, p3-…"). The names are in the tooltip, and one click opens the
+   day and prints them in full. */
 .day-actors {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.day-actors-more {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: right;
 }
 
 .feed {
@@ -3270,15 +3479,6 @@ a.feed-row:hover .feed-ref {
    whole first row and the two figures share the second.
    ------------------------------------------------------------------------- */
 
-@media (max-width: 1200px) {
-  .now-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .now-panel-wide {
-    grid-column: 1 / -1;
-  }
-}
 
 @media (max-width: 1000px) {
   .day-head {
@@ -3290,8 +3490,13 @@ a.feed-row:hover .feed-ref {
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1000px) {
   .now-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* the 24-hour figure goes back above its own bars once there is no width to share */
+  .now-panel.now-panel-day {
     grid-template-columns: minmax(0, 1fr);
   }
 }

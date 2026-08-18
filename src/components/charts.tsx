@@ -26,7 +26,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { axisLabel, bucketLabel, type CumulativeSeries } from "../lib/dashboard";
+import { axisLabel, axisTicks, bucketLabel, type CumulativeSeries } from "../lib/dashboard";
 
 /* --------------------------------------------------------------------------
    Measuring
@@ -66,26 +66,19 @@ function niceTicks(max: number): { top: number; ticks: number[] } {
   return { top: count * step, ticks: Array.from({ length: count + 1 }, (_, i) => i * step) };
 }
 
-/**
- * How many x labels fit without them touching, and which buckets get one. The last
- * bucket always gets one — it is where the lines end and the reader looks first — so the
- * label before it is dropped whenever the two would land closer than a full stride
- * apart, which is how "20:00 21:00" came to be printed as one word.
- */
-function labelIndices(count: number, innerWidth: number): number[] {
-  const room = Math.max(2, Math.floor(innerWidth / 64));
-  const stride = Math.max(1, Math.ceil((count - 1) / (room - 1)));
-  const out: number[] = [];
-  for (let i = 0; i < count; i += stride) out.push(i);
-  if (out[out.length - 1] !== count - 1) {
-    if (out.length > 1 && count - 1 - out[out.length - 1] < stride) out.pop();
-    out.push(count - 1);
-  }
-  return out;
-}
-
 const PAD = { top: 12, right: 10, bottom: 22, left: 30 };
+/** A tick that also carries the date it opens needs a second line under it. */
+const PAD_BOTTOM_DATED = 34;
 const PLOT_H = 132;
+
+/** How much of a tick label sits either side of its anchor, roughly, at 10px. */
+const TICK_HALF = 20;
+
+/** "+3", "−1", "±0" — a change against the period the chart is scoped to. */
+const signed = (n: number): string => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "±0");
+
+/** Height of the tallest bar in the 24-hour strip, in px. */
+const HOUR_BAR_H = 48;
 
 /* --------------------------------------------------------------------------
    The burn-up: two cumulative lines and the gap between them
@@ -103,6 +96,7 @@ export function BurnUp({
   lower,
   gap,
   noun,
+  scope,
 }: {
   series: CumulativeSeries;
   upper: SeriesSpec;
@@ -111,6 +105,14 @@ export function BurnUp({
   gap: { label: string; wash: string };
   /** What one unit is, for the tooltip and the accessible summary. */
   noun: string;
+  /**
+   * The window the chart is scoped to, named — "the last 7 days". Given one, the legend
+   * carries what changed inside it beside each running total, because a cumulative line
+   * ends at the project's lifetime total whatever the range, and a legend that reads
+   * exactly the same at 7 days as at All time looks like a control that does nothing
+   * (round 1 critic). Null for an all-time chart, where the total *is* the change.
+   */
+  scope?: string | null;
 }) {
   const [ref, width] = useMeasure<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
@@ -121,6 +123,19 @@ export function BurnUp({
   const { top, ticks } = niceTicks(series.max);
   const x = (i: number) => PAD.left + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
   const y = (v: number) => PAD.top + PLOT_H - (v / top) * PLOT_H;
+
+  const xTicks = axisTicks(series.axis, innerW);
+  const dated = xTicks.some((t) => t.date !== null);
+  const padBottom = dated ? PAD_BOTTOM_DATED : PAD.bottom;
+  const height = PAD.top + PLOT_H + padBottom;
+  const delta = scope
+    ? {
+        upper: series.totalUpper - series.baseUpper,
+        lower: series.totalLower - series.baseLower,
+        gap:
+          series.totalUpper - series.totalLower - (series.baseUpper - series.baseLower),
+      }
+    : null;
 
   const nearest = useCallback(
     (clientX: number) => {
@@ -167,7 +182,11 @@ export function BurnUp({
   const openGap = series.totalUpper - series.totalLower;
   const summary =
     `${upper.label} ${series.totalUpper}, ${lower.label} ${series.totalLower} ${noun} ` +
-    `over ${n} periods ending ${bucketLabel(points[n - 1].bucket, series.axis)}. ` +
+    `over ${n} periods from ${bucketLabel(points[0].bucket, series.axis)} to ` +
+    `${bucketLabel(points[n - 1].bucket, series.axis)}, UTC. ` +
+    (delta
+      ? `Over ${scope}: ${signed(delta.upper)} ${upper.label}, ${signed(delta.lower)} ${lower.label}. `
+      : "") +
     `Use the left and right arrow keys to read each period.`;
 
   return (
@@ -183,15 +202,10 @@ export function BurnUp({
         onBlur={() => setActive(null)}
         onPointerMove={(e) => setActive(nearest(e.clientX))}
         onPointerLeave={() => setActive(null)}
-        style={{ height: PAD.top + PLOT_H + PAD.bottom }}
+        style={{ height }}
       >
         {width > 0 && (
-          <svg
-            width={width}
-            height={PAD.top + PLOT_H + PAD.bottom}
-            aria-hidden="true"
-            focusable="false"
-          >
+          <svg width={width} height={height} aria-hidden="true" focusable="false">
             {ticks.map((t) => (
               <g key={t}>
                 <line
@@ -208,17 +222,33 @@ export function BurnUp({
               </g>
             ))}
 
-            {labelIndices(n, innerW).map((i) => (
-              <text
-                key={i}
-                className="chart-tick"
-                x={x(i)}
-                y={PAD.top + PLOT_H + 14}
-                textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}
-              >
-                {axisLabel(points[i].bucket.start, series.axis.granularity)}
-              </text>
-            ))}
+            {xTicks.map((t) => {
+              const px = x(t.index);
+              const anchor =
+                px - TICK_HALF < 0 ? "start" : px + TICK_HALF > width ? "end" : "middle";
+              return (
+                <g key={t.index}>
+                  <text
+                    className="chart-tick"
+                    x={px}
+                    y={PAD.top + PLOT_H + 14}
+                    textAnchor={anchor}
+                  >
+                    {t.label}
+                  </text>
+                  {t.date && (
+                    <text
+                      className="chart-tick chart-tick-date"
+                      x={px}
+                      y={PAD.top + PLOT_H + 26}
+                      textAnchor={anchor}
+                    >
+                      {t.date}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
 
             <path d={band} fill={gap.wash} />
             <path d={line((p) => p.upper)} fill="none" stroke={upper.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
@@ -273,9 +303,28 @@ export function BurnUp({
           the card head cannot reflow differently from the card beside it. */}
       <Legend
         items={[
-          { color: upper.color, label: upper.label, value: series.totalUpper },
-          { color: lower.color, label: lower.label, value: series.totalLower },
-          { color: gap.wash, label: gap.label, value: openGap, band: true },
+          {
+            color: upper.color,
+            label: upper.label,
+            value: series.totalUpper,
+            delta: delta?.upper,
+            deltaTitle: delta ? `${signed(delta.upper)} ${upper.label} over ${scope}` : undefined,
+          },
+          {
+            color: lower.color,
+            label: lower.label,
+            value: series.totalLower,
+            delta: delta?.lower,
+            deltaTitle: delta ? `${signed(delta.lower)} ${lower.label} over ${scope}` : undefined,
+          },
+          {
+            color: gap.wash,
+            label: gap.label,
+            value: openGap,
+            band: true,
+            delta: delta?.gap,
+            deltaTitle: delta ? `${signed(delta.gap)} ${gap.label} over ${scope}` : undefined,
+          },
         ]}
       />
     </div>
@@ -334,16 +383,47 @@ export function HourBars({
   label: string;
 }) {
   const max = Math.max(1, ...hours.map((h) => h.count));
+  const n = hours.length;
+  /** Every sixth hour, and the right-hand end, which is the hour we are standing in. */
+  const ticks = hours
+    .map((h, i) => ({ h, i }))
+    .filter(({ i }) => i === n - 1 || (n - 1 - i) % 6 === 0);
+
   return (
-    <div className="hour-bars" role="img" aria-label={label}>
-      {hours.map((h, i) => (
-        <span
-          key={h.start}
-          className={`hour-bar${i === hours.length - 1 ? " is-now" : ""}${h.count === 0 ? " is-empty" : ""}`}
-          style={{ height: `${h.count === 0 ? 2 : Math.max(3, Math.round((h.count / max) * 22))}px` }}
-          title={`${axisLabel(h.start, "hour")} — ${h.count} event${h.count === 1 ? "" : "s"}`}
-        />
-      ))}
+    <div className="hour-strip">
+      <div className="hour-bars" role="img" aria-label={label}>
+        {hours.map((h, i) => (
+          <span
+            key={h.start}
+            className={`hour-bar${i === n - 1 ? " is-now" : ""}${h.count === 0 ? " is-empty" : ""}`}
+            style={{ height: `${h.count === 0 ? 2 : Math.max(3, Math.round((h.count / max) * HOUR_BAR_H))}px` }}
+            title={`${axisLabel(h.start, "hour")} UTC — ${h.count} event${h.count === 1 ? "" : "s"}`}
+          />
+        ))}
+      </div>
+      {/* An axis, not a decoration: the hours are named, in the same UTC the rest of the
+          page prints, and the tallest bar's value is spelled out so the shape has a scale. */}
+      <p className="hour-axis tabular" aria-hidden="true">
+        {ticks.map(({ h, i }) => (
+          <span
+            key={h.start}
+            className="hour-tick"
+            style={
+              i === n - 1
+                ? { right: 0 }
+                : i === 0
+                  ? { left: 0 }
+                  : { left: `${(i / (n - 1)) * 100}%`, transform: "translateX(-50%)" }
+            }
+          >
+            {i === n - 1 ? "now" : axisLabel(h.start, "hour")}
+          </span>
+        ))}
+      </p>
+      <p className="hour-scale">
+        <span className="hour-scale-max tabular">{max}</span>{" "}
+        {max === 1 ? "event" : "events"} in the busiest hour · times UTC
+      </p>
     </div>
   );
 }
@@ -390,7 +470,15 @@ export function SplitBar({
 export function Legend({
   items,
 }: {
-  items: { color: string; label: string; value?: ReactNode; band?: boolean }[];
+  items: {
+    color: string;
+    label: string;
+    value?: ReactNode;
+    band?: boolean;
+    /** Change over the chart's range, when it is scoped to one. */
+    delta?: number | null;
+    deltaTitle?: string;
+  }[];
 }) {
   return (
     <ul className="chart-legend">
@@ -403,6 +491,14 @@ export function Legend({
           />
           {it.value !== undefined && <span className="legend-value tabular">{it.value}</span>}
           <span className="legend-label">{it.label}</span>
+          {it.delta !== undefined && it.delta !== null && (
+            <span
+              className={`legend-delta tabular${it.delta === 0 ? " is-flat" : ""}`}
+              title={it.deltaTitle}
+            >
+              {signed(it.delta)}
+            </span>
+          )}
         </li>
       ))}
     </ul>

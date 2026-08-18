@@ -130,7 +130,6 @@ try {
     { screen: "bugs", query: "label=nonexistent-label", control: "Filter by label", reads: "All labels" },
     { screen: "bugs", query: "assignee=nobody-at-all", control: "Filter by assignee", reads: "All assignees" },
     { screen: "bugs", query: "reporter=nobody-at-all", control: "Filter by reporter", reads: "All reporters" },
-    { screen: "work", query: "status=banana", control: "Filter by agent", reads: "All agents" },
     { screen: "work", query: "agent=nobody-at-all", control: "Filter by agent", reads: "All agents" },
     { screen: "work", query: "tag=nonexistent-tag", control: "Filter by tag", reads: "All tags" },
   ];
@@ -146,14 +145,26 @@ try {
     baseline[screen] = await fresh.locator(".work-rows .work-row").count();
   }
 
-  // The two tabs are their own shape of fallback: they choose a view rather than filter
-  // one, so an unknown value lands on the default view, not on "everything".
-  await fresh.goto(`${ORIGIN}/p/${slug}/bugs?tab=zzz`, { waitUntil: "domcontentloaded" });
-  await ready(fresh);
-  check(
-    "?tab=zzz falls back to the default tab on /bugs",
-    (await fresh.getByRole("tab", { name: /^Open/ }).getAttribute("aria-selected")) === "true",
-  );
+  // The tab-shaped dimensions are their own shape of fallback: they choose a view rather
+  // than filter one, so an unknown value lands on the default view, not on "everything".
+  // Every one of them is checked, on both boards and on the dashboard, because "the two we
+  // remembered" is how `?status=banana` came to be read back off the agent menu.
+  const tabbed = [
+    { screen: "bugs", query: "tab=zzz", tab: /^Open/, rows: "open" },
+    { screen: "work", query: "status=banana", tab: /^All/, rows: "work" },
+  ];
+  for (const t of tabbed) {
+    await fresh.goto(`${ORIGIN}/p/${slug}/${t.screen}?${t.query}`, { waitUntil: "domcontentloaded" });
+    await ready(fresh);
+    const selected =
+      (await fresh.getByRole("tab", { name: t.tab }).getAttribute("aria-selected")) === "true";
+    const rows = await fresh.locator(".work-rows .work-row").count();
+    check(
+      `?${t.query} falls back to the default tab on /${t.screen}`,
+      selected && (t.rows !== "work" || rows === baseline.work),
+      `default tab ${selected ? "selected" : "NOT selected"}, ${rows} rows`,
+    );
+  }
 
   for (const d of dimensions) {
     // The bug board's default tab is Open, so its unfiltered view is the All tab; the work
@@ -212,9 +223,42 @@ try {
   );
   await fresh.goto(`${ORIGIN}/p/${slug}?range=7d`, { waitUntil: "domcontentloaded" });
   await ready(fresh);
+  await fresh.waitForFunction(() =>
+    [...document.querySelectorAll(".chart-plot")].every((p) => p.querySelector("svg")),
+  );
   check(
     "…and a known range is obeyed",
     (await fresh.getByRole("tab", { name: "7 days" }).getAttribute("aria-selected")) === "true",
+  );
+
+  // A range in the URL that changes nothing on the screen is the same defect as a filter
+  // that is not in the URL at all. A cumulative burn-up ends at the project's lifetime
+  // total whatever the range, so what has to move is the change *inside* the window, which
+  // the legend prints beside each total.
+  const deltas = await fresh.locator(".chart-legend .legend-delta").allTextContents();
+  check(
+    "?range=7d rescopes the charts, not just the sentence under the control",
+    deltas.length >= 6 && deltas.some((d) => d !== "±0"),
+    `legend deltas: ${JSON.stringify(deltas)}`,
+  );
+
+  // And the axis has to say which days it covers. Sub-daily buckets used to label a whole
+  // week "12:00 · 00:00 · 12:00" — clock times with no date anywhere on the chart.
+  const ticks = await fresh.locator(".chart-tick").allTextContents();
+  check(
+    "…and the axis names dates, not only clock times",
+    ticks.some((t) => /^\d{1,2} [A-Z][a-z]{2}$/.test(t.trim())),
+    `ticks: ${JSON.stringify(ticks.slice(0, 14))}`,
+  );
+
+  await fresh.goto(`${ORIGIN}/p/${slug}`, { waitUntil: "domcontentloaded" });
+  await ready(fresh);
+  await fresh.waitForFunction(() =>
+    [...document.querySelectorAll(".chart-plot")].every((p) => p.querySelector("svg")),
+  );
+  check(
+    "…while All time prints totals with no change column (the total is the change)",
+    (await fresh.locator(".chart-legend .legend-delta").count()) === 0,
   );
   await fresh.close();
 
