@@ -49,7 +49,8 @@ export type EventType =
   | "bug_commented"
   | "bug_resolved"
   | "bug_closed"
-  | "project_created";
+  | "project_created"
+  | "project_updated";
 
 export interface VaultEvent {
   ts: string;

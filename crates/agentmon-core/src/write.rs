@@ -13,6 +13,10 @@
 //!    sections this build does not know about.
 //! 4. **Every mutation returns the record re-parsed from disk**, so a caller printing the
 //!    result is printing what a reader will actually see.
+//! 5. **Every mutation can be backdated.** Agents write the record after doing the work,
+//!    so each entry point takes an optional timestamp; it lands in the frontmatter *and*
+//!    in the event, and [`crate::time`] refuses one that is in the future or out of order
+//!    with the state it follows.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,6 +25,7 @@ use crate::body;
 use crate::error::{CoreError, Result};
 use crate::fsx::{self, ProjectLock};
 use crate::model::*;
+use crate::time;
 use crate::validate::{self, BUG_SECTIONS, WORK_SECTIONS};
 use crate::vault::{next_id, validate_id, validate_slug, Vault};
 
@@ -48,16 +53,30 @@ const BUG_KEYS: &[&str] = &[
 // inputs
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NewProject {
     pub slug: String,
     pub name: String,
     pub description: String,
     pub tags: Vec<String>,
     pub actor: String,
+    /// `--at`: when the project was created. `None` means now.
+    pub at: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+/// Fields to change on an existing project. `None` leaves the stored value alone, so a
+/// caller can backfill a description without touching the name.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateProject {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    /// Replaces the tag list (it is a set, not a log).
+    pub tags: Option<Vec<String>>,
+    pub actor: String,
+    pub at: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct StartWork {
     pub agent: String,
     pub title: String,
@@ -65,14 +84,30 @@ pub struct StartWork {
     pub refs: Vec<String>,
     /// Raw markdown; must contain `## What`, `## Why`, `## How`.
     pub body: String,
+    /// `--started-at`: when the work actually began. `None` means now.
+    pub started_at: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FinishWork {
     pub agent: String,
     pub outcome: String,
     pub files: Vec<String>,
     pub refs: Vec<String>,
+    /// `--finished-at`: when the work actually ended. `None` means now.
+    pub finished_at: Option<String>,
+    /// `--started-at`: corrects the recorded start, for work logged after the fact.
+    /// `None` leaves whatever `work start` recorded.
+    pub started_at: Option<String>,
+}
+
+/// Stopping work without finishing it: status `abandoned`, and the reason on the record.
+#[derive(Debug, Clone, Default)]
+pub struct AbandonWork {
+    pub agent: String,
+    /// Why it stopped, and what a reader should do instead. Appended under `## Updates`.
+    pub reason: String,
+    pub at: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +119,8 @@ pub struct NewBug {
     pub refs: Vec<String>,
     /// Raw markdown; `## Report` is added around plain prose.
     pub body: String,
+    /// `--created-at`: when the bug was found. `None` means now.
+    pub created_at: Option<String>,
 }
 
 /// What a mutation produced: the id, where it landed, the event that was logged, and the
@@ -119,9 +156,13 @@ impl<T> Written<T> {
 // ---------------------------------------------------------------------------
 
 pub const EV_PROJECT_CREATED: &str = "project_created";
+/// Not in the original SPEC event list; added with `agentmon project update` so metadata
+/// backfilled after the fact still shows up in the activity feed (SPEC.md, events.jsonl).
+pub const EV_PROJECT_UPDATED: &str = "project_updated";
 pub const EV_WORK_STARTED: &str = "work_started";
 pub const EV_WORK_UPDATED: &str = "work_updated";
 pub const EV_WORK_DONE: &str = "work_done";
+pub const EV_WORK_ABANDONED: &str = "work_abandoned";
 pub const EV_BUG_CREATED: &str = "bug_created";
 pub const EV_BUG_CLAIMED: &str = "bug_claimed";
 pub const EV_BUG_COMMENTED: &str = "bug_commented";
@@ -177,7 +218,7 @@ impl Vault {
             ));
         }
         let dir = self.projects_dir().join(&slug);
-        let created_at = crate::now_iso8601();
+        let created_at = time::stamp(req.at.as_deref(), "--at")?;
         let project = serde_json::json!({
             "id": format!("prj-{slug}"),
             "slug": slug,
@@ -199,13 +240,90 @@ impl Vault {
             ));
         }
 
-        let event = self.append_event(
+        let event = self.append_event_at(
             &slug,
             &req.actor,
             EV_PROJECT_CREATED,
             Some(&slug),
             &format!("Created project {slug} — {name}"),
+            &created_at,
         )?;
+        let record = self.project(&slug)?;
+        Ok(Written::new(slug, &dir, event, record))
+    }
+
+    /// Change a project's display metadata (name, description, tags).
+    ///
+    /// Exists because the first thing an agent writes about a project is usually wrong by
+    /// the second day, and hand-editing `project.json` skips the event log — which is
+    /// what the app's activity feed is built from.
+    pub fn update_project(&self, slug: &str, req: &UpdateProject) -> Result<Written<Project>> {
+        let dir = self.project_dir(slug)?;
+        let slug = validate_slug(slug)?.to_string();
+        let actor = require_agent(&req.actor)?;
+        if req.name.is_none() && req.description.is_none() && req.tags.is_none() {
+            return Err(CoreError::conflict(
+                "nothing to update",
+                "pass at least one of --name \"<display name>\", --description \"<one or two \
+                 sentences>\" or --tags a,b",
+            ));
+        }
+
+        let _lock = ProjectLock::acquire(&dir)?;
+        let path = dir.join("project.json");
+        let raw = fs::read_to_string(&path).map_err(|e| CoreError::io(&path, e))?;
+        let mut json: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|e| CoreError::malformed(&path, format!("invalid project.json: {e}")))?;
+        let created_at = json
+            .get("createdAt")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let ts = time::stamp(req.at.as_deref(), "--at")?;
+        time::require_at_or_after(&ts, "--at", &created_at, "the project's createdAt")?;
+
+        let mut changed: Vec<String> = Vec::new();
+        if let Some(name) = &req.name {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(CoreError::conflict(
+                    "--name is empty",
+                    "pass the display name the sidebar should show, e.g. --name \"Checkout rewrite\"",
+                ));
+            }
+            if json.get("name").and_then(|v| v.as_str()) != Some(name) {
+                changed.push(format!("name to \"{name}\""));
+            }
+            json["name"] = serde_json::Value::String(name.to_string());
+        }
+        if let Some(description) = &req.description {
+            let description = description.trim();
+            if json.get("description").and_then(|v| v.as_str()) != Some(description) {
+                changed.push("description".to_string());
+            }
+            json["description"] = serde_json::Value::String(description.to_string());
+        }
+        if let Some(tags) = &req.tags {
+            let tags = clean_list(tags);
+            changed.push(if tags.is_empty() {
+                "tags to none".to_string()
+            } else {
+                format!("tags to {}", tags.join(", "))
+            });
+            json["tags"] = serde_json::Value::Array(
+                tags.into_iter().map(serde_json::Value::String).collect(),
+            );
+        }
+        let text = format!("{}\n", serde_json::to_string_pretty(&json).unwrap());
+        fsx::write_atomic(&path, &text)?;
+
+        let summary = if changed.is_empty() {
+            format!("Re-saved project metadata for {slug} (no values changed)")
+        } else {
+            format!("Updated {slug}: {}", changed.join(", "))
+        };
+        let event =
+            self.append_event_at(&slug, &actor, EV_PROJECT_UPDATED, Some(&slug), &summary, &ts)?;
         let record = self.project(&slug)?;
         Ok(Written::new(slug, &dir, event, record))
     }
@@ -219,9 +337,10 @@ impl Vault {
         let parsed = validate::work_body(&req.body)?;
         let refs = normalize_refs(&req.refs)?;
 
+        let started = time::stamp(req.started_at.as_deref(), "--started-at")?;
+
         let _lock = ProjectLock::acquire(&dir)?;
         let worklogs = dir.join("worklogs");
-        let started = crate::now_iso8601();
 
         let mut id = next_id(&record_ids(&worklogs, "WORK")?, "WORK");
         let mut path;
@@ -251,12 +370,13 @@ impl Vault {
             id = next_id(&[id], "WORK");
         }
 
-        let event = self.append_event(
+        let event = self.append_event_at(
             slug,
             &agent,
             EV_WORK_STARTED,
             Some(&id),
             &title,
+            &started,
         )?;
         let record = self.worklog(slug, &id)?;
         Ok(Written::new(id, &path, event, record))
@@ -268,6 +388,7 @@ impl Vault {
         id: &str,
         agent: &str,
         message: &str,
+        at: Option<&str>,
     ) -> Result<Written<WorklogDetail>> {
         let dir = self.project_dir(slug)?;
         let agent = require_agent(agent)?;
@@ -279,6 +400,7 @@ impl Vault {
              two ids.\"",
         )?;
         let id = validate_id(id, "WORK")?;
+        let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("worklogs").join(format!("{id}.md"));
         let (fm, meta, md) = read_work(&path, &id, slug)?;
@@ -302,8 +424,8 @@ impl Vault {
                 ))
             }
         }
+        require_note_time(&ts, &meta, &md)?;
 
-        let ts = crate::now_iso8601();
         let entry = if agent == meta.agent {
             note.clone()
         } else {
@@ -315,12 +437,84 @@ impl Vault {
         body::append_entry(&mut sections, "Updates", &ts, &entry, WORK_SECTIONS);
         write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &sections)?;
 
-        let event = self.append_event(
+        let event = self.append_event_at(
             slug,
             &agent,
             EV_WORK_UPDATED,
             Some(&id),
             &body::excerpt(&note, 160),
+            &ts,
+        )?;
+        let record = self.worklog(slug, &id)?;
+        Ok(Written::new(id, &path, event, record))
+    }
+
+    /// Stop a work log without finishing it: status `abandoned`, `finished` stamped with
+    /// the moment it stopped, and the reason appended under `## Updates`.
+    ///
+    /// The alternative — leaving it `in_progress` forever — is worse: the dashboard shows
+    /// an agent still working on something nobody is doing.
+    pub fn abandon_work(
+        &self,
+        slug: &str,
+        id: &str,
+        req: &AbandonWork,
+    ) -> Result<Written<WorklogDetail>> {
+        let dir = self.project_dir(slug)?;
+        let agent = require_agent(&req.agent)?;
+        let reason = validate::note(
+            &req.reason,
+            "abandon reason",
+            "agentmon work abandon WORK-0003 -p agent-monitoring --agent cli-builder \\\n  \
+             --reason \"Superseded by WORK-0007, which solves the same problem in the core \
+             crate; nothing from this branch was kept.\"",
+        )?;
+        let id = validate_id(id, "WORK")?;
+        let ts = time::stamp(req.at.as_deref(), "--at")?;
+        let _lock = ProjectLock::acquire(&dir)?;
+        let path = dir.join("worklogs").join(format!("{id}.md"));
+        let (fm, mut meta, md) = read_work(&path, &id, slug)?;
+
+        match meta.status {
+            WorkStatus::InProgress => {}
+            WorkStatus::Done => {
+                return Err(CoreError::conflict(
+                    format!(
+                        "{id} is already done (finished {})",
+                        meta.finished.as_deref().unwrap_or("unknown")
+                    ),
+                    "finished work cannot be abandoned — it happened. If the result was later \
+                     thrown away, say so in a new work log that refs this one",
+                ))
+            }
+            WorkStatus::Abandoned => {
+                return Err(CoreError::conflict(
+                    format!("{id} was already abandoned"),
+                    "nothing to do. Start a new work log with `agentmon work start`",
+                ))
+            }
+        }
+        require_note_time(&ts, &meta, &md)?;
+
+        meta.status = WorkStatus::Abandoned;
+        meta.finished = Some(ts.clone());
+
+        let entry = if agent == meta.agent {
+            format!("**Abandoned.** {reason}")
+        } else {
+            format!("**Abandoned by {agent}.** {reason}")
+        };
+        let mut sections = body::sections(&md);
+        body::append_entry(&mut sections, "Updates", &ts, &entry, WORK_SECTIONS);
+        write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &sections)?;
+
+        let event = self.append_event_at(
+            slug,
+            &agent,
+            EV_WORK_ABANDONED,
+            Some(&id),
+            &body::excerpt(&reason, 160),
+            &ts,
         )?;
         let record = self.worklog(slug, &id)?;
         Ok(Written::new(id, &path, event, record))
@@ -337,6 +531,12 @@ impl Vault {
         let outcome = validate::outcome(&req.outcome)?;
         let extra_refs = normalize_refs(&req.refs)?;
         let id = validate_id(id, "WORK")?;
+        let finished = time::stamp(req.finished_at.as_deref(), "--finished-at")?;
+        let restart = req
+            .started_at
+            .as_deref()
+            .map(|s| time::stamp(Some(s), "--started-at"))
+            .transpose()?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("worklogs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_work(&path, &id, slug)?;
@@ -361,8 +561,28 @@ impl Vault {
             }
         }
 
+        // Order first, write second: a rejected timestamp must leave the record untouched.
+        let (first_update, last_update) = update_stamps(&md);
+        if let Some(started) = &restart {
+            time::require_order(started, "--started-at", &finished, "--finished-at")?;
+            time::require_at_or_before(
+                started,
+                "--started-at",
+                &first_update,
+                "this record's first progress note",
+            )?;
+            meta.started = started.clone();
+        }
+        time::require_at_or_after(&finished, "--finished-at", &meta.started, "started")?;
+        time::require_at_or_after(
+            &finished,
+            "--finished-at",
+            &last_update,
+            "this record's last progress note",
+        )?;
+
         meta.status = WorkStatus::Done;
-        meta.finished = Some(crate::now_iso8601());
+        meta.finished = Some(finished.clone());
         meta.files = merge_lists(&meta.files, &clean_list(&req.files));
         meta.refs = merge_lists(&meta.refs, &extra_refs);
 
@@ -375,12 +595,13 @@ impl Vault {
         body::upsert_section(&mut sections, "Outcome", &outcome_body, WORK_SECTIONS);
         write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &sections)?;
 
-        let event = self.append_event(
+        let event = self.append_event_at(
             slug,
             &agent,
             EV_WORK_DONE,
             Some(&id),
             &body::excerpt(&outcome, 160),
+            &finished,
         )?;
         let record = self.worklog(slug, &id)?;
         Ok(Written::new(id, &path, event, record))
@@ -395,9 +616,10 @@ impl Vault {
         let sections = validate::bug_body(&req.body)?;
         let refs = normalize_refs(&req.refs)?;
 
+        let created = time::stamp(req.created_at.as_deref(), "--created-at")?;
+
         let _lock = ProjectLock::acquire(&dir)?;
         let bugs = dir.join("bugs");
-        let created = crate::now_iso8601();
 
         let mut id = next_id(&record_ids(&bugs, "BUG")?, "BUG");
         let mut path;
@@ -428,15 +650,23 @@ impl Vault {
             id = next_id(&[id], "BUG");
         }
 
-        let event = self.append_event(slug, &agent, EV_BUG_CREATED, Some(&id), &title)?;
+        let event =
+            self.append_event_at(slug, &agent, EV_BUG_CREATED, Some(&id), &title, &created)?;
         let record = self.bug(slug, &id)?;
         Ok(Written::new(id, &path, event, record))
     }
 
-    pub fn claim_bug(&self, slug: &str, id: &str, agent: &str) -> Result<Written<BugDetail>> {
+    pub fn claim_bug(
+        &self,
+        slug: &str,
+        id: &str,
+        agent: &str,
+        at: Option<&str>,
+    ) -> Result<Written<BugDetail>> {
         let dir = self.project_dir(slug)?;
         let agent = require_agent(agent)?;
         let id = validate_id(id, "BUG")?;
+        let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("bugs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_bug(&path, &id, slug)?;
@@ -468,11 +698,13 @@ impl Vault {
             }
         }
 
+        time::require_at_or_after(&ts, "--at", &meta.created, "the bug's created time")?;
+
         let already_mine = meta.status == BugStatus::InProgress;
         meta.status = BugStatus::InProgress;
         meta.assignee = Some(agent.clone());
         if meta.claimed.is_none() {
-            meta.claimed = Some(crate::now_iso8601());
+            meta.claimed = Some(ts.clone());
         }
         let sections = body::sections(&md);
         write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &sections)?;
@@ -482,7 +714,7 @@ impl Vault {
         } else {
             format!("Claimed {id} — {}", meta.title)
         };
-        let event = self.append_event(slug, &agent, EV_BUG_CLAIMED, Some(&id), &summary)?;
+        let event = self.append_event_at(slug, &agent, EV_BUG_CLAIMED, Some(&id), &summary, &ts)?;
         let record = self.bug(slug, &id)?;
         Ok(Written::new(id, &path, event, record))
     }
@@ -493,6 +725,7 @@ impl Vault {
         id: &str,
         agent: &str,
         message: &str,
+        at: Option<&str>,
     ) -> Result<Written<BugDetail>> {
         let dir = self.project_dir(slug)?;
         let agent = require_agent(agent)?;
@@ -504,11 +737,13 @@ impl Vault {
              event was ever emitted.\"",
         )?;
         let id = validate_id(id, "BUG")?;
+        let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("bugs").join(format!("{id}.md"));
         let (fm, meta, md) = read_bug(&path, &id, slug)?;
+        time::require_at_or_after(&ts, "--at", &meta.created, "the bug's created time")?;
+        time::require_at_or_after(&ts, "--at", &last_comment(&md), "the previous comment")?;
 
-        let ts = crate::now_iso8601();
         let mut sections = body::sections(&md);
         body::append_entry(
             &mut sections,
@@ -519,12 +754,13 @@ impl Vault {
         );
         write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &sections)?;
 
-        let event = self.append_event(
+        let event = self.append_event_at(
             slug,
             &agent,
             EV_BUG_COMMENTED,
             Some(&id),
             &body::excerpt(&note, 160),
+            &ts,
         )?;
         let record = self.bug(slug, &id)?;
         Ok(Written::new(id, &path, event, record))
@@ -536,11 +772,13 @@ impl Vault {
         id: &str,
         agent: &str,
         resolution: &str,
+        at: Option<&str>,
     ) -> Result<Written<BugDetail>> {
         let dir = self.project_dir(slug)?;
         let agent = require_agent(agent)?;
         let text = validate::resolution(resolution)?;
         let id = validate_id(id, "BUG")?;
+        let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("bugs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_bug(&path, &id, slug)?;
@@ -572,25 +810,33 @@ impl Vault {
             }
         }
 
+        let floor = time::latest([
+            meta.created.as_str(),
+            meta.claimed.as_deref().unwrap_or(""),
+            last_comment(&md).as_str(),
+        ]);
+        time::require_at_or_after(&ts, "--at", &floor, "the bug's last recorded activity")?;
+
         meta.status = BugStatus::Resolved;
-        meta.resolved = Some(crate::now_iso8601());
+        meta.resolved = Some(ts.clone());
         meta.resolved_by = Some(agent.clone());
         if meta.assignee.is_none() {
             // Whoever wrote the fix owns it, even if they never ran `bug claim`.
             meta.assignee = Some(agent.clone());
-            meta.claimed.get_or_insert_with(crate::now_iso8601);
+            meta.claimed.get_or_insert_with(|| ts.clone());
         }
 
         let mut sections = body::sections(&md);
         body::upsert_section(&mut sections, "Resolution", &text, BUG_SECTIONS);
         write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &sections)?;
 
-        let event = self.append_event(
+        let event = self.append_event_at(
             slug,
             &agent,
             EV_BUG_RESOLVED,
             Some(&id),
             &body::excerpt(&text, 160),
+            &ts,
         )?;
         let record = self.bug(slug, &id)?;
         Ok(Written::new(id, &path, event, record))
@@ -598,7 +844,7 @@ impl Vault {
 
     // -- events -------------------------------------------------------------
 
-    /// Append one line to `projects/<slug>/events.jsonl`.
+    /// Append one line to `projects/<slug>/events.jsonl`, stamped now.
     pub fn append_event(
         &self,
         slug: &str,
@@ -607,9 +853,26 @@ impl Vault {
         r#ref: Option<&str>,
         summary: &str,
     ) -> Result<Event> {
+        self.append_event_at(slug, actor, event_type, r#ref, summary, &crate::now_iso8601())
+    }
+
+    /// Append one event carrying an explicit timestamp.
+    ///
+    /// Backdated mutations use this so the feed and the record agree: an event stamped
+    /// "now" for work that finished yesterday would put the record at the top of the
+    /// activity timeline and show a duration nobody worked.
+    pub fn append_event_at(
+        &self,
+        slug: &str,
+        actor: &str,
+        event_type: &str,
+        r#ref: Option<&str>,
+        summary: &str,
+        ts: &str,
+    ) -> Result<Event> {
         let slug = validate_slug(slug)?;
         let event = Event {
-            ts: crate::now_iso8601(),
+            ts: ts.to_string(),
             actor: actor.trim().to_string(),
             event_type: event_type.to_string(),
             r#ref: r#ref.map(|s| s.to_string()),
@@ -643,6 +906,34 @@ fn record_ids(dir: &Path, prefix: &str) -> Result<Vec<String>> {
         }
     }
     Ok(out)
+}
+
+/// First and last `### <ts>` entry under `## Updates` — the window a new note or an
+/// end-of-work timestamp has to fit around. Empty strings when there are no notes yet.
+fn update_stamps(md: &str) -> (String, String) {
+    let mut secs = body::sections(md);
+    let updates = body::take_section(&mut secs, "Updates")
+        .map(|s| body::work_updates(&s))
+        .unwrap_or_default();
+    let first = updates.first().map(|u| u.ts.clone()).unwrap_or_default();
+    let last = time::latest(updates.iter().map(|u| u.ts.as_str()));
+    (first, last)
+}
+
+/// Timestamp of the newest comment on a bug, or an empty string.
+fn last_comment(md: &str) -> String {
+    let mut secs = body::sections(md);
+    let comments = body::take_section(&mut secs, "Comments")
+        .map(|s| body::bug_comments(&s))
+        .unwrap_or_default();
+    time::latest(comments.iter().map(|c| c.ts.as_str()))
+}
+
+/// A note appended to a work log has to sit after the start and after every note already
+/// there, or the rendered timeline reads backwards.
+fn require_note_time(ts: &str, meta: &Worklog, md: &str) -> Result<()> {
+    time::require_at_or_after(ts, "--at", &meta.started, "the work log's started time")?;
+    time::require_at_or_after(ts, "--at", &update_stamps(md).1, "the previous note")
 }
 
 fn read_work(path: &Path, id: &str, slug: &str) -> Result<(String, Worklog, String)> {

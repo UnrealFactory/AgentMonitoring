@@ -55,7 +55,7 @@ vault/
                                   # { ts, actor, type, ref, summary }
                                   # type ∈ work_started|work_updated|work_done|work_abandoned|
                                   #        bug_created|bug_claimed|bug_commented|bug_resolved|
-                                  #        bug_closed|project_created
+                                  #        bug_closed|project_created|project_updated
     worklogs/WORK-0001.md         # zero-padded per-project sequence
     bugs/BUG-0001.md
 ```
@@ -127,17 +127,19 @@ IDs are immutable and per-project. Parsing must be lenient on unknown keys (forw
 
 ```
 agentmon init [--vault <dir>] [--name <vault name>]
-agentmon project create <slug> --name <n> [--description <d>] [--tags a,b]
+agentmon project create <slug> --name <n> [--description <d>] [--tags a,b] [--at T]
+agentmon project update <slug> [--name <n>] [--description <d>] [--tags a,b] [--at T]
 agentmon project list
-agentmon work start   -p <project> --agent <name> --title <t> [--tags] [--body-file f | --body s]
-agentmon work update  <WORK-ID> -p <project> --agent <name> (--message s | --body-file f)
-agentmon work done    <WORK-ID> -p <project> --agent <name> (--outcome s | --outcome-file f) [--files a,b]
+agentmon work start   -p <project> --agent <name> --title <t> [--tags] [--body-file f | --body s] [--started-at T]
+agentmon work update  <WORK-ID> -p <project> --agent <name> (--message s | --body-file|--message-file f) [--at T]
+agentmon work done    <WORK-ID> -p <project> --agent <name> (--outcome s | --outcome-file f) [--files a,b] [--finished-at T] [--started-at T]
+agentmon work abandon <WORK-ID> -p <project> --agent <name> (--reason s | --reason-file f) [--at T]
 agentmon work list    -p <project> [--status s] [--agent a] [--json]
 agentmon work view    <WORK-ID> -p <project> [--json]
-agentmon bug create   -p <project> --agent <name> --title <t> --severity <s> (--body s | --body-file f) [--labels]
-agentmon bug claim    <BUG-ID> -p <project> --agent <name>
-agentmon bug comment  <BUG-ID> -p <project> --agent <name> (--message s | --body-file f)
-agentmon bug resolve  <BUG-ID> -p <project> --agent <name> (--resolution s | --resolution-file f)
+agentmon bug create   -p <project> --agent <name> --title <t> --severity <s> (--body s | --body-file f) [--labels] [--created-at T]
+agentmon bug claim    <BUG-ID> -p <project> --agent <name> [--at T]
+agentmon bug comment  <BUG-ID> -p <project> --agent <name> (--message s | --body-file|--message-file f) [--at T]
+agentmon bug resolve  <BUG-ID> -p <project> --agent <name> (--resolution s | --resolution-file f) [--at T]
 agentmon bug list     -p <project> [--status s] [--severity] [--label] [--json]
 agentmon bug view     <BUG-ID> -p <project> [--json]
 agentmon status       -p <project>        # snapshot: active work, open bugs, recent events
@@ -148,6 +150,15 @@ Vault resolution: `--vault` flag > `AGENTMON_VAULT` env > `./vault` if it contai
 `work start` on `--body` expects `## What / ## Why / ## How` sections; CLI provides a
 template and rejects bodies missing them (clear error). Exit codes and `--json` output are
 part of the contract (agents script against them). Errors must say how to fix.
+
+`--vault` and `--json` are **global**: they may appear before or after the subcommand.
+
+**Backdating (`T` above).** Agents write records after doing the work, so every mutation
+takes the time it really happened (`--started-at` / `--finished-at` / `--at` /
+`--created-at`, UTC ISO8601). The supplied timestamp is written into the record's
+frontmatter *and* into the `events.jsonl` line, so the app's timeline is the real one.
+Rejected with exit `2`: a time in the future, or one earlier than the state it follows
+(an update before `started`, a resolution before `claimed`).
 
 ## Desktop app screens
 

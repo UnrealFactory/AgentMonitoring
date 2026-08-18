@@ -103,6 +103,7 @@ export const EVENT_LABEL: Record<EventType, string> = {
   bug_resolved: "resolved a bug",
   bug_closed: "closed a bug",
   project_created: "created the project",
+  project_updated: "updated the project",
 };
 
 export function eventLabel(type: string): string {

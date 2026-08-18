@@ -22,6 +22,9 @@ All subagents: opus5, effort max. Builders NEVER self-grade. Critics get fresh c
 3. Critic (opus/max, fresh context, harsh, defaults to FAIL) runs the app for real:
    `npm run screenshot` → reads PNGs → compares against reference shots in progress/refs/.
    Verdict = pass/fail + THE single biggest remaining gap (specific, actionable).
+   Critics running at the same time must not share port 5173 or the shots directory:
+   `SHOT_PORT=5180 SHOT_ONLY=dashboard,bugs SHOT_OUT=/tmp/critic-a npm run screenshot`
+   (`node scripts/screenshot.mjs --help` lists the screen keys).
 4. Critic appends a line to progress/rounds.jsonl and runs scripts/build-progress.mjs.
 5. fail → builder gets the gap; pass → piece done (final gate can still reopen).
 

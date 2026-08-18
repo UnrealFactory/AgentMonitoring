@@ -11,6 +11,10 @@ need is here.
 **In a hurry?** Jump to [Recipes](#recipes): three copy-pasteable sequences that cover
 recording work, filing a bug, and fixing someone else's bug.
 
+**Already finished the work and only now writing it down?** That is the normal case and it
+is fully supported — go to
+[Recording work you already finished](#recording-work-you-already-finished).
+
 ---
 
 ## Contents
@@ -21,12 +25,13 @@ recording work, filing a bug, and fixing someone else's bug.
 4. [Identifying yourself](#identifying-yourself)
 5. [The body contract](#the-body-contract) — the part agents get wrong
 6. [Recipes](#recipes) — copy, paste, edit the prose
-7. [Command reference](#command-reference)
-8. [JSON output](#json-output)
-9. [Exit codes](#exit-codes)
-10. [Writing records worth reading](#writing-records-worth-reading)
-11. [Troubleshooting](#troubleshooting)
-12. [Multiple agents at once](#multiple-agents-at-once)
+7. [Backdating](#backdating) — recording things after they happened
+8. [Command reference](#command-reference)
+9. [JSON output](#json-output)
+10. [Exit codes](#exit-codes)
+11. [Writing records worth reading](#writing-records-worth-reading)
+12. [Troubleshooting](#troubleshooting)
+13. [Multiple agents at once](#multiple-agents-at-once)
 
 ---
 
@@ -47,7 +52,7 @@ Two record types, and the difference matters:
 | | **Work log** (`WORK-NNNN`) | **Bug** (`BUG-NNNN`) |
 |---|---|---|
 | What it is | something *you* are doing | something that is *broken* |
-| Lifecycle | `in_progress` → `done` | `open` → `in_progress` → `resolved` |
+| Lifecycle | `in_progress` → `done` (or `abandoned`) | `open` → `in_progress` → `resolved` |
 | Body | `## What` `## Why` `## How` + `## Updates` + `## Outcome` | `## Report` + `## Comments` + `## Resolution` |
 | Created by | `agentmon work start` | `agentmon bug create` |
 
@@ -56,7 +61,9 @@ They never change. Every command that writes also appends one line to `events.js
 is what the app's activity feed and charts are built from — you never write that file
 yourself.
 
-Timestamps are always UTC ISO8601 with second precision: `2026-08-18T09:12:00Z`.
+Timestamps are always UTC ISO8601 with second precision: `2026-08-18T09:12:00Z`. Every
+command stamps "now" unless you tell it otherwise — and you can always tell it otherwise
+([Backdating](#backdating)).
 
 ---
 
@@ -108,7 +115,34 @@ agentmon --vault /c/Code/AgentMonitoring/vault status -p agent-monitoring
 export AGENTMON_VAULT=/c/Code/AgentMonitoring/vault
 ```
 
-`--vault` is global: it goes before or after the subcommand, either works.
+`--vault` is global: it goes before or after the subcommand, either works. So does
+`--json`.
+
+**If each of your commands runs in a fresh shell, `export` does not survive it.** Many
+agent harnesses start a new process per tool call, so an `export AGENTMON_VAULT=...` you
+ran in one call is gone by the next one — and rule 3 then quietly picks `./vault` in
+whatever directory you happen to be in. Two safe options:
+
+```bash
+# 1. pass the vault on every command (the reliable one)
+agentmon --vault /c/Code/AgentMonitoring/vault work list -p agent-monitoring
+
+# 2. or re-export inside the same command as the write
+export AGENTMON_VAULT=/c/Code/AgentMonitoring/vault && agentmon work list -p agent-monitoring
+```
+
+⚠️ The `./vault` fallback in this repository is the **live vault**: the real build history
+of AgentMonitoring, which humans read in the app. Anything you write there is real, is
+kept, and cannot be quietly deleted (there is no delete command by design). Experiment in
+a throwaway vault instead:
+
+```bash
+agentmon init --vault /tmp/scratch-vault --name "Scratch"
+agentmon --vault /tmp/scratch-vault project create demo --name "Demo"
+```
+
+`agentmon project list` prints the vault path it used as its first line — check it if you
+are unsure which vault a write went to.
 
 **Creating a vault** (only if you are starting from nothing — an existing project already
 has one, and `init` refuses to touch it):
@@ -138,7 +172,9 @@ export AGENTMON_PROJECT=agent-monitoring   # supplies -p as well
 
 With those exported, `agentmon work update WORK-0003 --message "..."` is a complete
 command. Explicit flags always win over the environment. **This manual writes both flags
-out in full**, so every example works with nothing exported.
+out in full**, so every example works with nothing exported — which also makes every
+example safe in a harness that gives each command its own shell (see
+[Finding the vault](#finding-the-vault)).
 
 ---
 
@@ -216,8 +252,21 @@ Two alternatives when a heredoc is awkward (for example, when your harness mangl
 cat notes.md | agentmon work start ... --body-file -    # read from stdin
 ```
 
-The same three forms exist for every prose flag: `--outcome` / `--outcome-file`,
-`--resolution` / `--resolution-file`, `--message` / `--body-file`.
+The same three forms exist for every prose flag — inline, from a file, or from stdin with
+`-`:
+
+| Command | Inline | From a file |
+|---|---|---|
+| `work start` | `--body` | `--body-file` |
+| `work update` | `--message` | `--body-file`, or `--message-file` (same flag) |
+| `work done` | `--outcome` | `--outcome-file` |
+| `work abandon` | `--reason` | `--reason-file` |
+| `bug create` | `--body` | `--body-file` |
+| `bug comment` | `--message` | `--body-file`, or `--message-file` (same flag) |
+| `bug resolve` | `--resolution` | `--resolution-file` |
+
+(`--message-file` exists because `--message`'s file form being called `--body-file` is a
+surprise; both spellings work and always will.)
 
 ---
 
@@ -283,10 +332,72 @@ Check your work the way a human will see it:
 agentmon work view WORK-0004 -p agent-monitoring
 ```
 
+#### Recording work you already finished
+
+You did not run `work start` when you began — you are writing all of this up at the end.
+That is normal, and it does **not** mean the record has to claim the work took four
+seconds. Tell the CLI when things really happened. (`plan.md` and `outcome.md` below are
+files you wrote first; `--body "..."` and `--outcome "..."` inline work exactly the same.)
+
+```bash
+# 1. Start the record with the real start time. Prints "Started WORK-0004".
+agentmon work start -p agent-monitoring \
+  --agent my-agent \
+  --title "Cache project counts so the sidebar stops re-reading every record" \
+  --tags performance,frontend \
+  --started-at 2026-08-18T09:12:00Z \
+  --body-file plan.md
+
+# 2. Optional: the notes you would have written along the way, each with its own time.
+agentmon work update WORK-0004 -p agent-monitoring --agent my-agent \
+  --at 2026-08-18T10:05:00Z \
+  --message "Cache is in and the sidebar no longer re-parses: screen switch went from 180ms to 12ms. Invalidation on a vault switch still missing."
+
+# 3. Close it with the real end time.
+agentmon work done WORK-0004 -p agent-monitoring --agent my-agent \
+  --files src/lib/api.ts,src/AppContext.tsx \
+  --finished-at 2026-08-18T11:30:00Z \
+  --outcome-file outcome.md
+```
+
+That is a record a human cannot tell apart from one written live: `started`, `finished`,
+every note, **and every line in `events.jsonl`** carry the times you gave, so the
+dashboard's timeline, the durations and the activity feed are all the real ones.
+
+Two details worth knowing:
+
+- `--finished-at` belongs to `work done`, not to `work start` (a work log gains its end
+  time when it is closed). Passing it to `work start` fails with exit `2` and prints the
+  two commands above.
+- Forgot `--started-at` and the record now says the work began when you typed it?
+  `work done --started-at <when it really began> --finished-at <when it ended>` corrects
+  both in one go.
+
+The full set of timestamp flags, and the two rules that can reject one, are in
+[Backdating](#backdating).
+
+#### If the work stops instead of finishing
+
+Work that will never be finished should say so, rather than sitting `in_progress` forever
+on the dashboard with your name on it:
+
+```bash
+agentmon work abandon WORK-0004 -p agent-monitoring \
+  --agent my-agent \
+  --reason "Superseded by WORK-0009, which caches at the API layer instead and covers the same screens; nothing from this branch was kept."
+```
+
+Status becomes `abandoned`, the reason is appended under `## Updates`, and the clock stops
+(`finished` is stamped with the moment it stopped, or with `--at <when>` if it stopped
+earlier).
+
 ### Recipe 2 — file a bug
 
 File a bug for something broken that you are **not** fixing right now. If you are fixing it
 immediately, a work log is usually the better record.
+
+(The `## Report` heading below is optional — plain prose becomes the report on its own. It
+is written out here because it makes the example easy to extend with a second section.)
 
 ```bash
 agentmon bug create -p agent-monitoring \
@@ -369,12 +480,73 @@ Rules the CLI enforces along the way, so you are not surprised:
 - Resolving an already-resolved bug fails with exit `5`; if it regressed, file a new bug
   with `--refs BUG-0002`.
 
+Filing all of this after the fact? Every step takes the time it really happened:
+`bug create --created-at`, and `--at` on `claim`, `comment` and `resolve` — see
+[Backdating](#backdating).
+
+---
+
+## Backdating
+
+Agents almost always write the record *after* doing the thing. Every mutation therefore
+takes the time it really happened; nothing is inferred from when you typed it.
+
+| Command | Flag | What it sets |
+|---|---|---|
+| `project create` | `--at` | `createdAt` and the `project_created` event |
+| `project update` | `--at` | the `project_updated` event |
+| `work start` | `--started-at` | `started` and the `work_started` event |
+| `work update` | `--at` | the `### <timestamp>` note heading and its event |
+| `work done` | `--finished-at` | `finished` and the `work_done` event |
+| `work done` | `--started-at` | corrects `started` on a record that was logged late |
+| `work abandon` | `--at` | `finished`, the note heading, and the `work_abandoned` event |
+| `bug create` | `--created-at` | `created` and the `bug_created` event |
+| `bug claim` | `--at` | `claimed` and the `bug_claimed` event |
+| `bug comment` | `--at` | the comment heading and the `bug_commented` event |
+| `bug resolve` | `--at` | `resolved` and the `bug_resolved` event |
+
+**Accepted spellings.** UTC ISO8601 is the canonical one; the rest are conveniences and
+are stored normalized to it:
+
+```
+2026-08-18T09:12:00Z        canonical — what ends up in the file
+2026-08-18T09:12            seconds optional, read as UTC
+"2026-08-18 09:12:00"       space instead of T (quote it, the shell splits on spaces)
+2026-08-18                  midnight UTC
+2026-08-18T11:12:00+02:00   an offset, converted to UTC (this one is 09:12Z)
+```
+
+Two rules, both enforced with exit `2` before anything is written:
+
+1. **Not the future.** A record documents work that already happened. (A minute of clock
+   skew is tolerated, so `--at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"` is always safe.)
+2. **Not before the state it follows.** An update cannot predate `started` or the note
+   before it; a resolution cannot predate the claim or the last comment. The error names
+   both times, so the fix is arithmetic, not guesswork:
+
+   ```
+   agentmon: invalid --at '2026-08-18T10:00:00Z': expected a time at or after the work
+   log's started time (2026-08-18T11:00:00Z) — timelines are rendered in order, so an
+   out-of-order timestamp would show the work happening backwards
+   ```
+
+If you genuinely do not know when something happened, leave the flag off: `now` is honest,
+and a wrong timestamp is worse than an imprecise one.
+
+Getting the current time to build a stamp from:
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ          # 2026-08-18T12:41:07Z
+date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ
+```
+
 ---
 
 ## Command reference
 
-Global: `--vault <DIR>` works on every command. `--json` works on every command (see
-[JSON output](#json-output)). Every command has a worked example in `--help`.
+Global: `--vault <DIR>` and `--json` work on **every** command, and go anywhere on the
+line — `agentmon --json work list -p x` and `agentmon work list -p x --json` are the same
+command (see [JSON output](#json-output)). Every command has a worked example in `--help`.
 
 ### `agentmon init`
 
@@ -393,7 +565,8 @@ agentmon init --name "Team records" --vault /srv/records
 ### `agentmon project create`
 
 ```
-agentmon project create <slug> --name <n> [--description <d>] [--tags a,b] [--agent <name>] [--json]
+agentmon project create <slug> --name <n> [--description <d>] [--tags a,b]
+                       [--agent <name>] [--at <ISO8601>] [--json]
 ```
 
 `<slug>` is the directory name and the value you pass to `-p` afterwards: lowercase
@@ -404,6 +577,26 @@ agentmon project create checkout-rewrite \
   --name "Checkout rewrite" \
   --description "Replace the legacy checkout flow with the new payment provider." \
   --tags frontend,payments \
+  --agent my-agent
+```
+
+### `agentmon project update`
+
+```
+agentmon project update <slug> [--name <n>] [--description <d>] [--tags a,b]
+                       [--agent <name>] [--at <ISO8601>] [--json]
+```
+
+Changes a project's display metadata. Only the flags you pass change; `--tags` replaces the
+whole list. The slug and id never move — they are what every record and URL points at.
+
+Use it instead of editing `project.json` by hand: this way the change is logged as a
+`project_updated` event, which is what the app's activity feed reads.
+
+```bash
+agentmon project update checkout-rewrite \
+  --description "Replace the legacy checkout flow with the new payment provider, without a big-bang cutover." \
+  --tags frontend,payments,q3 \
   --agent my-agent
 ```
 
@@ -424,17 +617,23 @@ agentmon project list
 ```
 agentmon work start -p <project> --agent <name> --title <t>
                     [--tags a,b] [--refs WORK-0001,BUG-0002]
-                    (--body <markdown> | --body-file <file|->) [--json]
+                    (--body <markdown> | --body-file <file|->)
+                    [--started-at <ISO8601>] [--json]
 ```
 
 Creates the next `WORK-NNNN` and prints its id. Body must contain `## What`, `## Why`,
 `## How` — see [the body contract](#the-body-contract). `--refs` links related records and
 is what makes "this work fixed that bug" visible in the app.
 
+`--started-at` is for work that began before you got round to recording it; it sets
+`started` and stamps the `work_started` event ([Backdating](#backdating)). There is no
+`--finished-at` here: a work log gains its end time from `work done`.
+
 ```bash
 agentmon work start -p agent-monitoring --agent my-agent \
   --title "Wire the vault watcher into the desktop app" \
   --tags tauri,live-updates --refs BUG-0002 \
+  --started-at 2026-08-18T09:12:00Z \
   --body-file plan.md
 ```
 
@@ -442,16 +641,24 @@ agentmon work start -p agent-monitoring --agent my-agent \
 
 ```
 agentmon work update <WORK-ID> -p <project> --agent <name>
-                     (--message <text> | --body-file <file|->) [--json]
+                     (--message <text> | --body-file <file|-> | --message-file <file|->)
+                     [--at <ISO8601>] [--json]
 ```
 
 Appends a timestamped note under `## Updates`. Append-only: notes are never edited or
-reordered. Fails with exit `5` on a work log that is already `done` — finished records are
-history.
+reordered. Fails with exit `5` on a work log that is already `done` or `abandoned` —
+closed records are history.
+
+`--message-file` and `--body-file` are the same flag under two names. `--at` stamps the
+note with the time it describes, which must be at or after `started` and at or after the
+previous note ([Backdating](#backdating)).
 
 ```bash
 agentmon work update WORK-0004 -p agent-monitoring --agent my-agent \
   --message "Debounce is in. One save produced four raw filesystem events; now it is one refresh."
+
+agentmon work update WORK-0004 -p agent-monitoring --agent my-agent \
+  --at 2026-08-18T10:05:00Z --message-file note.md
 ```
 
 ### `agentmon work done`
@@ -459,17 +666,49 @@ agentmon work update WORK-0004 -p agent-monitoring --agent my-agent \
 ```
 agentmon work done <WORK-ID> -p <project> --agent <name>
                    (--outcome <text> | --outcome-file <file|->)
-                   [--files a,b] [--refs ...] [--json]
+                   [--files a,b] [--refs ...]
+                   [--finished-at <ISO8601>] [--started-at <ISO8601>] [--json]
 ```
 
 Sets `status: done`, stamps `finished`, and writes `## Outcome`. `--files` and `--refs` are
 merged into whatever the record already has (never replaced, never duplicated). The outcome
 needs at least ~24 characters of real content; `"done"` is rejected.
 
+`--finished-at` records when the work actually ended (it must be at or after `started` and
+at or after the last note). `--started-at` corrects a start time on a record you created
+late — use it when `work start` stamped "now" for work that began hours earlier.
+
 ```bash
 agentmon work done WORK-0004 -p agent-monitoring --agent my-agent \
   --files src-tauri/src/lib.rs \
   --outcome "Shipped the debounced watcher; cargo test --workspace green and one CLI write now produces exactly one UI refresh."
+
+# the same work, written up two hours after it ended
+agentmon work done WORK-0004 -p agent-monitoring --agent my-agent \
+  --started-at 2026-08-18T09:12:00Z --finished-at 2026-08-18T11:30:00Z \
+  --outcome-file outcome.md
+```
+
+### `agentmon work abandon`
+
+```
+agentmon work abandon <WORK-ID> -p <project> --agent <name>
+                      (--reason <text> | --reason-file <file|->)
+                      [--at <ISO8601>] [--json]
+```
+
+Sets `status: abandoned`, stamps `finished` with the moment it stopped, appends the reason
+as a timestamped note under `## Updates`, and logs a `work_abandoned` event.
+
+Use it when work stops for good — superseded, blocked forever, or the approach turned out
+to be wrong. The alternative is a work log that claims to be in progress on a dashboard
+nobody is working from. Say what a reader should look at instead; that is the useful part
+of the reason. Abandoning finished work fails with exit `5` (it happened; write a new
+record referencing it instead), and so does abandoning it twice.
+
+```bash
+agentmon work abandon WORK-0004 -p agent-monitoring --agent my-agent \
+  --reason "Superseded by WORK-0009, which caches at the API layer instead and covers the same screens; nothing from this branch was kept."
 ```
 
 ### `agentmon work list`
@@ -498,7 +737,8 @@ agentmon work view WORK-0003 -p agent-monitoring
 
 ```
 agentmon bug create -p <project> --agent <name> --title <t> --severity <critical|high|medium|low>
-                    (--body <text> | --body-file <file|->) [--labels a,b] [--refs ...] [--json]
+                    (--body <text> | --body-file <file|->) [--labels a,b] [--refs ...]
+                    [--created-at <ISO8601>] [--json]
 ```
 
 Plain prose becomes `## Report`. See [Recipe 2](#recipe-2--file-a-bug).
@@ -513,10 +753,11 @@ agentmon bug create -p agent-monitoring --agent my-agent \
 ### `agentmon bug claim`
 
 ```
-agentmon bug claim <BUG-ID> -p <project> --agent <name> [--json]
+agentmon bug claim <BUG-ID> -p <project> --agent <name> [--at <ISO8601>] [--json]
 ```
 
-Sets `assignee` and moves the bug to `in_progress`.
+Sets `assignee` and moves the bug to `in_progress`. `--at` records when you took it (at or
+after the bug's `created`).
 
 ```bash
 agentmon bug claim BUG-0002 -p agent-monitoring --agent my-agent
@@ -526,10 +767,13 @@ agentmon bug claim BUG-0002 -p agent-monitoring --agent my-agent
 
 ```
 agentmon bug comment <BUG-ID> -p <project> --agent <name>
-                     (--message <text> | --body-file <file|->) [--json]
+                     (--message <text> | --body-file <file|-> | --message-file <file|->)
+                     [--at <ISO8601>] [--json]
 ```
 
 Appends `### <timestamp> — <agent>` to the thread. Allowed in any state.
+`--message-file` and `--body-file` are the same flag; `--at` must be at or after the bug's
+`created` and at or after the previous comment.
 
 ```bash
 agentmon bug comment BUG-0002 -p agent-monitoring --agent my-agent \
@@ -540,10 +784,13 @@ agentmon bug comment BUG-0002 -p agent-monitoring --agent my-agent \
 
 ```
 agentmon bug resolve <BUG-ID> -p <project> --agent <name>
-                     (--resolution <text> | --resolution-file <file|->) [--json]
+                     (--resolution <text> | --resolution-file <file|->)
+                     [--at <ISO8601>] [--json]
 ```
 
 Writes `## Resolution`, sets `status: resolved`, stamps `resolved` and `resolved_by`.
+`--at` records when it was actually fixed; it must be at or after everything already on the
+bug (created, claimed, the last comment).
 
 ```bash
 agentmon bug resolve BUG-0002 -p agent-monitoring --agent my-agent \
@@ -613,7 +860,9 @@ agentmon doctor --strict --json
 ## JSON output
 
 `--json` makes **all** output machine-readable, including failures, so a script never has
-to parse prose.
+to parse prose. It is a global flag: put it after the subcommand
+(`agentmon work list -p x --json`) or before it (`agentmon --json work list -p x`) —
+both are the same command.
 
 Success on a mutation:
 
@@ -671,7 +920,7 @@ not an envelope — those are the shapes the desktop app consumes.
 |---|---|---|
 | `0` | Success | — |
 | `1` | The vault has problems (`doctor` found errors) | Read the listed problems; each one names its fix |
-| `2` | Usage error: unknown flag, missing argument, bad value | Re-read the message; it names the flag and the allowed values |
+| `2` | Usage error: unknown flag, missing argument, bad value — including a timestamp that will not parse, is in the future, or is out of order | Re-read the message; it names the flag and the allowed values |
 | `3` | Not found: vault, project or record | `agentmon project list` / `work list` to see what exists |
 | `4` | Body rejected: missing sections, or placeholder text | The message prints the template — rewrite and re-run |
 | `5` | Conflict: already done, already claimed, already exists | The message says the alternative command to run |
@@ -719,7 +968,26 @@ you want a model to copy.
 
 **`no vault found at ...`** — you are not in the repository root, or the vault is elsewhere.
 Pass `--vault /path/to/vault`, or `export AGENTMON_VAULT=/path/to/vault`. `agentmon init`
-only if you genuinely need a new one.
+only if you genuinely need a new one. If it worked a moment ago and now does not, your
+harness probably gave that command a fresh shell and lost the export — pass `--vault` on
+every command instead ([Finding the vault](#finding-the-vault)).
+
+**`invalid --started-at '18/08/2026': expected UTC ISO8601 ...`** — the message lists every
+accepted spelling; the canonical one is `2026-08-18T09:12:00Z`. Build one with
+`date -u +%Y-%m-%dT%H:%M:%SZ`.
+
+**`invalid --at '...': expected a time at or after ...`** — the timestamp lands before the
+thing it follows (the start of the work, the previous note, the claim). The message prints
+the time you have to beat; pick a later one, or drop the flag and let it stamp now.
+
+**`invalid --finished-at '...': expected a time at or before now`** — a clock or a typo:
+records document work that already happened. Check the year and the timezone (an offset
+form like `+02:00` is fine, it is converted for you).
+
+**`--finished-at is not a flag of 'work start'`** — a work log gains its end time when it
+is closed. Run `work start --started-at <began>` first, then
+`work done <ID> --finished-at <ended> --outcome "..."`
+([Recording work you already finished](#recording-work-you-already-finished)).
 
 **`project '<slug>' not found`** — run `agentmon project list`. Slugs are the directory
 names under `projects/`; `-p` takes the slug, not the display name.
@@ -733,7 +1001,11 @@ at the start of a line, or they use `#`/`###` instead of `##`. Exactly two hashe
 space.
 
 **`WORK-0004 is already done`** — a finished work log is immutable. Start a new one:
-`agentmon work start`.
+`agentmon work start`. The same applies to `abandoned` records.
+
+**A work log of mine is stuck `in_progress` and I am not working on it** — close it
+honestly: `agentmon work abandon <ID> -p <project> --agent <you> --reason "..."`. Do not
+leave it; the dashboard reads `in_progress` as "an agent is on this right now".
 
 **`BUG-0002 is already claimed by <someone>`** — do not take it over. Add what you know with
 `agentmon bug comment`, or pick another bug from `agentmon bug list --status open`.

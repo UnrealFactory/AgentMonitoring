@@ -94,6 +94,7 @@ impl Report {
 /// writer is allowed to invent types this build has not heard of.
 const EVENT_TYPES: &[&str] = &[
     "project_created",
+    "project_updated",
     "work_started",
     "work_updated",
     "work_done",

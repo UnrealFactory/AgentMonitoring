@@ -43,6 +43,7 @@ impl TempVault {
                 description: "A project used by the agentmon-core tests.".into(),
                 tags: vec!["test".into()],
                 actor: "test-runner".into(),
+                at: None,
             })
             .expect("create project");
         tv
@@ -79,6 +80,7 @@ fn start(tv: &TempVault, title: &str) -> String {
                 tags: vec!["tauri".into(), "rust".into()],
                 refs: vec![],
                 body: BODY.into(),
+                started_at: None,
             },
         )
         .expect("work start")
@@ -102,6 +104,7 @@ fn work_start_writes_a_record_the_reader_understands() {
                 tags: vec!["tauri".into(), "live-updates".into()],
                 refs: vec!["bug-0002".into()], // lowercase in, canonical out
                 body: BODY.into(),
+                started_at: None,
             },
         )
         .unwrap();
@@ -143,10 +146,17 @@ fn update_then_done_round_trips_through_the_reader() {
             "cli-builder",
             "Watcher is running; a single save produced four raw notify events, so the debounce \
              is not optional.",
+            None,
         )
         .unwrap();
     tv.vault
-        .update_work("demo", &id, "cli-builder", "Debounce set to 250ms; one reload per save.")
+        .update_work(
+            "demo",
+            &id,
+            "cli-builder",
+            "Debounce set to 250ms; one reload per save.",
+            None,
+        )
         .unwrap();
     tv.vault
         .finish_work(
@@ -157,6 +167,8 @@ fn update_then_done_round_trips_through_the_reader() {
                 outcome: OUTCOME.into(),
                 files: vec!["src-tauri/src/lib.rs".into(), "src-tauri/Cargo.toml".into()],
                 refs: vec!["BUG-0002".into()],
+                finished_at: None,
+                started_at: None,
             },
         )
         .unwrap();
@@ -218,13 +230,15 @@ fn a_finished_work_log_is_immutable() {
                 outcome: OUTCOME.into(),
                 files: vec![],
                 refs: vec![],
+                finished_at: None,
+                started_at: None,
             },
         )
         .unwrap();
 
     let err = tv
         .vault
-        .update_work("demo", &id, "cli-builder", "One more thought.")
+        .update_work("demo", &id, "cli-builder", "One more thought.", None)
         .unwrap_err();
     assert_eq!(err.kind(), "conflict");
     assert!(err.to_string().contains("already done"), "{err}");
@@ -240,6 +254,8 @@ fn a_finished_work_log_is_immutable() {
                 outcome: OUTCOME.into(),
                 files: vec![],
                 refs: vec![],
+                finished_at: None,
+                started_at: None,
             },
         )
         .unwrap_err();
@@ -261,6 +277,8 @@ fn done_requires_a_real_outcome_and_prints_the_template() {
                     outcome: bad.into(),
                     files: vec![],
                     refs: vec![],
+                    finished_at: None,
+                    started_at: None,
                 },
             )
             .unwrap_err();
@@ -288,6 +306,7 @@ fn start_rejects_a_body_without_what_why_how() {
                 tags: vec![],
                 refs: vec![],
                 body: "## What\n\nI did the thing and it works now.\n".into(),
+                started_at: None,
             },
         )
         .unwrap_err();
@@ -324,6 +343,7 @@ fn file_bug(tv: &TempVault) -> String {
                 labels: vec!["tauri".into(), "live-updates".into()],
                 refs: vec![],
                 body: REPORT.into(),
+                created_at: None,
             },
         )
         .expect("bug create")
@@ -344,7 +364,7 @@ fn bug_lifecycle_round_trips() {
     assert!(b.report.contains("npm run tauri:dev"));
     assert!(b.resolution.is_none());
 
-    tv.vault.claim_bug("demo", &id, "cli-builder").unwrap();
+    tv.vault.claim_bug("demo", &id, "cli-builder", None).unwrap();
     let b = tv.vault.bug("demo", &id).unwrap();
     assert_eq!(b.meta.status, BugStatus::InProgress);
     assert_eq!(b.meta.assignee.as_deref(), Some("cli-builder"));
@@ -357,6 +377,7 @@ fn bug_lifecycle_round_trips() {
             "cli-builder",
             "Root cause: the Tauri shell never started a watcher, so `vault-changed` was never \
              emitted.",
+            None,
         )
         .unwrap();
     let b = tv.vault.bug("demo", &id).unwrap();
@@ -372,6 +393,7 @@ fn bug_lifecycle_round_trips() {
             "cli-builder",
             "Started a debounced notify watcher in setup() and re-armed it from set_vault_path. \
              Verified with cargo check and by watching the dashboard refresh.",
+            None,
         )
         .unwrap();
     let b = tv.vault.bug("demo", &id).unwrap();
@@ -398,9 +420,9 @@ fn bug_lifecycle_round_trips() {
 fn a_bug_claimed_by_someone_else_cannot_be_stolen() {
     let tv = TempVault::with_project("claim");
     let id = file_bug(&tv);
-    tv.vault.claim_bug("demo", &id, "cli-builder").unwrap();
+    tv.vault.claim_bug("demo", &id, "cli-builder", None).unwrap();
 
-    let err = tv.vault.claim_bug("demo", &id, "other-agent").unwrap_err();
+    let err = tv.vault.claim_bug("demo", &id, "other-agent", None).unwrap_err();
     assert_eq!(err.kind(), "conflict");
     assert!(err.to_string().contains("already claimed by cli-builder"), "{err}");
     assert!(err.to_string().contains("agentmon bug comment"), "suggests the fix: {err}");
@@ -411,7 +433,7 @@ fn a_bug_claimed_by_someone_else_cannot_be_stolen() {
         Some("cli-builder")
     );
     // and re-claiming by the same agent is a no-op, not an error (scripts get re-run)
-    tv.vault.claim_bug("demo", &id, "cli-builder").unwrap();
+    tv.vault.claim_bug("demo", &id, "cli-builder", None).unwrap();
 }
 
 #[test]
@@ -420,18 +442,18 @@ fn resolving_twice_is_refused_and_resolving_unclaimed_assigns_the_fixer() {
     let id = file_bug(&tv);
     let res = "Fixed by starting the watcher in setup(); verified with cargo check and a live \
                dashboard refresh.";
-    tv.vault.resolve_bug("demo", &id, "cli-builder", res).unwrap();
+    tv.vault.resolve_bug("demo", &id, "cli-builder", res, None).unwrap();
 
     let b = tv.vault.bug("demo", &id).unwrap();
     assert_eq!(b.meta.assignee.as_deref(), Some("cli-builder"));
     assert!(b.meta.claimed.is_some(), "resolving unclaimed records the claim too");
 
-    let err = tv.vault.resolve_bug("demo", &id, "other", res).unwrap_err();
+    let err = tv.vault.resolve_bug("demo", &id, "other", res, None).unwrap_err();
     assert_eq!(err.kind(), "conflict");
     assert!(err.to_string().contains("already resolved by cli-builder"), "{err}");
     // a comment on a resolved bug is still allowed — threads outlive the fix
     tv.vault
-        .comment_bug("demo", &id, "reviewer", "Confirmed on my machine after a rebuild.")
+        .comment_bug("demo", &id, "reviewer", "Confirmed on my machine after a rebuild.", None)
         .unwrap();
     assert_eq!(tv.vault.bug("demo", &id).unwrap().comments.len(), 1);
 }
@@ -451,6 +473,7 @@ fn ids_are_zero_padded_and_scoped_per_project() {
                 description: format!("Project {slug}"),
                 tags: vec![],
                 actor: "test-runner".into(),
+                at: None,
             })
             .unwrap();
     }
@@ -466,6 +489,7 @@ fn ids_are_zero_padded_and_scoped_per_project() {
                         tags: vec![],
                         refs: vec![],
                         body: BODY.into(),
+                            started_at: None,
                     },
                 )
                 .unwrap();
@@ -482,6 +506,7 @@ fn ids_are_zero_padded_and_scoped_per_project() {
                     labels: vec![],
                     refs: vec![],
                     body: REPORT.into(),
+                    created_at: None,
                 },
             )
             .unwrap();
@@ -501,6 +526,7 @@ fn creating_a_project_twice_is_a_conflict_not_a_reset() {
             description: String::new(),
             tags: vec![],
             actor: "test-runner".into(),
+            at: None,
         })
         .unwrap_err();
     assert_eq!(err.kind(), "conflict");
@@ -534,6 +560,7 @@ fn concurrent_writers_never_share_an_id_or_lose_an_event() {
                                 tags: vec![],
                                 refs: vec![],
                                 body: BODY.into(),
+                                    started_at: None,
                             },
                         )
                         .expect("concurrent start");
@@ -577,7 +604,7 @@ fn unknown_frontmatter_keys_survive_a_rewrite() {
     fs::write(&path, patched).unwrap();
 
     tv.vault
-        .update_work("demo", &id, "cli-builder", "Rewrote the record through the CLI.")
+        .update_work("demo", &id, "cli-builder", "Rewrote the record through the CLI.", None)
         .unwrap();
     let after = fs::read_to_string(&path).unwrap();
     assert!(after.contains("reviewers: [human-1]"), "unknown key kept:\n{after}");
@@ -590,7 +617,7 @@ fn an_update_from_another_agent_is_attributed_in_the_body() {
     let tv = TempVault::with_project("attribution");
     let id = start(&tv, "Wire the vault watcher into the desktop app");
     tv.vault
-        .update_work("demo", &id, "reviewer", "Picked this up while the author was offline.")
+        .update_work("demo", &id, "reviewer", "Picked this up while the author was offline.", None)
         .unwrap();
     let d = tv.vault.worklog("demo", &id).unwrap();
     assert_eq!(d.updates[0].ts.len(), 20, "the heading stays a bare timestamp");
@@ -616,7 +643,7 @@ fn doctor_is_clean_on_a_vault_the_cli_wrote() {
     let tv = TempVault::with_project("doctor-clean");
     let id = start(&tv, "Wire the vault watcher into the desktop app");
     tv.vault
-        .update_work("demo", &id, "cli-builder", "Halfway: the watcher fires.")
+        .update_work("demo", &id, "cli-builder", "Halfway: the watcher fires.", None)
         .unwrap();
     tv.vault
         .finish_work(
@@ -627,13 +654,15 @@ fn doctor_is_clean_on_a_vault_the_cli_wrote() {
                 outcome: OUTCOME.into(),
                 files: vec!["src-tauri/src/lib.rs".into()],
                 refs: vec![],
+                finished_at: None,
+                started_at: None,
             },
         )
         .unwrap();
     let bug = file_bug(&tv);
-    tv.vault.claim_bug("demo", &bug, "cli-builder").unwrap();
+    tv.vault.claim_bug("demo", &bug, "cli-builder", None).unwrap();
     tv.vault
-        .resolve_bug("demo", &bug, "cli-builder", OUTCOME)
+        .resolve_bug("demo", &bug, "cli-builder", OUTCOME, None)
         .unwrap();
 
     let report = doctor::check(&tv.vault).unwrap();

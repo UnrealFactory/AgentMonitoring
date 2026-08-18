@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use agentmon_core::{
-    doctor, validate, CoreError, FinishWork, NewBug, NewProject, Severity, StartWork, Vault,
-    WorkStatus,
+    doctor, validate, AbandonWork, CoreError, FinishWork, NewBug, NewProject, Severity, StartWork,
+    UpdateProject, Vault, WorkStatus,
 };
 use clap::{Args, CommandFactory, Parser, Subcommand};
 
@@ -60,11 +60,22 @@ EXAMPLES
   agentmon status -p agent-monitoring
   agentmon doctor
 
+ALREADY FINISHED THE WORK?
+  Record it after the fact — every mutation takes the time it really happened:
+  agentmon work start -p <proj> --agent <you> --title \"...\" --body \"...\" \\
+      --started-at 2026-08-18T09:12:00Z
+  agentmon work done WORK-0007 -p <proj> --agent <you> --outcome \"...\" \\
+      --finished-at 2026-08-18T11:30:00Z
+  Also: --created-at on `bug create`, --at on work update/abandon and bug claim/comment/resolve.
+
 VAULT RESOLUTION
   --vault <dir>  >  $AGENTMON_VAULT  >  ./vault (when it contains vault.json)
 
 DEFAULTS FROM THE ENVIRONMENT
   $AGENTMON_AGENT    supplies --agent    $AGENTMON_PROJECT  supplies --project
+
+GLOBAL FLAGS
+  --vault <dir> and --json work anywhere on the line, before or after the subcommand.
 
 EXIT CODES
   0 ok   1 vault has problems   2 usage   3 not found
@@ -91,6 +102,13 @@ struct Cli {
     #[arg(long, global = true, value_name = "DIR")]
     vault: Option<PathBuf>,
 
+    /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
+    ///
+    /// Global, so `agentmon --json work list -p x` and `agentmon work list -p x --json`
+    /// are the same command — agents write it both ways.
+    #[arg(long, global = true)]
+    json: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -104,9 +122,6 @@ enum Command {
         /// Human-readable vault name, shown in the app.
         #[arg(long, value_name = "NAME", default_value = "AgentMonitoring vault")]
         name: String,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
     },
     /// Create and list projects.
     #[command(subcommand)]
@@ -124,9 +139,6 @@ enum Command {
         /// Project slug.
         #[arg(short, long, value_name = "SLUG", env = "AGENTMON_PROJECT")]
         project: String,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
     },
     /// Validate vault integrity. Exits 1 when something is wrong.
     #[command(after_help = "EXAMPLES\n  agentmon doctor\n  agentmon doctor --strict --json\n\n\
@@ -136,9 +148,6 @@ enum Command {
         /// Treat warnings as failures.
         #[arg(long)]
         strict: bool,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
     },
 }
 
@@ -163,17 +172,37 @@ enum ProjectCmd {
         /// Agent recorded as the actor of the project_created event.
         #[arg(long, env = "AGENTMON_AGENT", default_value = "agentmon")]
         agent: String,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
+        /// When the project was created (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
+    },
+    /// Change a project's name, description or tags.
+    #[command(after_help = "EXAMPLE\n  agentmon project update checkout-rewrite \\\n    \
+        --description \"Replace the legacy checkout with the new payment provider.\" \\\n    \
+        --tags frontend,payments,q3\n\n  Only the flags you pass change; --tags replaces the \
+        whole list. Logs a project_updated event, which hand-editing project.json does not.")]
+    Update {
+        /// The project slug (the directory name under projects/).
+        slug: String,
+        /// New display name.
         #[arg(long)]
-        json: bool,
+        name: Option<String>,
+        /// New one-or-two-sentence description.
+        #[arg(long)]
+        description: Option<String>,
+        /// Replacement tag list, comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        tags: Option<Vec<String>>,
+        /// Agent recorded as the actor of the project_updated event.
+        #[arg(long, env = "AGENTMON_AGENT", default_value = "agentmon")]
+        agent: String,
+        /// When the change happened (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
     },
     /// List projects in the vault.
     #[command(after_help = "EXAMPLE\n  agentmon project list")]
-    List {
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
-    },
+    List,
 }
 
 #[derive(Args, Debug)]
@@ -218,7 +247,18 @@ EXAMPLE (Git Bash)
   EOF
   )\"
 
-  Long bodies: write a file and pass --body-file notes.md (or --body-file - for stdin).";
+  Long bodies: write a file and pass --body-file notes.md (or --body-file - for stdin).
+
+ALREADY STARTED (or finished) THE WORK?
+  Pass the real start time, then close the record with the real end time:
+  agentmon work start ... --started-at 2026-08-18T09:12:00Z
+  agentmon work done WORK-0007 ... --finished-at 2026-08-18T11:30:00Z --outcome \"...\"
+
+TIMESTAMPS (every --started-at / --finished-at / --at / --created-at)
+  UTC ISO8601: 2026-08-18T09:12:00Z. Also accepted: 2026-08-18T09:12,
+  \"2026-08-18 09:12:00\", 2026-08-18 (midnight UTC), 2026-08-18T11:12:00+02:00.
+  Refused (exit 2): a time in the future, or one before the state it follows. The time
+  is written into the record *and* into events.jsonl, so the app's timeline stays true.";
 
 #[derive(Subcommand, Debug)]
 enum WorkCmd {
@@ -244,15 +284,20 @@ enum WorkCmd {
         /// Read the body from a file ('-' reads stdin).
         #[arg(long, value_name = "FILE")]
         body_file: Option<PathBuf>,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
+        /// When the work actually began (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        started_at: Option<String>,
+        /// Not valid here — a record gains its end time from `work done --finished-at`.
+        #[arg(long, value_name = "ISO8601", hide = true)]
+        finished_at: Option<String>,
     },
     /// Append a timestamped progress note to a work log.
     #[command(after_help = "EXAMPLE\n  agentmon work update WORK-0003 -p agent-monitoring \\\n    \
         --agent cli-builder \\\n    --message \"Debounce is in: one save produced four notify \
         events, now one reload.\"\n\n  Notes are append-only and timestamped; they are the \
-        story of the work, so write what changed and what you learned, not \"progress\".")]
+        story of the work, so write what changed and what you learned, not \"progress\".\n\n\
+        Writing it up afterwards? --at 2026-08-18T10:05:00Z stamps the note with the time it \
+        actually happened.")]
     Update {
         /// WORK-NNNN.
         id: String,
@@ -263,19 +308,46 @@ enum WorkCmd {
         /// The progress note: what changed, what you learned, what is next.
         #[arg(long, conflicts_with = "body_file")]
         message: Option<String>,
-        /// Read the note from a file ('-' reads stdin).
-        #[arg(long, value_name = "FILE")]
+        /// Read the note from a file ('-' reads stdin). --message-file is the same flag.
+        #[arg(long, value_name = "FILE", visible_alias = "message-file")]
         body_file: Option<PathBuf>,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
+        /// When the note was written (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
+    },
+    /// Stop a work log that will not be finished (status abandoned, with the reason).
+    #[command(after_help = "EXAMPLE\n  agentmon work abandon WORK-0003 -p agent-monitoring \\\n    \
+        --agent cli-builder \\\n    --reason \"Superseded by WORK-0009, which solves the same \
+        problem in agentmon-core; nothing from this branch was kept.\"\n\n  Use it when work \
+        stops for good: leaving it in_progress shows an agent still working on something \
+        nobody is doing. The reason is appended under ## Updates and `finished` is stamped \
+        with the moment it stopped. --at backdates it.")]
+    Abandon {
+        /// WORK-NNNN.
+        id: String,
+        #[command(flatten)]
+        project: ProjectArg,
+        #[command(flatten)]
+        agent: AgentArg,
+        /// Why it stopped, and what a reader should look at instead.
+        #[arg(long, conflicts_with = "reason_file")]
+        reason: Option<String>,
+        /// Read the reason from a file ('-' reads stdin).
+        #[arg(long, value_name = "FILE")]
+        reason_file: Option<PathBuf>,
+        /// When it stopped (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
     },
     /// Close a work log with an outcome (what shipped, what changed, how it was verified).
     #[command(after_help = "EXAMPLE\n  agentmon work done WORK-0003 -p agent-monitoring \\\n    \
         --agent cli-builder \\\n    --files src-tauri/src/lib.rs,src-tauri/Cargo.toml \\\n    \
         --outcome \"Shipped the debounced watcher; cargo check -p agentmonitoring clean and the \
         dashboard refreshes within ~300ms of a CLI write.\"\n\n  The outcome is what a human \
-        reads first. Name the artifacts and the verification you actually ran.")]
+        reads first. Name the artifacts and the verification you actually ran.\n\n\
+        RECORDING WORK THAT IS ALREADY OVER\n  --finished-at 2026-08-18T11:30:00Z stamps the \
+        real end time; add --started-at to correct a start you had to guess at. Both land in \
+        the frontmatter and in events.jsonl, so the duration and the feed agree.")]
     Done {
         /// WORK-NNNN.
         id: String,
@@ -295,9 +367,12 @@ enum WorkCmd {
         /// Related records to link, comma-separated.
         #[arg(long, value_delimiter = ',')]
         refs: Vec<String>,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
+        /// When the work actually ended (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        finished_at: Option<String>,
+        /// Corrects the recorded start time (UTC ISO8601), for work logged after the fact.
+        #[arg(long, value_name = "ISO8601")]
+        started_at: Option<String>,
     },
     /// List work logs.
     #[command(after_help = "EXAMPLES\n  agentmon work list -p agent-monitoring\n  \
@@ -315,9 +390,6 @@ enum WorkCmd {
         /// Only records carrying this tag.
         #[arg(long)]
         tag: Option<String>,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
     },
     /// Show one work log.
     #[command(after_help = "EXAMPLES\n  agentmon work view WORK-0003 -p agent-monitoring\n  \
@@ -327,9 +399,6 @@ enum WorkCmd {
         id: String,
         #[command(flatten)]
         project: ProjectArg,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
     },
 }
 
@@ -387,9 +456,9 @@ enum BugCmd {
         /// Related records, comma-separated.
         #[arg(long, value_delimiter = ',')]
         refs: Vec<String>,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
+        /// When the bug was found (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        created_at: Option<String>,
     },
     /// Take ownership of a bug (sets assignee and status in_progress).
     #[command(after_help = "EXAMPLE\n  agentmon bug claim BUG-0002 -p agent-monitoring \
@@ -402,9 +471,9 @@ enum BugCmd {
         project: ProjectArg,
         #[command(flatten)]
         agent: AgentArg,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
+        /// When it was claimed (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
     },
     /// Add a comment to a bug's thread.
     #[command(after_help = "EXAMPLE\n  agentmon bug comment BUG-0002 -p agent-monitoring \\\n    \
@@ -420,12 +489,12 @@ enum BugCmd {
         /// What you found, what you tried, what it means for the fix.
         #[arg(long, conflicts_with = "body_file")]
         message: Option<String>,
-        /// Read the comment from a file ('-' reads stdin).
-        #[arg(long, value_name = "FILE")]
+        /// Read the comment from a file ('-' reads stdin). --message-file is the same flag.
+        #[arg(long, value_name = "FILE", visible_alias = "message-file")]
         body_file: Option<PathBuf>,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
+        /// When the comment was written (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
     },
     /// Resolve a bug with a written resolution.
     #[command(after_help = "EXAMPLE\n  agentmon bug resolve BUG-0002 -p agent-monitoring \\\n    \
@@ -446,9 +515,9 @@ enum BugCmd {
         /// Read the resolution from a file ('-' reads stdin).
         #[arg(long, value_name = "FILE")]
         resolution_file: Option<PathBuf>,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
+        /// When it was fixed (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
     },
     /// List bugs.
     #[command(after_help = "EXAMPLES\n  agentmon bug list -p agent-monitoring --status open\n  \
@@ -469,9 +538,6 @@ enum BugCmd {
         /// Only bugs assigned to this agent.
         #[arg(long)]
         assignee: Option<String>,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
     },
     /// Show one bug with its comment thread.
     #[command(after_help = "EXAMPLES\n  agentmon bug view BUG-0002 -p agent-monitoring\n  \
@@ -481,9 +547,6 @@ enum BugCmd {
         id: String,
         #[command(flatten)]
         project: ProjectArg,
-        /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
-        #[arg(long)]
-        json: bool,
     },
 }
 
@@ -493,11 +556,10 @@ enum BugCmd {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let json = wants_json(&cli.command);
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            if json {
+            if cli.json {
                 let payload = serde_json::json!({
                     "ok": false,
                     "error": { "kind": err.kind, "message": err.message, "exitCode": err.code },
@@ -539,36 +601,14 @@ impl From<CoreError> for CliError {
 
 type CliResult = std::result::Result<(), CliError>;
 
-/// Whether this invocation asked for machine-readable output (errors follow suit).
-fn wants_json(cmd: &Command) -> bool {
-    match cmd {
-        Command::Init { json, .. } | Command::Status { json, .. } | Command::Doctor { json, .. } => {
-            *json
-        }
-        Command::Project(ProjectCmd::Create { json, .. })
-        | Command::Project(ProjectCmd::List { json }) => *json,
-        Command::Work(WorkCmd::Start { json, .. })
-        | Command::Work(WorkCmd::Update { json, .. })
-        | Command::Work(WorkCmd::Done { json, .. })
-        | Command::Work(WorkCmd::List { json, .. })
-        | Command::Work(WorkCmd::View { json, .. }) => *json,
-        Command::Bug(BugCmd::Create { json, .. })
-        | Command::Bug(BugCmd::Claim { json, .. })
-        | Command::Bug(BugCmd::Comment { json, .. })
-        | Command::Bug(BugCmd::Resolve { json, .. })
-        | Command::Bug(BugCmd::List { json, .. })
-        | Command::Bug(BugCmd::View { json, .. }) => *json,
-    }
-}
-
 fn run(cli: &Cli) -> CliResult {
     match &cli.command {
-        Command::Init { name, json } => cmd_init(cli, name, *json),
+        Command::Init { name } => cmd_init(cli, name, cli.json),
         Command::Project(cmd) => run_project(cli, cmd),
         Command::Work(cmd) => run_work(cli, cmd),
         Command::Bug(cmd) => run_bug(cli, cmd),
-        Command::Status { project, json } => cmd_status(cli, project, *json),
-        Command::Doctor { strict, json } => cmd_doctor(cli, *strict, *json),
+        Command::Status { project } => cmd_status(cli, project, cli.json),
+        Command::Doctor { strict } => cmd_doctor(cli, *strict, cli.json),
     }
 }
 
@@ -617,7 +657,7 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
             description,
             tags,
             agent,
-            json,
+            at,
         } => {
             let vault = open(cli)?;
             let written = vault.create_project(&NewProject {
@@ -626,8 +666,9 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
                 description: description.clone().unwrap_or_default(),
                 tags: tags.clone(),
                 actor: agent.clone(),
+                at: at.clone(),
             })?;
-            if *json {
+            if cli.json {
                 print_json(&written)?;
             } else {
                 println!("Created project {} ({})", written.record.name, written.id);
@@ -641,10 +682,43 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
             }
             Ok(())
         }
-        ProjectCmd::List { json } => {
+        ProjectCmd::Update {
+            slug,
+            name,
+            description,
+            tags,
+            agent,
+            at,
+        } => {
+            let vault = open(cli)?;
+            let written = vault.update_project(
+                slug,
+                &UpdateProject {
+                    name: name.clone(),
+                    description: description.clone(),
+                    tags: tags.clone(),
+                    actor: agent.clone(),
+                    at: at.clone(),
+                },
+            )?;
+            if cli.json {
+                return print_json(&written);
+            }
+            let p = &written.record;
+            println!("Updated project {} ({})", p.name, p.slug);
+            if !p.description.is_empty() {
+                println!("  {}", clip(&p.description, 100));
+            }
+            if !p.tags.is_empty() {
+                println!("  tags: {}", p.tags.join(", "));
+            }
+            println!("  {}", written.path);
+            Ok(())
+        }
+        ProjectCmd::List => {
             let vault = open(cli)?;
             let projects = vault.projects()?;
-            if *json {
+            if cli.json {
                 return print_json(&projects);
             }
             if projects.is_empty() {
@@ -701,8 +775,12 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             refs,
             body,
             body_file,
-            json,
+            started_at,
+            finished_at,
         } => {
+            if let Some(f) = finished_at {
+                return Err(finished_at_on_start(f));
+            }
             let body = read_text(
                 body.as_deref(),
                 body_file.as_deref(),
@@ -723,9 +801,10 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                     tags: tags.clone(),
                     refs: refs.clone(),
                     body,
+                    started_at: started_at.clone(),
                 },
             )?;
-            if *json {
+            if cli.json {
                 return print_json(&w);
             }
             println!("Started {}  {}", w.id, w.record.meta.title);
@@ -748,7 +827,7 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             agent,
             message,
             body_file,
-            json,
+            at,
         } => {
             let message = read_text(
                 message.as_deref(),
@@ -756,7 +835,7 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                 BodySource {
                     what: "work update",
                     inline_flag: "--message",
-                    file_flag: "--body-file",
+                    file_flag: "--body-file (or --message-file)",
                     template: "A sentence or two: what changed since the last note, what you \
                                learned, what you are doing next.",
                     example: "agentmon work update WORK-0003 -p agent-monitoring \\\n  \
@@ -765,8 +844,9 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                 },
             )?;
             let vault = open(cli)?;
-            let w = vault.update_work(&project.project, id, &agent.agent, &message)?;
-            if *json {
+            let w =
+                vault.update_work(&project.project, id, &agent.agent, &message, at.as_deref())?;
+            if cli.json {
                 return print_json(&w);
             }
             let n = w.record.updates.len();
@@ -780,6 +860,51 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             println!("  {}", w.path);
             Ok(())
         }
+        WorkCmd::Abandon {
+            id,
+            project,
+            agent,
+            reason,
+            reason_file,
+            at,
+        } => {
+            let reason = read_text(
+                reason.as_deref(),
+                reason_file.as_deref(),
+                BodySource {
+                    what: "abandon reason",
+                    inline_flag: "--reason",
+                    file_flag: "--reason-file",
+                    template: "One or two sentences: why this stopped, and what a reader \
+                               should look at instead.",
+                    example: "agentmon work abandon WORK-0003 -p agent-monitoring \\\n  \
+                              --agent cli-builder \\\n  --reason \"Superseded by WORK-0009, \
+                              which solves the same problem in agentmon-core; nothing from \
+                              this branch was kept.\"",
+                },
+            )?;
+            let vault = open(cli)?;
+            let w = vault.abandon_work(
+                &project.project,
+                id,
+                &AbandonWork {
+                    agent: agent.agent.clone(),
+                    reason,
+                    at: at.clone(),
+                },
+            )?;
+            if cli.json {
+                return print_json(&w);
+            }
+            println!("Abandoned {}  {}", w.id, w.record.meta.title);
+            println!(
+                "  started {}  stopped {}",
+                w.record.meta.started,
+                w.record.meta.finished.as_deref().unwrap_or("—")
+            );
+            println!("  {}", w.path);
+            Ok(())
+        }
         WorkCmd::Done {
             id,
             project,
@@ -788,7 +913,8 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             outcome_file,
             files,
             refs,
-            json,
+            finished_at,
+            started_at,
         } => {
             let outcome = read_text(
                 outcome.as_deref(),
@@ -810,9 +936,11 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                     outcome,
                     files: files.clone(),
                     refs: refs.clone(),
+                    finished_at: finished_at.clone(),
+                    started_at: started_at.clone(),
                 },
             )?;
-            if *json {
+            if cli.json {
                 return print_json(&w);
             }
             println!("Completed {}  {}", w.id, w.record.meta.title);
@@ -832,7 +960,6 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             status,
             agent,
             tag,
-            json,
         } => {
             let vault = open(cli)?;
             let mut works = vault.worklogs(&project.project)?;
@@ -846,7 +973,7 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             if let Some(t) = tag {
                 works.retain(|w| w.meta.tags.iter().any(|x| x.eq_ignore_ascii_case(t)));
             }
-            if *json {
+            if cli.json {
                 return print_json(&works);
             }
             if works.is_empty() {
@@ -881,10 +1008,10 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             println!("\n{} work log(s), {} in progress", works.len(), open_n);
             Ok(())
         }
-        WorkCmd::View { id, project, json } => {
+        WorkCmd::View { id, project } => {
             let vault = open(cli)?;
             let w = vault.worklog(&project.project, id)?;
-            if *json {
+            if cli.json {
                 return print_json(&w);
             }
             println!("{}  {}", w.meta.id, w.meta.title);
@@ -929,7 +1056,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             body_file,
             labels,
             refs,
-            json,
+            created_at,
         } => {
             let severity: Severity = agentmon_core::parse_severity(severity)?;
             let body = read_text(
@@ -953,9 +1080,10 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                     labels: labels.clone(),
                     refs: refs.clone(),
                     body,
+                    created_at: created_at.clone(),
                 },
             )?;
-            if *json {
+            if cli.json {
                 return print_json(&b);
             }
             println!(
@@ -977,11 +1105,11 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             id,
             project,
             agent,
-            json,
+            at,
         } => {
             let vault = open(cli)?;
-            let b = vault.claim_bug(&project.project, id, &agent.agent)?;
-            if *json {
+            let b = vault.claim_bug(&project.project, id, &agent.agent, at.as_deref())?;
+            if cli.json {
                 return print_json(&b);
             }
             println!(
@@ -1009,7 +1137,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             agent,
             message,
             body_file,
-            json,
+            at,
         } => {
             let message = read_text(
                 message.as_deref(),
@@ -1017,7 +1145,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                 BodySource {
                     what: "bug comment",
                     inline_flag: "--message",
-                    file_flag: "--body-file",
+                    file_flag: "--body-file (or --message-file)",
                     template: "A sentence or two: what you found, what you tried, what it means \
                                for the fix.",
                     example: "agentmon bug comment BUG-0002 -p agent-monitoring \\\n  \
@@ -1026,8 +1154,9 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                 },
             )?;
             let vault = open(cli)?;
-            let b = vault.comment_bug(&project.project, id, &agent.agent, &message)?;
-            if *json {
+            let b =
+                vault.comment_bug(&project.project, id, &agent.agent, &message, at.as_deref())?;
+            if cli.json {
                 return print_json(&b);
             }
             let n = b.record.comments.len();
@@ -1046,7 +1175,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             agent,
             resolution,
             resolution_file,
-            json,
+            at,
         } => {
             let resolution = read_text(
                 resolution.as_deref(),
@@ -1060,8 +1189,8 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                 },
             )?;
             let vault = open(cli)?;
-            let b = vault.resolve_bug(&project.project, id, &agent.agent, &resolution)?;
-            if *json {
+            let b = vault.resolve_bug(&project.project, id, &agent.agent, &resolution, at.as_deref())?;
+            if cli.json {
                 return print_json(&b);
             }
             println!("Resolved {}  {}", b.id, b.record.meta.title);
@@ -1081,7 +1210,6 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             severity,
             label,
             assignee,
-            json,
         } => {
             let vault = open(cli)?;
             let mut bugs = vault.bugs(&project.project)?;
@@ -1105,7 +1233,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                         .unwrap_or(false)
                 });
             }
-            if *json {
+            if cli.json {
                 return print_json(&bugs);
             }
             if bugs.is_empty() {
@@ -1131,10 +1259,10 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             println!("\n{} bug(s), {} still open", bugs.len(), open_n);
             Ok(())
         }
-        BugCmd::View { id, project, json } => {
+        BugCmd::View { id, project } => {
             let vault = open(cli)?;
             let b = vault.bug(&project.project, id)?;
-            if *json {
+            if cli.json {
                 return print_json(&b);
             }
             println!("{}  {}", b.meta.id, b.meta.title);
@@ -1335,6 +1463,22 @@ fn print_json<T: serde::Serialize>(value: &T) -> CliResult {
     Ok(())
 }
 
+/// `work start --finished-at ...` is a guess an agent makes when it is recording work it
+/// already did. Answer with the two commands that do what it meant.
+fn finished_at_on_start(finished: &str) -> CliError {
+    CliError {
+        code: exit::USAGE,
+        kind: "invalid_argument",
+        message: format!(
+            "--finished-at is not a flag of `work start`: a work log gains its end time when \
+             it is closed.\n\nRecord work that is already over in two steps:\n\n  \
+             agentmon work start ... --started-at <when it began>       # prints the new id\n  \
+             agentmon work done <ID> ... --finished-at {finished} \\\n    --outcome \"<what \
+             shipped, how it was verified>\""
+        ),
+    }
+}
+
 /// Everything needed to explain how to supply a missing body.
 struct BodySource {
     what: &'static str,
@@ -1508,6 +1652,123 @@ mod tests {
         let body_err: CliError = agentmon_core::validate::work_body("nope").unwrap_err().into();
         assert_eq!(body_err.code, exit::INVALID_BODY);
         assert_eq!(body_err.kind, "invalid_body");
+    }
+
+    /// Walk to a subcommand by path, e.g. `["work", "done"]`.
+    fn sub(path: &[&str]) -> clap::Command {
+        let mut cmd = Cli::command();
+        for name in path {
+            let next = cmd
+                .get_subcommands()
+                .find(|c| c.get_name() == *name)
+                .unwrap_or_else(|| panic!("`agentmon {}` exists", path.join(" ")))
+                .clone();
+            cmd = next;
+        }
+        cmd
+    }
+
+    fn has_flag(path: &[&str], long: &str) -> bool {
+        sub(path).get_arguments().any(|a| {
+            a.get_long() == Some(long)
+                || a.get_all_aliases()
+                    .map(|al| al.iter().any(|x| *x == long))
+                    .unwrap_or(false)
+        })
+    }
+
+    #[test]
+    fn json_is_global_so_placement_never_matters() {
+        for args in [
+            vec!["agentmon", "--json", "work", "list", "-p", "demo"],
+            vec!["agentmon", "work", "list", "-p", "demo", "--json"],
+            vec!["agentmon", "work", "--json", "list", "-p", "demo"],
+        ] {
+            let cli = Cli::try_parse_from(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+            assert!(cli.json, "{args:?}");
+        }
+        let cli = Cli::try_parse_from(["agentmon", "work", "list", "-p", "demo"]).unwrap();
+        assert!(!cli.json, "--json is opt-in");
+        // and the same is true of --vault, which agents write in both places
+        for args in [
+            vec!["agentmon", "--vault", "v", "status", "-p", "demo"],
+            vec!["agentmon", "status", "-p", "demo", "--vault", "v"],
+        ] {
+            let cli = Cli::try_parse_from(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+            assert_eq!(cli.vault.as_deref(), Some(Path::new("v")), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn every_mutation_accepts_the_time_it_really_happened() {
+        // These pairs are the table in docs/AGENT_MANUAL.md ("Backdating"). If one is
+        // renamed here, the manual is wrong and a fresh agent will paste a flag that
+        // does not exist.
+        let cases: &[(&[&str], &str)] = &[
+            (&["project", "create"], "at"),
+            (&["project", "update"], "at"),
+            (&["work", "start"], "started-at"),
+            (&["work", "update"], "at"),
+            (&["work", "done"], "finished-at"),
+            (&["work", "done"], "started-at"),
+            (&["work", "abandon"], "at"),
+            (&["bug", "create"], "created-at"),
+            (&["bug", "claim"], "at"),
+            (&["bug", "comment"], "at"),
+            (&["bug", "resolve"], "at"),
+        ];
+        for (path, flag) in cases {
+            assert!(
+                has_flag(path, flag),
+                "`agentmon {}` must accept --{flag}",
+                path.join(" ")
+            );
+        }
+    }
+
+    #[test]
+    fn message_file_is_the_same_flag_as_body_file() {
+        for path in [
+            vec!["agentmon", "work", "update", "WORK-0001"],
+            vec!["agentmon", "bug", "comment", "BUG-0001"],
+        ] {
+            let mut args = path.clone();
+            args.extend(["-p", "demo", "--agent", "a", "--message-file", "notes.md"]);
+            let cli = Cli::try_parse_from(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+            let file = match cli.command {
+                Command::Work(WorkCmd::Update { body_file, .. }) => body_file,
+                Command::Bug(BugCmd::Comment { body_file, .. }) => body_file,
+                other => panic!("unexpected parse: {other:?}"),
+            };
+            assert_eq!(file.as_deref(), Some(Path::new("notes.md")), "{args:?}");
+        }
+        assert!(has_flag(&["work", "update"], "body-file"), "--body-file still works");
+        assert!(has_flag(&["bug", "comment"], "body-file"), "--body-file still works");
+    }
+
+    #[test]
+    fn finished_at_on_work_start_points_at_the_two_step_recipe() {
+        let cli = Cli::try_parse_from([
+            "agentmon",
+            "work",
+            "start",
+            "-p",
+            "demo",
+            "--agent",
+            "a",
+            "--title",
+            "Something already finished",
+            "--body",
+            "## What\n\nx\n\n## Why\n\ny\n\n## How\n\nz",
+            "--finished-at",
+            "2026-08-18T11:30:00Z",
+        ])
+        .expect("--finished-at parses, so the error can be a good one");
+        let err = run(&cli).unwrap_err();
+        assert_eq!(err.code, exit::USAGE);
+        assert!(err.message.contains("agentmon work done"), "{}", err.message);
+        assert!(err.message.contains("--started-at"), "{}", err.message);
+        assert!(err.message.contains("2026-08-18T11:30:00Z"), "{}", err.message);
     }
 
     #[test]
