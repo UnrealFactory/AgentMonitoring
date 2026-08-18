@@ -1,6 +1,6 @@
 /** Formatting helpers. Timestamps in the vault are always UTC ISO8601 strings. */
 
-import type { BugStatus, EventType, Severity, WorkStatus } from "./types";
+import type { BugStatus, Severity, WorkStatus } from "./types";
 
 const parse = (iso: string | null | undefined): Date | null => {
   if (!iso) return null;
@@ -98,32 +98,9 @@ export const SEVERITY_LABEL: Record<Severity, string> = {
   low: "Low",
 };
 
-export const EVENT_LABEL: Record<EventType, string> = {
-  work_started: "started work",
-  work_updated: "updated work",
-  work_done: "finished work",
-  work_abandoned: "abandoned work",
-  bug_created: "filed a bug",
-  bug_claimed: "claimed a bug",
-  bug_commented: "commented on a bug",
-  bug_resolved: "resolved a bug",
-  bug_closed: "closed a bug",
-  project_created: "created the project",
-  project_updated: "updated the project",
-};
-
-export function eventLabel(type: string): string {
-  return EVENT_LABEL[type as EventType] ?? type.replace(/_/g, " ");
-}
-
-/** Which accent an event dot gets in the timeline. */
-export function eventTone(type: string): "work" | "done" | "bug" | "resolved" | "neutral" {
-  if (type === "work_done") return "done";
-  if (type.startsWith("work_")) return "work";
-  if (type === "bug_resolved" || type === "bug_closed") return "resolved";
-  if (type.startsWith("bug_")) return "bug";
-  return "neutral";
-}
+/* Event wording and event colour live with the screen that draws them (lib/dashboard.ts):
+   they are one vocabulary — the verb, the icon and the tone have to be chosen together —
+   and splitting them across two files is how they drift apart. */
 
 export function pluralize(n: number, singular: string, plural = `${singular}s`): string {
   return `${n} ${n === 1 ? singular : plural}`;

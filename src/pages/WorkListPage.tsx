@@ -12,7 +12,7 @@ import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useProjectSlug } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
-import { api } from "../lib/api";
+import { api, failureTitle } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
 import { useUrlFilters } from "../lib/useUrlFilters";
@@ -43,11 +43,13 @@ const ALLOWED = { status: ["all", ...GROUP_ORDER] } as const;
 
 export function WorkListPage() {
   const slug = useProjectSlug()!;
-  const { data, error, loading, reload } = useAsync(() => api.listWorklogs(slug), [slug]);
-
-  const { values, set, reset, isDirty } = useUrlFilters(DEFAULTS, ALLOWED);
-  const status = values.status as WorkStatus | "all";
-  const { agent, tag, q: query } = values;
+  const {
+    data,
+    error,
+    status: httpStatus,
+    loading,
+    reload,
+  } = useAsync(() => api.listWorklogs(slug), [slug]);
 
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -65,6 +67,20 @@ export function WorkListPage() {
     () => [...new Set(works.flatMap((w) => w.tags))].sort((a, b) => a.localeCompare(b)),
     [works]
   );
+
+  /**
+   * An agent or tag the project has never heard of is treated the way `?status=banana`
+   * already was: as not set. A pasted link that outlived the record it filtered on shows
+   * the whole list, rather than an empty one under menus that all say "All".
+   */
+  const allowed = useMemo(
+    () => ({ ...ALLOWED, agent: ["all", ...agents], tag: ["all", ...tags] }),
+    [agents, tags]
+  );
+
+  const { values, set, reset, isDirty } = useUrlFilters(DEFAULTS, allowed);
+  const status = values.status as WorkStatus | "all";
+  const { agent, tag, q: query } = values;
 
   /** Sized for the names in this project; `chrome` is the avatar and its gap. */
   const agentWidth = useMemo(() => agentColumnWidth(agents, { chrome: 26, min: 96 }), [agents]);
@@ -149,7 +165,16 @@ export function WorkListPage() {
   if (error) {
     return (
       <div className="page">
-        <ErrorState message={error} onRetry={reload} />
+        <ErrorState
+          title={failureTitle(error, httpStatus)}
+          message={error}
+          onRetry={httpStatus === 404 ? undefined : reload}
+          action={
+            <Link className="button" to="/projects">
+              All projects
+            </Link>
+          }
+        />
       </div>
     );
   }

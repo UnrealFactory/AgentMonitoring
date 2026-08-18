@@ -349,299 +349,27 @@
   padding: var(--space-2);
 }
 
-/* --- stats ---------------------------------------------------------------- */
-
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-3);
-}
-
-.stat {
-  position: relative;
-  padding: var(--space-4);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.stat::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 2px;
-  background: var(--grey);
-  opacity: 0.65;
-}
-
-.stat-accent::before { background: var(--accent); }
-.stat-green::before { background: var(--green); }
-.stat-amber::before { background: var(--amber); }
-.stat-red::before { background: var(--red); }
-.stat-purple::before { background: var(--purple); }
-
-.stat-value {
-  font-size: var(--text-3xl);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-tighter);
-  line-height: 1.05;
-}
-
-.stat-label {
-  margin-top: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.stat-hint {
-  margin-top: 2px;
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-/* --- compact list --------------------------------------------------------- */
-
-.list {
-  list-style: none;
-}
-
-.list-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-2);
-  border-radius: var(--radius);
-  transition: background var(--duration-fast) var(--ease);
-}
-
-.list-row:hover {
-  background: var(--bg-hover);
-}
-
-.list-id {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  flex: none;
-  width: 74px;
-}
-
-.list-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.list-title {
-  font-size: var(--text-base);
-  font-weight: var(--weight-medium);
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.list-sub {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.card-note {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.list-side {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: none;
-}
-
-/* --- timeline ------------------------------------------------------------- */
-
-.timeline {
-  list-style: none;
-  position: relative;
-  padding: var(--space-1) var(--space-2);
-}
-
-.timeline::before {
-  content: "";
-  position: absolute;
-  left: 12px;
-  top: 12px;
-  bottom: 12px;
-  width: 1px;
-  background: var(--border-subtle);
-}
-
-.timeline-item {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-2) 0 var(--space-2) var(--space-5);
-}
-
-.timeline-dot {
-  position: absolute;
-  left: 8px;
-  top: 14px;
-  width: 9px;
-  height: 9px;
-  border-radius: var(--radius-full);
-  background: var(--grey);
-  box-shadow: 0 0 0 3px var(--bg-surface);
-}
-
-.tone-work .timeline-dot { background: var(--blue); }
-.tone-done .timeline-dot { background: var(--green); }
-.tone-bug .timeline-dot { background: var(--orange); }
-.tone-resolved .timeline-dot { background: var(--purple); }
-
-.timeline-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.timeline-head {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: var(--text-base);
-}
-
-.timeline-actor {
-  font-weight: var(--weight-medium);
-  color: var(--text-primary);
-}
-
-.timeline-verb {
-  color: var(--text-secondary);
-}
-
-.timeline-ref {
-  font-size: var(--text-xs);
-  color: var(--accent-text);
-  background: var(--accent-soft);
-  padding: 1px 5px;
-  border-radius: var(--radius-xs);
-}
-
-.timeline-summary {
-  margin-top: 2px;
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  line-height: var(--leading-snug);
-}
-
-.timeline-ts {
-  flex: none;
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  padding-top: 2px;
-}
-
-/* --- table ---------------------------------------------------------------- */
-
-.table-wrap {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-base);
-}
-
-.table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  text-align: left;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-  color: var(--text-tertiary);
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-subtle);
-  white-space: nowrap;
-}
-
-.table tbody td {
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-  vertical-align: top;
-}
-
-.table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.table tbody tr {
-  transition: background var(--duration-fast) var(--ease);
-}
-
-.table tbody tr:hover {
-  background: var(--bg-hover);
-}
-
-.table-rows tbody td {
-  padding: var(--space-3);
-}
-
-.table .num,
-.table th.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.col-id { width: 92px; }
-.col-status { width: 120px; }
-.col-agent { width: 170px; }
-.col-date { width: 118px; white-space: nowrap; }
-
-.col-id a {
-  color: var(--text-tertiary);
-  font-size: var(--text-sm);
-}
-
-.col-id a:hover {
-  color: var(--accent-text);
-}
-
-.cell-title {
-  font-weight: var(--weight-medium);
-  color: var(--text-primary);
-}
-
-.cell-title:hover {
-  color: var(--accent-text);
-}
-
-.cell-sub {
-  margin-top: 3px;
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  line-height: var(--leading-snug);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .muted {
   color: var(--text-tertiary);
+}
+
+/* Present to a screen reader, absent to the eye — for the sentence version of a
+   chart's hover readout. Not `display: none`, which would hide it from both. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* --- toolbar / controls --------------------------------------------------- */
@@ -904,6 +632,13 @@
   justify-content: flex-start;
 }
 
+/* The initial that stands in for the word when a row runs out of width. Hidden by
+   default; the container query at the bottom of this file swaps the two, so severity is
+   never left as four colours with nothing to read. */
+.pill-abbr {
+  display: none;
+}
+
 .tag {
   display: inline-flex;
   align-items: center;
@@ -1036,6 +771,18 @@
   overflow-wrap: anywhere;
 }
 
+.error-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+a.button {
+  display: inline-flex;
+  align-items: center;
+}
+
 .skeleton-list {
   display: flex;
   flex-direction: column;
@@ -1103,11 +850,19 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* 720px is the measure — about 46 characters at this size, which is where a heading
+   stops being comfortable to read in one sweep. It was never the cause of the orphaned
+   id: that was the line breaker treating the id as an ordinary word, so a title that
+   fitted the measure alone but not with the id on the end dropped the id onto a line of
+   its own. `.record-title-tail` fixes it where it happens (components/ui.tsx), and the
+   measure stays a measure. `anywhere` is the safety net for the record whose last word
+   is longer than the box. */
 .record-title {
   font-size: var(--text-2xl);
   line-height: 1.2;
   letter-spacing: var(--tracking-tighter);
   max-width: 720px;
+  overflow-wrap: anywhere;
 }
 
 /* The record id, inline after the title the way a PR number follows its title. */
@@ -2133,6 +1888,36 @@ a.rel-row:hover .rel-id {
   color: var(--text-tertiary);
 }
 
+/* Who has written into this record: avatars, because the names are long and the count
+   is the fact. The full list is on the row's tooltip. */
+.side-people {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.side-people-count {
+  margin-left: 3px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.side-lastword {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 0;
+}
+
+.side-lastword-who {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --- work list ------------------------------------------------------------ */
 
 /* Status as a bare dot: colour carries the state, the group header says the word. */
@@ -2645,9 +2430,16 @@ kbd {
   }
 }
 
+/* The severity *word* goes, its initial stays. Dropping to the dot alone would make
+   severity colour-only — four hues a red-green reader cannot separate and a printer
+   cannot reproduce — on the one column of this board that must never be ambiguous. */
 @container (max-width: 760px) {
   .bug-row .pill-sev .pill-text {
     display: none;
+  }
+
+  .bug-row .pill-sev .pill-abbr {
+    display: inline;
   }
 
   .bug-row .pill-sev {
@@ -2655,11 +2447,852 @@ kbd {
   }
 
   .bug-row-sev {
-    width: 24px;
+    width: 36px;
   }
 
   .bug-row-comments {
     display: none;
+  }
+}
+
+/* ===========================================================================
+   DASHBOARD
+
+   Three bands, read top to bottom: what is true now, what the trend is, and who
+   did it. The rules that keep it calm at every width:
+
+     * every row is a grid or a flex line with `min-width: 0` down to the text, so
+       the thing that gives ground is the agent name — which ellipsises and carries
+       a tooltip — and never a number, which would be a lie if it were cut
+       (vault BUG-0006);
+     * chart ink comes from the `--series-*` steps and chart chrome from
+       `--chart-*`; chart *text* never wears a series colour.
+   ======================================================================== */
+
+.dashboard {
+  gap: var(--space-5);
+}
+
+/* a project with work open says so, quietly, next to the timestamp */
+.live-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: var(--space-3);
+  color: var(--green);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+
+/* --- the NOW strip -------------------------------------------------------- */
+
+.now-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+.now-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.now-label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
+}
+
+.now-label-link {
+  color: inherit;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.now-label-link:hover {
+  color: var(--text-secondary);
+}
+
+/* The one hero figure on the screen: proportional digits, not tabular — at this
+   size equal-width digits make a number like 12 look like it has come apart. */
+.now-hero,
+.now-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.now-hero-value {
+  font-size: var(--text-hero);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tighter);
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.now-figure-value {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tighter);
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+/* Zero is a real answer and gets to look like one, rather than shouting. */
+.now-hero-value.is-quiet,
+.now-figure-value.is-quiet {
+  color: var(--text-tertiary);
+}
+
+.now-hero-unit,
+.now-figure-unit {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.now-note {
+  margin-top: auto;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: var(--leading-snug);
+}
+
+.now-link {
+  color: var(--text-link);
+}
+
+.now-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.now-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 calc(-1 * var(--space-2));
+}
+
+.now-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 6px var(--space-2);
+  border-radius: var(--radius);
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.now-row:hover {
+  background: var(--bg-hover);
+}
+
+.now-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.now-row-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-row-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.now-row-id {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.now-row-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: none;
+}
+
+.now-row-dur {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--blue);
+  white-space: nowrap;
+}
+
+/* the same figure on a log that has stopped: how long it took, not how long it has run */
+.now-row-dur.is-done {
+  color: var(--green);
+}
+
+.now-row-since {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.now-more {
+  display: block;
+  padding: 4px var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.now-more:hover {
+  color: var(--text-primary);
+}
+
+.now-sev {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* the severity chips are the bug board's, so the two screens read as one product */
+.now-sev .sev-chip {
+  cursor: pointer;
+}
+
+/* --- 24-hour strip -------------------------------------------------------- */
+
+.hour-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 24px;
+}
+
+.hour-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 1.5px 1.5px 0 0;
+  background: var(--text-tertiary);
+  opacity: 0.75;
+}
+
+.hour-bar.is-empty {
+  background: var(--chart-empty);
+  opacity: 1;
+}
+
+/* the hour we are standing in, in the accent — the de-emphasis grey is context */
+.hour-bar.is-now {
+  background: var(--accent-text);
+  opacity: 1;
+}
+
+/* …but an empty current hour is a tick marking "you are here", not a reading */
+.hour-bar.is-now.is-empty {
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+/* --- range control -------------------------------------------------------- */
+
+.dash-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.dash-scope {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  min-width: 0;
+}
+
+/* --- chart cards ---------------------------------------------------------- */
+
+.chart-card .card-body {
+  padding: var(--space-3) var(--space-4) var(--space-2);
+}
+
+.chart-head {
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.chart-heading {
+  min-width: 0;
+  margin-right: auto;
+}
+
+.chart-sub {
+  margin-top: 3px;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.chart-legend {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: 0 2px;
+}
+
+.chart-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* A stroke for a line, a block for a filled band: the key mirrors the mark. */
+.key-line {
+  width: 12px;
+  height: 3px;
+  flex: none;
+  border-radius: 2px;
+}
+
+.key-line.is-band {
+  width: 14px;
+  height: 9px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.legend-value {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.legend-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chart-plot {
+  position: relative;
+  border-radius: var(--radius-sm);
+}
+
+.chart-plot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.chart-grid {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+
+.chart-axis-rule {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+}
+
+.chart-crosshair {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.chart-tick {
+  fill: var(--text-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the 2px ring in the surface colour, so a dot stays legible over its own line */
+.chart-dot {
+  stroke: var(--bg-surface);
+  stroke-width: 2;
+}
+
+/* --- chart tooltip -------------------------------------------------------- */
+
+.chart-tip {
+  position: absolute;
+  top: 4px;
+  z-index: 5;
+  min-width: 168px;
+  max-width: 260px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+.chart-tip.is-mid { transform: translateX(-50%); }
+.chart-tip.is-end { transform: translateX(-100%); }
+.chart-tip.is-start { transform: none; }
+
+.tip-when {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.tip-rows {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.tip-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tip-row .key-line {
+  align-self: center;
+}
+
+/* the value leads, the series name follows: the reader has the series already */
+.tip-value {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.tip-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.tip-added {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tip-gap {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.tip-gap-value {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+/* --- agents --------------------------------------------------------------- */
+
+.agent-table {
+  display: flex;
+  flex-direction: column;
+}
+
+/* One grid for the header and every row, so a column cannot drift out of line.
+   The name track is `minmax(0, …)`: it may shrink below its ideal width, and when
+   it does the name inside it ellipsises rather than the row pushing a number out
+   of the card. */
+.agent-head,
+.agent-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, var(--agent-col, 160px))
+    minmax(56px, 1fr)
+    46px 46px 46px
+    78px;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 0 var(--space-3);
+}
+
+.agent-head {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.agent-rows {
+  list-style: none;
+}
+
+.agent-row {
+  height: 38px;
+  border-radius: var(--radius);
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.agent-row:hover {
+  background: var(--bg-hover);
+}
+
+.agent-cell-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.agent-cell-name .agent {
+  min-width: 0;
+}
+
+.sdot-idle {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+
+.agent-cell-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Bars share one scale — the busiest agent's total is full width — so a row's
+   length is comparable with the row above it. Square at the baseline, 4px round
+   at the data end, 2px of surface between the two segments. */
+.split-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  min-width: 0;
+  border-radius: 0 4px 4px 0;
+  overflow: hidden;
+}
+
+.split-seg {
+  min-width: 2px;
+  flex-basis: 0;
+}
+
+.agent-total {
+  flex: none;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  min-width: 18px;
+}
+
+.agent-cell-num {
+  text-align: right;
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* The header cells are plain spans; each takes the alignment of the column it names, so a
+   heading always sits over its own numbers. */
+.agent-head .agent-cell-bar,
+.agent-head .agent-cell-num,
+.agent-head .agent-cell-seen {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-cell-seen {
+  text-align: right;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- activity feed, cut into days ----------------------------------------- */
+
+.day-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.day + .day {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* The date column is the stretchy one, so the day's shape, its count and its cast sit in
+   a fixed block at the right where they line up down the list and can be compared. */
+.day-head {
+  display: grid;
+  grid-template-columns: 14px auto minmax(74px, 1fr) 132px 28px minmax(0, 150px);
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.day-head:hover {
+  background: var(--bg-hover);
+}
+
+.day-caret {
+  width: 12px;
+  height: 12px;
+  color: var(--text-tertiary);
+  transition: transform var(--duration) var(--ease);
+}
+
+.day.is-open .day-caret {
+  transform: rotate(90deg);
+}
+
+.day-label {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.day-date {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* the day's shape in one 4px bar: how much of it was work, and how much was bugs */
+.day-mix {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+  min-width: 0;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.mix-seg {
+  flex-basis: 0;
+  min-width: 2px;
+  border-radius: 1px;
+  background: var(--grey);
+}
+
+.mix-seg.tone-work { background: var(--series-work); }
+.mix-seg.tone-done { background: var(--series-done); }
+.mix-seg.tone-bug { background: var(--series-bug); }
+.mix-seg.tone-resolved { background: var(--series-fix); }
+
+.day-count {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.day-actors {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.feed {
+  list-style: none;
+  position: relative;
+  padding: var(--space-1) 0 var(--space-3) 0;
+  margin-left: var(--space-4);
+}
+
+/* the rail the icons sit on */
+.feed::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 4px;
+  bottom: 18px;
+  width: 1px;
+  background: var(--border-subtle);
+}
+
+.feed-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  padding: 5px var(--space-3) 5px 5px;
+  border-radius: var(--radius);
+  transition: background var(--duration-fast) var(--ease);
+}
+
+a.feed-row:hover {
+  background: var(--bg-hover);
+}
+
+.feed-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+.event-icon {
+  color: var(--text-tertiary);
+}
+
+.event-icon.tone-work { color: var(--series-work); }
+.event-icon.tone-done { color: var(--series-done); }
+.event-icon.tone-bug { color: var(--series-bug); }
+.event-icon.tone-resolved { color: var(--series-fix); }
+
+.feed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.feed-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--text-base);
+}
+
+.feed-actor {
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.feed-verb {
+  color: var(--text-secondary);
+}
+
+.feed-ref {
+  font-size: var(--text-xs);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+}
+
+a.feed-row:hover .feed-ref {
+  background: rgba(94, 106, 210, 0.28);
+}
+
+.feed-summary {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: var(--leading-snug);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-time {
+  flex: none;
+  padding-top: 3px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.feed-more-row {
+  padding-left: 34px;
+}
+
+.feed-more {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.feed-more:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* --- dashboard in a narrower window --------------------------------------
+   The strip is the first thing to reflow: below ~1200px three panels side by
+   side leave the wide one too narrow for a work-log title, so it takes the
+   whole first row and the two figures share the second.
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 1200px) {
+  .now-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .now-panel-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1000px) {
+  .day-head {
+    grid-template-columns: 14px auto minmax(74px, 1fr) 132px 28px;
+  }
+
+  .day-actors {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .now-strip {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

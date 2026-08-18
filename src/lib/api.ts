@@ -142,6 +142,22 @@ export const api = {
 };
 
 /**
+ * What a failed read actually was, in the reader's words rather than the transport's.
+ *
+ * Both transports answer a missing record the same way — 404 with a message naming the id
+ * or the slug — and that case is not "could not read the vault", it is "that is not here".
+ * A reader who follows a link to `BUG-9999` and is told the vault is unreadable goes and
+ * checks their disk; the truth is that the link is stale.
+ */
+export function failureTitle(error: string, status: number | undefined, id?: string): string {
+  if (status !== 404) return "Could not read the vault";
+  const project = /^project '([^']+)' not found/.exec(error);
+  if (project) return `This vault has no project called “${project[1]}”`;
+  if (id) return `This project has no ${id}`;
+  return "Not in this vault";
+}
+
+/**
  * Subscribe to vault changes. In the desktop app this will be backed by the Tauri
  * filesystem watcher; in browser mode there is nothing to listen to, so it is a no-op.
  * Returns an unsubscribe function.

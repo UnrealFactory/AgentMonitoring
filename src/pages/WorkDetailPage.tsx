@@ -10,7 +10,7 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCurrentProject, useProjectSlug } from "../AppContext";
-import { api } from "../lib/api";
+import { api, failureTitle } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useActiveSection } from "../lib/useActiveSection";
 import { Markdown } from "../lib/markdown";
@@ -23,7 +23,14 @@ import {
   type TocEntry,
 } from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
-import { AgentChip, ErrorState, Skeleton, Tag, WorkStatusPill } from "../components/ui";
+import {
+  AgentChip,
+  ErrorState,
+  RecordTitle,
+  Skeleton,
+  Tag,
+  WorkStatusPill,
+} from "../components/ui";
 import {
   formatDateTime,
   formatDateTimeUtc,
@@ -52,7 +59,10 @@ export function WorkDetailPage() {
   const slug = useProjectSlug()!;
   const project = useCurrentProject();
   const { id = "" } = useParams<{ id: string }>();
-  const { data, error, loading, reload } = useAsync(() => api.getWorklog(slug, id), [slug, id]);
+  const { data, error, status, loading, reload } = useAsync(
+    () => api.getWorklog(slug, id),
+    [slug, id]
+  );
 
   const work = data;
   const related = useRelated(slug, id, work?.refs ?? EMPTY);
@@ -76,9 +86,19 @@ export function WorkDetailPage() {
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {
+    const missing = status === 404;
     return (
       <div className="page">
-        <ErrorState message={error} onRetry={reload} />
+        <ErrorState
+          title={failureTitle(error, status, id)}
+          message={error}
+          onRetry={missing ? undefined : reload}
+          action={
+            <Link className="button" to={`/p/${slug}/work`}>
+              Back to the work list
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -103,9 +123,7 @@ export function WorkDetailPage() {
       </nav>
 
       <header className="record-head">
-        <h1 className="record-title">
-          {work.title} <span className="record-id mono">{work.id}</span>
-        </h1>
+        <RecordTitle title={work.title} id={work.id} />
 
         <div className="rec-byline">
           <WorkStatusPill status={work.status} />

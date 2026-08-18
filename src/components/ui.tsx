@@ -26,8 +26,12 @@ export function BugStatusPill({ status }: { status: BugStatus }) {
 
 /**
  * Severity, as the same coloured pill everywhere it appears — board row, record header,
- * sidebar, related block. The label collapses to the dot in very narrow rows; the title
- * keeps it readable to a screen reader and to a hover.
+ * sidebar, related block.
+ *
+ * In a narrow row the word gives way to its initial, never to the dot alone. Four hues
+ * with nothing beside them is severity encoded in colour only: a reader with red-green
+ * colour blindness cannot separate Critical from High there, and neither can anyone
+ * printing the page. "C" costs seven pixels and keeps the meaning in the glyph.
  */
 export function SeverityBadge({ severity }: { severity: Severity }) {
   const label = SEVERITY_LABEL[severity] ?? severity;
@@ -35,7 +39,38 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
     <span className={`pill pill-sev pill-sev-${severity}`} title={`${label} severity`}>
       <span className="dot" aria-hidden="true" />
       <span className="pill-text">{label}</span>
+      <span className="pill-abbr" aria-hidden="true">
+        {label.charAt(0)}
+      </span>
     </span>
+  );
+}
+
+/**
+ * A record's headline: its title, with its id set after it the way a PR number follows a
+ * PR title.
+ *
+ * The id is bound to the title's last word with a non-breaking space, which is the whole
+ * trick. Left to itself the line breaker treats the id as an ordinary word, so any title
+ * that fits the measure on its own but not with the id on the end pushed the id down to a
+ * line of its own — a lone "BUG-0006" under a full-width heading, which reads as a stray
+ * rather than as part of the title. Bound, the last word travels with it: the second line
+ * is "…card BUG-0006", which is how a wrapped title is supposed to look.
+ */
+export function RecordTitle({ title, id }: { title: string; id: string }) {
+  const text = title.trim();
+  const cut = text.lastIndexOf(" ");
+  const head = cut > 0 ? text.slice(0, cut + 1) : "";
+  const tail = cut > 0 ? text.slice(cut + 1) : text;
+  return (
+    <h1 className="record-title">
+      {head}
+      <span className="record-title-tail">
+        {tail}
+        {"\u00a0"}
+        <span className="record-id mono">{id}</span>
+      </span>
+    </h1>
   );
 }
 
@@ -216,36 +251,42 @@ export function Skeleton({ rows = 4 }: { rows?: number }) {
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+/**
+ * A failure, said in the reader's terms first and the backend's second.
+ *
+ * The headline used to be "Could not read the vault" for every failure, which is a
+ * different sentence from the truth on the most common one: a link to `BUG-9999` in a
+ * project that has nine bugs is not a vault this app cannot read, it is a record that is
+ * not there — and telling somebody their data store is broken when it isn't sends them
+ * looking in the wrong place. Callers that know which one it is pass the title.
+ */
+export function ErrorState({
+  title = "Could not read the vault",
+  message,
+  onRetry,
+  action,
+}: {
+  title?: string;
+  message: string;
+  onRetry?: () => void;
+  /** Where to go instead — a list to return to, usually. */
+  action?: ReactNode;
+}) {
   return (
     <div className="error-state" role="alert">
-      <p className="error-title">Could not read the vault</p>
+      <p className="error-title">{title}</p>
       <p className="error-message">{message}</p>
-      {onRetry && (
-        <button className="button" onClick={onRetry}>
-          Try again
-        </button>
+      {(onRetry || action) && (
+        <div className="error-actions">
+          {onRetry && (
+            <button className="button" onClick={onRetry}>
+              Try again
+            </button>
+          )}
+          {action}
+        </div>
       )}
     </div>
   );
 }
 
-export function Stat({
-  label,
-  value,
-  tone = "neutral",
-  hint,
-}: {
-  label: string;
-  value: ReactNode;
-  tone?: "neutral" | "accent" | "green" | "amber" | "red" | "purple";
-  hint?: ReactNode;
-}) {
-  return (
-    <div className={`stat stat-${tone}`}>
-      <div className="stat-value tabular">{value}</div>
-      <div className="stat-label">{label}</div>
-      {hint && <div className="stat-hint">{hint}</div>}
-    </div>
-  );
-}

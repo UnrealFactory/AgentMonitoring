@@ -34,10 +34,25 @@ export type UrlFilters<S extends FilterSpec> = {
   isDirty: (except?: (keyof S & string)[]) => boolean;
 };
 
-/** `defaults` must be a stable object (a module-level constant), not a fresh literal. */
+/**
+ * `defaults` must be a stable object (a module-level constant), not a fresh literal, and
+ * so must `allowed` — a module constant for the closed vocabularies (tab, status,
+ * severity) or a `useMemo` for the open ones (label, tag, agent, assignee, reporter),
+ * which are only known once the project's records are loaded.
+ */
 export function useUrlFilters<S extends FilterSpec>(
   defaults: S,
-  /** Values a filter is allowed to take, when it is an enum: anything else is ignored. */
+  /**
+   * The values each filter may take. A **closed** vocabulary (tab, severity) is a
+   * constant; an **open** one — the labels, tags and agent names a project happens to
+   * contain — has to be passed in from the loaded records, because that is the only place
+   * it exists. Both are checked the same way, and for the same reason: a URL is typed by
+   * hand and outlives the build that produced it, so `?agent=nova` pasted into a project
+   * that has never heard of nova must show the unfiltered board, not an empty one whose
+   * menu says "All agents" while the rows say nothing matched.
+   *
+   * A filter with no entry here accepts anything (the free-text search box).
+   */
   allowed: Partial<Record<keyof S & string, readonly string[]>> = {}
 ): UrlFilters<S> {
   const [params, setParams] = useSearchParams();
@@ -48,15 +63,11 @@ export function useUrlFilters<S extends FilterSpec>(
       const raw = params.get(key);
       if (raw === null) continue;
       const permitted = allowed[key];
-      // A URL is typed by hand and outlives the build that produced it, so an unknown
-      // value is treated as "not set" rather than as a filter nothing can match.
       if (permitted && !permitted.includes(raw)) continue;
       out[key] = raw as S[keyof S & string];
     }
     return out;
-    // `allowed` is a literal at the call sites; the params + defaults are what change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params, defaults]);
+  }, [params, defaults, allowed]);
 
   const set = useCallback(
     <K extends keyof S & string>(key: K, value: S[K]) => {

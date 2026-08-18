@@ -14,7 +14,7 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCurrentProject, useProjectSlug } from "../AppContext";
-import { api } from "../lib/api";
+import { api, failureTitle } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useActiveSection } from "../lib/useActiveSection";
 import { Markdown } from "../lib/markdown";
@@ -32,6 +32,7 @@ import {
   AgentChip,
   BugStatusPill,
   ErrorState,
+  RecordTitle,
   SeverityBadge,
   Skeleton,
   Tag,
@@ -43,7 +44,7 @@ import {
   formatRelative,
   pluralize,
 } from "../lib/format";
-import type { BugDetail } from "../lib/types";
+import type { BugComment, BugDetail } from "../lib/types";
 
 /** A timestamp shown as a real date, with the relative time next to it. */
 function Stamp({ iso, relative = true }: { iso: string; relative?: boolean }) {
@@ -61,7 +62,10 @@ export function BugDetailPage() {
   const slug = useProjectSlug()!;
   const project = useCurrentProject();
   const { id = "" } = useParams<{ id: string }>();
-  const { data, error, loading, reload } = useAsync(() => api.getBug(slug, id), [slug, id]);
+  const { data, error, status, loading, reload } = useAsync(
+    () => api.getBug(slug, id),
+    [slug, id]
+  );
 
   const bug = data;
   const related = useRelated(slug, id, bug?.refs ?? EMPTY);
@@ -89,9 +93,19 @@ export function BugDetailPage() {
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {
+    const missing = status === 404;
     return (
       <div className="page">
-        <ErrorState message={error} onRetry={reload} />
+        <ErrorState
+          title={failureTitle(error, status, id)}
+          message={error}
+          onRetry={missing ? undefined : reload}
+          action={
+            <Link className="button" to={`/p/${slug}/bugs`}>
+              Back to the bug board
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -106,6 +120,24 @@ export function BugDetailPage() {
   const openFor = formatDuration(bug.created, bug.resolved);
   const claimDelay = bug.claimed ? formatDuration(bug.created, bug.claimed) : null;
 
+  /**
+   * Everybody who has actually written into this record, in the order they first appear:
+   * the reporter, then whoever answered. Not the assignee unless they said something —
+   * a name on a field is a claim, a name in the thread is a contribution.
+   */
+  const participants = [bug.reporter, ...bug.comments.map((c) => c.agent)].filter(
+    (name, i, all) => name && all.indexOf(name) === i
+  );
+  /**
+   * The newest thing anybody said, which is what a reader arriving late wants first.
+   * Taken by timestamp rather than by position: the thread is written in file order and a
+   * backdated comment can land anywhere in it.
+   */
+  const lastComment = bug.comments.reduce<BugComment | null>(
+    (newest, c) => (!newest || c.ts > newest.ts ? c : newest),
+    null
+  );
+
   return (
     <div className="page page-detail">
       <nav className="breadcrumb">
@@ -117,9 +149,7 @@ export function BugDetailPage() {
       </nav>
 
       <header className="record-head">
-        <h1 className="record-title">
-          {bug.title} <span className="record-id mono">{bug.id}</span>
-        </h1>
+        <RecordTitle title={bug.title} id={bug.id} />
 
         <div className="rec-byline">
           <BugStatusPill status={bug.status} />
@@ -233,6 +263,34 @@ export function BugDetailPage() {
                     <AgentChip name={bug.assignee} />
                   ) : (
                     <span className="muted">unassigned</span>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Participants</dt>
+                <dd>
+                  <span className="side-people" title={participants.join(", ")}>
+                    {participants.map((name) => (
+                      <AgentChip key={name} name={name} hideName />
+                    ))}
+                    <span className="side-people-count tabular">{participants.length}</span>
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>Last word</dt>
+                <dd>
+                  {lastComment ? (
+                    <span className="side-lastword">
+                      <span className="side-lastword-who" title={lastComment.agent}>
+                        {lastComment.agent}
+                      </span>
+                      <span className="side-rel" title={formatDateTimeUtc(lastComment.ts)}>
+                        {formatRelative(lastComment.ts)}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="muted">no replies yet</span>
                   )}
                 </dd>
               </div>

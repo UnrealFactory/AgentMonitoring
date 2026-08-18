@@ -19,7 +19,7 @@ import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useProjectSlug } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
-import { api } from "../lib/api";
+import { api, failureTitle } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
 import { useUrlFilters } from "../lib/useUrlFilters";
@@ -97,13 +97,13 @@ function sortNote(groups: { status: BugStatus }[]): string {
 
 export function BugsPage() {
   const slug = useProjectSlug()!;
-  const { data, error, loading, reload } = useAsync(() => api.listBugs(slug), [slug]);
-
-  const { values, set, reset, isDirty } = useUrlFilters(DEFAULTS, ALLOWED);
-  const tab = values.tab as Tab;
-  const severity = values.severity as Severity | "all";
-  const { label, assignee, reporter, q: query } = values;
-  const setTab = useCallback((t: Tab) => set("tab", t), [set]);
+  const {
+    data,
+    error,
+    status: httpStatus,
+    loading,
+    reload,
+  } = useAsync(() => api.listBugs(slug), [slug]);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const bugs = useMemo(() => data ?? [], [data]);
@@ -130,6 +130,28 @@ export function BugsPage() {
     () => [...new Set(bugs.map((b) => b.reporter))].sort((a, b) => a.localeCompare(b)),
     [bugs]
   );
+
+  /**
+   * The same list the menus offer is the list the URL is checked against. `?label=frontend`
+   * in a project with no frontend label is a stale or hand-typed link, and the honest
+   * answer to it is the unfiltered board — the same answer `?tab=banana` already got.
+   * Without this the board silently showed nothing while every control claimed to be off.
+   */
+  const allowed = useMemo(
+    () => ({
+      ...ALLOWED,
+      label: ["all", ...labels],
+      assignee: ["all", "none", ...assignees],
+      reporter: ["all", ...reporters],
+    }),
+    [labels, assignees, reporters]
+  );
+
+  const { values, set, reset, isDirty } = useUrlFilters(DEFAULTS, allowed);
+  const tab = values.tab as Tab;
+  const severity = values.severity as Severity | "all";
+  const { label, assignee, reporter, q: query } = values;
+  const setTab = useCallback((t: Tab) => set("tab", t), [set]);
 
   /**
    * The handoff column is sized for the names this project actually uses — `nova` and a
@@ -257,7 +279,16 @@ export function BugsPage() {
   if (error) {
     return (
       <div className="page">
-        <ErrorState message={error} onRetry={reload} />
+        <ErrorState
+          title={failureTitle(error, httpStatus)}
+          message={error}
+          onRetry={httpStatus === 404 ? undefined : reload}
+          action={
+            <Link className="button" to="/projects">
+              All projects
+            </Link>
+          }
+        />
       </div>
     );
   }

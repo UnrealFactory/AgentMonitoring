@@ -115,12 +115,107 @@ try {
   );
 
   // -- nonsense in the URL is ignored rather than obeyed ------------------------------------
-  await fresh.goto(`${ORIGIN}/p/${slug}/bugs?tab=banana&severity=urgent`, {
-    waitUntil: "domcontentloaded",
-  });
+  //
+  // Every dimension, not a sample of two. The closed vocabularies (tab, status, severity)
+  // were checked against a constant from the start; the open ones — label, assignee,
+  // reporter, agent, tag — are only knowable from the project's own records, and until
+  // this round they were passed through unchecked. `?agent=nova` pasted into a project
+  // that has never heard of nova produced an empty screen under menus that all read
+  // "All …": the board showing nothing, and nothing on it saying why.
+  //
+  // `q` is deliberately absent: free text has no vocabulary, and a search for a word this
+  // project does not contain *should* come back empty.
+  const dimensions = [
+    { screen: "bugs", query: "severity=urgent", control: "Filter by severity", reads: "All severities" },
+    { screen: "bugs", query: "label=nonexistent-label", control: "Filter by label", reads: "All labels" },
+    { screen: "bugs", query: "assignee=nobody-at-all", control: "Filter by assignee", reads: "All assignees" },
+    { screen: "bugs", query: "reporter=nobody-at-all", control: "Filter by reporter", reads: "All reporters" },
+    { screen: "work", query: "status=banana", control: "Filter by agent", reads: "All agents" },
+    { screen: "work", query: "agent=nobody-at-all", control: "Filter by agent", reads: "All agents" },
+    { screen: "work", query: "tag=nonexistent-tag", control: "Filter by tag", reads: "All tags" },
+  ];
+
+  /** How many rows each board shows with nothing filtered — the number to fall back to. */
+  const baseline = {};
+  for (const [screen, url] of [
+    ["bugs", `${ORIGIN}/p/${slug}/bugs?tab=all`],
+    ["work", `${ORIGIN}/p/${slug}/work`],
+  ]) {
+    await fresh.goto(url, { waitUntil: "domcontentloaded" });
+    await ready(fresh);
+    baseline[screen] = await fresh.locator(".work-rows .work-row").count();
+  }
+
+  // The two tabs are their own shape of fallback: they choose a view rather than filter
+  // one, so an unknown value lands on the default view, not on "everything".
+  await fresh.goto(`${ORIGIN}/p/${slug}/bugs?tab=zzz`, { waitUntil: "domcontentloaded" });
   await ready(fresh);
-  const banana = await fresh.locator(".work-rows .work-row").count();
-  check("an unknown filter value falls back to the default", banana > 0, `${banana} rows`);
+  check(
+    "?tab=zzz falls back to the default tab on /bugs",
+    (await fresh.getByRole("tab", { name: /^Open/ }).getAttribute("aria-selected")) === "true",
+  );
+
+  for (const d of dimensions) {
+    // The bug board's default tab is Open, so its unfiltered view is the All tab; the work
+    // list's default already shows everything.
+    const base = d.screen === "bugs" ? "tab=all&" : "";
+    const url = `${ORIGIN}/p/${slug}/${d.screen}?${base}${d.query}`;
+    await fresh.goto(url, { waitUntil: "domcontentloaded" });
+    await ready(fresh);
+    const rows = await fresh.locator(".work-rows .work-row").count();
+    const button = fresh.getByLabel(d.control).first();
+    const reads = (await button.innerText()).trim();
+    const set = await button.evaluate((el) => el.classList.contains("is-set"));
+    check(
+      `?${d.query} falls back to unset on /${d.screen}`,
+      rows === baseline[d.screen] && reads === d.reads && !set,
+      `${rows} rows (unfiltered: ${baseline[d.screen]}), control reads "${reads}"${set ? " and looks set" : ""}`,
+    );
+  }
+
+  // The other half of the same claim: a value the project *does* contain still filters.
+  // Without this the check above passes on a board that ignores its URL entirely.
+  const allBugs = await (await fetch(`${ORIGIN}/vault-api/projects/${slug}/bugs`)).json();
+  const allWork = await (await fetch(`${ORIGIN}/vault-api/projects/${slug}/worklogs`)).json();
+  const real = [
+    { screen: "bugs", key: "label", value: allBugs.flatMap((b) => b.labels)[0], control: "Filter by label" },
+    {
+      screen: "bugs",
+      key: "reporter",
+      value: allBugs[0]?.reporter,
+      control: "Filter by reporter",
+    },
+    { screen: "work", key: "agent", value: allWork[0]?.agent, control: "Filter by agent" },
+    { screen: "work", key: "tag", value: allWork.flatMap((w) => w.tags)[0], control: "Filter by tag" },
+  ];
+  for (const r of real) {
+    const base = r.screen === "bugs" ? "tab=all&" : "";
+    await fresh.goto(`${ORIGIN}/p/${slug}/${r.screen}?${base}${r.key}=${encodeURIComponent(r.value)}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await ready(fresh);
+    const rows = await fresh.locator(".work-rows .work-row").count();
+    const reads = (await fresh.getByLabel(r.control).first().innerText()).trim();
+    check(
+      `?${r.key}=${r.value} does filter /${r.screen}`,
+      rows > 0 && rows < baseline[r.screen] && reads === r.value,
+      `${rows} rows (unfiltered: ${baseline[r.screen]}), control reads "${reads}"`,
+    );
+  }
+
+  // The dashboard's own filter is closed, and lives in the URL the same way.
+  await fresh.goto(`${ORIGIN}/p/${slug}?range=decade`, { waitUntil: "domcontentloaded" });
+  await ready(fresh);
+  check(
+    "?range=decade falls back to All time on the dashboard",
+    (await fresh.getByRole("tab", { name: "All time" }).getAttribute("aria-selected")) === "true",
+  );
+  await fresh.goto(`${ORIGIN}/p/${slug}?range=7d`, { waitUntil: "domcontentloaded" });
+  await ready(fresh);
+  check(
+    "…and a known range is obeyed",
+    (await fresh.getByRole("tab", { name: "7 days" }).getAttribute("aria-selected")) === "true",
+  );
   await fresh.close();
 
   // -- the work list does the same -----------------------------------------------------------

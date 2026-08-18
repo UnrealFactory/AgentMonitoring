@@ -4,7 +4,7 @@
  *
  *   npm run check:clipping
  *   node scripts/check-clipping.mjs [--port 5173] [--widths 1600,1280,1104,960]
- *                                  [--project relay] [--include-dashboard] [--url ORIGIN]
+ *                                  [--project relay] [--url ORIGIN]
  *
  * Two defects, one gate, because they are the same failure seen from two sides — a box that
  * is smaller than what it holds:
@@ -27,9 +27,10 @@
  * ancestor that hides overflow — so a real ellipsis is not reported as an overlap, and text
  * below the fold is still measured.
  *
- * The dashboard is walked but excluded from the verdict (vault BUG-0006, still open, P4's
- * scope): its Agents table overflows its card, which would keep this gate permanently red
- * and therefore meaningless for everyone else. `--include-dashboard` puts it back in.
+ * Every screen is gated, the dashboard included. It used to be walked but excused, because
+ * its Agents table overflowed its own card (vault BUG-0006) and would have kept this gate
+ * permanently red for everyone else. That bug is fixed, so the excuse is gone: a gate with
+ * a hole in it is a gate that says nothing about the hole.
  *
  * Boots its own dev server when none is listening. Not part of the product; a builder's
  * tool, like shoot-region.mjs.
@@ -55,7 +56,6 @@ Options:
   --port <n>            dev-server port to boot on / check against (default 5173)
   --url <origin>        check an already-running server instead of booting one
   --project <slug>      only this project (default: every project in the vault)
-  --include-dashboard   also fail on the dashboard (vault BUG-0006 keeps it red today)
   --slack <px>          how much overflow is rounding rather than a defect (default 0.75)`);
   process.exit(0);
 }
@@ -67,7 +67,6 @@ const WIDTHS = value("--widths", "1600,1440,1280,1152,1104,1024,960")
   .map((w) => Number(w.trim()))
   .filter(Boolean);
 const WANT_PROJECT = (value("--project", "") || "").trim();
-const INCLUDE_DASHBOARD = flag("--include-dashboard");
 const SLACK = Number(value("--slack", "0.75"));
 
 const log = (...m) => console.log("[check-clipping]", ...m);
@@ -224,7 +223,6 @@ const PROBE = (slack) => {
 let browser = null;
 let server = null;
 let failures = 0;
-let warnings = 0;
 let checked = 0;
 
 try {
@@ -243,12 +241,12 @@ try {
     );
   }
 
-  /** Every screen of the app, and every record in it. `gate: false` = walked but not judged. */
+  /** Every screen of the app, and every record in it. All of them count. */
   const screens = [];
   for (const p of wanted) {
     const bugs = await api(`/projects/${p.slug}/bugs`);
     const works = await api(`/projects/${p.slug}/worklogs`);
-    screens.push({ path: `/p/${p.slug}`, gate: INCLUDE_DASHBOARD, why: "vault BUG-0006, P4" });
+    screens.push({ path: `/p/${p.slug}` });
     screens.push({ path: `/p/${p.slug}/work` });
     screens.push({ path: `/p/${p.slug}/bugs` });
     // The board opens on the bugs that still need someone; the dense view is All.
@@ -278,24 +276,23 @@ try {
         await page.goto(`${ORIGIN}${screen.path}`, { waitUntil: "domcontentloaded" });
         await page.waitForSelector(".page-title, .record-title", { state: "visible" });
         await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        // A chart is drawn at the measured pixel width of its container, so it lands one
+        // frame after the data. Probing between the two would measure an empty card and
+        // call it clean.
+        await page.waitForFunction(() =>
+          [...document.querySelectorAll(".chart-plot")].every((p) => p.querySelector("svg")),
+        );
         await page.evaluate(() => document.fonts.ready);
         const { clipped, overlaps } = await page.evaluate(PROBE, SLACK);
-        const gated = screen.gate !== false;
         const where = `${String(width).padEnd(5)} ${screen.path.padEnd(38)}`;
-        const note = gated ? "" : `  [not gated: ${screen.why}]`;
         for (const f of clipped) {
-          if (gated) failures += 1;
-          else warnings += 1;
-          lines.push(
-            `${gated ? "CLIPPED" : "clipped"} ${where} ${f.clipper} cuts ${f.cut} by ${f.px}px — "${f.text}"${note}`,
-          );
+          failures += 1;
+          lines.push(`CLIPPED ${where} ${f.clipper} cuts ${f.cut} by ${f.px}px — "${f.text}"`);
         }
         for (const o of overlaps) {
-          if (gated) failures += 1;
-          else warnings += 1;
+          failures += 1;
           lines.push(
-            `${gated ? "OVERLAP" : "overlap"} ${where} ${o.a} over ${o.b} by ${o.px}px — ` +
-              `"${o.textA}" / "${o.textB}"${note}`,
+            `OVERLAP ${where} ${o.a} over ${o.b} by ${o.px}px — "${o.textA}" / "${o.textB}"`,
           );
         }
         checked += 1;
@@ -317,7 +314,6 @@ try {
 }
 
 log(`${checked} screen loads`);
-if (warnings) log(`${warnings} finding(s) on screens that are not gated (see the notes above)`);
 log(
   failures === 0
     ? "clean: nothing is cut without an ellipsis, nothing is painted over anything"

@@ -88,6 +88,37 @@
   --sev-low: var(--grey);
   --sev-low-soft: var(--grey-soft);
 
+  /* --- chart series -------------------------------------------------------
+     The same four hues the rest of the app already means things with — blue is
+     work in flight, green is finished, orange is a bug, purple is a fix — stepped
+     for the surface a chart is painted on rather than reused at pill brightness.
+     A 6px pill dot and a 150px-tall fill are not the same amount of colour: the
+     token steps sit at OKLCH L ≈ 0.71–0.76, which glares as a large area on
+     #16171a, so each chart step holds its hue and chroma and drops to L 0.668.
+
+     Validated as a palette, not chosen by eye (dataviz skill's validator,
+     `--mode dark --surface #16171a`): every step inside the dark lightness band,
+     chroma ≥ 0.10, contrast ≥ 5.6:1, and every *pair a chart actually draws
+     together* clear of the gates — work↔done ΔE 19.9 normal / 18.8 deutan,
+     bug↔fix 26.8 / 27.2. The pair this palette must never draw together is
+     blue↔purple: they are ΔE 0.5 apart under deuteranopia and 11.6 under normal
+     vision, so no chart here carries both. That is why the burn-ups are split
+     work-vs-done and bug-vs-fix rather than one four-series chart.
+     ---------------------------------------------------------------------- */
+  --series-work: #3f99ed;
+  --series-work-wash: rgba(63, 153, 237, 0.13);
+  --series-done: #3fac78;
+  --series-done-wash: rgba(63, 172, 120, 0.13);
+  --series-bug: #d37c28;
+  --series-bug-wash: rgba(211, 124, 40, 0.14);
+  --series-fix: #9b7eec;
+  --series-fix-wash: rgba(155, 126, 236, 0.13);
+
+  /* chart chrome: one step off the surface, recessive, never dashed */
+  --chart-grid: #26272b;
+  --chart-axis: #2f3035;
+  --chart-empty: rgba(255, 255, 255, 0.07);
+
   /* --- typography -------------------------------------------------------- */
   --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
     system-ui, sans-serif;
@@ -102,6 +133,9 @@
   --text-xl: 20px;
   --text-2xl: 26px;
   --text-3xl: 32px;
+  /* The one number a screen leads with. Exactly one per view (the dashboard's
+     "working right now"), in the same sans as everything else. */
+  --text-hero: 48px;
 
   --leading-tight: 1.25;
   --leading-snug: 1.4;

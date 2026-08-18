@@ -127,6 +127,11 @@ async function shoot(page, { name, path, waitFor, prepare, full }) {
     const el = document.querySelector(".page-title, .record-title");
     return !!el && el.getBoundingClientRect().width > 0;
   });
+  // Charts are drawn at the measured pixel width of their container, so they appear one
+  // frame after the data does. Shooting between the two photographs empty cards.
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll(".chart-plot")].every((p) => p.querySelector("svg")),
+  );
   const file = join(shotsDir, `${name}.png`);
   await page.screenshot({ path: file });
   log(`${name.padEnd(12)} ${path}`);
@@ -222,7 +227,7 @@ try {
   log(`project: ${slug} · work-detail: ${work.id} · bug-detail: ${bug.id}`);
 
   const all = [
-    { name: "dashboard", path: `/p/${slug}`, waitFor: ".stat-row .stat-value" },
+    { name: "dashboard", path: `/p/${slug}`, waitFor: ".now-strip .now-hero-value" },
     { name: "work-list", path: `/p/${slug}/work`, waitFor: ".work-rows .work-row" },
     { name: "work-detail", path: `/p/${slug}/work/${work.id}`, waitFor: ".record-title", full: true },
     {
