@@ -23,6 +23,12 @@ export function formatDateTime(iso: string | null | undefined): string {
   }).format(d);
 }
 
+/** "18 Aug 2026, 09:12 UTC" — for tooltips, where the timezone must be explicit. */
+export function formatDateTimeUtc(iso: string | null | undefined): string {
+  const text = formatDateTime(iso);
+  return text === "—" ? text : `${text} UTC`;
+}
+
 /** "18 Aug 2026" */
 export function formatDate(iso: string | null | undefined): string {
   const d = parse(iso);

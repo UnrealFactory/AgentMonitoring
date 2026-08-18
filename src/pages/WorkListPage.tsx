@@ -1,30 +1,54 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+/**
+ * Every work record in the project, as a dense keyboard-driven list.
+ *
+ * Filtering is client-side and instant: the vault is small enough to hold in memory and
+ * a round trip per keystroke would feel like a website. Rows are grouped by status so
+ * "what is happening right now" is always the first thing on the screen.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useProjectSlug } from "../AppContext";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
-import { AgentChip, EmptyState, ErrorState, Skeleton, Tag, WorkStatusPill } from "../components/ui";
-import { formatDate, formatRelative, pluralize } from "../lib/format";
-import type { WorkStatus } from "../lib/types";
+import {
+  AgentChip,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  Tag,
+  WorkStatusDot,
+} from "../components/ui";
+import { formatDateTimeUtc, formatRelative, pluralize, WORK_STATUS_LABEL } from "../lib/format";
+import type { WorklogSummary, WorkStatus } from "../lib/types";
 
 const STATUSES: (WorkStatus | "all")[] = ["all", "in_progress", "done", "abandoned"];
-const STATUS_TEXT: Record<string, string> = {
-  all: "All",
-  in_progress: "In progress",
-  done: "Done",
-  abandoned: "Abandoned",
-};
+const STATUS_TEXT: Record<string, string> = { all: "All", ...WORK_STATUS_LABEL };
+/** In progress first: the list answers "what is happening" before "what happened". */
+const GROUP_ORDER: WorkStatus[] = ["in_progress", "done", "abandoned"];
+const MAX_TAGS = 3;
 
 export function WorkListPage() {
   const slug = useProjectSlug()!;
+  const navigate = useNavigate();
   const { data, error, loading, reload } = useAsync(() => api.listWorklogs(slug), [slug]);
+
   const [status, setStatus] = useState<WorkStatus | "all">("all");
   const [agent, setAgent] = useState("all");
+  const [tag, setTag] = useState("all");
   const [query, setQuery] = useState("");
+  const [cursor, setCursor] = useState(-1);
 
-  const works = data ?? [];
+  const searchRef = useRef<HTMLInputElement>(null);
+  const rowRefs = useRef<(HTMLAnchorElement | null)[]>([]);
+
+  const works = useMemo(() => data ?? [], [data]);
+
   const agents = useMemo(
     () => [...new Set(works.map((w) => w.agent))].sort((a, b) => a.localeCompare(b)),
+    [works]
+  );
+  const tags = useMemo(
+    () => [...new Set(works.flatMap((w) => w.tags))].sort((a, b) => a.localeCompare(b)),
     [works]
   );
 
@@ -33,15 +57,79 @@ export function WorkListPage() {
     return works.filter((w) => {
       if (status !== "all" && w.status !== status) return false;
       if (agent !== "all" && w.agent !== agent) return false;
+      if (tag !== "all" && !w.tags.includes(tag)) return false;
       if (!q) return true;
       return (
         w.title.toLowerCase().includes(q) ||
         w.id.toLowerCase().includes(q) ||
+        w.agent.toLowerCase().includes(q) ||
         w.excerpt.toLowerCase().includes(q) ||
         w.tags.some((t) => t.toLowerCase().includes(q))
       );
     });
-  }, [works, status, agent, query]);
+  }, [works, status, agent, tag, query]);
+
+  /** Grouped for display; `flat` is the same rows in screen order, for the keyboard. */
+  const groups = useMemo(
+    () =>
+      GROUP_ORDER.map((s) => ({ status: s, items: filtered.filter((w) => w.status === s) })).filter(
+        (g) => g.items.length > 0
+      ),
+    [filtered]
+  );
+  const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+
+  const filtersActive = status !== "all" || agent !== "all" || tag !== "all" || query.trim() !== "";
+  const clearFilters = useCallback(() => {
+    setStatus("all");
+    setAgent("all");
+    setTag("all");
+    setQuery("");
+  }, []);
+
+  // A new result set invalidates the old cursor position.
+  useEffect(() => setCursor(-1), [status, agent, tag, query]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing =
+        !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT");
+
+      if (e.key === "Escape") {
+        if (query) setQuery("");
+        el?.blur();
+        return;
+      }
+      if (!typing && (e.key === "/" || (e.key === "f" && (e.metaKey || e.ctrlKey)))) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+      // Arrows belong to a <select> when one has focus; everywhere else they drive the list.
+      if (el?.tagName === "SELECT") return;
+      if (typing && e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
+      if (!flat.length) return;
+
+      const move = (delta: number) => {
+        e.preventDefault();
+        setCursor((c) => {
+          const next = Math.min(flat.length - 1, Math.max(0, c < 0 ? 0 : c + delta));
+          rowRefs.current[next]?.scrollIntoView({ block: "nearest" });
+          return next;
+        });
+      };
+      if (e.key === "ArrowDown" || (!typing && e.key === "j")) move(1);
+      else if (e.key === "ArrowUp" || (!typing && e.key === "k")) move(-1);
+      else if (e.key === "Enter" && cursor >= 0 && flat[cursor]) {
+        e.preventDefault();
+        navigate(`/p/${slug}/work/${flat[cursor].id}`);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [flat, cursor, navigate, slug, query]);
 
   if (error) {
     return (
@@ -50,6 +138,9 @@ export function WorkListPage() {
       </div>
     );
   }
+
+  const inProgress = works.filter((w) => w.status === "in_progress").length;
+  let rowIndex = -1;
 
   return (
     <div className="page">
@@ -61,7 +152,9 @@ export function WorkListPage() {
           </p>
         </div>
         <div className="page-head-meta tabular">
-          {loading ? "loading…" : pluralize(filtered.length, "record")}
+          {loading
+            ? "loading…"
+            : `${pluralize(works.length, "record")}${inProgress ? ` · ${inProgress} in progress` : ""}`}
         </div>
       </header>
 
@@ -97,74 +190,195 @@ export function WorkListPage() {
               </option>
             ))}
           </select>
-          <input
-            className="input"
-            type="search"
-            value={query}
-            placeholder="Search titles, ids, tags…"
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search work logs"
-          />
+          <select
+            className="select"
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+            aria-label="Filter by tag"
+          >
+            <option value="all">All tags</option>
+            {tags.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <div className="search">
+            <svg className="search-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M10.2 10.2 L13.5 13.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            <input
+              ref={searchRef}
+              className="input search-input"
+              type="search"
+              value={query}
+              placeholder="Search work"
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search work logs"
+            />
+            {!query && <kbd className="search-kbd">/</kbd>}
+          </div>
         </div>
       </div>
 
-      {loading ? (
-        <Skeleton rows={6} />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title={works.length ? "No work matches those filters" : "No work recorded yet"}
-          hint={
-            works.length
-              ? "Clear the filters to see every record."
-              : "Agents create records with `agentmon work start -p " + slug + " --agent <name> --title <t>`."
-          }
-        />
-      ) : (
-        <div className="table-wrap">
-          <table className="table table-rows">
-            <thead>
-              <tr>
-                <th className="col-id">ID</th>
-                <th>Title</th>
-                <th className="col-status">Status</th>
-                <th className="col-agent">Agent</th>
-                <th className="col-date">Started</th>
-                <th className="col-date">Last activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((w) => (
-                <tr key={w.id}>
-                  <td className="col-id mono">
-                    <Link to={`/p/${slug}/work/${w.id}`}>{w.id}</Link>
-                  </td>
-                  <td>
-                    <Link className="cell-title" to={`/p/${slug}/work/${w.id}`}>
-                      {w.title}
-                    </Link>
-                    <div className="cell-sub">{w.excerpt}</div>
-                    {w.tags.length > 0 && (
-                      <div className="tag-row">
-                        {w.tags.map((t) => (
-                          <Tag key={t}>{t}</Tag>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  <td className="col-status">
-                    <WorkStatusPill status={w.status} />
-                  </td>
-                  <td className="col-agent">
-                    <AgentChip name={w.agent} />
-                  </td>
-                  <td className="col-date muted tabular">{formatDate(w.started)}</td>
-                  <td className="col-date muted tabular">{formatRelative(w.lastActivity)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {filtersActive && (
+        <div className="filter-summary">
+          <span className="filter-count tabular">
+            {pluralize(filtered.length, "match", "matches")}
+          </span>
+          {status !== "all" && (
+            <button className="filter-chip" onClick={() => setStatus("all")}>
+              Status: {STATUS_TEXT[status]} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {agent !== "all" && (
+            <button className="filter-chip" onClick={() => setAgent("all")}>
+              Agent: {agent} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {tag !== "all" && (
+            <button className="filter-chip" onClick={() => setTag("all")}>
+              Tag: {tag} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {query.trim() && (
+            <button className="filter-chip" onClick={() => setQuery("")}>
+              “{query.trim()}” <span aria-hidden="true">×</span>
+            </button>
+          )}
+          <button className="filter-clear" onClick={clearFilters}>
+            Clear all
+          </button>
         </div>
       )}
+
+      {loading ? (
+        <Skeleton rows={6} />
+      ) : flat.length === 0 ? (
+        works.length === 0 ? (
+          <EmptyState
+            icon={
+              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+                <path
+                  d="M3 3.5 H13 M3 8 H13 M3 12.5 H9"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              </svg>
+            }
+            title="No work recorded yet"
+            hint={
+              <>
+                Agents open a record before they start, so the reasoning is written down while it
+                is still true:
+                <code className="empty-code">
+                  agentmon work start -p {slug} --agent &lt;name&gt; --title &lt;title&gt;
+                </code>
+              </>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={
+              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+                <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                <path
+                  d="M10.2 10.2 L13.5 13.5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              </svg>
+            }
+            title="No work matches these filters"
+            hint={`${pluralize(works.length, "record")} in this project, none of them matching all of the filters above.`}
+            action={
+              <button className="button" onClick={clearFilters}>
+                Clear filters
+              </button>
+            }
+          />
+        )
+      ) : (
+        <>
+          <div className="work-list">
+            {groups.map((group) => (
+              <section className="work-group" key={group.status}>
+                <header className="work-group-head">
+                  <WorkStatusDot status={group.status} />
+                  <h2 className="work-group-title">{WORK_STATUS_LABEL[group.status]}</h2>
+                  <span className="work-group-count tabular">{group.items.length}</span>
+                </header>
+                <ul className="work-rows">
+                  {group.items.map((w) => {
+                    rowIndex += 1;
+                    const i = rowIndex;
+                    return (
+                      <li key={w.id}>
+                        <Link
+                          ref={(el) => {
+                            rowRefs.current[i] = el;
+                          }}
+                          className={`work-row${cursor === i ? " is-cursor" : ""}`}
+                          to={`/p/${slug}/work/${w.id}`}
+                          onMouseEnter={() => setCursor(i)}
+                          onFocus={() => setCursor(i)}
+                        >
+                          <WorkStatusDot status={w.status} />
+                          <span className="work-row-id mono">{w.id}</span>
+                          {/* the title is the only thing a row may ellipsise, so it
+                              carries the full text for the one row in ten that does */}
+                          <span className="work-row-title" title={w.title}>
+                            {w.title}
+                          </span>
+                          <RowTags work={w} />
+                          <span className="work-row-agent">
+                            <AgentChip name={w.agent} />
+                          </span>
+                          <time
+                            className="work-row-time tabular"
+                            dateTime={w.lastActivity}
+                            title={`Last activity ${formatDateTimeUtc(w.lastActivity)}`}
+                          >
+                            {formatRelative(w.lastActivity)}
+                          </time>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
+
+          <p className="list-hints">
+            <kbd>↑</kbd>
+            <kbd>↓</kbd> move · <kbd>↵</kbd> open · <kbd>/</kbd> search
+          </p>
+        </>
+      )}
     </div>
+  );
+}
+
+/** Tags, capped so a five-tag record cannot push the agent column around. */
+function RowTags({ work }: { work: WorklogSummary }) {
+  if (!work.tags.length) return <span className="work-row-tags" />;
+  const shown = work.tags.slice(0, MAX_TAGS);
+  const rest = work.tags.length - shown.length;
+  return (
+    <span className="work-row-tags">
+      {shown.map((t) => (
+        <Tag key={t}>{t}</Tag>
+      ))}
+      {rest > 0 && (
+        <span className="tag tag-more" title={work.tags.join(", ")}>
+          +{rest}
+        </span>
+      )}
+    </span>
   );
 }

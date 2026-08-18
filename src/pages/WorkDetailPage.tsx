@@ -1,15 +1,85 @@
+/**
+ * One work record, rendered the way a good merged pull request reads: what was done, why,
+ * how, which files moved, the notes posted while it was running, and — visually separate
+ * from everything above it — the outcome.
+ *
+ * The reader is assumed never to have seen the work. Nothing that carries meaning is
+ * truncated, every id in the prose is a link, and every timestamp is shown both as a real
+ * date and as "how long ago".
+ */
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useProjectSlug } from "../AppContext";
+import { useCurrentProject, useProjectSlug } from "../AppContext";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { Markdown } from "../lib/markdown";
-import { AgentChip, ErrorState, MetaRow, Skeleton, Tag, WorkStatusPill } from "../components/ui";
-import { formatDateTime, formatDuration, formatRelative } from "../lib/format";
+import { AgentChip, ErrorState, Skeleton, Tag, WorkStatusPill } from "../components/ui";
+import {
+  formatDateTime,
+  formatDateTimeUtc,
+  formatDuration,
+  formatRelative,
+  pluralize,
+} from "../lib/format";
+import type { WorklogDetail } from "../lib/types";
+
+/** A timestamp shown as a real date, with the relative time next to it. */
+function Stamp({ iso, relative = true }: { iso: string; relative?: boolean }) {
+  return (
+    <>
+      <time className="tabular" dateTime={iso} title={formatDateTimeUtc(iso)}>
+        {formatDateTime(iso)}
+      </time>
+      {relative && <span className="stamp-rel"> · {formatRelative(iso)}</span>}
+    </>
+  );
+}
+
+/** Which section the reader is currently looking at, for the contents rail. */
+function useActiveSection(ids: string[]): string {
+  const [active, setActive] = useState(ids[0] ?? "");
+  const key = ids.join(",");
+  useEffect(() => {
+    const seen = new Map<string, boolean>();
+    const els = ids
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => !!el);
+    if (!els.length) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) seen.set(e.target.id, e.isIntersecting);
+        const first = ids.find((id) => seen.get(id));
+        if (first) setActive(first);
+      },
+      { rootMargin: "-72px 0px -55% 0px" }
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return active;
+}
 
 export function WorkDetailPage() {
   const slug = useProjectSlug()!;
+  const project = useCurrentProject();
   const { id = "" } = useParams<{ id: string }>();
   const { data, error, loading, reload } = useAsync(() => api.getWorklog(slug, id), [slug, id]);
+
+  const work = data;
+  const sections = useMemo(() => {
+    if (!work) return [];
+    const out = [
+      { id: "what", label: "What", count: 0 },
+      { id: "why", label: "Why", count: 0 },
+      { id: "how", label: "How", count: 0 },
+    ];
+    if (work.files.length) out.push({ id: "files", label: "Files", count: work.files.length });
+    out.push({ id: "updates", label: "Updates", count: work.updates.length });
+    if (work.outcome) out.push({ id: "outcome", label: "Outcome", count: 0 });
+    return out;
+  }, [work]);
+  const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {
     return (
@@ -18,7 +88,7 @@ export function WorkDetailPage() {
       </div>
     );
   }
-  if (loading || !data) {
+  if (loading || !work) {
     return (
       <div className="page">
         <Skeleton rows={7} />
@@ -26,73 +96,131 @@ export function WorkDetailPage() {
     );
   }
 
-  const work = data;
+  const duration = formatDuration(work.started, work.finished);
 
   return (
     <div className="page page-detail">
       <nav className="breadcrumb">
+        <Link to={`/p/${slug}`}>{project?.name ?? slug}</Link>
+        <span aria-hidden="true">/</span>
         <Link to={`/p/${slug}/work`}>Work</Link>
         <span aria-hidden="true">/</span>
         <span className="mono">{work.id}</span>
       </nav>
 
       <header className="record-head">
-        <h1 className="record-title">{work.title}</h1>
-        <div className="record-subline">
+        <h1 className="record-title">
+          {work.title} <span className="record-id mono">{work.id}</span>
+        </h1>
+
+        <div className="rec-byline">
           <WorkStatusPill status={work.status} />
-          <span className="record-byline">
-            <AgentChip name={work.agent} /> started {formatRelative(work.started)}
-            {work.finished
-              ? ` · finished ${formatRelative(work.finished)} (${formatDuration(work.started, work.finished)})`
-              : ` · running for ${formatDuration(work.started, null)}`}
+          <AgentChip name={work.agent} size="md" />
+          <span className="rec-byline-text">
+            {work.status === "done" && work.finished ? (
+              <>
+                finished this work on <Stamp iso={work.finished} />
+              </>
+            ) : work.status === "abandoned" && work.finished ? (
+              <>
+                stopped this work on <Stamp iso={work.finished} />
+              </>
+            ) : (
+              <>
+                has been working on this since <Stamp iso={work.started} />
+              </>
+            )}
           </span>
+        </div>
+
+        <div className="rec-facts">
+          <ul className="rec-fact-list">
+            <li>
+              <span className="rec-fact-label">Started</span>
+              <Stamp iso={work.started} relative={false} />
+            </li>
+            <li>
+              <span className="rec-fact-label">Finished</span>
+              {work.finished ? (
+                <Stamp iso={work.finished} relative={false} />
+              ) : (
+                <span className="muted">still running</span>
+              )}
+            </li>
+            <li>
+              <span className="rec-fact-label">Duration</span>
+              <span className="tabular">{duration}</span>
+            </li>
+            <li>
+              <span className="rec-fact-label">Updates</span>
+              <span className="tabular">{work.updates.length}</span>
+            </li>
+            <li>
+              <span className="rec-fact-label">Files</span>
+              <span className="tabular">{work.files.length}</span>
+            </li>
+          </ul>
+
+          {(work.tags.length > 0 || work.refs.length > 0) && (
+            <div className="rec-chips">
+              {work.tags.map((t) => (
+                <Tag key={t}>{t}</Tag>
+              ))}
+              {work.refs.map((r) => (
+                <Link
+                  key={r}
+                  className="ref-link mono"
+                  to={r.startsWith("BUG") ? `/p/${slug}/bugs/${r}` : `/p/${slug}/work/${r}`}
+                >
+                  {r}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
       <div className="detail-layout">
         <article className="detail-main">
-          <section className="record-section">
-            <h2 className="section-title">What</h2>
-            <Markdown source={work.what} />
-          </section>
+          <Body id="what" title="What" source={work.what} />
+          <Body id="why" title="Why" source={work.why} />
+          <Body id="how" title="How" source={work.how} />
 
-          <section className="record-section">
-            <h2 className="section-title">Why</h2>
-            <Markdown source={work.why} />
-          </section>
+          {work.files.length > 0 && <FilesSection files={work.files} />}
 
-          <section className="record-section">
-            <h2 className="section-title">How</h2>
-            <Markdown source={work.how} />
-          </section>
-
-          {work.updates.length > 0 && (
-            <section className="record-section">
-              <h2 className="section-title">
-                Updates <span className="section-count tabular">{work.updates.length}</span>
-              </h2>
-              <ol className="update-list">
-                {work.updates.map((u, i) => (
-                  <li className="update" key={`${u.ts}-${i}`}>
-                    <div className="update-rail" aria-hidden="true">
-                      <span className="update-dot" />
-                    </div>
-                    <div className="update-body">
-                      <time className="update-ts tabular" dateTime={u.ts}>
-                        {formatDateTime(u.ts)}
-                      </time>
-                      <Markdown source={u.body} />
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
+          <UpdatesSection work={work} />
 
           {work.outcome && (
-            <section className="record-section outcome">
-              <h2 className="section-title">Outcome</h2>
-              <Markdown source={work.outcome} />
+            <section className="record-section" id="outcome">
+              <div className="outcome-card">
+                <header className="outcome-head">
+                  <span className="outcome-mark" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="11" height="11">
+                      <path
+                        d="M3.5 8.5 L6.5 11.5 L12.5 4.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <h2 className="outcome-title">Outcome</h2>
+                  <span className="outcome-when">
+                    {work.finished ? (
+                      <>
+                        shipped <Stamp iso={work.finished} />
+                      </>
+                    ) : (
+                      "recorded"
+                    )}
+                  </span>
+                </header>
+                <div className="outcome-body">
+                  <Markdown source={work.outcome} />
+                </div>
+              </div>
             </section>
           )}
 
@@ -105,75 +233,213 @@ export function WorkDetailPage() {
         </article>
 
         <aside className="detail-side">
-          <dl className="meta-card">
-            <MetaRow label="Status">
-              <WorkStatusPill status={work.status} />
-            </MetaRow>
-            <MetaRow label="Agent">
-              <AgentChip name={work.agent} />
-            </MetaRow>
-            <MetaRow label="Started">
-              <time className="tabular" dateTime={work.started}>
-                {formatDateTime(work.started)}
-              </time>
-            </MetaRow>
-            <MetaRow label="Finished">
-              {work.finished ? (
-                <time className="tabular" dateTime={work.finished}>
-                  {formatDateTime(work.finished)}
-                </time>
-              ) : (
-                <span className="muted">still open</span>
-              )}
-            </MetaRow>
-            <MetaRow label="Tags">
-              {work.tags.length ? (
-                <div className="tag-row">
-                  {work.tags.map((t) => (
-                    <Tag key={t}>{t}</Tag>
-                  ))}
-                </div>
-              ) : (
-                <span className="muted">none</span>
-              )}
-            </MetaRow>
-            <MetaRow label="Related">
-              {work.refs.length ? (
-                <div className="ref-row">
-                  {work.refs.map((r) => (
-                    <Link
-                      key={r}
-                      className="ref-link mono"
-                      to={
-                        r.startsWith("BUG")
-                          ? `/p/${slug}/bugs/${r}`
-                          : `/p/${slug}/work/${r}`
-                      }
-                    >
-                      {r}
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <span className="muted">none</span>
-              )}
-            </MetaRow>
-            <MetaRow label="Files">
-              {work.files.length ? (
-                <ul className="file-list">
-                  {work.files.map((f) => (
-                    <li key={f} className="mono">
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <span className="muted">none recorded</span>
-              )}
-            </MetaRow>
-          </dl>
+          <nav className="side-card contents" aria-label="On this page">
+            <div className="side-card-title">On this page</div>
+            <ul className="contents-list">
+              {sections.map((s) => (
+                <li key={s.id}>
+                  <a className={`contents-link${active === s.id ? " is-active" : ""}`} href={`#${s.id}`}>
+                    <span>{s.label}</span>
+                    {s.count > 0 && <span className="contents-count tabular">{s.count}</span>}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <div className="side-card">
+            <div className="side-card-title">Record</div>
+            <dl className="side-facts">
+              <div>
+                <dt>Status</dt>
+                <dd>
+                  <WorkStatusPill status={work.status} />
+                </dd>
+              </div>
+              <div>
+                <dt>Agent</dt>
+                <dd>
+                  <AgentChip name={work.agent} />
+                </dd>
+              </div>
+              <div>
+                <dt>Started</dt>
+                <dd className="tabular" title={formatDateTimeUtc(work.started)}>
+                  {formatDateTime(work.started)}
+                  <span className="side-rel">{formatRelative(work.started)}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Finished</dt>
+                <dd className="tabular" title={work.finished ? formatDateTimeUtc(work.finished) : ""}>
+                  {work.finished ? (
+                    <>
+                      {formatDateTime(work.finished)}
+                      <span className="side-rel">{formatRelative(work.finished)}</span>
+                    </>
+                  ) : (
+                    <span className="muted">still open</span>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Duration</dt>
+                <dd className="tabular">
+                  {duration}
+                  {!work.finished && <span className="side-rel">and counting</span>}
+                </dd>
+              </div>
+              <div>
+                <dt>Last activity</dt>
+                <dd className="tabular" title={formatDateTimeUtc(work.lastActivity)}>
+                  {formatRelative(work.lastActivity)}
+                </dd>
+              </div>
+            </dl>
+          </div>
         </aside>
       </div>
     </div>
+  );
+}
+
+/** One of the three body sections. A section the agent left empty says so. */
+function Body({ id, title, source }: { id: string; title: string; source: string }) {
+  return (
+    <section className="record-section" id={id}>
+      <h2 className="section-title">{title}</h2>
+      {source.trim() ? (
+        <Markdown source={source} />
+      ) : (
+        <p className="muted">
+          This record has no <code>## {title}</code> section.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** Files touched, grouped the way a reader scans them: directory muted, file bright. */
+function FilesSection({ files }: { files: string[] }) {
+  const sorted = [...files].sort((a, b) => a.localeCompare(b));
+  const dirs = new Set(sorted.map((f) => (f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "")));
+  return (
+    <section className="record-section" id="files">
+      <h2 className="section-title">
+        Files touched <span className="section-count tabular">{files.length}</span>
+      </h2>
+      <div className="files-card">
+        <div className="files-head">
+          <svg className="files-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M4 2.5 h5 l3 3 v8 h-8 z M9 2.5 v3 h3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span>
+            {pluralize(files.length, "file")} across {pluralize(dirs.size, "directory", "directories")}
+          </span>
+        </div>
+        <ul className="file-grid">
+          {sorted.map((f) => {
+            const cut = f.lastIndexOf("/");
+            const dir = cut >= 0 ? f.slice(0, cut + 1) : "";
+            const name = cut >= 0 ? f.slice(cut + 1) : f;
+            return (
+              <li key={f} className="file-item mono" title={f}>
+                <span className="file-dir">{dir}</span>
+                <span className="file-name">{name}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The progress notes as a timeline: it opens with the moment the work started, carries
+ * each update, and closes on the moment the status changed (or on "still running").
+ */
+function UpdatesSection({ work }: { work: WorklogDetail }) {
+  const endLabel =
+    work.status === "done"
+      ? "Marked done"
+      : work.status === "abandoned"
+        ? "Abandoned"
+        : "Still in progress";
+  const endTone =
+    work.status === "done" ? "done" : work.status === "abandoned" ? "abandoned" : "open";
+
+  return (
+    <section className="record-section" id="updates">
+      <h2 className="section-title">
+        Updates
+        {work.updates.length > 0 && (
+          <span className="section-count tabular">{work.updates.length}</span>
+        )}
+      </h2>
+
+      <ol className="timeline-rail">
+        <li className="trail-node trail-edge">
+          <span className="trail-dot trail-dot-start" aria-hidden="true" />
+          <div className="trail-edge-text">
+            <span className="trail-edge-label">{work.agent} started this work</span>
+            <span className="trail-edge-time tabular" title={formatDateTimeUtc(work.started)}>
+              {formatDateTime(work.started)} · {formatRelative(work.started)}
+            </span>
+          </div>
+        </li>
+
+        {work.updates.length === 0 && (
+          <li className="trail-node trail-empty">
+            <span className="trail-dot trail-dot-muted" aria-hidden="true" />
+            <p className="trail-empty-text">
+              No progress notes yet. Agents add them with{" "}
+              <code>agentmon work update {work.id} --message …</code>
+            </p>
+          </li>
+        )}
+
+        {work.updates.map((u, i) => (
+          <li className="trail-node" key={`${u.ts}-${i}`}>
+            <span className="trail-dot" aria-hidden="true" />
+            <article className="update-card">
+              <header className="update-head">
+                <AgentChip name={work.agent} />
+                <span className="update-verb">posted update {i + 1}</span>
+                <time className="update-ts tabular" dateTime={u.ts} title={formatDateTimeUtc(u.ts)}>
+                  {formatDateTime(u.ts)} · {formatRelative(u.ts)}
+                </time>
+              </header>
+              <div className="update-body">
+                <Markdown source={u.body} />
+              </div>
+            </article>
+          </li>
+        ))}
+
+        <li className="trail-node trail-edge">
+          <span className={`trail-dot trail-dot-${endTone}`} aria-hidden="true" />
+          <div className="trail-edge-text">
+            <span className="trail-edge-label">{endLabel}</span>
+            <span className="trail-edge-time tabular">
+              {work.finished ? (
+                <span title={formatDateTimeUtc(work.finished)}>
+                  {formatDateTime(work.finished)} · {formatRelative(work.finished)} ·{" "}
+                  {formatDuration(work.started, work.finished)} in total
+                </span>
+              ) : (
+                <span>running for {formatDuration(work.started, null)}</span>
+              )}
+            </span>
+          </div>
+        </li>
+      </ol>
+    </section>
   );
 }

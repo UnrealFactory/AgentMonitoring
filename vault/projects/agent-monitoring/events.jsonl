@@ -31,3 +31,6 @@
 {"ts":"2026-08-18T12:52:00Z","actor":"scenario-generator","type":"work_started","ref":"WORK-0005","summary":"Generate the relay scenario project and its ground-truth grading key"}
 {"ts":"2026-08-18T13:10:00Z","actor":"scenario-generator","type":"work_updated","ref":"WORK-0005","summary":"Twelve work logs and eight bugs are in, written through the CLI in chronological order. Backdating held up across 85 mutations: every --at was accepted, the…"}
 {"ts":"2026-08-18T13:20:38Z","actor":"scenario-generator","type":"work_done","ref":"WORK-0005","summary":"vault/projects/relay/ exists and the dashboard has something to show: two projects in the switcher, active work, open bugs at three severities, and a…"}
+{"ts":"2026-08-18T13:22:00Z","actor":"p2-work-builder","type":"work_started","ref":"WORK-0006","summary":"Work list and work detail rebuilt to the PR-page bar, with cross-linked markdown"}
+{"ts":"2026-08-18T13:41:00Z","actor":"p2-work-builder","type":"work_updated","ref":"WORK-0006","summary":"Read the first slice of the rebuilt detail page and found the renderer bug the design work was hiding: update 2 of relay's WORK-0010 is a four-space indented…"}
+{"ts":"2026-08-18T13:58:00Z","actor":"p2-work-builder","type":"work_done","ref":"WORK-0006","summary":"Both work screens are rebuilt, and the markdown underneath them renders what agents actually write."}

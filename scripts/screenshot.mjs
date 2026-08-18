@@ -11,17 +11,22 @@
  * photograph a half-painted page.
  *
  * Flags (each also readable from the environment, for harnesses that cannot pass argv):
- *   --port <n>      $SHOT_PORT  dev-server port to boot on / shoot against (default 5173)
- *   --only a,b      $SHOT_ONLY  comma list of screen keys, e.g. dashboard,bug-detail
- *   --out <dir>     $SHOT_OUT   where the PNGs go (default progress/shots)
- *   --keep-server   leave the dev server running afterwards
- *   --url <origin>  shoot against an already-running server (implies --keep-server)
+ *   --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
+ *   --only a,b       $SHOT_ONLY     comma list of screen keys, e.g. dashboard,bug-detail
+ *   --out <dir>      $SHOT_OUT      where the PNGs go (default progress/shots)
+ *   --project <slug> $SHOT_PROJECT  which project to shoot (default: the richest one)
+ *   --record <ids>   $SHOT_RECORD   WORK-/BUG- ids the detail screens should open
+ *   --keep-server    leave the dev server running afterwards
+ *   --url <origin>   shoot against an already-running server (implies --keep-server)
  *
  * Two critics can therefore run at the same time without fighting over port 5173 or
  * overwriting each other's files:
  *
  *   SHOT_PORT=5180 SHOT_ONLY=dashboard SHOT_OUT=/tmp/a npm run screenshot
  *   SHOT_PORT=5181 SHOT_ONLY=bug-detail SHOT_OUT=/tmp/b npm run screenshot
+ *
+ * Detail screens are shot twice: `work-detail.png` at the window size (what a human sees)
+ * and `work-detail-full.png` with the whole record in one image (what a reviewer reads).
  */
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
@@ -38,19 +43,32 @@ const value = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 
+const VIEWPORT = { width: 1600, height: 1000 };
+const SCALE = 1.5;
+const VIEWPORT_TEXT = `${VIEWPORT.width}x${VIEWPORT.height}`;
+
 if (flag("--help") || flag("-h")) {
   console.log(`Capture the app's screens to PNG.
 
-  npm run screenshot                      every screen -> progress/shots/
-  npm run screenshot -- --only bugs       one screen
+  npm run screenshot                                every screen -> progress/shots/
+  npm run screenshot -- --only bugs                 one screen
+  npm run screenshot -- --project relay             a specific project
+  npm run screenshot -- --record WORK-0009,BUG-0004 specific records on the detail screens
   SHOT_PORT=5180 SHOT_ONLY=dashboard SHOT_OUT=/tmp/a npm run screenshot
 
 Options (flag, or environment variable):
-  --port <n>     $SHOT_PORT   dev-server port to boot on / shoot against (default 5173)
-  --only a,b     $SHOT_ONLY   screens: dashboard, work-list, work-detail, bugs, bug-detail, projects
-  --out <dir>    $SHOT_OUT    output directory (default progress/shots)
-  --url <origin>              shoot an already-running server (implies --keep-server)
-  --keep-server               leave the dev server running afterwards
+  --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
+  --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail, projects
+  --out <dir>      $SHOT_OUT      output directory (default progress/shots)
+  --project <slug> $SHOT_PROJECT  project to shoot (default: the one with the most records)
+  --record <ids>   $SHOT_RECORD   record ids for the detail screens, e.g. WORK-0009 or
+                                  WORK-0009,BUG-0004 (default: a finished work log and a
+                                  resolved bug, so Outcome and Resolution are on screen)
+  --url <origin>                  shoot an already-running server (implies --keep-server)
+  --keep-server                   leave the dev server running afterwards
+
+Detail screens produce two files: work-detail.png at ${VIEWPORT_TEXT} (what a human sees on
+screen) and work-detail-full.png with the entire record in one tall image.
 
 Two runs with different --port and --out are safe at the same time.`);
   process.exit(0);
@@ -73,9 +91,25 @@ const shotsDir = outArg
     : join(root, outArg)
   : join(root, "progress", "shots");
 const KEEP = flag("--keep-server") || args.includes("--url");
-const VIEWPORT = { width: 1600, height: 1000 };
-const SCALE = 1.5;
+const WANT_PROJECT = (value("--project", process.env.SHOT_PROJECT) || "").trim();
+const WANT_RECORDS = (value("--record", process.env.SHOT_RECORD) || "")
+  .split(",")
+  .map((s) => s.trim().toUpperCase())
+  .filter(Boolean);
 const BOOT_TIMEOUT_MS = 90_000;
+
+/**
+ * The app scrolls inside `.main`, so the document is always exactly one viewport tall and
+ * Playwright's fullPage would capture nothing extra. For the tall shot we hand scrolling
+ * back to the document; the sticky rail is pinned in place so it cannot smear.
+ */
+const FULL_PAGE_CSS = `
+  html, body, #root { height: auto; }
+  .app { height: auto; min-height: 100vh; }
+  .main, .sidebar { overflow: visible; }
+  .sidebar-foot { margin-top: var(--space-6); }
+  .detail-side { position: static; }
+`;
 
 const log = (...m) => console.log("[screenshot]", ...m);
 
@@ -142,7 +176,7 @@ const api = async (path) => {
   return res.json();
 };
 
-async function shoot(page, { name, path, waitFor, prepare }) {
+async function shoot(page, { name, path, waitFor, prepare, full }) {
   const url = `${ORIGIN}${path}`;
   await page.goto(url, { waitUntil: "domcontentloaded" });
   if (prepare) await prepare(page);
@@ -157,6 +191,16 @@ async function shoot(page, { name, path, waitFor, prepare }) {
   const file = join(shotsDir, `${name}.png`);
   await page.screenshot({ path: file });
   log(`${name.padEnd(12)} ${path}`);
+
+  // Detail screens also get the whole record in one image, for reading rather than judging
+  // the window. The injected stylesheet dies with the navigation to the next screen.
+  if (full) {
+    const style = await page.addStyleTag({ content: FULL_PAGE_CSS });
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+    await page.screenshot({ path: join(shotsDir, `${name}-full.png`), fullPage: true });
+    await style.evaluate((el) => el.remove());
+    log(`${`${name}-full`.padEnd(12)} ${path} (full page)`);
+  }
   return file;
 }
 
@@ -182,25 +226,70 @@ try {
 
   const projects = await api("/projects");
   if (!projects.length) throw new Error("the vault has no projects — nothing to screenshot");
-  const slug = projects[0].slug;
+
+  let project;
+  if (WANT_PROJECT) {
+    project = projects.find((p) => p.slug === WANT_PROJECT);
+    if (!project) {
+      throw new Error(
+        `no project '${WANT_PROJECT}' in this vault (--project/$SHOT_PROJECT). ` +
+          `Known slugs: ${projects.map((p) => p.slug).join(", ")}`,
+      );
+    }
+  } else {
+    // Default to the project with the most records: it is the one whose screens are worth
+    // judging. `--project` pins a different one.
+    project = [...projects].sort(
+      (a, b) =>
+        b.counts.workTotal + b.counts.bugsTotal - (a.counts.workTotal + a.counts.bugsTotal) ||
+        a.slug.localeCompare(b.slug),
+    )[0];
+  }
+  const slug = project.slug;
 
   const works = await api(`/projects/${slug}/worklogs`);
   const bugs = await api(`/projects/${slug}/bugs`);
   if (!works.length) throw new Error(`project '${slug}' has no worklogs — nothing to screenshot`);
   if (!bugs.length) throw new Error(`project '${slug}' has no bugs — nothing to screenshot`);
 
+  /** `--record WORK-0009,BUG-0004` pins what the detail screens open; each id must exist. */
+  const pick = (ids, prefix) => {
+    const wanted = ids.find((id) => id.startsWith(prefix));
+    if (!wanted) return null;
+    const found = (prefix === "WORK" ? works : bugs).find((r) => r.id === wanted);
+    if (!found) {
+      throw new Error(
+        `no ${wanted} in project '${slug}' (--record/$SHOT_RECORD). ` +
+          `Known ids: ${(prefix === "WORK" ? works : bugs).map((r) => r.id).join(", ")}`,
+      );
+    }
+    return found;
+  };
+  const unknownPrefix = WANT_RECORDS.filter((id) => !/^(WORK|BUG)-\d+$/.test(id));
+  if (unknownPrefix.length) {
+    throw new Error(
+      `--record/$SHOT_RECORD wants ids like WORK-0009 or BUG-0004, got ${unknownPrefix.join(", ")}`,
+    );
+  }
+
   // Prefer records that exercise the full page: a finished work log has an Outcome,
   // a resolved bug has a Resolution.
-  const work = works.find((w) => w.status === "done") ?? works[0];
+  const work =
+    pick(WANT_RECORDS, "WORK") ??
+    works.find((w) => w.status === "done" && w.updateCount > 0) ??
+    works.find((w) => w.status === "done") ??
+    works[0];
   const bug =
+    pick(WANT_RECORDS, "BUG") ??
     bugs.find((b) => (b.status === "resolved" || b.status === "closed") && b.commentCount > 0) ??
     bugs.find((b) => b.status === "resolved" || b.status === "closed") ??
     bugs[0];
+  log(`project: ${slug} · work-detail: ${work.id} · bug-detail: ${bug.id}`);
 
   const all = [
     { name: "dashboard", path: `/p/${slug}`, waitFor: ".stat-row .stat-value" },
-    { name: "work-list", path: `/p/${slug}/work`, waitFor: "table.table-rows tbody tr" },
-    { name: "work-detail", path: `/p/${slug}/work/${work.id}`, waitFor: ".record-title" },
+    { name: "work-list", path: `/p/${slug}/work`, waitFor: ".work-rows .work-row" },
+    { name: "work-detail", path: `/p/${slug}/work/${work.id}`, waitFor: ".record-title", full: true },
     {
       name: "bugs",
       path: `/p/${slug}/bugs`,
@@ -216,7 +305,7 @@ try {
         }
       },
     },
-    { name: "bug-detail", path: `/p/${slug}/bugs/${bug.id}`, waitFor: ".record-title" },
+    { name: "bug-detail", path: `/p/${slug}/bugs/${bug.id}`, waitFor: ".record-title", full: true },
     { name: "projects", path: "/projects", waitFor: ".project-card" },
   ];
 
@@ -229,7 +318,10 @@ try {
   }
   const screens = ONLY.length ? all.filter((s) => ONLY.includes(s.name)) : all;
 
-  for (const s of screens) rmSync(join(shotsDir, `${s.name}.png`), { force: true });
+  for (const s of screens) {
+    rmSync(join(shotsDir, `${s.name}.png`), { force: true });
+    if (s.full) rmSync(join(shotsDir, `${s.name}-full.png`), { force: true });
+  }
 
   browser = await chromium.launch();
   const context = await browser.newContext({
@@ -260,4 +352,8 @@ try {
   else if (server) log(`dev server left running on ${ORIGIN} (--keep-server)`);
 }
 
+// One tick for libuv to finish closing the sockets the vault-api fetches left behind:
+// exiting in the middle of that abandons the process with a UV assertion on Windows,
+// which looks like a crash to whoever is reading the log.
+await new Promise((r) => setTimeout(r, 60));
 process.exit(failed ? 1 : 0);

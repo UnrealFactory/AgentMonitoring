@@ -33,11 +33,27 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
   );
 }
 
+/** Status without the label: the list rows carry it as a dot in front of the id. */
+export function WorkStatusDot({ status }: { status: WorkStatus }) {
+  return (
+    <span
+      className={`sdot sdot-${status}`}
+      title={WORK_STATUS_LABEL[status] ?? status}
+      aria-label={WORK_STATUS_LABEL[status] ?? status}
+      role="img"
+    />
+  );
+}
+
 export function Tag({ children }: { children: ReactNode }) {
   return <span className="tag">{children}</span>;
 }
 
-export function AgentChip({ name }: { name: string }) {
+/**
+ * Agent identity. `md` is the byline size (the record's author, as on a PR page);
+ * `sm` is the in-a-row size.
+ */
+export function AgentChip({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
   const initials = name
     .split(/[-_\s]/)
     .filter(Boolean)
@@ -45,7 +61,7 @@ export function AgentChip({ name }: { name: string }) {
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
   return (
-    <span className="agent">
+    <span className={size === "md" ? "agent agent-md" : "agent"}>
       <span className="agent-avatar" aria-hidden="true">
         {initials || "?"}
       </span>
@@ -82,10 +98,12 @@ export function EmptyState({
   title,
   hint,
   icon = "·",
+  action,
 }: {
   title: string;
   hint?: ReactNode;
   icon?: ReactNode;
+  action?: ReactNode;
 }) {
   return (
     <div className="empty">
@@ -94,6 +112,7 @@ export function EmptyState({
       </div>
       <p className="empty-title">{title}</p>
       {hint && <p className="empty-hint">{hint}</p>}
+      {action && <div className="empty-action">{action}</div>}
     </div>
   );
 }

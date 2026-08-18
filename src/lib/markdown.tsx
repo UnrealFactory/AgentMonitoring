@@ -5,8 +5,13 @@
  * content (written by agents, i.e. by generated text) can never inject markup. It covers
  * what the SPEC body sections actually use: headings, paragraphs, lists, fenced code,
  * blockquotes, rules, tables, and inline code/bold/italic/links.
+ *
+ * It also turns record ids mentioned in prose (`WORK-0004`, `BUG-0002`) into links to
+ * those records — an agent writing "see BUG-0004" is making a cross-reference, and a
+ * reader should be able to follow it. Ids inside code spans stay literal.
  */
 import type { ReactNode } from "react";
+import { Link, useParams } from "react-router-dom";
 
 type Block =
   | { kind: "heading"; level: number; text: string }
@@ -49,6 +54,31 @@ function parseBlocks(src: string): Block[] {
       }
       i += 1; // closing fence
       blocks.push({ kind: "code", lang: fence[2] ?? "", text: body.join("\n") });
+      continue;
+    }
+
+    // Indented code block. Agents use these for terminal transcripts and incident
+    // timelines; joining those lines into a paragraph destroys the only thing they say.
+    if (/^(?: {4}|\t)\S/.test(line)) {
+      const body: string[] = [];
+      while (i < lines.length) {
+        if (/^(?: {4}|\t)/.test(lines[i])) {
+          body.push(lines[i].replace(/^(?: {4}|\t)/, ""));
+          i += 1;
+          continue;
+        }
+        if (!lines[i].trim()) {
+          // A blank line only stays inside the block if indented content follows it.
+          let j = i;
+          while (j < lines.length && !lines[j].trim()) j += 1;
+          if (j >= lines.length || !/^(?: {4}|\t)/.test(lines[j])) break;
+          body.push(...lines.slice(i, j).map(() => ""));
+          i = j;
+          continue;
+        }
+        break;
+      }
+      blocks.push({ kind: "code", lang: "", text: body.join("\n").replace(/\s+$/, "") });
       continue;
     }
 
@@ -115,6 +145,7 @@ function parseBlocks(src: string): Block[] {
       !/^\s*(`{3,}|~{3,})/.test(lines[i]) &&
       !/^\s*([-*+]|\d+[.)])\s/.test(lines[i]) &&
       !/^\s*>/.test(lines[i]) &&
+      !/^(?: {4}|\t)\S/.test(lines[i]) &&
       !isTableRow(lines[i])
     ) {
       para.push(lines[i]);
@@ -127,8 +158,36 @@ function parseBlocks(src: string): Block[] {
   return blocks;
 }
 
-/** Inline spans: `code`, **bold**, *italic*, [text](href). */
-function inline(text: string, keyPrefix = ""): ReactNode[] {
+/** `WORK-0004` / `BUG-0002` written in prose. */
+const REF_RE = /\b(WORK|BUG)-\d{1,8}\b/g;
+
+/** Resolves a record id to a route, or null when we are not inside a project. */
+type RefLinker = ((id: string) => string) | null;
+
+/** Split plain text on record ids and link the ids. */
+function withRefs(text: string, keyPrefix: string, link: RefLinker): ReactNode[] {
+  if (!link || !text) return [text];
+  const out: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let n = 0;
+  REF_RE.lastIndex = 0;
+  while ((m = REF_RE.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(
+      <Link key={`${keyPrefix}r${n++}`} className="ref-inline mono" to={link(m[0])}>
+        {m[0]}
+      </Link>
+    );
+    last = m.index + m[0].length;
+  }
+  if (!out.length) return [text];
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/** Inline spans: `code`, **bold**, *italic*, [text](href), and bare record ids. */
+function inline(text: string, keyPrefix = "", link: RefLinker = null): ReactNode[] {
   const out: ReactNode[] = [];
   const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(\[[^\]]+\]\([^)\s]+\))/g;
   let last = 0;
@@ -136,15 +195,15 @@ function inline(text: string, keyPrefix = ""): ReactNode[] {
   let n = 0;
 
   while ((m = pattern.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m.index > last) out.push(...withRefs(text.slice(last, m.index), `${keyPrefix}p${n}`, link));
     const token = m[0];
     const key = `${keyPrefix}i${n++}`;
     if (token.startsWith("`")) {
       out.push(<code key={key}>{token.slice(1, -1)}</code>);
     } else if (token.startsWith("**") || token.startsWith("__")) {
-      out.push(<strong key={key}>{token.slice(2, -2)}</strong>);
+      out.push(<strong key={key}>{withRefs(token.slice(2, -2), key, link)}</strong>);
     } else if (token.startsWith("*")) {
-      out.push(<em key={key}>{token.slice(1, -1)}</em>);
+      out.push(<em key={key}>{withRefs(token.slice(1, -1), key, link)}</em>);
     } else {
       const link = token.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
       if (link) {
@@ -165,11 +224,17 @@ function inline(text: string, keyPrefix = ""): ReactNode[] {
     }
     last = m.index + token.length;
   }
-  if (last < text.length) out.push(text.slice(last));
+  if (last < text.length) out.push(...withRefs(text.slice(last), `${keyPrefix}p${n}`, link));
   return out;
 }
 
 export function Markdown({ source, className }: { source: string; className?: string }) {
+  // Record ids link inside the project the reader is already looking at; on screens with
+  // no project in the route (there is one: the projects list) they stay plain text.
+  const slug = useParams<{ project: string }>().project;
+  const link: RefLinker = slug
+    ? (id) => (id.startsWith("BUG") ? `/p/${slug}/bugs/${id}` : `/p/${slug}/work/${id}`)
+    : null;
   const blocks = parseBlocks(source ?? "");
   return (
     <div className={className ? `prose ${className}` : "prose"}>
@@ -178,11 +243,12 @@ export function Markdown({ source, className }: { source: string; className?: st
         switch (block.kind) {
           case "heading": {
             const Tag = (`h${Math.min(block.level + 2, 6)}` as unknown) as "h3";
-            return <Tag key={key}>{inline(block.text, key)}</Tag>;
+            return <Tag key={key}>{inline(block.text, key, link)}</Tag>;
           }
           case "code":
             return (
               <pre key={key} data-lang={block.lang || undefined}>
+                {block.lang && <span className="code-lang">{block.lang}</span>}
                 <code>{block.text}</code>
               </pre>
             );
@@ -190,18 +256,18 @@ export function Markdown({ source, className }: { source: string; className?: st
             return block.ordered ? (
               <ol key={key}>
                 {block.items.map((item, j) => (
-                  <li key={`${key}-${j}`}>{inline(item, `${key}-${j}`)}</li>
+                  <li key={`${key}-${j}`}>{inline(item, `${key}-${j}`, link)}</li>
                 ))}
               </ol>
             ) : (
               <ul key={key}>
                 {block.items.map((item, j) => (
-                  <li key={`${key}-${j}`}>{inline(item, `${key}-${j}`)}</li>
+                  <li key={`${key}-${j}`}>{inline(item, `${key}-${j}`, link)}</li>
                 ))}
               </ul>
             );
           case "quote":
-            return <blockquote key={key}>{inline(block.text, key)}</blockquote>;
+            return <blockquote key={key}>{inline(block.text, key, link)}</blockquote>;
           case "rule":
             return <hr key={key} />;
           case "table":
@@ -210,7 +276,7 @@ export function Markdown({ source, className }: { source: string; className?: st
                 <thead>
                   <tr>
                     {block.header.map((h, j) => (
-                      <th key={`${key}-h${j}`}>{inline(h, `${key}-h${j}`)}</th>
+                      <th key={`${key}-h${j}`}>{inline(h, `${key}-h${j}`, link)}</th>
                     ))}
                   </tr>
                 </thead>
@@ -218,7 +284,7 @@ export function Markdown({ source, className }: { source: string; className?: st
                   {block.rows.map((row, r) => (
                     <tr key={`${key}-r${r}`}>
                       {row.map((cell, c) => (
-                        <td key={`${key}-r${r}c${c}`}>{inline(cell, `${key}-r${r}c${c}`)}</td>
+                        <td key={`${key}-r${r}c${c}`}>{inline(cell, `${key}-r${r}c${c}`, link)}</td>
                       ))}
                     </tr>
                   ))}
@@ -227,7 +293,7 @@ export function Markdown({ source, className }: { source: string; className?: st
             );
           case "paragraph":
           default:
-            return <p key={key}>{inline(block.text, key)}</p>;
+            return <p key={key}>{inline(block.text, key, link)}</p>;
         }
       })}
     </div>
