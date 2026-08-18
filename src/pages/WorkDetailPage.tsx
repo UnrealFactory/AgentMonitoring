@@ -13,6 +13,7 @@ import { useCurrentProject, useProjectSlug } from "../AppContext";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { Markdown } from "../lib/markdown";
+import { RelatedSection, useRelated } from "../components/Related";
 import { AgentChip, ErrorState, Skeleton, Tag, WorkStatusPill } from "../components/ui";
 import {
   formatDateTime,
@@ -22,6 +23,9 @@ import {
   pluralize,
 } from "../lib/format";
 import type { WorklogDetail } from "../lib/types";
+
+/** A stable empty array, so the related-index memo is not invalidated every render. */
+const EMPTY: string[] = [];
 
 /** A timestamp shown as a real date, with the relative time next to it. */
 function Stamp({ iso, relative = true }: { iso: string; relative?: boolean }) {
@@ -67,6 +71,7 @@ export function WorkDetailPage() {
   const { data, error, loading, reload } = useAsync(() => api.getWorklog(slug, id), [slug, id]);
 
   const work = data;
+  const related = useRelated(slug, id, work?.refs ?? EMPTY);
   const sections = useMemo(() => {
     if (!work) return [];
     const out = [
@@ -77,8 +82,9 @@ export function WorkDetailPage() {
     if (work.files.length) out.push({ id: "files", label: "Files", count: work.files.length });
     out.push({ id: "updates", label: "Updates", count: work.updates.length });
     if (work.outcome) out.push({ id: "outcome", label: "Outcome", count: 0 });
+    if (related.count) out.push({ id: "related", label: "Related", count: related.count });
     return out;
-  }, [work]);
+  }, [work, related.count]);
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {
@@ -161,19 +167,10 @@ export function WorkDetailPage() {
             </li>
           </ul>
 
-          {(work.tags.length > 0 || work.refs.length > 0) && (
+          {work.tags.length > 0 && (
             <div className="rec-chips">
               {work.tags.map((t) => (
                 <Tag key={t}>{t}</Tag>
-              ))}
-              {work.refs.map((r) => (
-                <Link
-                  key={r}
-                  className="ref-link mono"
-                  to={r.startsWith("BUG") ? `/p/${slug}/bugs/${r}` : `/p/${slug}/work/${r}`}
-                >
-                  {r}
-                </Link>
               ))}
             </div>
           )}
@@ -223,6 +220,8 @@ export function WorkDetailPage() {
               </div>
             </section>
           )}
+
+          <RelatedSection slug={slug} id={work.id} kind="work" related={related} />
 
           {work.extraSections.map((s) => (
             <section className="record-section" key={s.title}>

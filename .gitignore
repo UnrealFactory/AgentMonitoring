@@ -5,6 +5,8 @@ target/
 .DS_Store
 Thumbs.db
 .vite/
+# Critic scratch shots (SHOT_OUT=progress/critic-*): evidence for one round, tens of MB.
+progress/critic-*/
 .env
 .env.local
 src-tauri/gen/

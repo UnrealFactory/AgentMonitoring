@@ -293,15 +293,21 @@ try {
     {
       name: "bugs",
       path: `/p/${slug}/bugs`,
-      waitFor: ".issue-list .issue",
-      // The board opens on "Open". When every bug in the vault is already fixed, that
-      // tab is (correctly) an empty state — switch to "All" so the shot shows the board
-      // doing its job instead of the emptiest screen in the app.
+      waitFor: ".work-rows .bug-row, .empty-title",
+      // The board opens on "Open", which is the right default for the app and a poor
+      // photograph of it: this vault has two open bugs and six fixed ones, so the default
+      // tab shows a quarter of the board. Below four open rows the shot switches to "All"
+      // (every state, every severity) and says so in the log, rather than photographing
+      // the emptiest view of a screen whose job is density.
       prepare: async (page) => {
-        const rows = page.locator(".issue-list .issue");
         await page.waitForSelector(".segmented [role=tab]", { state: "visible" });
-        if ((await rows.count()) === 0) {
+        await page.waitForFunction(
+          () => !!document.querySelector(".work-rows .bug-row, .empty-title"),
+        );
+        const open = await page.locator(".work-rows .bug-row").count();
+        if (open < 4) {
           await page.getByRole("tab", { name: /^All/ }).click();
+          log(`bugs: captured the All tab (${open} open bug(s) — the Open tab is the default)`);
         }
       },
     },

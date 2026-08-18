@@ -12,6 +12,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "screenshot": "node scripts/screenshot.mjs",
+    "smoke": "node scripts/markdown-smoke.mjs",
     "capture-refs": "node scripts/capture-refs.mjs",
     "progress": "node scripts/build-progress.mjs"
   },

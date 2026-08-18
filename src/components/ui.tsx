@@ -24,11 +24,17 @@ export function BugStatusPill({ status }: { status: BugStatus }) {
   );
 }
 
+/**
+ * Severity, as the same coloured pill everywhere it appears — board row, record header,
+ * sidebar, related block. The label collapses to the dot in very narrow rows; the title
+ * keeps it readable to a screen reader and to a hover.
+ */
 export function SeverityBadge({ severity }: { severity: Severity }) {
+  const label = SEVERITY_LABEL[severity] ?? severity;
   return (
-    <span className={`pill pill-sev-${severity}`}>
+    <span className={`pill pill-sev pill-sev-${severity}`} title={`${label} severity`}>
       <span className="dot" aria-hidden="true" />
-      {SEVERITY_LABEL[severity] ?? severity}
+      <span className="pill-text">{label}</span>
     </span>
   );
 }
@@ -45,15 +51,92 @@ export function WorkStatusDot({ status }: { status: WorkStatus }) {
   );
 }
 
+export function BugStatusDot({ status }: { status: BugStatus }) {
+  return (
+    <span
+      className={`sdot sdot-bug-${status}`}
+      title={BUG_STATUS_LABEL[status] ?? status}
+      aria-label={BUG_STATUS_LABEL[status] ?? status}
+      role="img"
+    />
+  );
+}
+
+/** Either kind of record, for lists that mix them (the Related block). */
+export function RecordStatusDot({
+  status,
+  kind,
+}: {
+  status: WorkStatus | BugStatus;
+  kind: "work" | "bug";
+}) {
+  return kind === "bug" ? (
+    <BugStatusDot status={status as BugStatus} />
+  ) : (
+    <WorkStatusDot status={status as WorkStatus} />
+  );
+}
+
+/** A count of comments, quiet when there are none. */
+export function CommentCount({ count }: { count: number }) {
+  if (!count) return <span className="comment-count is-empty" aria-hidden="true" />;
+  return (
+    <span className="comment-count tabular" title={`${count} comment${count === 1 ? "" : "s"}`}>
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+        <path
+          d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+        />
+      </svg>
+      {count}
+    </span>
+  );
+}
+
+/**
+ * Who found it and who owns it, in one glyph pair — the handoff is the fact a triage
+ * board is read for.
+ */
+export function Handoff({ from, to }: { from: string; to: string | null }) {
+  return (
+    <span className="handoff" title={to ? `filed by ${from} · assigned to ${to}` : `filed by ${from} · unassigned`}>
+      <AgentChip name={from} hideName />
+      <span className="handoff-arrow" aria-hidden="true">
+        →
+      </span>
+      {to ? (
+        <AgentChip name={to} />
+      ) : (
+        <span className="handoff-none">
+          <span className="handoff-empty" aria-hidden="true" />
+          unassigned
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function Tag({ children }: { children: ReactNode }) {
   return <span className="tag">{children}</span>;
 }
 
 /**
  * Agent identity. `md` is the byline size (the record's author, as on a PR page);
- * `sm` is the in-a-row size.
+ * `sm` is the in-a-row size. `hideName` keeps the avatar and moves the name into the
+ * tooltip — for narrow rows, where a name would push the title out instead.
  */
-export function AgentChip({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
+export function AgentChip({
+  name,
+  size = "sm",
+  hideName = false,
+}: {
+  name: string;
+  size?: "sm" | "md";
+  hideName?: boolean;
+}) {
   const initials = name
     .split(/[-_\s]/)
     .filter(Boolean)
@@ -61,7 +144,10 @@ export function AgentChip({ name, size = "sm" }: { name: string; size?: "sm" | "
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
   return (
-    <span className={size === "md" ? "agent agent-md" : "agent"}>
+    <span
+      className={`agent${size === "md" ? " agent-md" : ""}${hideName ? " agent-compact" : ""}`}
+      title={name}
+    >
       <span className="agent-avatar" aria-hidden="true">
         {initials || "?"}
       </span>
@@ -140,15 +226,6 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
           Try again
         </button>
       )}
-    </div>
-  );
-}
-
-export function MetaRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="meta-row">
-      <dt className="meta-label">{label}</dt>
-      <dd className="meta-value">{children}</dd>
     </div>
   );
 }

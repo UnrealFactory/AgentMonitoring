@@ -695,7 +695,6 @@
   color: var(--text-tertiary);
 }
 
-.select,
 .input {
   height: 30px;
   padding: 0 var(--space-2);
@@ -707,16 +706,127 @@
   transition: border-color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
 }
 
-.select:hover,
 .input:hover {
   border-color: var(--border);
 }
 
-.select:focus-visible,
 .input:focus-visible {
   outline: none;
   border-color: var(--border-accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* --- filter menu (the app's own select) ----------------------------------- */
+
+.select-root {
+  position: relative;
+}
+
+.select-button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 30px;
+  max-width: 220px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  transition: background var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.select-button:hover {
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text-primary);
+}
+
+.select-button.is-open {
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* a filter that is doing something says so without shouting */
+.select-button.is-set {
+  color: var(--text-primary);
+  background: var(--bg-active);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.select-value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.select-caret {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--text-tertiary);
+}
+
+.select-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  max-width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-1);
+  list-style: none;
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.select-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.select-option.is-cursor {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.select-option.is-selected {
+  color: var(--text-primary);
+}
+
+.select-check {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  flex: none;
+  color: var(--accent-text);
+}
+
+.select-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.select-option-hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .input {
@@ -780,6 +890,13 @@
 .pill-sev-medium { background: var(--sev-medium-soft); color: var(--sev-medium); }
 .pill-sev-low { background: var(--sev-low-soft); color: var(--sev-low); }
 
+/* In a column (the board) severity pills share a width so their dots line up; anywhere
+   else — a byline, a related row — they take the width of their own word. */
+.bug-row .pill-sev {
+  min-width: 62px;
+  justify-content: flex-start;
+}
+
 .tag {
   display: inline-flex;
   align-items: center;
@@ -827,6 +944,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Avatar only: the name lives in the tooltip, for rows too narrow to spell it out. */
+.agent-compact .agent-name {
+  display: none;
 }
 
 /* Byline size: this agent is the author of the record, not a field in a row. */
@@ -990,23 +1112,13 @@
   white-space: nowrap;
 }
 
-/* byline: status, who, and the one sentence that says where this record stands.
-   `.record-subline`/`.record-byline` are the bug page's names for the same row — one
-   language for both kinds of record. */
-.rec-byline,
-.record-subline {
+/* byline: status, who, and the one sentence that says where this record stands —
+   the same row on a work record and on a bug. */
+.rec-byline {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-3);
-}
-
-.record-byline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-md);
-  color: var(--text-secondary);
 }
 
 .rec-byline-text {
@@ -1123,18 +1235,6 @@
   color: var(--text-tertiary);
   font-size: 10px;
   letter-spacing: 0;
-}
-
-.record-section.outcome,
-.record-section.resolution {
-  padding: var(--space-4) var(--space-5);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-  box-shadow: inset 3px 0 0 var(--green);
-}
-
-.record-section.resolution {
-  box-shadow: inset 3px 0 0 var(--purple);
 }
 
 /* --- files touched -------------------------------------------------------- */
@@ -1376,100 +1476,337 @@
   padding: var(--space-5) var(--space-4);
 }
 
-/* comments */
-
-.comment-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.comment {
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-}
-
-.comment-head {
-  display: flex;
+.outcome-by {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding-bottom: var(--space-2);
-  margin-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
 }
 
-.comment-ts {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-/* side meta */
-
-.meta-card {
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-}
-
-.meta-card-title {
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-  color: var(--text-tertiary);
-  padding-bottom: var(--space-2);
-  margin-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.meta-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.meta-row:last-child {
-  border-bottom: none;
-}
-
-.meta-label {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.meta-value {
-  margin: 0;
-  font-size: var(--text-base);
+.outcome-by .agent-name {
   color: var(--text-primary);
 }
 
-.meta-value .tag-row {
-  margin-top: 0;
+/* The bug page's version of the same moment: a fix, in purple rather than green, so a
+   resolved bug and a shipped piece of work are never mistaken for each other. */
+.outcome-card.is-resolution {
+  border-color: rgba(167, 139, 250, 0.3);
 }
 
-.ref-row {
+.is-resolution .outcome-head {
+  background: rgba(167, 139, 250, 0.1);
+  border-bottom-color: rgba(167, 139, 250, 0.24);
+}
+
+.is-resolution .outcome-mark {
+  background: var(--purple);
+  color: #1a1230;
+}
+
+.is-resolution .outcome-title {
+  color: #cbbcfd;
+}
+
+/* --- bug: status history strip -------------------------------------------
+   Filed → claimed → resolved, with the real gap between each pair. A step that has
+   not happened is an outline, so an open bug's strip still reads as a status.
+   ------------------------------------------------------------------------- */
+
+.status-strip {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  list-style: none;
+  gap: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
 }
 
-.ref-link {
-  padding: 1px 6px;
-  border-radius: var(--radius-xs);
+.strip-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.strip-step:not(:first-child) {
+  flex: 1;
+}
+
+.strip-node {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.strip-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: var(--radius-full);
+  background: var(--bg-app);
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+
+.is-done .strip-dot-filed {
+  background: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+.is-done .strip-dot-claimed {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+
+.is-done .strip-dot-resolved {
+  background: var(--purple);
+  box-shadow: 0 0 0 3px var(--purple-soft);
+}
+
+.strip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.strip-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  letter-spacing: var(--tracking-tight);
+}
+
+.is-pending .strip-label {
+  color: var(--text-tertiary);
+}
+
+.strip-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   font-size: var(--text-xs);
-  color: var(--accent-text);
-  background: var(--accent-soft);
+  color: var(--text-tertiary);
+  white-space: nowrap;
 }
 
-.ref-link:hover {
-  background: rgba(94, 106, 210, 0.28);
+.strip-who {
+  color: var(--text-secondary);
+}
+
+/* the connector carries the elapsed time between two moments */
+.strip-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: var(--space-6);
+  padding: 0 var(--space-3);
+}
+
+.strip-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.is-pending .strip-line {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--border) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+.strip-gap {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* --- bug: the claim moment inside the thread ------------------------------ */
+
+.trail-dot-claim {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+
+.trail-dot-resolved {
+  background: var(--purple);
+  box-shadow: 0 0 0 3px var(--purple-soft);
+}
+
+.claim-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 1px 0 var(--space-1);
+}
+
+.claim-line .agent-name {
+  color: var(--text-primary);
+  font-size: var(--text-base);
+}
+
+.claim-verb {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.claim-when {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.claim-delay {
+  color: var(--text-tertiary);
+}
+
+/* --- a section's own byline (who wrote this part, and when) --------------- */
+
+.section-byline {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-tertiary);
+}
+
+/* --- a record that cannot answer for itself ------------------------------- */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.notice-mark {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  flex: none;
+  border-radius: var(--radius-full);
+  background: var(--amber);
+}
+
+.notice-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.notice-text {
+  margin-top: 3px;
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: var(--leading-snug);
+}
+
+/* --- related records (both directions) ------------------------------------ */
+
+.rel-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rel-group + .rel-group {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.rel-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: rgba(255, 255, 255, 0.015);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.rel-arrow {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.rel-group-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.rel-group-hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.rel-rows {
+  list-style: none;
+}
+
+.rel-rows li + li .rel-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.rel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: var(--space-2) var(--space-4);
+  transition: background var(--duration-fast) var(--ease);
+}
+
+a.rel-row:hover {
+  background: var(--bg-hover);
+}
+
+.rel-id {
+  flex: none;
+  width: 76px;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+a.rel-row:hover .rel-id {
+  color: var(--accent-text);
+}
+
+.rel-title {
+  flex: 1 1 auto;
+  min-width: 24ch;
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rel-side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.rel-time {
+  width: 52px;
+  text-align: right;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.rel-row.is-missing {
+  cursor: default;
+}
+
+.rec-byline-strong {
+  color: var(--text-primary);
 }
 
 /* --- detail rail ---------------------------------------------------------- */
@@ -1566,40 +1903,6 @@
   color: var(--text-tertiary);
 }
 
-.history {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.history li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.history-dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: var(--radius-full);
-  background: var(--text-tertiary);
-}
-
-.history-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.history-ts {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  flex: none;
-}
-
 /* --- work list ------------------------------------------------------------ */
 
 /* Status as a bare dot: colour carries the state, the group header says the word. */
@@ -1624,6 +1927,36 @@
 .sdot-abandoned {
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--text-tertiary);
+}
+
+/* bug states use the same alphabet: filled = live, ringed = waiting, hollow = closed */
+.sdot-bug-open {
+  background: var(--status-open);
+  box-shadow: 0 0 0 3px var(--status-open-soft);
+}
+
+.sdot-bug-in_progress {
+  background: var(--status-in-progress);
+  box-shadow: 0 0 0 3px var(--status-in-progress-soft);
+}
+
+.sdot-bug-resolved {
+  background: var(--status-resolved);
+}
+
+.sdot-bug-closed {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-tertiary);
+}
+
+.sdot-missing {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+
+/* the dot inside a segmented tab sits on the text baseline, not above it */
+.segment .sdot {
+  margin-right: 1px;
 }
 
 .work-list {
@@ -1661,6 +1994,9 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  /* The row responds to its own width, not the window's: the same list is 1176px wide in
+     a maximised window and 660px wide with the sidebar taking a third of a small one. */
+  container-type: inline-size;
 }
 
 .work-rows li + li .work-row {
@@ -1700,7 +2036,9 @@
 
 .work-row-title {
   flex: 1 1 auto;
-  min-width: 0;
+  /* The title is the only thing that identifies a row, so it is the last thing to give
+     ground: nothing may squeeze it below about thirty characters. */
+  min-width: 30ch;
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
   color: var(--text-primary);
@@ -1856,81 +2194,212 @@ kbd {
   margin-top: var(--space-2);
 }
 
-/* --- issue list ----------------------------------------------------------- */
+/* --- bug board ------------------------------------------------------------
+   The board reuses the work list's row chassis (.work-rows / .work-row) — one row
+   language for both kinds of record — and adds the columns a triage screen needs:
+   severity first, then who found it and who holds it, then how loud the thread is.
+   ------------------------------------------------------------------------- */
 
-.issue-list {
-  list-style: none;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+/* A bug row carries two more columns than a work row, so it spends less on each: the
+   title is what a reader is scanning for and it gets everything the others give up. */
+.bug-row {
+  gap: 10px;
+}
+
+.bug-row-sev {
+  flex: none;
+  width: 70px;
+}
+
+.bug-row-people {
+  flex: none;
+  width: 140px;
   overflow: hidden;
 }
 
-.issue-list li + li .issue {
-  border-top: 1px solid var(--border-subtle);
+.bug-row-comments {
+  flex: none;
+  width: 32px;
+  display: flex;
+  justify-content: flex-end;
 }
 
-.issue {
+/* reporter → assignee, the handoff a board is read for */
+.handoff {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.handoff-arrow {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  flex: none;
+}
+
+.handoff-none {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.handoff-empty {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: var(--radius-full);
+  border: 1px dashed var(--border-strong);
+}
+
+.comment-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.comment-count.is-empty {
+  display: block;
+}
+
+.comment-count svg {
+  opacity: 0.75;
+}
+
+/* severity breakdown: a legend that is also a filter */
+.sev-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  transition: background var(--duration-fast) var(--ease);
+  gap: 6px;
+  margin-top: calc(-1 * var(--space-3));
 }
 
-.issue:hover {
-  background: var(--bg-hover);
+.sev-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
 }
 
-.issue-severity {
-  width: 8px;
-  height: 8px;
+.sev-chip:hover {
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.sev-chip.is-active {
+  background: var(--bg-active);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-primary);
+}
+
+.sev-chip.is-zero {
+  opacity: 0.45;
+}
+
+.sev-chip-dot {
+  width: 7px;
+  height: 7px;
   flex: none;
   border-radius: var(--radius-full);
   background: var(--grey);
 }
 
-.issue-severity.sev-critical { background: var(--sev-critical); box-shadow: 0 0 0 3px var(--sev-critical-soft); }
-.issue-severity.sev-high { background: var(--sev-high); box-shadow: 0 0 0 3px var(--sev-high-soft); }
-.issue-severity.sev-medium { background: var(--sev-medium); }
-.issue-severity.sev-low { background: var(--sev-low); }
+.sev-chip-critical .sev-chip-dot { background: var(--sev-critical); }
+.sev-chip-high .sev-chip-dot { background: var(--sev-high); }
+.sev-chip-medium .sev-chip-dot { background: var(--sev-medium); }
+.sev-chip-low .sev-chip-dot { background: var(--sev-low); }
 
-.issue-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.issue-titleline {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.issue-title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
-  color: var(--text-primary);
-}
-
-.issue:hover .issue-title {
-  color: var(--accent-text);
-}
-
-.issue-sub {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: 3px;
-  font-size: var(--text-sm);
+.sev-chip-count {
   color: var(--text-tertiary);
 }
 
-.issue-side {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex: none;
+.sev-chip.is-active .sev-chip-count {
+  color: var(--text-secondary);
+}
+
+/* how a group is ordered, said once, next to the group it orders */
+.work-group-note {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  padding-right: var(--space-1);
+}
+
+.list-hints-left {
+  margin-right: auto;
+  color: var(--text-tertiary);
+}
+
+/* --- rows in a narrow window ----------------------------------------------
+   Both lists collapse in the same order, from least to most useful: tag chips go
+   first, then the agent's name (the avatar and its tooltip stay), then the severity
+   word (the coloured dot stays) and the comment count. The title never shrinks below
+   30ch, and no column ever collides with another.
+
+   These rules must come after every base column width above, since a container query
+   and a plain rule of the same specificity are settled by source order.
+   ------------------------------------------------------------------------- */
+
+/* A bug row spends more on its other columns, so its labels go one step earlier. */
+@container (max-width: 1150px) {
+  .bug-row .work-row-tags {
+    display: none;
+  }
+}
+
+@container (max-width: 1100px) {
+  .work-row-tags {
+    display: none;
+  }
+}
+
+@container (max-width: 900px) {
+  .work-row-agent {
+    width: auto;
+  }
+
+  .work-row-agent .agent-name,
+  .bug-row-people .agent-name {
+    display: none;
+  }
+
+  .bug-row-people {
+    width: 56px;
+  }
+
+  .handoff-none {
+    font-size: 0;
+    gap: 0;
+  }
+}
+
+@container (max-width: 760px) {
+  .bug-row .pill-sev .pill-text {
+    display: none;
+  }
+
+  .bug-row .pill-sev {
+    min-width: 0;
+  }
+
+  .bug-row-sev {
+    width: 24px;
+  }
+
+  .bug-row-comments {
+    display: none;
+  }
 }
 
 /* --- projects ------------------------------------------------------------- */

@@ -5,11 +5,13 @@
  * a round trip per keystroke would feel like a website. Rows are grouped by status so
  * "what is happening right now" is always the first thing on the screen.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useProjectSlug } from "../AppContext";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
+import { useListKeyboard } from "../lib/useListKeyboard";
+import { Select } from "../components/Select";
 import {
   AgentChip,
   EmptyState,
@@ -29,17 +31,14 @@ const MAX_TAGS = 3;
 
 export function WorkListPage() {
   const slug = useProjectSlug()!;
-  const navigate = useNavigate();
   const { data, error, loading, reload } = useAsync(() => api.listWorklogs(slug), [slug]);
 
   const [status, setStatus] = useState<WorkStatus | "all">("all");
   const [agent, setAgent] = useState("all");
   const [tag, setTag] = useState("all");
   const [query, setQuery] = useState("");
-  const [cursor, setCursor] = useState(-1);
 
   const searchRef = useRef<HTMLInputElement>(null);
-  const rowRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
   const works = useMemo(() => data ?? [], [data]);
 
@@ -87,49 +86,16 @@ export function WorkListPage() {
     setQuery("");
   }, []);
 
-  // A new result set invalidates the old cursor position.
-  useEffect(() => setCursor(-1), [status, agent, tag, query]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      const typing =
-        !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT");
-
-      if (e.key === "Escape") {
-        if (query) setQuery("");
-        el?.blur();
-        return;
-      }
-      if (!typing && (e.key === "/" || (e.key === "f" && (e.metaKey || e.ctrlKey)))) {
-        e.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
-        return;
-      }
-      // Arrows belong to a <select> when one has focus; everywhere else they drive the list.
-      if (el?.tagName === "SELECT") return;
-      if (typing && e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
-      if (!flat.length) return;
-
-      const move = (delta: number) => {
-        e.preventDefault();
-        setCursor((c) => {
-          const next = Math.min(flat.length - 1, Math.max(0, c < 0 ? 0 : c + delta));
-          rowRefs.current[next]?.scrollIntoView({ block: "nearest" });
-          return next;
-        });
-      };
-      if (e.key === "ArrowDown" || (!typing && e.key === "j")) move(1);
-      else if (e.key === "ArrowUp" || (!typing && e.key === "k")) move(-1);
-      else if (e.key === "Enter" && cursor >= 0 && flat[cursor]) {
-        e.preventDefault();
-        navigate(`/p/${slug}/work/${flat[cursor].id}`);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [flat, cursor, navigate, slug, query]);
+  const clearQuery = useCallback(() => setQuery(""), []);
+  const href = useCallback((w: WorklogSummary) => `/p/${slug}/work/${w.id}`, [slug]);
+  const { cursor, setCursor, rowRefs } = useListKeyboard({
+    items: flat,
+    href,
+    searchRef,
+    query,
+    onClearQuery: clearQuery,
+    resetKey: `${status}|${agent}|${tag}|${query}`,
+  });
 
   if (error) {
     return (
@@ -177,32 +143,32 @@ export function WorkListPage() {
         </div>
 
         <div className="toolbar-right">
-          <select
-            className="select"
+          <Select
+            label="Filter by agent"
             value={agent}
-            onChange={(e) => setAgent(e.target.value)}
-            aria-label="Filter by agent"
-          >
-            <option value="all">All agents</option>
-            {agents.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-          <select
-            className="select"
+            onChange={setAgent}
+            options={[
+              { value: "all", label: "All agents" },
+              ...agents.map((a) => ({
+                value: a,
+                label: a,
+                hint: works.filter((w) => w.agent === a).length,
+              })),
+            ]}
+          />
+          <Select
+            label="Filter by tag"
             value={tag}
-            onChange={(e) => setTag(e.target.value)}
-            aria-label="Filter by tag"
-          >
-            <option value="all">All tags</option>
-            {tags.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+            onChange={setTag}
+            options={[
+              { value: "all", label: "All tags" },
+              ...tags.map((t) => ({
+                value: t,
+                label: t,
+                hint: works.filter((w) => w.tags.includes(t)).length,
+              })),
+            ]}
+          />
           <div className="search">
             <svg className="search-icon" viewBox="0 0 16 16" aria-hidden="true">
               <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.4" />

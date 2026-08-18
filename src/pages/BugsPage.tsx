@@ -1,56 +1,176 @@
-import { useMemo, useState } from "react";
+/**
+ * The bug board: every defect in the project, what state it is in, how bad it is, and who
+ * is holding it.
+ *
+ * It is a triage screen first and an archive second, so the defaults are triage defaults:
+ * it opens on Open, sorts open work by severity and then by recency, and puts the severity
+ * pill in the first column where the eye lands. Filtering is client-side and instant — the
+ * vault is small enough to hold in memory, and a round trip per keystroke would feel like
+ * a website rather than an app.
+ */
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useProjectSlug } from "../AppContext";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
+import { useListKeyboard } from "../lib/useListKeyboard";
+import { Select } from "../components/Select";
 import {
-  AgentChip,
-  BugStatusPill,
+  BugStatusDot,
+  CommentCount,
   EmptyState,
   ErrorState,
+  Handoff,
   SeverityBadge,
   Skeleton,
   Tag,
 } from "../components/ui";
-import { formatRelative, pluralize } from "../lib/format";
-import type { Severity } from "../lib/types";
+import {
+  BUG_STATUS_LABEL,
+  formatDateTimeUtc,
+  formatRelative,
+  pluralize,
+  SEVERITY_LABEL,
+} from "../lib/format";
+import type { BugStatus, BugSummary, Severity } from "../lib/types";
+
+type Tab = "open" | "resolved" | "all";
 
 const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];
+const SEVERITY_RANK: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+/** Open first, and inside "open" the ones somebody has already picked up come second. */
+const GROUP_ORDER: BugStatus[] = ["open", "in_progress", "resolved", "closed"];
+const MAX_LABELS = 2;
+
+const isOpen = (b: BugSummary) => b.status === "open" || b.status === "in_progress";
+
+/** What the row's time column measures: how old, or how long since it was fixed. */
+const rowTime = (b: BugSummary) => (isOpen(b) ? b.created : (b.resolved ?? b.lastActivity));
 
 export function BugsPage() {
   const slug = useProjectSlug()!;
   const { data, error, loading, reload } = useAsync(() => api.listBugs(slug), [slug]);
-  const [tab, setTab] = useState<"open" | "resolved" | "all">("open");
+
+  const [tab, setTab] = useState<Tab>("open");
   const [severity, setSeverity] = useState<Severity | "all">("all");
   const [label, setLabel] = useState("all");
+  const [assignee, setAssignee] = useState("all");
+  const [reporter, setReporter] = useState("all");
   const [query, setQuery] = useState("");
 
-  const bugs = data ?? [];
-  const openCount = bugs.filter((b) => b.status === "open" || b.status === "in_progress").length;
-  const closedCount = bugs.length - openCount;
+  const searchRef = useRef<HTMLInputElement>(null);
+  const bugs = useMemo(() => data ?? [], [data]);
+  /** The project's own numbers, ignoring the filters — for the page header. */
+  const totalOpen = bugs.filter(isOpen).length;
 
   const labels = useMemo(
     () => [...new Set(bugs.flatMap((b) => b.labels))].sort((a, b) => a.localeCompare(b)),
     [bugs]
   );
+  const assignees = useMemo(
+    () =>
+      [...new Set(bugs.map((b) => b.assignee).filter((a): a is string => !!a))].sort((a, b) =>
+        a.localeCompare(b)
+      ),
+    [bugs]
+  );
+  const reporters = useMemo(
+    () => [...new Set(bugs.map((b) => b.reporter))].sort((a, b) => a.localeCompare(b)),
+    [bugs]
+  );
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return bugs.filter((b) => {
-      const isOpen = b.status === "open" || b.status === "in_progress";
-      if (tab === "open" && !isOpen) return false;
-      if (tab === "resolved" && isOpen) return false;
-      if (severity !== "all" && b.severity !== severity) return false;
+  /**
+   * One predicate, with the ability to leave one dimension out of it. A count shown *on*
+   * a control must not be filtered by that control: "Open 2 / Resolved 6" answers "how
+   * many will I see if I switch tabs", and the severity chips count what selecting each
+   * one would give — which is how facet counts work everywhere a human has met them.
+   */
+  const matches = useCallback(
+    (b: BugSummary, skip: "tab" | "severity" | null = null) => {
+      if (skip !== "tab" && tab !== "all" && isOpen(b) !== (tab === "open")) return false;
+      if (skip !== "severity" && severity !== "all" && b.severity !== severity) return false;
       if (label !== "all" && !b.labels.includes(label)) return false;
+      if (assignee !== "all" && (b.assignee ?? "") !== (assignee === "none" ? "" : assignee))
+        return false;
+      if (reporter !== "all" && b.reporter !== reporter) return false;
+      const q = query.trim().toLowerCase();
       if (!q) return true;
       return (
         b.title.toLowerCase().includes(q) ||
         b.id.toLowerCase().includes(q) ||
         b.excerpt.toLowerCase().includes(q) ||
+        b.reporter.toLowerCase().includes(q) ||
+        (b.assignee ?? "").toLowerCase().includes(q) ||
         b.labels.some((l) => l.toLowerCase().includes(q))
       );
-    });
-  }, [bugs, tab, severity, label, query]);
+    },
+    [tab, severity, label, assignee, reporter, query]
+  );
+
+  const tabCounts = useMemo(() => {
+    const scope = bugs.filter((b) => matches(b, "tab"));
+    const open = scope.filter(isOpen).length;
+    return { open, resolved: scope.length - open, all: scope.length };
+  }, [bugs, matches]);
+
+  const severityCounts = useMemo(
+    () =>
+      SEVERITIES.map((s) => ({
+        severity: s,
+        count: bugs.filter((b) => b.severity === s && matches(b, "severity")).length,
+      })),
+    [bugs, matches]
+  );
+
+  const filtered = useMemo(() => bugs.filter((b) => matches(b)), [bugs, matches]);
+
+  /**
+   * Grouped by state; open groups sort by severity then recency (a critical filed today
+   * outranks a low filed today, and a critical filed today outranks one from last week),
+   * closed groups sort by when they were closed.
+   */
+  const groups = useMemo(
+    () =>
+      GROUP_ORDER.map((status) => ({
+        status,
+        items: filtered
+          .filter((b) => b.status === status)
+          .sort((a, b) =>
+            isOpen(a)
+              ? SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
+                rowTime(b).localeCompare(rowTime(a))
+              : rowTime(b).localeCompare(rowTime(a))
+          ),
+      })).filter((g) => g.items.length > 0),
+    [filtered]
+  );
+  const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+
+  const filtersActive =
+    severity !== "all" ||
+    label !== "all" ||
+    assignee !== "all" ||
+    reporter !== "all" ||
+    query.trim() !== "";
+
+  const clearFilters = useCallback(() => {
+    setSeverity("all");
+    setLabel("all");
+    setAssignee("all");
+    setReporter("all");
+    setQuery("");
+  }, []);
+
+  const clearQuery = useCallback(() => setQuery(""), []);
+  const href = useCallback((b: BugSummary) => `/p/${slug}/bugs/${b.id}`, [slug]);
+  const { cursor, setCursor, rowRefs } = useListKeyboard({
+    items: flat,
+    href,
+    searchRef,
+    query,
+    onClearQuery: clearQuery,
+    resetKey: `${tab}|${severity}|${label}|${assignee}|${reporter}|${query}`,
+  });
 
   if (error) {
     return (
@@ -60,17 +180,22 @@ export function BugsPage() {
     );
   }
 
+  let rowIndex = -1;
+
   return (
     <div className="page">
       <header className="page-head">
         <div>
           <h1 className="page-title">Bugs</h1>
           <p className="page-sub">
-            Every defect an agent found, who owns it now, and the written record of how it was fixed.
+            Every defect an agent found, who owns it now, and the written record of how it was
+            fixed.
           </p>
         </div>
         <div className="page-head-meta tabular">
-          {loading ? "loading…" : pluralize(filtered.length, "bug")}
+          {loading
+            ? "loading…"
+            : `${pluralize(bugs.length, "bug")}${totalOpen ? ` · ${totalOpen} open` : " · none open"}`}
         </div>
       </header>
 
@@ -82,7 +207,8 @@ export function BugsPage() {
             className={`segment${tab === "open" ? " is-active" : ""}`}
             onClick={() => setTab("open")}
           >
-            Open<span className="segment-count tabular">{openCount}</span>
+            <span className="sdot sdot-bug-open" aria-hidden="true" />
+            Open<span className="segment-count tabular">{tabCounts.open}</span>
           </button>
           <button
             role="tab"
@@ -90,7 +216,8 @@ export function BugsPage() {
             className={`segment${tab === "resolved" ? " is-active" : ""}`}
             onClick={() => setTab("resolved")}
           >
-            Resolved<span className="segment-count tabular">{closedCount}</span>
+            <span className="sdot sdot-bug-resolved" aria-hidden="true" />
+            Resolved<span className="segment-count tabular">{tabCounts.resolved}</span>
           </button>
           <button
             role="tab"
@@ -98,93 +225,367 @@ export function BugsPage() {
             className={`segment${tab === "all" ? " is-active" : ""}`}
             onClick={() => setTab("all")}
           >
-            All<span className="segment-count tabular">{bugs.length}</span>
+            All<span className="segment-count tabular">{tabCounts.all}</span>
           </button>
         </div>
 
         <div className="toolbar-right">
-          <select
-            className="select"
+          <Select
+            label="Filter by severity"
             value={severity}
-            onChange={(e) => setSeverity(e.target.value as Severity | "all")}
-            aria-label="Filter by severity"
-          >
-            <option value="all">All severities</option>
-            {SEVERITIES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <select
-            className="select"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            aria-label="Filter by label"
-          >
-            <option value="all">All labels</option>
-            {labels.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <input
-            className="input"
-            type="search"
-            value={query}
-            placeholder="Search bugs…"
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search bugs"
+            onChange={(v) => setSeverity(v as Severity | "all")}
+            options={[
+              { value: "all", label: "All severities" },
+              ...SEVERITIES.map((s) => ({
+                value: s,
+                label: SEVERITY_LABEL[s],
+                hint: bugs.filter((b) => b.severity === s).length,
+              })),
+            ]}
           />
+          <Select
+            label="Filter by label"
+            value={label}
+            onChange={setLabel}
+            options={[
+              { value: "all", label: "All labels" },
+              ...labels.map((l) => ({
+                value: l,
+                label: l,
+                hint: bugs.filter((b) => b.labels.includes(l)).length,
+              })),
+            ]}
+          />
+          <Select
+            label="Filter by assignee"
+            value={assignee}
+            onChange={setAssignee}
+            options={[
+              { value: "all", label: "All assignees" },
+              { value: "none", label: "Unassigned", hint: bugs.filter((b) => !b.assignee).length },
+              ...assignees.map((a) => ({
+                value: a,
+                label: a,
+                hint: bugs.filter((b) => b.assignee === a).length,
+              })),
+            ]}
+          />
+          <Select
+            label="Filter by reporter"
+            value={reporter}
+            onChange={setReporter}
+            options={[
+              { value: "all", label: "All reporters" },
+              ...reporters.map((r) => ({
+                value: r,
+                label: r,
+                hint: bugs.filter((b) => b.reporter === r).length,
+              })),
+            ]}
+          />
+          <div className="search">
+            <svg className="search-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+              <path
+                d="M10.2 10.2 L13.5 13.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            </svg>
+            <input
+              ref={searchRef}
+              className="input search-input"
+              type="search"
+              value={query}
+              placeholder="Search bugs"
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search bugs"
+            />
+            {!query && <kbd className="search-kbd">/</kbd>}
+          </div>
         </div>
       </div>
 
+      {!loading && bugs.length > 0 && (
+        <div className="sev-bar" aria-label="Severity breakdown">
+          {severityCounts.map(({ severity: s, count }) => (
+            <button
+              key={s}
+              className={`sev-chip sev-chip-${s}${severity === s ? " is-active" : ""}${
+                count === 0 ? " is-zero" : ""
+              }`}
+              onClick={() => setSeverity(severity === s ? "all" : s)}
+              aria-pressed={severity === s}
+              title={`${count} ${SEVERITY_LABEL[s].toLowerCase()} in this tab`}
+            >
+              <span className="sev-chip-dot" aria-hidden="true" />
+              <span className="sev-chip-label">{SEVERITY_LABEL[s]}</span>
+              <span className="sev-chip-count tabular">{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {filtersActive && (
+        <div className="filter-summary">
+          <span className="filter-count tabular">
+            {pluralize(filtered.length, "match", "matches")}
+          </span>
+          {severity !== "all" && (
+            <button className="filter-chip" onClick={() => setSeverity("all")}>
+              Severity: {SEVERITY_LABEL[severity]} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {label !== "all" && (
+            <button className="filter-chip" onClick={() => setLabel("all")}>
+              Label: {label} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {assignee !== "all" && (
+            <button className="filter-chip" onClick={() => setAssignee("all")}>
+              Assignee: {assignee === "none" ? "unassigned" : assignee}{" "}
+              <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {reporter !== "all" && (
+            <button className="filter-chip" onClick={() => setReporter("all")}>
+              Reporter: {reporter} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {query.trim() && (
+            <button className="filter-chip" onClick={clearQuery}>
+              “{query.trim()}” <span aria-hidden="true">×</span>
+            </button>
+          )}
+          <button className="filter-clear" onClick={clearFilters}>
+            Clear all
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <Skeleton rows={6} />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title={bugs.length ? "Nothing matches those filters" : "No bugs filed"}
-          hint={
-            bugs.length
-              ? "Try the All tab."
-              : "Agents file with `agentmon bug create -p " + slug + " --severity high --title <t>`."
-          }
+      ) : flat.length === 0 ? (
+        <BoardEmpty
+          slug={slug}
+          total={bugs.length}
+          tab={tab}
+          filtersActive={filtersActive}
+          openCount={totalOpen}
+          resolvedCount={bugs.length - totalOpen}
+          onClear={clearFilters}
+          onSwitchTab={setTab}
         />
       ) : (
-        <ul className="issue-list">
-          {filtered.map((b) => (
-            <li key={b.id}>
-              <Link className="issue" to={`/p/${slug}/bugs/${b.id}`}>
-                <span className={`issue-severity sev-${b.severity}`} aria-hidden="true" />
-                <div className="issue-main">
-                  <div className="issue-titleline">
-                    <span className="issue-title">{b.title}</span>
-                    {b.labels.map((l) => (
-                      <Tag key={l}>{l}</Tag>
-                    ))}
-                  </div>
-                  <div className="issue-sub">
-                    <span className="mono">{b.id}</span>
-                    <span>
-                      filed by {b.reporter} · {formatRelative(b.created)}
-                    </span>
-                    {b.assignee && <span>assigned to {b.assignee}</span>}
-                    {b.commentCount > 0 && (
-                      <span className="tabular">{pluralize(b.commentCount, "comment")}</span>
+        <>
+          <div className="work-list">
+            {groups.map((group) => (
+              <section className="work-group" key={group.status}>
+                <header className="work-group-head">
+                  <BugStatusDot status={group.status} />
+                  <h2 className="work-group-title">{BUG_STATUS_LABEL[group.status]}</h2>
+                  <span className="work-group-count tabular">{group.items.length}</span>
+                  {(group.status === "open" || group.status === "in_progress") &&
+                    group.items.length > 1 && (
+                      <span className="work-group-note">severity, then newest</span>
                     )}
-                  </div>
-                </div>
-                <div className="issue-side">
-                  <SeverityBadge severity={b.severity} />
-                  <BugStatusPill status={b.status} />
-                  {b.assignee ? <AgentChip name={b.assignee} /> : <span className="muted">unassigned</span>}
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                </header>
+                <ul className="work-rows">
+                  {group.items.map((b) => {
+                    rowIndex += 1;
+                    const i = rowIndex;
+                    return (
+                      <li key={b.id}>
+                        <Link
+                          ref={(el) => {
+                            rowRefs.current[i] = el;
+                          }}
+                          className={`work-row bug-row${cursor === i ? " is-cursor" : ""}`}
+                          to={`/p/${slug}/bugs/${b.id}`}
+                          onMouseEnter={() => setCursor(i)}
+                          onFocus={() => setCursor(i)}
+                        >
+                          <span className="bug-row-sev">
+                            <SeverityBadge severity={b.severity} />
+                          </span>
+                          <span className="work-row-id mono">{b.id}</span>
+                          <span className="work-row-title" title={b.title}>
+                            {b.title}
+                          </span>
+                          <RowLabels bug={b} />
+                          <span className="bug-row-people">
+                            <Handoff from={b.reporter} to={b.assignee} />
+                          </span>
+                          <span className="bug-row-comments">
+                            <CommentCount count={b.commentCount} />
+                          </span>
+                          <time
+                            className="work-row-time tabular"
+                            dateTime={rowTime(b)}
+                            title={
+                              isOpen(b)
+                                ? `Filed ${formatDateTimeUtc(b.created)} · last activity ${formatDateTimeUtc(b.lastActivity)}`
+                                : `Resolved ${formatDateTimeUtc(b.resolved ?? b.lastActivity)} · filed ${formatDateTimeUtc(b.created)}`
+                            }
+                          >
+                            {formatRelative(rowTime(b))}
+                          </time>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
+
+          <p className="list-hints">
+            <span className="list-hints-left">
+              {tab === "resolved"
+                ? "Sorted by when they were closed."
+                : "Open bugs sort by severity, then by how recently they were filed."}
+            </span>
+            <kbd>↑</kbd>
+            <kbd>↓</kbd> move · <kbd>↵</kbd> open · <kbd>/</kbd> search
+          </p>
+        </>
       )}
     </div>
+  );
+}
+
+/** Labels, capped so a five-label bug cannot push the people column around. */
+function RowLabels({ bug }: { bug: BugSummary }) {
+  if (!bug.labels.length) return <span className="work-row-tags" />;
+  const shown = bug.labels.slice(0, MAX_LABELS);
+  const rest = bug.labels.length - shown.length;
+  return (
+    <span className="work-row-tags">
+      {shown.map((l) => (
+        <Tag key={l}>{l}</Tag>
+      ))}
+      {rest > 0 && (
+        <span className="tag tag-more" title={bug.labels.join(", ")}>
+          +{rest}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Three different nothings, told apart: an empty project, a filter that matches nothing,
+ * and the good one — a board with no open bugs left.
+ */
+function BoardEmpty({
+  slug,
+  total,
+  tab,
+  filtersActive,
+  openCount,
+  resolvedCount,
+  onClear,
+  onSwitchTab,
+}: {
+  slug: string;
+  total: number;
+  tab: Tab;
+  filtersActive: boolean;
+  openCount: number;
+  resolvedCount: number;
+  onClear: () => void;
+  onSwitchTab: (tab: Tab) => void;
+}) {
+  if (total === 0) {
+    return (
+      <EmptyState
+        icon={
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <path
+              d="M8 3.2a2.4 2.4 0 0 1 2.4 2.4v3.2A2.4 2.4 0 0 1 8 11.2a2.4 2.4 0 0 1-2.4-2.4V5.6A2.4 2.4 0 0 1 8 3.2Z M3 6.2h2.6 M10.4 6.2H13 M3 9.4h2.6 M10.4 9.4H13"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+            />
+          </svg>
+        }
+        title="No bugs filed"
+        hint={
+          <>
+            Agents file a bug the moment they find one, with the repro in the body so the next
+            agent can reproduce it without asking:
+            <code className="empty-code">
+              agentmon bug create -p {slug} --agent &lt;name&gt; --severity high --title &lt;title&gt;
+            </code>
+          </>
+        }
+      />
+    );
+  }
+
+  if (!filtersActive && tab === "open") {
+    return (
+      <EmptyState
+        icon={
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <path
+              d="M3.5 8.5 L6.5 11.5 L12.5 4.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        }
+        title="Nothing open"
+        hint={`Every one of the ${pluralize(resolvedCount, "bug")} filed in this project has been resolved, and each one carries the written fix.`}
+        action={
+          <button className="button" onClick={() => onSwitchTab("resolved")}>
+            Read the resolved ones
+          </button>
+        }
+      />
+    );
+  }
+
+  if (!filtersActive && tab === "resolved") {
+    return (
+      <EmptyState
+        icon={
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+            <path d="M8 5.2v3.2l2 1.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+        }
+        title="Nothing resolved yet"
+        hint={`${pluralize(openCount, "bug")} still open in this project. A bug leaves this board when an agent writes the fix into it with \`agentmon bug resolve\`.`}
+        action={
+          <button className="button" onClick={() => onSwitchTab("open")}>
+            Show the open ones
+          </button>
+        }
+      />
+    );
+  }
+
+  return (
+    <EmptyState
+      icon={
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M10.2 10.2 L13.5 13.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+      }
+      title="No bugs match these filters"
+      hint={`${pluralize(total, "bug")} in this project, none of them matching all of the filters above.`}
+      action={
+        <button className="button" onClick={onClear}>
+          Clear filters
+        </button>
+      }
+    />
   );
 }
