@@ -56,13 +56,6 @@ function renderInline(nodes: Inline[], keyPrefix: string, link: RefLinker): Reac
   });
 }
 
-/** Inline markdown with no block wrapper — for one-line strings (titles, summaries). */
-export function InlineMarkdown({ source }: { source: string }) {
-  const slug = useParams<{ project: string }>().project;
-  const link: RefLinker = slug ? (id) => recordPath(slug, id) : null;
-  return <>{renderInline(parseInline(source ?? ""), "x", link)}</>;
-}
-
 export function Markdown({ source, className }: { source: string; className?: string }) {
   // Record ids link inside the project the reader is already looking at; on screens with
   // no project in the route (there is one: the projects list) they stay plain text.
