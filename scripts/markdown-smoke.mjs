@@ -19,6 +19,7 @@ import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseBlocks, parseInline, inlineText } from "../src/lib/markdown-parse.ts";
+import { splitLabelledSections } from "../src/lib/sections.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -151,6 +152,56 @@ console.log("fixtures");
   eq("…label markup parsed", link.children.some((c) => c.kind === "em"), true);
 }
 
+// 10. Resolutions split into the parts their author labelled, and the proof is one of them.
+{
+  const src = [
+    "**Root cause.** `dispatcher.rs` ran the claim, the send and the release in one",
+    "transaction.",
+    "",
+    "**Fix**, in `relay-worker/src/dispatcher.rs` and `relay-store/src/queue.rs`:",
+    "",
+    "1. The claim gets its own transaction.",
+    "2. The send holds no connection.",
+    "",
+    "**Verified.**",
+    "",
+    "- `cargo test --workspace` — 71 passed.",
+    "- Killed a worker mid-batch: 41 deliveries reclaimed 90 seconds later.",
+    "",
+    "**Consequence, stated plainly.** At-least-once becomes reachable through a new door.",
+  ].join("\n");
+  const { preamble, sections } = splitLabelledSections(src);
+  eq("nothing before the first label", preamble, "");
+  eq("four labelled parts", sections.length, 4);
+  eq("…first is the cause", sections[0].label, "Root cause");
+  eq("…the fix keeps its binding clause on the heading", sections[1].trailer.startsWith(","), true);
+  eq("…and counts its steps", sections[1].items, 2);
+  eq("…the proof is found", sections[2].evidence, true);
+  eq("…with its checks counted", sections[2].items, 2);
+  eq("…and gets its own anchor", sections[2].id, "res-verified");
+  eq("…a long label is shortened for the rail", sections[3].short, "Consequence");
+  eq("…without rewriting the heading", sections[3].label, "Consequence, stated plainly");
+  check(
+    "…and the fix's own words stay in its body",
+    sections[1].body.includes("The claim gets its own transaction."),
+    sections[1].body,
+  );
+}
+
+// 11. A resolution written as plain prose is left exactly as it is — no invented headings.
+{
+  const src = "Replaced the capturing closure with a free function.\n\nVerified with `cargo build`.";
+  const { preamble, sections } = splitLabelledSections(src);
+  eq("no sections invented", sections.length, 0);
+  eq("…and the text is untouched", preamble, src);
+}
+
+// 12. One bold lead-in is an emphasised sentence, not a section (two is a pattern).
+{
+  const { sections } = splitLabelledSections("**Note.** The endpoint was already dead.");
+  eq("a single label is not a structure", sections.length, 0);
+}
+
 /* ------------------------------------------------------- every vault record */
 
 console.log("vault sweep");
@@ -160,17 +211,36 @@ const SYNTAX = /^[-*_>#`|.)(\[\]]+$/;
 /** Emphasis and code fences are markup, not letters — compare without them. */
 const bare = (s) => s.replace(/[`*]/g, "");
 
-function sweep(file) {
-  const raw = readFileSync(file, "utf8");
-  const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
-  const out = bare(rendered(body));
+/** Every word of `source` that `out` does not contain. */
+function lost(source, out) {
   const missing = [];
-  for (const word of body.split(/\s+/)) {
+  for (const word of source.split(/\s+/)) {
     const w = bare(word.trim()).replace(/^[(\[]+/, "").replace(/[)\].,;:]+$/, "");
     if (!w || SYNTAX.test(w)) continue;
     if (!out.includes(w)) missing.push(w);
   }
-  check(`${file.split(/[\\/]/).slice(-3).join("/")} loses nothing`, missing.length === 0, missing.slice(0, 6).join(" · "));
+  return missing;
+}
+
+function sweep(file) {
+  const raw = readFileSync(file, "utf8");
+  const name = file.split(/[\\/]/).slice(-3).join("/");
+  const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+  const missing = lost(body, bare(rendered(body)));
+  check(`${name} loses nothing`, missing.length === 0, missing.slice(0, 6).join(" · "));
+
+  // The record page splits Resolution and Outcome into the parts their author labelled.
+  // Splitting is a re-arrangement of the author's bytes and must lose none of them either.
+  const parts = body.split(/\n## (?:Resolution|Outcome)\s*\n/);
+  if (parts.length < 2) return;
+  const section = parts.slice(1).join("\n").split(/\n## /)[0];
+  const { preamble, sections } = splitLabelledSections(section);
+  if (!sections.length) return;
+  const out = bare(
+    [preamble, ...sections.map((s) => `${s.label} ${s.trailer} ${s.body}`)].join("\n"),
+  );
+  const dropped = lost(section, out);
+  check(`${name} splits without loss`, dropped.length === 0, dropped.slice(0, 6).join(" · "));
 }
 
 if (!existsSync(vault)) {

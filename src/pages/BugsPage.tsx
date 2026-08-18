@@ -8,9 +8,10 @@
  * vault is small enough to hold in memory, and a round trip per keystroke would feel like
  * a website rather than an app.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useProjectSlug } from "../AppContext";
+import { agentColumnWidth } from "../lib/columns";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
@@ -76,6 +77,17 @@ export function BugsPage() {
   );
   const reporters = useMemo(
     () => [...new Set(bugs.map((b) => b.reporter))].sort((a, b) => a.localeCompare(b)),
+    [bugs]
+  );
+
+  /**
+   * The handoff column is sized for the names this project actually uses — `nova` and a
+   * board of `p0-foundation-builder` cannot share one width. Computed from every bug rather
+   * than the filtered ones, so the column does not twitch while somebody types in search.
+   * `chrome` is the two avatars, the arrow and their gaps, measured: 62px.
+   */
+  const peopleWidth = useMemo(
+    () => agentColumnWidth(bugs.map((b) => b.assignee ?? "unassigned"), { chrome: 62, min: 118 }),
     [bugs]
   );
 
@@ -379,7 +391,7 @@ export function BugsPage() {
         />
       ) : (
         <>
-          <div className="work-list">
+          <div className="work-list" style={{ "--people-col": peopleWidth } as CSSProperties}>
             {groups.map((group) => (
               <section className="work-group" key={group.status}>
                 <header className="work-group-head">

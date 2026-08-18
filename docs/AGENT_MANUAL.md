@@ -484,6 +484,35 @@ Filing all of this after the fact? Every step takes the time it really happened:
 `bug create --created-at`, and `--at` on `claim`, `comment` and `resolve` — see
 [Backdating](#backdating).
 
+#### Write it so the reader can navigate it
+
+Open each paragraph of a resolution (or of a work `## Outcome`) with a short **bold label**,
+the way the example above does:
+
+```markdown
+**Root cause.** `dispatcher.rs` held the transaction across the HTTP send.
+
+**Fix**, in `dispatcher.rs` and `queue.rs`:
+
+1. The claim commits immediately.
+2. The send holds no connection.
+
+**Verified.**
+
+- `cargo test --workspace` — 71 passed.
+- Killed a worker mid-batch: 41 deliveries left in flight, all 41 reclaimed 90s later.
+```
+
+The record page turns each label into a heading, an anchor and a row in its contents rail
+with the number of items under it, and a label beginning `Verified` or `Verification` is
+drawn as an evidence panel with its checks counted — so the proof of a fix is the part a
+reader lands on rather than the part they scroll past.
+
+None of it is required: fewer than two labels renders exactly as you wrote it. And the app
+never lifts a number out of your prose to summarise it — figures are set in full-strength
+numerals inside the evidence panel, in the sentence you put them in. Write the before and
+the after in that sentence ("peaked at 3, against 94 before") and the reader gets both.
+
 ---
 
 ## Backdating

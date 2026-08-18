@@ -1505,6 +1505,178 @@
   color: #cbbcfd;
 }
 
+/* --- resolution parts -----------------------------------------------------
+   A fix is not one block of text: it is a cause, a change, the proof it worked, and what
+   the fix cost. Agents already write it that way (**Root cause.** … **Verified.** …), so
+   each labelled part becomes a heading with an anchor, and the proof — the part a reader
+   comes for and the part that vanished when it was one bold phrase in two thousand words —
+   is drawn as evidence rather than prose.
+   ------------------------------------------------------------------------- */
+
+/* Jump strip under the banner: the parts of this fix, in the author's order. */
+.res-jump {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.res-jump-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 240px;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
+}
+
+.res-jump-link:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.res-jump-link.is-evidence {
+  color: #93d6b4;
+  box-shadow: inset 0 0 0 1px rgba(76, 183, 130, 0.34);
+}
+
+.res-jump-count {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.res-jump-link .check-mark {
+  color: var(--green);
+}
+
+.res-part {
+  scroll-margin-top: var(--space-6);
+}
+
+/* Between parts, and between a part and the prose that opened the section before the
+   first label. */
+.res-part + .res-part,
+.prose + .res-part {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Sentence case, not the small caps of a page-level section label: these headings are the
+   author's own words — "Not done, deliberately: no metrics strip built by regex" is a
+   sentence, and setting it in capitals both shouts and changes how it was written. */
+.res-part-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+
+/* The clause the author bound to the label (", in `dispatcher.rs` and `queue.rs`:")
+   stays on the heading line, in the author's own words and punctuation — and its opening
+   comma hugs the label, so the flex gap is taken back off it. */
+.res-part-trailer {
+  margin-left: calc(-1 * var(--space-2));
+  font-size: var(--text-base);
+  font-weight: var(--weight-normal);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-tertiary);
+}
+
+.res-part-trailer code {
+  color: var(--text-secondary);
+}
+
+.res-part-count {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--green-soft);
+  color: #93d6b4;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.res-part-mark {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  align-self: center;
+  border-radius: var(--radius-full);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+/* The evidence block: a panel, not a paragraph. */
+.res-part.is-evidence {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--bg-inset);
+  box-shadow: inset 0 0 0 1px rgba(76, 183, 130, 0.18), inset 3px 0 0 var(--green);
+}
+
+.res-part.is-evidence + .res-part {
+  border-top: none;
+}
+
+.res-part.is-evidence .res-part-title {
+  margin-bottom: var(--space-3);
+  color: #9fdcbd;
+}
+
+/* Each verification is a check that was run, with its own mark. */
+.evidence-prose ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  list-style: none;
+}
+
+.evidence-prose ul > li {
+  position: relative;
+  padding-left: var(--space-5);
+}
+
+.evidence-prose ul > li::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--green);
+  border-width: 0 1.6px 1.6px 0;
+  transform: rotate(42deg);
+}
+
+/* Figures in the evidence, set so the eye lands on them. Typography only: the numbers are
+   the author's, exactly where the author wrote them (src/lib/markdown.tsx). */
+.figure {
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
 /* --- bug: status history strip -------------------------------------------
    Filed → claimed → resolved, with the real gap between each pair. A step that has
    not happened is an outline, so an open bug's strip still reads as a status.
@@ -1859,6 +2031,34 @@ a.rel-row:hover .rel-id {
   font-weight: var(--weight-medium);
 }
 
+.contents-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The resolution's own parts, one level in: Root cause / Fix / Verified / … */
+.contents-link.is-sub {
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.contents-link.is-sub.is-active {
+  color: var(--text-primary);
+}
+
+.contents-link.is-evidence .contents-label::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 7px;
+  margin-right: 7px;
+  border: solid var(--green);
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-1px) rotate(42deg);
+}
+
 .contents-count {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
@@ -2055,10 +2255,20 @@ a.rel-row:hover .rel-id {
   overflow: hidden;
 }
 
+/* Sized from the project's own names (see src/lib/columns.ts); the fallback is only for
+   a list rendered before that runs. `display: flex` is load-bearing — see .bug-row-people. */
 .work-row-agent {
   flex: none;
-  width: 152px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: var(--agent-col, 152px);
   overflow: hidden;
+}
+
+.work-row-agent .agent {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .work-row-time {
@@ -2211,9 +2421,21 @@ kbd {
   width: 70px;
 }
 
+/* Who found it → who holds it.
+   `display: flex` and the min-widths under it are not decoration. A fixed box with
+   `overflow: hidden` around an *inline* child cuts that child wherever the box ends —
+   mid-glyph, with no ellipsis, because the child fits its own box and never learns it is
+   being cropped: `p3-bugs-builder` rendered as "p3-bugs-builc" and the page looked correct
+   while showing a name the vault does not contain. Making this a flex container with
+   min-width 0 all the way down to .agent-name lets the truncation happen where it is
+   visible, and scripts/check-clipping.mjs fails the build if it ever regresses.
+   The width itself comes from the project's names (src/lib/columns.ts). */
 .bug-row-people {
   flex: none;
-  width: 140px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: var(--people-col, 140px);
   overflow: hidden;
 }
 
@@ -2226,9 +2448,15 @@ kbd {
 
 /* reporter → assignee, the handoff a board is read for */
 .handoff {
-  display: inline-flex;
+  display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.handoff .agent {
   min-width: 0;
 }
 
@@ -2242,9 +2470,12 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .handoff-empty {

@@ -7,12 +7,21 @@
  * truncated, every id in the prose is a link, and every timestamp is shown both as a real
  * date and as "how long ago".
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCurrentProject, useProjectSlug } from "../AppContext";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
+import { useActiveSection } from "../lib/useActiveSection";
 import { Markdown } from "../lib/markdown";
+import {
+  ContentsRail,
+  PartsBody,
+  PartsJump,
+  partsToc,
+  useLabelledParts,
+  type TocEntry,
+} from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
 import { AgentChip, ErrorState, Skeleton, Tag, WorkStatusPill } from "../components/ui";
 import {
@@ -39,31 +48,6 @@ function Stamp({ iso, relative = true }: { iso: string; relative?: boolean }) {
   );
 }
 
-/** Which section the reader is currently looking at, for the contents rail. */
-function useActiveSection(ids: string[]): string {
-  const [active, setActive] = useState(ids[0] ?? "");
-  const key = ids.join(",");
-  useEffect(() => {
-    const seen = new Map<string, boolean>();
-    const els = ids
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => !!el);
-    if (!els.length) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) seen.set(e.target.id, e.isIntersecting);
-        const first = ids.find((id) => seen.get(id));
-        if (first) setActive(first);
-      },
-      { rootMargin: "-72px 0px -55% 0px" }
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return active;
-}
-
 export function WorkDetailPage() {
   const slug = useProjectSlug()!;
   const project = useCurrentProject();
@@ -72,19 +56,23 @@ export function WorkDetailPage() {
 
   const work = data;
   const related = useRelated(slug, id, work?.refs ?? EMPTY);
+  /** The outcome's own parts (Shipped / Verified / Known gaps), as its author labelled them. */
+  const outcome = useLabelledParts(work?.outcome);
   const sections = useMemo(() => {
-    if (!work) return [];
-    const out = [
+    if (!work) return [] as TocEntry[];
+    const out: TocEntry[] = [
       { id: "what", label: "What", count: 0 },
       { id: "why", label: "Why", count: 0 },
       { id: "how", label: "How", count: 0 },
     ];
     if (work.files.length) out.push({ id: "files", label: "Files", count: work.files.length });
     out.push({ id: "updates", label: "Updates", count: work.updates.length });
-    if (work.outcome) out.push({ id: "outcome", label: "Outcome", count: 0 });
+    if (work.outcome) {
+      out.push({ id: "outcome", label: "Outcome", count: 0 }, ...partsToc(outcome));
+    }
     if (related.count) out.push({ id: "related", label: "Related", count: related.count });
     return out;
-  }, [work, related.count]);
+  }, [work, related.count, outcome]);
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {
@@ -214,8 +202,9 @@ export function WorkDetailPage() {
                     )}
                   </span>
                 </header>
+                <PartsJump result={outcome} label="Inside this outcome" />
                 <div className="outcome-body">
-                  <Markdown source={work.outcome} />
+                  <PartsBody result={outcome} />
                 </div>
               </div>
             </section>
@@ -232,19 +221,7 @@ export function WorkDetailPage() {
         </article>
 
         <aside className="detail-side">
-          <nav className="side-card contents" aria-label="On this page">
-            <div className="side-card-title">On this page</div>
-            <ul className="contents-list">
-              {sections.map((s) => (
-                <li key={s.id}>
-                  <a className={`contents-link${active === s.id ? " is-active" : ""}`} href={`#${s.id}`}>
-                    <span>{s.label}</span>
-                    {s.count > 0 && <span className="contents-count tabular">{s.count}</span>}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          <ContentsRail entries={sections} active={active} />
 
           <div className="side-card">
             <div className="side-card-title">Record</div>

@@ -5,9 +5,10 @@
  * a round trip per keystroke would feel like a website. Rows are grouped by status so
  * "what is happening right now" is always the first thing on the screen.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useProjectSlug } from "../AppContext";
+import { agentColumnWidth } from "../lib/columns";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
@@ -51,12 +52,21 @@ export function WorkListPage() {
     [works]
   );
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return works.filter((w) => {
-      if (status !== "all" && w.status !== status) return false;
+  /** Sized for the names in this project; `chrome` is the avatar and its gap. */
+  const agentWidth = useMemo(() => agentColumnWidth(agents, { chrome: 26, min: 96 }), [agents]);
+
+  /**
+   * One predicate, with the ability to leave the status dimension out of it (BUG-0005).
+   * A count printed *on* a control must count what choosing that control would give, with
+   * every other filter still applied — otherwise "Done 9" sits above a Done group of 2 and
+   * the screen states two different numbers for the same set.
+   */
+  const matches = useCallback(
+    (w: WorklogSummary, skipStatus = false) => {
+      if (!skipStatus && status !== "all" && w.status !== status) return false;
       if (agent !== "all" && w.agent !== agent) return false;
       if (tag !== "all" && !w.tags.includes(tag)) return false;
+      const q = query.trim().toLowerCase();
       if (!q) return true;
       return (
         w.title.toLowerCase().includes(q) ||
@@ -65,8 +75,19 @@ export function WorkListPage() {
         w.excerpt.toLowerCase().includes(q) ||
         w.tags.some((t) => t.toLowerCase().includes(q))
       );
-    });
-  }, [works, status, agent, tag, query]);
+    },
+    [status, agent, tag, query]
+  );
+
+  const filtered = useMemo(() => works.filter((w) => matches(w)), [works, matches]);
+
+  /** What each status tab would show if it were the one selected. */
+  const statusCounts = useMemo(() => {
+    const scope = works.filter((w) => matches(w, true));
+    const counts: Record<string, number> = { all: scope.length };
+    for (const s of GROUP_ORDER) counts[s] = scope.filter((w) => w.status === s).length;
+    return counts;
+  }, [works, matches]);
 
   /** Grouped for display; `flat` is the same rows in screen order, for the keyboard. */
   const groups = useMemo(
@@ -135,9 +156,7 @@ export function WorkListPage() {
               onClick={() => setStatus(s)}
             >
               {STATUS_TEXT[s]}
-              <span className="segment-count tabular">
-                {s === "all" ? works.length : works.filter((w) => w.status === s).length}
-              </span>
+              <span className="segment-count tabular">{statusCounts[s] ?? 0}</span>
             </button>
           ))}
         </div>
@@ -270,7 +289,7 @@ export function WorkListPage() {
         )
       ) : (
         <>
-          <div className="work-list">
+          <div className="work-list" style={{ "--agent-col": agentWidth } as CSSProperties}>
             {groups.map((group) => (
               <section className="work-group" key={group.status}>
                 <header className="work-group-head">

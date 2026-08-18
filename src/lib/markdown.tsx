@@ -15,16 +15,55 @@ import { parseBlocks, parseInline, type Inline } from "./markdown-parse";
 /** Resolves a record id to a route, or null when we are not inside a project. */
 type RefLinker = ((id: string) => string) | null;
 
+interface Opts {
+  link: RefLinker;
+  /** Set figures in tabular numerals and full-strength ink. See `withFigures`. */
+  figures?: boolean;
+}
+
 export function recordPath(slug: string, id: string): string {
   return id.toUpperCase().startsWith("BUG") ? `/p/${slug}/bugs/${id}` : `/p/${slug}/work/${id}`;
 }
 
-function renderInline(nodes: Inline[], keyPrefix: string, link: RefLinker): ReactNode[] {
+/** A number, with the unit an agent writes against it: `3`, `11ms`, `2,900`, `30s`. */
+const FIGURE = /\d[\d,]*(?:\.\d+)?(?:ms|s|m|h|%|x|k|MB|GB)?/g;
+
+/**
+ * Marks the figures in a run of text so the eye lands on them — used on verification
+ * evidence, where the numbers ARE the claim ("idle in transaction peaked at 3, against 94
+ * before"). Strictly typographic: every character stays exactly where the author put it,
+ * and nothing is paired, computed or summarised. Anything welded to a word or a hyphen
+ * (`p99`, `2026-08-20`, `v1.2`) is left alone — it is an identifier, not a measurement.
+ */
+function withFigures(text: string, keyPrefix: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  FIGURE.lastIndex = 0;
+  while ((m = FIGURE.exec(text))) {
+    const before = text[m.index - 1] ?? " ";
+    const after = text[m.index + m[0].length] ?? " ";
+    if (/[\w-]/.test(before) || /[\w-]/.test(after)) continue;
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(
+      <b className="figure tabular" key={`${keyPrefix}f${m.index}`}>
+        {m[0]}
+      </b>
+    );
+    last = m.index + m[0].length;
+  }
+  if (!out.length) return [text];
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+function renderInline(nodes: Inline[], keyPrefix: string, opts: Opts): ReactNode[] {
+  const { link } = opts;
   return nodes.map((node, i) => {
     const key = `${keyPrefix}i${i}`;
     switch (node.kind) {
       case "text":
-        return node.text;
+        return opts.figures ? withFigures(node.text, key) : node.text;
       case "code":
         return <code key={key}>{node.text}</code>;
       case "ref":
@@ -36,18 +75,18 @@ function renderInline(nodes: Inline[], keyPrefix: string, link: RefLinker): Reac
           node.id
         );
       case "strong":
-        return <strong key={key}>{renderInline(node.children, key, link)}</strong>;
+        return <strong key={key}>{renderInline(node.children, key, opts)}</strong>;
       case "em":
-        return <em key={key}>{renderInline(node.children, key, link)}</em>;
+        return <em key={key}>{renderInline(node.children, key, opts)}</em>;
       case "link": {
         // Only web links are followed; anything else keeps its text and loses its href.
         const safe = /^(https?:|mailto:)/i.test(node.href);
         return safe ? (
           <a key={key} href={node.href} target="_blank" rel="noreferrer noopener">
-            {renderInline(node.children, key, link)}
+            {renderInline(node.children, key, opts)}
           </a>
         ) : (
-          <span key={key}>{renderInline(node.children, key, link)}</span>
+          <span key={key}>{renderInline(node.children, key, opts)}</span>
         );
       }
       default:
@@ -56,11 +95,35 @@ function renderInline(nodes: Inline[], keyPrefix: string, link: RefLinker): Reac
   });
 }
 
-export function Markdown({ source, className }: { source: string; className?: string }) {
+/** The linker for the project in the current route, or null outside a project. */
+function useRefLinker(): RefLinker {
+  const slug = useParams<{ project: string }>().project;
+  return slug ? (id) => recordPath(slug, id) : null;
+}
+
+/**
+ * One run of markdown with no block wrapper — for headings and labels built out of record
+ * text, where a `<p>` would be wrong.
+ */
+export function InlineMarkdown({ source }: { source: string }) {
+  const link = useRefLinker();
+  return <>{renderInline(parseInline(source ?? ""), "il", { link })}</>;
+}
+
+export function Markdown({
+  source,
+  className,
+  figures = false,
+}: {
+  source: string;
+  className?: string;
+  /** Mark the numbers: for verification evidence, where the figures are the point. */
+  figures?: boolean;
+}) {
   // Record ids link inside the project the reader is already looking at; on screens with
   // no project in the route (there is one: the projects list) they stay plain text.
-  const slug = useParams<{ project: string }>().project;
-  const link: RefLinker = slug ? (id) => recordPath(slug, id) : null;
+  const link = useRefLinker();
+  const opts: Opts = { link, figures };
   const blocks = parseBlocks(source ?? "");
   return (
     <div className={className ? `prose ${className}` : "prose"}>
@@ -69,7 +132,7 @@ export function Markdown({ source, className }: { source: string; className?: st
         switch (block.kind) {
           case "heading": {
             const Tag = `h${Math.min(block.level + 2, 6)}` as unknown as "h3";
-            return <Tag key={key}>{renderInline(parseInline(block.text), key, link)}</Tag>;
+            return <Tag key={key}>{renderInline(parseInline(block.text), key, opts)}</Tag>;
           }
           case "code":
             return (
@@ -80,7 +143,7 @@ export function Markdown({ source, className }: { source: string; className?: st
             );
           case "list": {
             const items = block.items.map((item, j) => (
-              <li key={`${key}-${j}`}>{renderInline(parseInline(item), `${key}-${j}`, link)}</li>
+              <li key={`${key}-${j}`}>{renderInline(parseInline(item), `${key}-${j}`, opts)}</li>
             ));
             // start={N} rather than a counted list: the author's numbers are data.
             return block.ordered ? (
@@ -93,7 +156,7 @@ export function Markdown({ source, className }: { source: string; className?: st
           }
           case "quote":
             return (
-              <blockquote key={key}>{renderInline(parseInline(block.text), key, link)}</blockquote>
+              <blockquote key={key}>{renderInline(parseInline(block.text), key, opts)}</blockquote>
             );
           case "rule":
             return <hr key={key} />;
@@ -104,7 +167,7 @@ export function Markdown({ source, className }: { source: string; className?: st
                   <tr>
                     {block.header.map((h, j) => (
                       <th key={`${key}-h${j}`}>
-                        {renderInline(parseInline(h), `${key}-h${j}`, link)}
+                        {renderInline(parseInline(h), `${key}-h${j}`, opts)}
                       </th>
                     ))}
                   </tr>
@@ -114,7 +177,7 @@ export function Markdown({ source, className }: { source: string; className?: st
                     <tr key={`${key}-r${r}`}>
                       {row.map((cell, c) => (
                         <td key={`${key}-r${r}c${c}`}>
-                          {renderInline(parseInline(cell), `${key}-r${r}c${c}`, link)}
+                          {renderInline(parseInline(cell), `${key}-r${r}c${c}`, opts)}
                         </td>
                       ))}
                     </tr>
@@ -124,7 +187,7 @@ export function Markdown({ source, className }: { source: string; className?: st
             );
           case "paragraph":
           default:
-            return <p key={key}>{renderInline(parseInline(block.text), key, link)}</p>;
+            return <p key={key}>{renderInline(parseInline(block.text), key, opts)}</p>;
         }
       })}
     </div>

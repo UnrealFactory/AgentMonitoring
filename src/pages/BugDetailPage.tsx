@@ -7,14 +7,26 @@
  * **claim** — the instant a bug stopped being everyone's problem and became someone's — is
  * an event in the thread, not a date buried in a sidebar. The **resolution** is the
  * merged-PR moment of this page: its own banner, its own colour, naming who fixed it, when,
- * and how long it had been open.
+ * and how long it had been open — and, because a fix is not one block of text, it is broken
+ * into the parts its author labelled (cause, change, proof, cost), each one an anchor and a
+ * row in the contents rail, with the verification drawn as evidence rather than prose.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCurrentProject, useProjectSlug } from "../AppContext";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
+import { useActiveSection } from "../lib/useActiveSection";
 import { Markdown } from "../lib/markdown";
+import type { SplitResult } from "../lib/sections";
+import {
+  ContentsRail,
+  PartsBody,
+  PartsJump,
+  partsToc,
+  useLabelledParts,
+  type TocEntry,
+} from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
 import {
   AgentChip,
@@ -45,31 +57,6 @@ function Stamp({ iso, relative = true }: { iso: string; relative?: boolean }) {
   );
 }
 
-/** Which section the reader is currently looking at, for the contents rail. */
-function useActiveSection(ids: string[]): string {
-  const [active, setActive] = useState(ids[0] ?? "");
-  const key = ids.join(",");
-  useEffect(() => {
-    const seen = new Map<string, boolean>();
-    const els = ids
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => !!el);
-    if (!els.length) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) seen.set(e.target.id, e.isIntersecting);
-        const first = ids.find((id) => seen.get(id));
-        if (first) setActive(first);
-      },
-      { rootMargin: "-72px 0px -55% 0px" }
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return active;
-}
-
 export function BugDetailPage() {
   const slug = useProjectSlug()!;
   const project = useCurrentProject();
@@ -79,16 +66,26 @@ export function BugDetailPage() {
   const bug = data;
   const related = useRelated(slug, id, bug?.refs ?? EMPTY);
 
+  /**
+   * The resolution, split into the parts its author labelled (Root cause / Fix / Verified /
+   * …). They are anchors and contents rows, not just headings: the evidence for a fix is
+   * the part a reader most often comes for, and in one 2,000-word blob it was the part they
+   * most often missed.
+   */
+  const resolution = useLabelledParts(bug?.resolution);
+
   const sections = useMemo(() => {
-    if (!bug) return [];
-    const out = [
+    if (!bug) return [] as TocEntry[];
+    const out: TocEntry[] = [
       { id: "report", label: "Report", count: 0 },
       { id: "thread", label: "Thread", count: bug.comments.length },
     ];
-    if (bug.resolution) out.push({ id: "resolution", label: "Resolution", count: 0 });
+    if (bug.resolution) {
+      out.push({ id: "resolution", label: "Resolution", count: 0 }, ...partsToc(resolution));
+    }
     if (related.count) out.push({ id: "related", label: "Related", count: related.count });
     return out;
-  }, [bug, related.count]);
+  }, [bug, related.count, resolution]);
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {
@@ -176,7 +173,9 @@ export function BugDetailPage() {
 
           <ThreadSection bug={bug} claimDelay={claimDelay} />
 
-          {bug.resolution && <ResolutionCard bug={bug} openFor={openFor} />}
+          {bug.resolution && (
+            <ResolutionCard bug={bug} openFor={openFor} resolution={resolution} />
+          )}
 
           {bug.status === "closed" && !bug.resolution && (
             <section className="record-section">
@@ -204,22 +203,7 @@ export function BugDetailPage() {
         </article>
 
         <aside className="detail-side">
-          <nav className="side-card contents" aria-label="On this page">
-            <div className="side-card-title">On this page</div>
-            <ul className="contents-list">
-              {sections.map((s) => (
-                <li key={s.id}>
-                  <a
-                    className={`contents-link${active === s.id ? " is-active" : ""}`}
-                    href={`#${s.id}`}
-                  >
-                    <span>{s.label}</span>
-                    {s.count > 0 && <span className="contents-count tabular">{s.count}</span>}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          <ContentsRail entries={sections} active={active} />
 
           <div className="side-card">
             <div className="side-card-title">Bug</div>
@@ -480,8 +464,20 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
   );
 }
 
-/** The merged-PR moment of this page: who fixed it, when, and the fix itself. */
-function ResolutionCard({ bug, openFor }: { bug: BugDetail; openFor: string }) {
+/**
+ * The merged-PR moment of this page: who fixed it, when, and the fix itself — carrying the
+ * author's own sub-sections as anchors, so the proof has a landmark instead of being one
+ * bold phrase inside two thousand words.
+ */
+function ResolutionCard({
+  bug,
+  openFor,
+  resolution,
+}: {
+  bug: BugDetail;
+  openFor: string;
+  resolution: SplitResult;
+}) {
   return (
     <section className="record-section" id="resolution">
       <div className="outcome-card is-resolution">
@@ -512,8 +508,11 @@ function ResolutionCard({ bug, openFor }: { bug: BugDetail; openFor: string }) {
             )}
           </span>
         </header>
+
+        <PartsJump result={resolution} label="Inside this resolution" />
+
         <div className="outcome-body">
-          <Markdown source={bug.resolution ?? ""} />
+          <PartsBody result={resolution} />
         </div>
       </div>
     </section>
