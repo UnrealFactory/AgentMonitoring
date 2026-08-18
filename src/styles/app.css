@@ -1291,6 +1291,7 @@ a.button {
   align-items: center;
   gap: 5px;
   max-width: 240px;
+  min-width: 0;
   padding: 2px 9px;
   border-radius: var(--radius-full);
   background: var(--bg-raised);
@@ -1299,8 +1300,16 @@ a.button {
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   transition: color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
+}
+
+/* The part's name is the one thing in the chip allowed to give ground, and it ellipsises
+   where the reader can see it. The count beside it never does: a number cut out of a box
+   with `overflow: hidden` is a fact the reader cannot see *and* cannot tell is missing. */
+.res-jump-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .res-jump-link:hover {
@@ -1314,11 +1323,13 @@ a.button {
 }
 
 .res-jump-count {
+  flex: none;
   color: var(--text-tertiary);
   font-size: var(--text-xs);
 }
 
 .res-jump-link .check-mark {
+  flex: none;
   color: var(--green);
 }
 

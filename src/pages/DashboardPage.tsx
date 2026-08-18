@@ -499,13 +499,20 @@ function InFlightRow({
           </span>
         </span>
         {outline.lines.length > 0 && note && (
-          <span
-            className="now-quote"
-            title={`Latest note, ${formatDateTimeUtc(note.ts)} — the opening sentence of each paragraph. Open the record for the whole note.`}
-          >
+          <span className="now-quote">
             {outline.lines.map((line, i) => (
-              <span className="now-quote-line" key={i}>
-                {i === 0 && <span className="now-quote-lead">Latest note</span>}
+              /* Each line carries its own sentence in the tooltip, so a sentence too long
+                 for the column is still readable without leaving the page — and the record
+                 itself, one click away, still has the note in full. */
+              <span className="now-quote-line" key={i} title={line}>
+                {i === 0 && (
+                  <span
+                    className="now-quote-lead"
+                    title={`The opening sentence of each paragraph of the note posted ${formatDateTimeUtc(note.ts)}`}
+                  >
+                    Latest note
+                  </span>
+                )}
                 {i === outline.lines.length - 1 && outline.skipped > 0 ? `… ${line}` : line}
               </span>
             ))}

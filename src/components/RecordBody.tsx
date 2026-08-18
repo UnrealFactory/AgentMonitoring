@@ -67,7 +67,11 @@ export function PartsJump({ result, label }: { result: SplitResult; label: strin
           title={part.label}
         >
           {part.evidence && <CheckMark />}
-          {part.short}
+          {/* The label is its own element so that *it* is what ellipsises when a part's
+              heading is long. Left as bare text it took the whole chip and pushed the count
+              out of a box with `overflow: hidden`, which cut the number off entirely — the
+              same defect as vault BUG-0006, one level down. */}
+          <span className="res-jump-text">{part.short}</span>
           {part.items > 0 && <span className="res-jump-count tabular">{part.items}</span>}
         </a>
       ))}
