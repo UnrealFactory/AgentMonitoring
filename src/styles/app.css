@@ -1970,7 +1970,11 @@ a.rel-row:hover .rel-id {
 
 .rel-title {
   flex: 1 1 auto;
-  min-width: 24ch;
+  /* No floor: a floor does not save the title, it moves the damage — with `24ch` here the
+     row grew past the card and the card (overflow: hidden) cut the *timestamp* instead,
+     which has no ellipsis to warn anyone. The title is the one thing on this row that can
+     truncate legibly, so it is the one thing that gives up width. */
+  min-width: 0;
   font-size: var(--text-base);
   color: var(--text-primary);
   white-space: nowrap;
@@ -2842,6 +2846,13 @@ kbd {
   overflow-x: auto;
   font-size: var(--text-sm);
   line-height: 1.55;
+}
+
+/* The language label gets a band of its own. Laid over the code it sat on top of the first
+   line's last words (`…-> usize {` under a grey RUST), and a label that eats code is worth
+   less than the 10px it costs to keep out of the way. */
+.prose pre[data-lang] {
+  padding-top: 24px;
 }
 
 .code-lang {

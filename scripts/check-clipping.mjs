@@ -3,7 +3,7 @@
  * Find text this app destroys: ink that is cut in half, and ink painted on top of other ink.
  *
  *   npm run check:clipping
- *   node scripts/check-clipping.mjs [--port 5173] [--widths 1600,1440,1280,1152,960]
+ *   node scripts/check-clipping.mjs [--port 5173] [--widths 1600,1280,1104,960]
  *                                  [--project relay] [--include-dashboard] [--url ORIGIN]
  *
  * Two defects, one gate, because they are the same failure seen from two sides — a box that
@@ -51,7 +51,7 @@ if (flag("--help") || flag("-h")) {
   node scripts/check-clipping.mjs --widths 1600,960 --project relay
 
 Options:
-  --widths a,b,c        viewport widths to walk (default 1600,1440,1280,1152,960)
+  --widths a,b,c        viewport widths to walk (default 1600,1440,1280,1152,1104,1024,960)
   --port <n>            dev-server port to boot on / check against (default 5173)
   --url <origin>        check an already-running server instead of booting one
   --project <slug>      only this project (default: every project in the vault)
@@ -62,7 +62,7 @@ Options:
 
 const PORT = Number(value("--port", process.env.SHOT_PORT || 5173));
 const ORIGIN = value("--url", `http://localhost:${PORT}`).replace(/\/$/, "");
-const WIDTHS = value("--widths", "1600,1440,1280,1152,960")
+const WIDTHS = value("--widths", "1600,1440,1280,1152,1104,1024,960")
   .split(",")
   .map((w) => Number(w.trim()))
   .filter(Boolean);
@@ -150,10 +150,12 @@ const PROBE = (slack) => {
 
   // -- 2. overlap: two pieces of ink in the same pixels -----------------------------------
   /**
-   * The rectangles the text actually paints in, clipped by every ancestor that hides
-   * horizontal overflow — so an honest ellipsis reports the width the reader sees, not the
-   * width the string wanted. Vertical clipping is deliberately not applied: content below
-   * the fold of the scrolling `.main` is off screen, not broken, and must still be measured.
+   * The rectangles the text actually paints in, clipped by every ancestor that bounds
+   * horizontal overflow — hidden and clip, but scrollports too: a `pre` scrolling a long
+   * line paints nothing outside itself, so that line cannot be lying on top of the sidebar.
+   * An honest ellipsis therefore reports the width the reader sees, not the width the
+   * string wanted. Vertical clipping is deliberately not applied: content below the fold of
+   * the scrolling `.main` is off screen, not broken, and must still be measured.
    */
   const inkRects = (node) => {
     const range = document.createRange();
@@ -165,7 +167,7 @@ const PROBE = (slack) => {
       bottom: r.bottom,
     }));
     for (let el = node.parentElement; el && rects.length; el = el.parentElement) {
-      if (!cutsHorizontally(el)) continue;
+      if (!boundsHorizontally(el)) continue;
       const p = padBox(el);
       rects = rects
         .map((r) => ({ ...r, left: Math.max(r.left, p.left), right: Math.min(r.right, p.right) }))

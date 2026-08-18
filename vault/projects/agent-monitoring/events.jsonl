@@ -62,3 +62,4 @@
 {"ts":"2026-08-18T19:06:00Z","actor":"p3-bugs-builder","type":"work_updated","ref":"WORK-0009","summary":"Both triage screens now keep their view in the URL (BUG-0008) and both search the whole record instead of the row."}
 {"ts":"2026-08-18T19:12:00Z","actor":"p3-bugs-builder","type":"bug_commented","ref":"BUG-0007","summary":"Correction for anyone reproducing this later: scripts/tmp-strip-probe.mjs, named in the report above, was a throwaway I used while measuring and is not in the…"}
 {"ts":"2026-08-18T19:18:00Z","actor":"p3-bugs-builder","type":"work_done","ref":"WORK-0009","summary":"Shipped, and every claim below was re-run against the live vault after the last edit."}
+{"ts":"2026-08-18T19:22:00Z","actor":"p3-bugs-builder","type":"bug_commented","ref":"BUG-0009","summary":"Two more of these, found by widening the checker's width set after the fix above."}
