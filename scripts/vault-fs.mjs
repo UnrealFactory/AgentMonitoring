@@ -9,7 +9,7 @@
 //   * camelCase JSON keys (frontmatter `resolved_by` -> `resolvedBy`);
 //   * worklogs sorted by lastActivity desc, then id desc;
 //   * bugs sorted open-first, then severity, then lastActivity desc;
-//   * events newest first, malformed lines skipped;
+//   * events newest first (ties break on append order, reversed), malformed lines skipped;
 //   * ids/slugs validated before touching the filesystem.
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -450,9 +450,13 @@ export function createVaultReader(vaultDir) {
             return null;
           }
         })
-        .filter(Boolean);
-      events.sort((a, b) => b.ts.localeCompare(a.ts));
-      return limit ? events.slice(0, limit) : events;
+        .filter(Boolean)
+        .map((e, i) => ({ e, i }));
+      // Parity with agentmon-core: timestamps have second precision, so ties break on
+      // append order reversed — the last line written is the most recent thing.
+      events.sort((a, b) => b.e.ts.localeCompare(a.e.ts) || b.i - a.i);
+      const out = events.map(({ e }) => e);
+      return limit ? out.slice(0, limit) : out;
     },
 
     getStatus(slug) {

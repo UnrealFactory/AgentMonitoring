@@ -307,11 +307,9 @@ impl Vault {
             body::take_section(&mut secs, "Resolution").filter(|s| !s.trim().is_empty());
 
         let mut last = meta.created.clone();
-        for t in [&meta.claimed, &meta.resolved] {
-            if let Some(t) = t {
-                if *t > last {
-                    last = t.clone();
-                }
+        for t in [&meta.claimed, &meta.resolved].into_iter().flatten() {
+            if *t > last {
+                last = t.clone();
             }
         }
         for c in &comments {
@@ -341,12 +339,17 @@ impl Vault {
             return Ok(Vec::new());
         }
         let raw = read_to_string(&path)?;
-        let mut events: Vec<Event> = raw
+        // Timestamps have second precision, so several events routinely share one. Ties
+        // break on file order (reversed), which is append order — the last line written
+        // is the most recent thing that happened.
+        let mut events: Vec<(usize, Event)> = raw
             .lines()
             .filter(|l| !l.trim().is_empty())
             .filter_map(|l| serde_json::from_str::<Event>(l).ok())
+            .enumerate()
             .collect();
-        events.sort_by(|a, b| b.ts.cmp(&a.ts));
+        events.sort_by(|(ai, a), (bi, b)| b.ts.cmp(&a.ts).then_with(|| bi.cmp(ai)));
+        let mut events: Vec<Event> = events.into_iter().map(|(_, e)| e).collect();
         if let Some(n) = limit {
             events.truncate(n);
         }

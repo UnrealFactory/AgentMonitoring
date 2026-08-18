@@ -155,6 +155,142 @@ fn split_comment_heading(head: &str) -> (String, String) {
     (head.trim().to_string(), String::new())
 }
 
+// ---------------------------------------------------------------------------
+// editing (the CLI's write path)
+// ---------------------------------------------------------------------------
+
+/// Render sections back to markdown: one blank line after each `##` heading, one blank
+/// line between sections. Content inside a section is untouched, so code fences, lists
+/// and tables survive a rewrite byte for byte.
+pub fn render(sections: &[Section]) -> String {
+    let mut out = String::new();
+    for s in sections {
+        if s.title.is_empty() {
+            if s.body.trim().is_empty() {
+                continue;
+            }
+            out.push_str(s.body.trim());
+            out.push_str("\n\n");
+        } else {
+            out.push_str("## ");
+            out.push_str(&s.title);
+            out.push_str("\n\n");
+            if !s.body.trim().is_empty() {
+                out.push_str(s.body.trim());
+                out.push_str("\n\n");
+            }
+        }
+    }
+    out
+}
+
+/// Index of a section by name (case-insensitive, tolerates a trailing colon).
+fn find(sections: &[Section], name: &str) -> Option<usize> {
+    let want = name.to_ascii_lowercase();
+    sections
+        .iter()
+        .position(|s| s.title.trim().trim_end_matches(':').to_ascii_lowercase() == want)
+}
+
+/// Where a new section belongs: after the last of its predecessors in `order`, so a
+/// record written by an older build still gets `## Outcome` in the right place.
+fn insertion_point(sections: &[Section], name: &str, order: &[&str]) -> usize {
+    let Some(rank) = order.iter().position(|o| o.eq_ignore_ascii_case(name)) else {
+        return sections.len();
+    };
+    let mut at = 0;
+    for (i, s) in sections.iter().enumerate() {
+        let t = s.title.trim().trim_end_matches(':');
+        let r = order.iter().position(|o| o.eq_ignore_ascii_case(t));
+        match r {
+            Some(r) if r < rank => at = i + 1,
+            // Unknown sections stay where the author put them; they never push a known
+            // section past their position.
+            None if t.is_empty() => at = i + 1,
+            _ => {}
+        }
+    }
+    at
+}
+
+/// Set (replacing) a `## <name>` section, creating it in canonical position if absent.
+pub fn upsert_section(sections: &mut Vec<Section>, name: &str, body: &str, order: &[&str]) {
+    match find(sections, name) {
+        Some(i) => {
+            sections[i].title = name.to_string();
+            sections[i].body = body.trim().to_string();
+        }
+        None => {
+            let at = insertion_point(sections, name, order);
+            sections.insert(
+                at,
+                Section {
+                    title: name.to_string(),
+                    body: body.trim().to_string(),
+                },
+            );
+        }
+    }
+}
+
+/// Append a `### <heading>` entry to a section (`## Updates`, `## Comments`), creating
+/// the section if this is the first entry.
+pub fn append_entry(
+    sections: &mut Vec<Section>,
+    name: &str,
+    heading: &str,
+    body: &str,
+    order: &[&str],
+) {
+    let entry = format!("### {}\n\n{}", heading.trim(), body.trim());
+    match find(sections, name) {
+        Some(i) => {
+            let existing = sections[i].body.trim().to_string();
+            sections[i].body = if existing.is_empty() {
+                entry
+            } else {
+                format!("{existing}\n\n{entry}")
+            };
+        }
+        None => {
+            let at = insertion_point(sections, name, order);
+            sections.insert(
+                at,
+                Section {
+                    title: name.to_string(),
+                    body: entry,
+                },
+            );
+        }
+    }
+}
+
+/// Frontmatter lines for keys this build does not know about.
+///
+/// The CLI rewrites frontmatter from typed structs in the exact key order SPEC.md shows;
+/// without this, a key written by a newer build would be silently dropped the first time
+/// an older build touched the record. Multi-line values (block scalars, nested maps) are
+/// carried across whole.
+pub fn extra_frontmatter(frontmatter: &str, known: &[&str]) -> String {
+    let mut out = String::new();
+    let mut keeping = false;
+    for line in frontmatter.lines() {
+        let is_top_level_key = !line.starts_with([' ', '\t', '-']) && line.contains(':');
+        if is_top_level_key {
+            let key = line.split(':').next().unwrap_or("").trim();
+            keeping = !key.is_empty() && !known.iter().any(|k| k.eq_ignore_ascii_case(key));
+        } else if line.trim().is_empty() {
+            keeping = false;
+            continue;
+        }
+        if keeping {
+            out.push_str(line.trim_end());
+            out.push('\n');
+        }
+    }
+    out
+}
+
 /// `[label](href)` starting at `open` — returns the label and the index just past `)`.
 fn link_at(chars: &[char], open: usize) -> Option<(String, usize)> {
     let close = chars[open + 1..].iter().position(|c| *c == ']')? + open + 1;

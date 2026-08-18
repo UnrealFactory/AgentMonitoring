@@ -32,17 +32,12 @@ pub struct VaultInfo {
 // project.json
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectStatus {
+    #[default]
     Active,
     Archived,
-}
-
-impl Default for ProjectStatus {
-    fn default() -> Self {
-        ProjectStatus::Active
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
