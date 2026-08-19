@@ -10,10 +10,15 @@
  */
 import { createContext, useContext, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useContextMenu } from "../components/ContextMenu";
+import { recordKind, useRecordMenu } from "./menus";
 import { parseBlocks, parseInline, type Inline } from "./markdown-parse";
 
 /** Resolves a record id to a route, or null when we are not inside a project. */
 type RefLinker = ((id: string) => string) | null;
+
+/** The two handlers a chip spreads onto itself to answer the right button. */
+type ChipMenu = (id: string, title: string | undefined) => ReturnType<ReturnType<typeof useContextMenu>>;
 
 /**
  * What the ids in this project's prose are called — `BUG-0004` → its title.
@@ -33,6 +38,8 @@ interface Opts {
   titles: Map<string, string> | null;
   /** Set figures in tabular numerals and full-strength ink. See `withFigures`. */
   figures?: boolean;
+  /** The right button, for the chips. Null outside a project, where they are not links. */
+  chipMenu?: ChipMenu | null;
 }
 
 export function recordPath(slug: string, id: string): string {
@@ -84,11 +91,17 @@ function renderInline(nodes: Inline[], keyPrefix: string, opts: Opts): ReactNode
         if (!link) return node.id;
         const title = opts.titles?.get(node.id);
         const unknown = !!opts.titles && !title;
+        /* A chip is a link to a record, so it takes the record's menu — the same one the
+           Related row naming that record 200px below it opens. Not on an `is-unknown` chip:
+           the app has read the project's records and none of them answers to that id, so
+           there is nothing to open and nothing to copy a title from. */
+        const menu = unknown ? undefined : opts.chipMenu?.(node.id, title);
         return (
           <Link
             key={key}
             className={`ref-inline mono${unknown ? " is-unknown" : ""}`}
             to={link(node.id)}
+            {...menu}
             title={
               title
                 ? `${node.id} — ${title}`
@@ -129,13 +142,31 @@ function useRefLinker(): RefLinker {
 }
 
 /**
+ * The right button for the chips, or null outside a project.
+ *
+ * An id in a sentence is a link to a record, and every other link to a record in this app
+ * opens Open / Copy id / Copy title / Copy link — a reader who right-clicks "BUG-0021" in a
+ * paragraph to copy its id, having just done exactly that on the row for it, should not find
+ * the gesture dead on one of the two. `renderInline` is a plain function called in a loop, so
+ * the factory is built once here and handed down through the render options.
+ */
+function useChipMenu(): ChipMenu | null {
+  const slug = useParams<{ project: string }>().project;
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
+  if (!slug) return null;
+  return (id, title) => contextMenu(() => recordMenu({ kind: recordKind(id), id, title, slug }));
+}
+
+/**
  * One run of markdown with no block wrapper — for headings and labels built out of record
  * text, where a `<p>` would be wrong.
  */
 export function InlineMarkdown({ source }: { source: string }) {
   const link = useRefLinker();
   const titles = useContext(RecordTitles);
-  return <>{renderInline(parseInline(source ?? ""), "il", { link, titles })}</>;
+  const chipMenu = useChipMenu();
+  return <>{renderInline(parseInline(source ?? ""), "il", { link, titles, chipMenu })}</>;
 }
 
 export function Markdown({
@@ -152,7 +183,8 @@ export function Markdown({
   // no project in the route (there is one: the projects list) they stay plain text.
   const link = useRefLinker();
   const titles = useContext(RecordTitles);
-  const opts: Opts = { link, titles, figures };
+  const chipMenu = useChipMenu();
+  const opts: Opts = { link, titles, figures, chipMenu };
   const blocks = parseBlocks(source ?? "");
   return (
     <div className={className ? `prose ${className}` : "prose"}>

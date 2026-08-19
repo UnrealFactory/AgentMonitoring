@@ -1,16 +1,27 @@
 /**
  * The two menus this app actually has, defined once.
  *
- * A project is named in four places (the switcher card, the rows in its dropdown, the
- * sidebar's vault list, the Projects screen) and a record in nine (the work list, the bug
- * board, the head of each record, the Related block, and on the dashboard the working-right-
- * now row, the last-finished row, the unresolved-bug row and every row of the activity
- * feed) — so the menu they open is built here rather than beside each of them. Copies of a
- * menu are how the same action ends up with two labels, and how one screen quietly loses an
- * item: the round that introduced this file wired five of those surfaces and missed the two
- * a reader meets first, the dashboard and the switcher card.
+ * **Every link to a project opens the project menu; every link to a record opens the record
+ * menu.** That is the whole rule, and it is written as a rule because three rounds of
+ * enumerating surfaces one at a time lost one each time: the round that introduced this file
+ * wired five surfaces and missed the dashboard and the switcher card; the round that fixed
+ * those missed the vault-wide feed on /projects — twelve rows, byte-identical in class and
+ * layout to the dashboard rows one screen over, every one of them pointing at a real record,
+ * and not one of them answering the right button or Shift+F10. The failure is silent, since
+ * the document-level suppressor eats the event either way, so a reader who learned the
+ * gesture anywhere else simply finds it dead.
  *
- * Two rules the items obey:
+ * The surfaces, as of this round. A project: the switcher card, the rows in its dropdown, the
+ * sidebar's vault list, the Projects screen's rows, the breadcrumb at the head of every record,
+ * and the vault feed's project-event lines. A record: the work list, the bug board, the head of
+ * each record, the Related block, an id written into prose, the dashboard's four (working-right-
+ * now, last-finished, unresolved-bug, activity feed) and the vault-wide feed on /projects,
+ * whose rows are the only ones in the app that can name a project other than the one the
+ * sidebar is standing in. Deliberately *not* a numbered list: the count is not the contract,
+ * the rule above it is, and a surface that links to a record and takes no menu from here is the
+ * same defect again whatever the number says.
+ *
+ * Three rules the items obey:
  *
  *   * **Nothing here deletes.** The vault is append-only by SPEC: a project is archived,
  *     which hides it from the switcher and the default list and keeps every work log, bug
@@ -18,6 +29,10 @@
  *     archive is undoable from the affordance the screen already has.
  *   * **A hint is the value.** "Copy slug · relay" tells the reader what is about to be on
  *     their clipboard; a menu that says only "Copy link" has to be tried to be understood.
+ *   * **The same items in the same order, wherever the row is drawn.** A menu that drops
+ *     Copy title on the screens that happen not to have read one would teach the reader that
+ *     the gesture means different things in different places; instead the title is fetched
+ *     at the moment it is asked for (see {@link readTitle}).
  */
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -31,12 +46,26 @@ import type { Project, ProjectStatus } from "./types";
 export interface RecordRef {
   kind: "work" | "bug";
   id: string;
-  title: string;
+  /**
+   * The record's title — omitted by the surfaces that never read one (an event feed carries
+   * an id and a summary; an id written into prose carries nothing at all). Copy title then
+   * reads it from the vault when it is clicked, so the item is in every copy of this menu.
+   */
+  title?: string;
   /** The project the record lives in — ids are per-project by SPEC. */
   slug: string;
   /** True on the record's own page: there is no "Open" for the thing already open. */
   here?: boolean;
 }
+
+/**
+ * Which kind an id names.
+ *
+ * The vault's ids carry it (`WORK-0021`, `BUG-0004`), which is what lets a feed row and a
+ * chip in a sentence open a menu about a record neither of them has loaded.
+ */
+export const recordKind = (id: string): RecordRef["kind"] =>
+  id.toUpperCase().startsWith("BUG") ? "bug" : "work";
 
 /**
  * The app route for a record.
@@ -49,6 +78,19 @@ export interface RecordRef {
 export const recordRoute = (r: Pick<RecordRef, "kind" | "id" | "slug">): string =>
   `/p/${r.slug}/${r.kind === "work" ? "work" : "bugs"}/${r.id}`;
 
+/**
+ * The title of a record the screen showing it never read, read now.
+ *
+ * Only ever called from Copy title's own click, and only on the surfaces that have an id
+ * without a title. One record file, over the transport the rest of the app uses; if it
+ * cannot be read the copy says so rather than putting the wrong thing on the clipboard.
+ */
+const readTitle = async (r: RecordRef): Promise<string> => {
+  const record =
+    r.kind === "bug" ? await api.getBug(r.slug, r.id) : await api.getWorklog(r.slug, r.id);
+  return record.title;
+};
+
 /** Work logs and bugs: open it, or take a piece of it away with you. */
 export function useRecordMenu() {
   const navigate = useNavigate();
@@ -60,7 +102,11 @@ export function useRecordMenu() {
       if (!r.here) items.push({ id: "open", label: "Open", run: () => navigate(route) });
       items.push(
         { id: "copy-id", label: "Copy id", hint: r.id, separator: !r.here, run: () => copy(r.id, r.id) },
-        { id: "copy-title", label: "Copy title", run: () => copy(r.title, "the title") },
+        {
+          id: "copy-title",
+          label: "Copy title",
+          run: () => copy(r.title ? r.title : () => readTitle(r), "the title"),
+        },
         { id: "copy-link", label: "Copy link", hint: route, run: () => copy(route, route) }
       );
       return { label: r.id, items };

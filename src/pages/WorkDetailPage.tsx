@@ -24,7 +24,7 @@ import {
 } from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
 import { useContextMenu } from "../components/ContextMenu";
-import { useRecordMenu } from "../lib/menus";
+import { useProjectMenu, useRecordMenu } from "../lib/menus";
 import {
   AgentChip,
   CorrectionMark,
@@ -77,6 +77,7 @@ export function WorkDetailPage() {
      comes to reference another. */
   const contextMenu = useContextMenu();
   const recordMenu = useRecordMenu();
+  const projectMenu = useProjectMenu();
   const related = useRelated(slug, id, work?.refs ?? EMPTY);
   /** Notes their authors opened with "Correction:" — see src/lib/updates.ts. */
   const corrections = countCorrections(work?.updates ?? []);
@@ -147,7 +148,15 @@ export function WorkDetailPage() {
           />
         )}
         <nav className="breadcrumb">
-          <Link to={`/p/${slug}`}>{project?.name ?? slug}</Link>
+          {/* The crumb is a link to the project, so it opens the project's menu — the same
+              one the sidebar row for it opens. Only "Work" between them stays plain: a list
+              screen is not a thing there is anything to copy or archive about. */}
+          <Link
+            to={`/p/${slug}`}
+            {...contextMenu(() => (project ? projectMenu(project) : null))}
+          >
+            {project?.name ?? slug}
+          </Link>
           <span aria-hidden="true">/</span>
           <Link to={`/p/${slug}/work`}>Work</Link>
           <span aria-hidden="true">/</span>

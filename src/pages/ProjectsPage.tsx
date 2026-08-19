@@ -23,7 +23,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useApp, useVaultNonce } from "../AppContext";
 import { CommandLine, ErrorState, Skeleton, Tag } from "../components/ui";
 import { useContextMenu } from "../components/ContextMenu";
-import { useProjectMenu } from "../lib/menus";
+import { recordKind, useProjectMenu, useRecordMenu, type RecordRef } from "../lib/menus";
 import { EventIcon } from "../components/EventIcon";
 import { useNow } from "../components/charts";
 import { api } from "../lib/api";
@@ -639,6 +639,26 @@ function VaultActivity({ projects, now }: { projects: Project[]; now: number }) 
   );
 }
 
+/**
+ * One line of that timeline — and the one row in the app the right button used to miss.
+ *
+ * These are the dashboard's feed rows read across the folder instead of inside one: same
+ * class, same layout, same `refHref` destination. For two rounds they were also the only
+ * record rows in the product with no menu on them, which is invisible rather than annoying —
+ * the document-level suppressor eats the right-click either way, so the gesture a reader
+ * learned one screen over just stops working here, with nothing on screen to say why.
+ *
+ * The menu is about **what the row points at**, which is the rule everywhere else: a line
+ * about a record opens that record's menu, and a line about the project itself — created,
+ * renamed — points at the project and opens the project's. So no row in this list is dead.
+ *
+ * Two things are true here and nowhere else. The row carries the project's name, so the
+ * record menu it opens is the only one in the app whose Copy link can name a project other
+ * than the one the sidebar is standing in. And Archive is answered by the toast rather than
+ * by this screen's undo bar (which the project rows above use), because that bar is at the
+ * top of a page whose feed is at the bottom: an undo the reader has to scroll to find is
+ * one they will not find.
+ */
 function VaultFeedRow({
   event,
   project,
@@ -648,10 +668,25 @@ function VaultFeedRow({
   project: Project;
   now: number;
 }) {
-  const href = refHref(project.slug, event.ref) ?? `/p/${project.slug}`;
+  const recordHref = refHref(project.slug, event.ref);
+  const href = recordHref ?? `/p/${project.slug}`;
+  /* No title: this feed reads events, and an event line carries a summary, not a title.
+     Copy title reads the record when it is clicked (src/lib/menus.ts) rather than this
+     screen reading every project's records in case somebody right-clicks one row. */
+  const record: RecordRef | null =
+    recordHref && event.ref
+      ? { kind: recordKind(event.ref), id: event.ref, slug: project.slug }
+      : null;
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
+  const projectMenu = useProjectMenu();
   return (
     <li>
-      <Link className={`feed-row tone-${tone(event.type)}`} to={href}>
+      <Link
+        className={`feed-row tone-${tone(event.type)}`}
+        to={href}
+        {...contextMenu(() => (record ? recordMenu(record) : projectMenu(project)))}
+      >
         <span className="feed-icon" aria-hidden="true">
           <EventIcon type={event.type} />
         </span>

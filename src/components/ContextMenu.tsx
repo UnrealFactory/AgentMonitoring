@@ -606,14 +606,29 @@ function invokerFor(row: HTMLElement): HTMLElement | null {
  * A copy action with no acknowledgement is indistinguishable from a copy action that
  * failed, and in a webview it sometimes is one — so the toast reports what actually
  * happened rather than assuming.
+ *
+ * The value may be a *promise for* the value, because not every surface that shows a record
+ * has read all of it. A feed line carries an id and a summary, never a title (lib/menus.ts),
+ * and the alternative to fetching one on demand is either a menu that is missing an item on
+ * some screens or a screen that reads every record it lists in case somebody right-clicks.
+ * A read of one file is cheaper than both, and its failure is a sentence rather than a
+ * silence.
  */
 export function useCopy() {
   const { toast } = useContextMenuApi();
   return useCallback(
-    (text: string, what: string) => {
-      void writeClipboard(text).then((ok) =>
-        toast(ok ? `Copied ${what}` : COPY_FAILED, ok ? undefined : WARN)
-      );
+    (text: string | (() => Promise<string>), what: string) => {
+      void (async () => {
+        let value: string;
+        try {
+          value = typeof text === "string" ? text : await text();
+        } catch (err) {
+          toast(err instanceof Error ? err.message : String(err), WARN);
+          return;
+        }
+        const ok = await writeClipboard(value);
+        toast(ok ? `Copied ${what}` : COPY_FAILED, ok ? undefined : WARN);
+      })();
     },
     [toast]
   );

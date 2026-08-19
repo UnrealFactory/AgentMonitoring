@@ -29,7 +29,7 @@ import {
 } from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
 import { useContextMenu } from "../components/ContextMenu";
-import { useRecordMenu } from "../lib/menus";
+import { useProjectMenu, useRecordMenu } from "../lib/menus";
 import {
   AgentChip,
   BugStatusPill,
@@ -79,6 +79,7 @@ export function BugDetailPage() {
   /* The same menu the board row opens, minus Open — the reader is already on it. */
   const contextMenu = useContextMenu();
   const recordMenu = useRecordMenu();
+  const projectMenu = useProjectMenu();
   const related = useRelated(slug, id, bug?.refs ?? EMPTY);
 
   /**
@@ -170,7 +171,14 @@ export function BugDetailPage() {
           />
         )}
         <nav className="breadcrumb">
-          <Link to={`/p/${slug}`}>{project?.name ?? slug}</Link>
+          {/* Same as the work log's: the crumb names a project, so it opens the project's
+              menu. "Bugs" beside it is a list screen and stays plain. */}
+          <Link
+            to={`/p/${slug}`}
+            {...contextMenu(() => (project ? projectMenu(project) : null))}
+          >
+            {project?.name ?? slug}
+          </Link>
           <span aria-hidden="true">/</span>
           <Link to={`/p/${slug}/bugs`}>Bugs</Link>
           <span aria-hidden="true">/</span>

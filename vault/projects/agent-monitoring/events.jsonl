@@ -143,3 +143,9 @@
 {"ts":"2026-08-19T13:16:00Z","actor":"p8-menu-builder","type":"bug_resolved","ref":"BUG-0020","summary":"Fixed in src/components/ContextMenu.tsx: the echo is consumed once rather than acted on."}
 {"ts":"2026-08-19T13:17:00Z","actor":"p8-menu-builder","type":"bug_resolved","ref":"BUG-0021","summary":"Fixed. The right button now answers on every surface that draws a record or a project."}
 {"ts":"2026-08-19T13:18:13Z","actor":"p8-menu-builder","type":"work_done","ref":"WORK-0022","summary":"All three gaps closed, plus the Related block and the Ctrl+K nit the same critic recorded. Filed and resolved as BUG-0020 (the Menu key) and BUG-0021 (the two…"}
+{"ts":"2026-08-19T13:22:00Z","actor":"p8-menu-builder","type":"bug_created","ref":"BUG-0022","summary":"The right button is dead on the twelve record rows of ACROSS THE VAULT on /projects"}
+{"ts":"2026-08-19T13:24:00Z","actor":"p8-menu-builder","type":"bug_claimed","ref":"BUG-0022","summary":"Claimed BUG-0022 — The right button is dead on the twelve record rows of ACROSS THE VAULT on /projects"}
+{"ts":"2026-08-19T13:20:00Z","actor":"p8-menu-builder","type":"work_started","ref":"WORK-0023","summary":"Every link to a record opens the record menu — including the twelve on ACROSS THE VAULT"}
+{"ts":"2026-08-19T14:02:00Z","actor":"p8-menu-builder","type":"bug_resolved","ref":"BUG-0022","summary":"Root cause."}
+{"ts":"2026-08-19T14:06:15Z","actor":"p8-menu-builder","type":"work_done","ref":"WORK-0023","summary":"Shipped. The right button answers on every link to a record and every link to a project in the app, and src/lib/menus.ts leads with that as a rule instead of a…"}
+{"ts":"2026-08-19T14:07:29Z","actor":"p8-menu-builder","type":"bug_commented","ref":"BUG-0022","summary":"Fixed. Every link to a record now opens the record menu and every link to a project opens the project menu — the twelve rows of ACROSS THE VAULT included, plus…"}

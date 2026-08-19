@@ -37,10 +37,14 @@
  *      (VK_APPS), which this gate claimed for a round without ever pressing, while in the
  *      shipped desktop build it opened the menu and Chromium's own synthesized contextmenu
  *      closed it a millisecond later.
- *   8. Every surface that draws a record or a project row offers it — including the two a
- *      reader meets first, which had it last round and did not: the **dashboard** (the
- *      default landing route: the hero "working right now" row, the unresolved-bug row, the
- *      activity feed) and the **project switcher** at the top of the sidebar.
+ *   8. Every surface that draws a record or a project row offers it. Each round has lost one
+ *      by enumerating them instead of following the rule (every link to a record opens the
+ *      record menu; every link to a project opens the project menu), so each round's misses
+ *      are nailed down here: the **dashboard** (the default landing route: the hero "working
+ *      right now" row, the unresolved-bug row, the activity feed) and the **project
+ *      switcher**; then **"Across the vault"** on /projects — twelve record rows, the same
+ *      class and layout as the dashboard's, the only feed whose rows name another project —
+ *      plus the **breadcrumb** at the head of every record and an **id written into prose**.
  *   9. Nothing in it deletes (the vault is append-only), Archive says so before the click,
  *      and archiving really does leave a way back — from the Projects screen's undo bar, and
  *      from the toast when it is invoked anywhere else.
@@ -533,6 +537,9 @@ try {
   // A record's head carries the same menu as its row, minus the Open it does not need.
   await page.goto(`${ORIGIN}/p/${slug}/work/${someWork.id}`, { waitUntil: "domcontentloaded" });
   await ready(page);
+  // The watcher does not survive a navigation, and half of what is measured below is what
+  // the document did with an event that raised no menu.
+  await watchContextMenu(page);
   await page.locator(".record-head").click({ button: "right", position: { x: 12, y: 10 } });
   await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
   const headItems = await menuItems(page);
@@ -542,6 +549,47 @@ try {
     JSON.stringify(headItems),
   );
   await page.keyboard.press("Escape");
+
+  /* The breadcrumb above it. It is a link to the project, on every work log and every bug
+     in the vault, and for two rounds it was the one project link in the app that opened
+     nothing (P8 round 3 critic, recorded not charged). */
+  const crumb = page.locator(".breadcrumb a").first();
+  const crumbName = (await crumb.textContent())?.trim();
+  await crumb.click({ button: "right" });
+  await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  check(
+    "the breadcrumb at the head of a record opens its project's menu",
+    (await page.getAttribute(".ctx-menu", "aria-label")) === crumbName &&
+      same(await menuItems(page), ["open", "work", "bugs", "copy-slug", "archive"]),
+    `label ${await page.getAttribute(".ctx-menu", "aria-label")} vs ${crumbName}, items ${JSON.stringify(await menuItems(page))}`,
+  );
+  await page.keyboard.press("Escape");
+  // The list crumb beside it is not a record and not a project: still nothing, still no Edge.
+  await armContextMenu(page);
+  await page.locator(".breadcrumb a").nth(1).click({ button: "right" });
+  await page.waitForTimeout(150);
+  check("…while the Work crumb beside it opens no menu", !(await menuOpen(page)));
+  check(
+    "…and no browser menu either",
+    (await ctxSeen(page)).length === 1 && (await ctxSeen(page))[0].prevented,
+    JSON.stringify(await ctxSeen(page)),
+  );
+
+  /* An id written into a sentence. It is a link to a record — the same record the Related
+     row a few hundred pixels below names — so it answers the same way. */
+  const chip = page.locator("a.ref-inline:not(.is-unknown)").first();
+  if (await chip.count()) {
+    const chipId = (await chip.textContent())?.trim();
+    await chip.click({ button: "right" });
+    await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+    check(
+      "a record id written into prose opens that record's menu",
+      (await page.getAttribute(".ctx-menu", "aria-label")) === chipId &&
+        same(await menuItems(page), ["open", "copy-id", "copy-title", "copy-link"]),
+      `label ${await page.getAttribute(".ctx-menu", "aria-label")} vs ${chipId}, items ${JSON.stringify(await menuItems(page))}`,
+    );
+    await page.keyboard.press("Escape");
+  }
 
   /* The Related block, on the same page: those rows are other records, so Open comes back. */
   const relRow = page.locator(".rel-row:not(.is-missing)").first();
@@ -692,6 +740,92 @@ try {
     JSON.stringify(await ctxSeen(page)),
   );
 
+  /* 6d. "Across the vault" — the twelve rows at the foot of /projects.
+
+     Same class string, same layout, same refHref destination as the dashboard feed rows one
+     screen over, every one of them pointing at a real record, and for two rounds not one of
+     them answered the right button or Shift+F10 (P8 round 3 critic). Silently: the document
+     suppressor eats the event either way, so the gesture a reader learned on the dashboard
+     just stopped working here. This is also the only feed in the app whose rows can name
+     another project, which is what the Copy link check below is really about. */
+  log("--- across the vault");
+  await page.waitForSelector(".vault-feed a.feed-row", { state: "visible", timeout: 10_000 });
+  /* Which rows are records is read off the destination, not off the `.feed-ref` chip: a
+     project event carries a ref too (it is the slug), and a gate that took the chip as the
+     tell would silently measure the wrong row on a vault whose newest event is a rename. */
+  const RECORD_ROW = '.vault-feed a.feed-row[href*="/work/"], .vault-feed a.feed-row[href*="/bugs/"]';
+  const PROJECT_ROW = '.vault-feed a.feed-row:not([href*="/work/"]):not([href*="/bugs/"])';
+  const recordRow = page.locator(RECORD_ROW).first();
+  check(
+    "the vault feed draws rows that point at records",
+    (await recordRow.count()) > 0,
+    `${await page.locator(".vault-feed a.feed-row").count()} rows, ${await page.locator(RECORD_ROW).count()} of them records`,
+  );
+  const feedRef = (await recordRow.locator(".feed-ref").textContent())?.trim();
+  const feedHref = await recordRow.getAttribute("href");
+  const feedProjectName = (await recordRow.locator(".feed-project").textContent())?.trim();
+  const feedSlug = feedHref.split("/")[2];
+  await armContextMenu(page);
+  await recordRow.click({ button: "right" });
+  await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  check(
+    "a row of the vault-wide feed opens the record menu",
+    (await page.getAttribute(".ctx-menu", "aria-label")) === feedRef,
+    `label ${await page.getAttribute(".ctx-menu", "aria-label")}, row ${feedRef}`,
+  );
+  check(
+    "…with the same four items the identical row on the dashboard has",
+    same(await menuItems(page), ["open", "copy-id", "copy-title", "copy-link"]),
+    JSON.stringify(await menuItems(page)),
+  );
+  check(
+    "…and the browser's menu is suppressed on it",
+    (await ctxSeen(page)).length === 1 && (await ctxSeen(page)).every((e) => e.prevented),
+    JSON.stringify(await ctxSeen(page)),
+  );
+  /* The cross-project claim: this screen has no project in its URL, so the link the menu
+     offers has to come from the row — the project the row itself names. */
+  check(
+    "…and Copy link carries the row's own project, which this screen's URL does not name",
+    (await page.locator('.ctx-item[data-item="copy-link"] .ctx-hint').textContent()) === feedHref &&
+      projects.find((p) => p.slug === feedSlug)?.name === feedProjectName,
+    `hint ${await page.locator('.ctx-item[data-item="copy-link"] .ctx-hint').textContent()}, href ${feedHref}, row names ${feedProjectName}`,
+  );
+  // The item this screen cannot answer from what it read: the feed loads events, which
+  // carry a summary and never a title, so Copy title has to go and get one.
+  await page.locator('.ctx-item[data-item="copy-title"]').click();
+  await page.waitForSelector(".toast", { state: "visible", timeout: 5_000 });
+  const feedCopied = await page.evaluate(() => navigator.clipboard.readText());
+  const feedRecord = await (
+    await fetch(
+      `${ORIGIN}/vault-api/projects/${feedSlug}/${feedRef.startsWith("BUG") ? "bugs" : "worklogs"}/${feedRef}`,
+    )
+  ).json();
+  check(
+    "…and Copy title fetches the title the vault feed never read",
+    feedCopied === feedRecord.title && feedCopied.length > 0,
+    `clipboard ${JSON.stringify(feedCopied)} vs vault ${JSON.stringify(feedRecord.title)}`,
+  );
+
+  /* Shift+F10 on the same row: the critic's second half — the mouse gesture was dead here
+     and so was the keyboard one, on a screen that is the permanent sidebar destination and
+     the recovery screen when a vault will not open. */
+  await recordRow.focus();
+  await page.keyboard.press("Shift+F10");
+  await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  check(
+    "Shift+F10 on a focused vault-feed row opens the same menu",
+    (await page.getAttribute(".ctx-menu", "aria-label")) === feedRef &&
+      (await menuFocus(page)) === "open",
+    `label ${await page.getAttribute(".ctx-menu", "aria-label")}, focus ${await menuFocus(page)}`,
+  );
+  await page.keyboard.press("Escape");
+  check(
+    "…and esc hands the keyboard back to the row",
+    await page.evaluate(() => !!document.activeElement?.classList?.contains("feed-row")),
+    `focus is ${await focused(page)}`,
+  );
+
   /* Edge flipping. A menu that clips at the window edge is a menu with items nobody can
      reach, and the narrow window is where it happens. */
   await page.setViewportSize({ width: 960, height: 700 });
@@ -769,6 +903,23 @@ try {
     "…and the overflow row is not styled as active either",
     (await wide.locator(".nav-more.active").count()) === 0,
   );
+
+  /* The vault feed's *other* kind of row, in the vault shape that guarantees one: ten
+     projects created a moment ago, so the newest events here are about projects and not
+     about records. Those lines link to the project, so they open the project's menu — the
+     rule is a menu about whatever the row points at, and no row in that list is dead. */
+  await wide.waitForSelector(".vault-feed a.feed-row", { state: "visible", timeout: 10_000 });
+  const evRow = wide.locator(PROJECT_ROW).first();
+  const evName = (await evRow.locator(".feed-project").textContent())?.trim();
+  await evRow.click({ button: "right" });
+  await wide.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  check(
+    "a vault-feed row about the project itself opens the project menu",
+    (await wide.getAttribute(".ctx-menu", "aria-label")) === evName &&
+      same(await menuItems(wide), ["open", "work", "bugs", "copy-slug", "archive"]),
+    `label ${await wide.getAttribute(".ctx-menu", "aria-label")} vs ${evName}, items ${JSON.stringify(await menuItems(wide))}`,
+  );
+  await wide.keyboard.press("Escape");
 
   /* 8. Archive, from the menu — the one item in this app that writes. It is run against the
      scratch copy, never ./vault, and what is checked is the promise the item makes in its

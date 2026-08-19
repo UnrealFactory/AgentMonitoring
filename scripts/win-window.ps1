@@ -10,11 +10,19 @@
 # `menukey` presses VK_APPS — the Menu key beside the right Ctrl — which SendKeys has no
 # token for and which is the one key WebView2 answers with a synthesized contextmenu event
 # of its own. That echo used to close the menu the same keypress had just opened.
+#
+#   powershell -File scripts/win-window.ps1 -Action scroll -X 700 -Y 500 -Delta -600
+#
+# `scroll` turns the real wheel over the point given, which is how a row below the fold —
+# the vault-wide feed at the foot of /projects, say — is reached without a keyboard shortcut
+# the app may not have.
 param(
-  [ValidateSet("shot", "click", "key", "menukey")] [string]$Action = "shot",
+  [ValidateSet("shot", "click", "key", "menukey", "scroll")] [string]$Action = "shot",
   [string]$Out = "",
   [int]$X = 0,
   [int]$Y = 0,
+  # Wheel notches * 120; negative scrolls down.
+  [int]$Delta = -360,
   [ValidateSet("left", "right")] [string]$Button = "left",
   [string]$Key = "",
   [string]$ProcessName = "agentmonitoring"
@@ -65,6 +73,18 @@ if ($Action -eq "click") {
     [Win]::mouse_event(0x0004, 0, 0, 0, 0)  # LEFTUP
   }
   Write-Output "clicked $Button at client $X,$Y (screen $($origin.X + $X),$($origin.Y + $Y))"
+  exit 0
+}
+
+if ($Action -eq "scroll") {
+  [void][Win]::SetCursorPos($origin.X + $X, $origin.Y + $Y)
+  Start-Sleep -Milliseconds 120
+  # MOUSEEVENTF_WHEEL = 0x0800; the delta rides in the `data` argument, which is declared
+  # unsigned — so a downward scroll is reinterpreted bit for bit rather than cast, which
+  # PowerShell refuses to do for a negative number.
+  $data = [System.BitConverter]::ToUInt32([System.BitConverter]::GetBytes($Delta), 0)
+  [Win]::mouse_event(0x0800, 0, 0, $data, 0)
+  Write-Output "scrolled $Delta at client $X,$Y"
   exit 0
 }
 

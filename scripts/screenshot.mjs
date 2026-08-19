@@ -63,7 +63,7 @@ Options (flag, or environment variable):
   --width <n>      $SHOT_WIDTH    viewport width (default 1600; the shell is judged at 1152 too)
   --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail,
                                   projects, palette, palette-vault, menu-project, menu-record,
-                                  menu-dashboard, menu-switcher
+                                  menu-dashboard, menu-switcher, menu-vault-feed
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
   --project <slug> $SHOT_PROJECT  project to shoot (default: the one with the most records)
   --suffix <s>     $SHOT_SUFFIX   append to every file name, so a second project's screens
@@ -337,6 +337,23 @@ try {
         await page.waitForSelector(".now-row", { state: "visible" });
         await page.waitForFunction(() => !document.querySelector(".skeleton"));
         await page.locator("a.now-row").first().click({ button: "right" });
+      },
+    },
+    {
+      /* "Across the vault", at the foot of /projects: twelve record rows that for two
+         rounds were the only rows in the app the right button did not answer — the same
+         class and layout as the dashboard feed, on the screen that is both the permanent
+         sidebar destination and the recovery screen for a vault that will not open. */
+      name: "menu-vault-feed",
+      path: "/projects",
+      waitFor: ".ctx-menu",
+      prepare: async (page) => {
+        await page.waitForSelector(".vault-feed a.feed-row", { state: "visible" });
+        await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        await page
+          .locator('.vault-feed a.feed-row[href*="/work/"], .vault-feed a.feed-row[href*="/bugs/"]')
+          .first()
+          .click({ button: "right" });
       },
     },
     {
