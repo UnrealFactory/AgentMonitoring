@@ -43,7 +43,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation } from "react-router-dom";
-import { useModalLock } from "../lib/modal";
+import { modalDepth, onModalChange, useModalLock } from "../lib/modal";
 import { writeClipboard } from "../lib/clipboard";
 
 /** One line of a menu. Deliberately data, not JSX: the same item is built in three places. */
@@ -105,6 +105,54 @@ const TOAST_MS = 2200;
 
 /** Anything Tab can reach — what a row hands the focus back to when the menu closes. */
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/* ==========================================================================
+   The Menu key's echo
+   ======================================================================= */
+
+/**
+ * The Menu key fires *twice*, and the second one used to close what the first one opened.
+ *
+ * Chromium — and therefore WebView2 — answers VK_APPS (the key beside the right Ctrl) with a
+ * `keydown` of `key: "ContextMenu"` **and then**, a millisecond later, a synthesized
+ * `contextmenu` event on whatever has the focus. `preventDefault()` on the keydown does not
+ * stop it. So the sequence the P8 round shipped was:
+ *
+ *   t+0ms  keydown ContextMenu → the row opens this menu
+ *   t+1ms  the menu is in the DOM and the first item has the keyboard
+ *   t+2ms  Chromium's own contextmenu arrives, targeting that item inside `.ctx-layer`,
+ *          whose handler reads it as "a right-click somewhere else" and closes the menu
+ *
+ * Net effect: the Menu key appeared to do nothing at all, on every row in the app, in the
+ * shipped desktop window. (Shift+F10 was fine — Chromium sends no echo for it, which is why
+ * the gate that only pressed Shift+F10 never saw this.)
+ *
+ * The echo is the same gesture as the keypress, not a new one, so it is consumed once: a
+ * keyboard-origin contextmenu (`button` is -1 rather than 2) arriving just after a keyboard
+ * open is swallowed — the default is still prevented, so no browser menu — and the window
+ * is closed behind it. A *second* Menu key press therefore behaves normally and dismisses
+ * the menu, which is what the key does on the rest of the desktop.
+ */
+let keyEchoUntil = 0;
+
+/** How long after a keyboard open an echo can still be arriving. It arrives in ~1ms. */
+const KEY_ECHO_MS = 1000;
+
+/** Called by the keyboard opener, so the echo that follows can be told from a real click. */
+function expectKeyEcho(): void {
+  keyEchoUntil = performance.now() + KEY_ECHO_MS;
+}
+
+/**
+ * Is this contextmenu event the echo of the keypress that just opened a menu? Consuming, so
+ * it answers true at most once per keypress.
+ */
+function takeKeyEcho(e: { button: number }): boolean {
+  // A right-click is always button 2; the synthesized one is -1 (0 in some engines).
+  if (e.button === 2 || performance.now() > keyEchoUntil) return false;
+  keyEchoUntil = 0;
+  return true;
+}
 
 /**
  * Is the pointer over something a human types into?
@@ -185,6 +233,9 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     const onContextMenu = (e: MouseEvent) => {
       if (e.defaultPrevented || isTextEntry(e.target)) return;
       e.preventDefault();
+      // The Menu key's echo, arriving over a page that happens to have a selection on it:
+      // one keypress must not also raise a second menu about the words behind the first.
+      if (takeKeyEcho(e)) return;
       const at = { x: e.clientX, y: e.clientY };
       const text = selectionAt(at);
       if (!text) return;
@@ -264,6 +315,18 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
     if (top + height > vh - MARGIN) top = Math.max(MARGIN, request.at.y - height - NUDGE);
     setPlaced({ id: request.id, left, top });
   }, [request]);
+
+  /* …and it gives the keyboard up to anything that arrives over it. Ctrl+K on an open row
+     menu used to open the palette *on top* while this stayed mounted across its scrim, and
+     the first Escape then closed the menu rather than the palette the reader was looking at
+     (P8 round 2 critic). Declared after the lock above, so the depth read here already
+     counts this menu's own. */
+  useEffect(() => {
+    const mine = modalDepth();
+    return onModalChange((depth) => {
+      if (depth > mine) onClose();
+    });
+  }, [onClose]);
 
   // The keyboard goes in, and comes back out to the row it came from.
   useEffect(() => {
@@ -359,6 +422,9 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
       onWheel={onClose}
       onContextMenu={(e) => {
         e.preventDefault();
+        // The keypress that opened this menu, arriving a second time (see takeKeyEcho).
+        // Reading it as a right-click elsewhere is what made the Menu key a no-op.
+        if (takeKeyEcho(e)) return;
         onClose();
       }}
     >
@@ -496,6 +562,12 @@ export function useContextMenu() {
         // being swallowed: `preventDefault` is the whole signal, and a gate (and the next
         // reader of this code) can see it on the event where it happened.
         if (e.defaultPrevented) return;
+        // A menu opened from this row by the Menu key an instant ago; this is that same
+        // keypress coming back. Opening a second one under it is not what was asked for.
+        if (takeKeyEcho(e)) {
+          e.preventDefault();
+          return;
+        }
         const spec = build();
         if (!spec?.items.length) return; // the document-level suppressor still eats the event
         e.preventDefault();
@@ -508,6 +580,9 @@ export function useContextMenu() {
         const spec = build();
         if (!spec?.items.length) return;
         e.preventDefault();
+        // Chromium sends a contextmenu event of its own straight after this one; it is the
+        // same gesture, and the menu about to open must survive it (see takeKeyEcho).
+        expectKeyEcho();
         const box = e.currentTarget.getBoundingClientRect();
         // Under the row's leading edge, where the reader's eye already is — not at 0,0.
         open(spec, { x: box.left + 16, y: box.bottom - 4 }, invokerFor(e.currentTarget));

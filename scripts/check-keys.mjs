@@ -33,8 +33,15 @@
  *      copy/paste/spellcheck there belong to the browser and cannot be rebuilt honestly.
  *   7. The app's own menu takes the keyboard: the first item is focused on open, ↑ ↓ Home End
  *      move it, ↵ runs it, esc and a click away close it, and the focus goes back to the row
- *      it came from. Shift+F10 opens it without a mouse at all.
- *   8. Nothing in it deletes (the vault is append-only), Archive says so before the click,
+ *      it came from. Shift+F10 opens it without a mouse at all — and so does the **Menu key**
+ *      (VK_APPS), which this gate claimed for a round without ever pressing, while in the
+ *      shipped desktop build it opened the menu and Chromium's own synthesized contextmenu
+ *      closed it a millisecond later.
+ *   8. Every surface that draws a record or a project row offers it — including the two a
+ *      reader meets first, which had it last round and did not: the **dashboard** (the
+ *      default landing route: the hero "working right now" row, the unresolved-bug row, the
+ *      activity feed) and the **project switcher** at the top of the sidebar.
+ *   9. Nothing in it deletes (the vault is append-only), Archive says so before the click,
  *      and archiving really does leave a way back — from the Projects screen's undo bar, and
  *      from the toast when it is invoked anywhere else.
  *
@@ -390,6 +397,62 @@ try {
   );
   check("…and the modal lock is released", (await page.getAttribute("html", "data-modal")) === null);
 
+  /* The Menu key — VK_APPS, beside the right Ctrl — which this gate used to claim without
+     ever pressing.
+
+     Chromium answers it with a keydown *and* a synthesized contextmenu a millisecond later,
+     so the shipped P8 build opened the menu and killed it on the spot: keydown at t+0, menu
+     in the DOM at t+1, Chromium's own contextmenu at t+2 landing on .ctx-item inside the
+     layer, whose handler read it as a click elsewhere and closed. The key did nothing, on
+     every row in the app, in the real desktop window (P8 round 2 critic). What follows is
+     that exact sequence, so it cannot come back. */
+  const thirdRow = page.locator(".work-row").nth(2);
+  const thirdId = (await thirdRow.locator(".work-row-id").textContent())?.trim();
+  await thirdRow.focus();
+  await armContextMenu(page);
+  await page.keyboard.press("ContextMenu");
+  await page.waitForTimeout(250); // long enough for the echo, which arrives in about 1ms
+  check("the Menu key opens the menu on a focused row", await menuOpen(page));
+  check(
+    "…and it is still there after the browser's own contextmenu echo arrives",
+    (await menuOpen(page)) && (await page.getAttribute(".ctx-menu", "aria-label")) === thirdId,
+    `label ${await page.getAttribute(".ctx-menu", "aria-label")}, row ${thirdId}`,
+  );
+  check(
+    "…the echo is swallowed rather than shown as the browser's menu",
+    (await ctxSeen(page)).length === 1 && (await ctxSeen(page)).every((e) => e.prevented),
+    JSON.stringify(await ctxSeen(page)),
+  );
+  check("…and the keyboard is on its first item", (await menuFocus(page)) === "open");
+  // Pressing it a second time is the desktop's own way to dismiss a menu.
+  await page.keyboard.press("ContextMenu");
+  await page.waitForTimeout(250);
+  check("the Menu key pressed again closes it", !(await menuOpen(page)));
+
+  /* Ctrl+K over an open menu. Two modals on screen at once, one of them straddling the
+     other's scrim, cost two Escapes to get back to the page — and the first of them closed
+     the menu the reader had already stopped looking at. A menu stands down for anything
+     that takes the keyboard over it. */
+  await firstRow.click({ button: "right" });
+  await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  await page.keyboard.press("Control+k");
+  await page.waitForSelector(".palette", { state: "visible", timeout: 5_000 });
+  /* The menu stands down on the render *after* the palette takes the lock — one frame, which
+     no hand can press a second key inside, but which a gate reading in the same millisecond
+     can catch mid-flight. Waiting for it to settle is what a reader would see. */
+  await page.waitForSelector(".ctx-menu", { state: "detached", timeout: 2_000 }).catch(() => {});
+  check(
+    "Ctrl+K over an open menu leaves only the palette on screen",
+    !(await menuOpen(page)),
+    `menus ${await page.locator(".ctx-menu").count()}, palettes ${await page.locator(".palette").count()}, modal ${await page.getAttribute("html", "data-modal")}, focus ${await focused(page)}`,
+  );
+  await page.keyboard.press("Escape");
+  check("…and one esc puts the reader back on the page", !(await paletteOpen(page)));
+  check(
+    "…with no modal lock left behind",
+    (await page.getAttribute("html", "data-modal")) === null,
+  );
+
   // Shift+F10: the same menu, no mouse anywhere in it.
   const secondRow = page.locator(".work-row").nth(1);
   const secondId = (await secondRow.locator(".work-row-id").textContent())?.trim();
@@ -479,6 +542,155 @@ try {
     JSON.stringify(headItems),
   );
   await page.keyboard.press("Escape");
+
+  /* The Related block, on the same page: those rows are other records, so Open comes back. */
+  const relRow = page.locator(".rel-row:not(.is-missing)").first();
+  if (await relRow.count()) {
+    const relId = (await relRow.locator(".rel-id").textContent())?.trim();
+    await relRow.click({ button: "right" });
+    await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+    check(
+      "a Related row opens the menu for the record it points at",
+      (await page.getAttribute(".ctx-menu", "aria-label")) === relId &&
+        same(await menuItems(page), ["open", "copy-id", "copy-title", "copy-link"]),
+      `${await page.getAttribute(".ctx-menu", "aria-label")} vs ${relId}`,
+    );
+    await page.keyboard.press("Escape");
+  }
+
+  /* 6b. The dashboard — /p/<slug>, the route the app lands on.
+
+     Every screen with record rows on it had this menu except the first one a reader sees:
+     right-clicking the hero "working right now" row, the unresolved-bug row beside it or any
+     row of the activity feed gave nothing, while the identical row on /work gave four items
+     (P8 round 2 critic). Each of the three is checked by the id it names, because a menu
+     that opens on the wrong record is worse than no menu. */
+  log("--- the dashboard's own rows");
+  await page.goto(`${ORIGIN}/p/${slug}`, { waitUntil: "domcontentloaded" });
+  await ready(page);
+  await page.waitForSelector(".now-row, .feed-row", { state: "visible" });
+  await watchContextMenu(page);
+
+  const dashRows = [
+    ["the hero row under Working right now", "a.now-row", ".now-row-id"],
+    ["a row of the activity feed", "a.feed-row", ".feed-ref"],
+  ];
+  for (const [what, sel, idSel] of dashRows) {
+    const row = page.locator(sel).first();
+    const id = (await row.locator(idSel).first().textContent())?.trim();
+    await row.click({ button: "right" });
+    await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+    check(
+      `${what} opens the record menu`,
+      (await page.getAttribute(".ctx-menu", "aria-label")) === id,
+      `label ${await page.getAttribute(".ctx-menu", "aria-label")}, row ${id}`,
+    );
+    check(
+      `…with the same four items the row on the list screen has`,
+      same(await menuItems(page), ["open", "copy-id", "copy-title", "copy-link"]),
+      JSON.stringify(await menuItems(page)),
+    );
+    await page.keyboard.press("Escape");
+  }
+
+  /* The unresolved-bug row is the second panel of the strip: a bug, from a screen whose
+     other rows are work logs, so the menu has to be about the row and not about the strip. */
+  const bugRow = page.locator(".now-panel").nth(1).locator("a.now-row").first();
+  if (await bugRow.count()) {
+    const bugId = (await bugRow.locator(".now-row-id").textContent())?.trim();
+    await bugRow.click({ button: "right" });
+    await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+    check(
+      "the unresolved-bug row opens that bug's menu",
+      (await page.getAttribute(".ctx-menu", "aria-label")) === bugId,
+      `label ${await page.getAttribute(".ctx-menu", "aria-label")}, row ${bugId}`,
+    );
+    check(
+      "…and Copy link offers the bug's route, not the dashboard's",
+      (await page.locator('.ctx-item[data-item="copy-link"] .ctx-hint').textContent()) ===
+        `/p/${slug}/bugs/${bugId}`,
+    );
+    await page.keyboard.press("Escape");
+  }
+
+  // A feed row's Copy title has to carry the record's real title — the feed only knows an id.
+  const feedRow = page.locator("a.feed-row").first();
+  const feedId = (await feedRow.locator(".feed-ref").first().textContent())?.trim();
+  await feedRow.click({ button: "right" });
+  await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  await page.locator('.ctx-item[data-item="copy-title"]').click();
+  await page.waitForSelector(".toast", { state: "visible", timeout: 5_000 });
+  const feedTitle = await page.evaluate(() => navigator.clipboard.readText());
+  const realTitle = await (
+    await fetch(`${ORIGIN}/vault-api/projects/${slug}/${feedId.startsWith("BUG") ? "bugs" : "worklogs"}/${feedId}`)
+  ).json();
+  check(
+    "Copy title on a feed row copies the record's title, which the feed line does not print",
+    feedTitle === realTitle.title && feedTitle.length > 0,
+    `clipboard ${JSON.stringify(feedTitle)} vs vault ${JSON.stringify(realTitle.title)}`,
+  );
+
+  // And the parts of the dashboard that are not records still show nothing at all.
+  await armContextMenu(page);
+  const chartAt = await page.evaluate(() => {
+    const b = document.querySelector(".chart-card .card-body")?.getBoundingClientRect();
+    return b ? { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + 8) } : null;
+  });
+  await page.mouse.click(chartAt.x, chartAt.y, { button: "right" });
+  await page.waitForTimeout(150);
+  check("a chart on the dashboard opens no menu", !(await menuOpen(page)));
+  check(
+    "…and no browser menu either",
+    (await ctxSeen(page)).length === 1 && (await ctxSeen(page))[0].prevented,
+    JSON.stringify(await ctxSeen(page)),
+  );
+
+  /* 6c. The project switcher — the card at the top of the shell that names the project you
+     are standing in. Its dropdown items and the vault list below it both carried this menu;
+     the card itself did not, so the same project answered 300px lower down and not where a
+     reader points first (P8 round 2 critic). */
+  await armContextMenu(page);
+  const switcher = page.locator(".switcher-button");
+  const switcherName = (await switcher.locator(".switcher-name").textContent())?.trim();
+  await switcher.click({ button: "right", position: { x: 60, y: 20 } });
+  await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  check(
+    "the sidebar's project switcher opens the project menu",
+    (await page.getAttribute(".ctx-menu", "aria-label")) === switcherName,
+    `label ${await page.getAttribute(".ctx-menu", "aria-label")}, card ${switcherName}`,
+  );
+  check(
+    "…the same five items the small copy of that project below it opens",
+    same(await menuItems(page), ["open", "work", "bugs", "copy-slug", "archive"]),
+    JSON.stringify(await menuItems(page)),
+  );
+  check(
+    "…and still nothing that deletes",
+    !/delete|remove|discard/i.test((await page.locator(".ctx-menu").textContent()) ?? ""),
+  );
+  check(
+    "…and right-clicking it did not also drop its dropdown open",
+    (await page.locator(".switcher-menu").count()) === 0,
+  );
+  await page.keyboard.press("Escape");
+  check(
+    "…and esc gives the switcher its focus back",
+    await page.evaluate(() => document.activeElement?.classList?.contains("switcher-button")),
+    `focus is ${await focused(page)}`,
+  );
+
+  // Off a project there is no one project to act on, so there is no menu — and no Edge one.
+  await page.goto(`${ORIGIN}/projects`, { waitUntil: "domcontentloaded" });
+  await ready(page);
+  await watchContextMenu(page);
+  await page.locator(".switcher-button").click({ button: "right", position: { x: 60, y: 20 } });
+  await page.waitForTimeout(150);
+  check("on /projects the switcher names no project, so it opens no menu", !(await menuOpen(page)));
+  check(
+    "…and the browser's is suppressed there too",
+    (await ctxSeen(page)).length === 1 && (await ctxSeen(page))[0].prevented,
+    JSON.stringify(await ctxSeen(page)),
+  );
 
   /* Edge flipping. A menu that clips at the window edge is a menu with items nobody can
      reach, and the narrow window is where it happens. */

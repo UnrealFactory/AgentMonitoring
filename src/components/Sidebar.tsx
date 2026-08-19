@@ -49,9 +49,11 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  /* Right-click (and Shift+F10) on any project row in this column: the same menu the
-     Projects screen's rows open — the reader should not have to remember which list they
-     are looking at. */
+  /* Right-click (and Shift+F10) on anything in this column that names a project — the
+     switcher card, the rows in its dropdown, the vault list under Projects — opens the same
+     menu the Projects screen's rows do. The reader should not have to remember which of the
+     three lists they are looking at, nor find that one copy of a project answers and
+     another does not. */
   const contextMenu = useContextMenu();
   const projectMenu = useProjectMenu();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -142,6 +144,13 @@ export function Sidebar() {
           onClick={() => setMenuOpen((v) => !v)}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
+          /* The card that names the project you are standing in is the first project row a
+             reader meets, and it was the only one the right button did nothing on: the
+             switcher's *dropdown* items and the vault list below both had this menu, so the
+             same project answered 300px lower down and not here (P8 round 2 critic). Off a
+             project — "All projects" on /projects — there is no one project to act on, so
+             there is no menu and the browser's stays suppressed. */
+          {...contextMenu(() => (current ? projectMenu(current) : null))}
         >
           <span className="switcher-label">
             <span className="switcher-name">{current?.name ?? "All projects"}</span>

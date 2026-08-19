@@ -5,8 +5,13 @@
 #   powershell -File scripts/win-window.ps1 -Action click -X 120 -Y 300 -Button right
 #
 # X/Y are client-area coordinates of the app window; the script adds the window origin.
+#   powershell -File scripts/win-window.ps1 -Action menukey
+#
+# `menukey` presses VK_APPS — the Menu key beside the right Ctrl — which SendKeys has no
+# token for and which is the one key WebView2 answers with a synthesized contextmenu event
+# of its own. That echo used to close the menu the same keypress had just opened.
 param(
-  [ValidateSet("shot", "click", "key")] [string]$Action = "shot",
+  [ValidateSet("shot", "click", "key", "menukey")] [string]$Action = "shot",
   [string]$Out = "",
   [int]$X = 0,
   [int]$Y = 0,
@@ -26,6 +31,7 @@ public class Win {
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, int e);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint f, int extra);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
@@ -65,6 +71,15 @@ if ($Action -eq "click") {
 if ($Action -eq "key") {
   [System.Windows.Forms.SendKeys]::SendWait($Key)
   Write-Output "sent $Key"
+  exit 0
+}
+
+if ($Action -eq "menukey") {
+  # VK_APPS = 0x5D, KEYEVENTF_KEYUP = 0x0002.
+  [Win]::keybd_event(0x5D, 0, 0, 0)
+  Start-Sleep -Milliseconds 60
+  [Win]::keybd_event(0x5D, 0, 0x0002, 0)
+  Write-Output "sent VK_APPS (the Menu key)"
   exit 0
 }
 

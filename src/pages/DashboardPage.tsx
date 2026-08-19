@@ -34,6 +34,8 @@ import { agentColumnWidth } from "../lib/columns";
 import { useAsync } from "../lib/useAsync";
 import { useUrlFilters } from "../lib/useUrlFilters";
 import { BurnUp, HourBars, Legend, SplitBar, useNow } from "../components/charts";
+import { useContextMenu } from "../components/ContextMenu";
+import { useRecordMenu, type RecordRef } from "../lib/menus";
 import { EventIcon } from "../components/EventIcon";
 import {
   AgentChip,
@@ -107,6 +109,26 @@ const NO_NOTES: Record<string, WorkUpdate | undefined> = {};
 /** How many rows the two lists in the NOW strip print before they hand over to a board. */
 const IN_PROGRESS_ROWS = 3;
 const UNRESOLVED_BUG_ROWS = 3;
+
+/**
+ * A row's record, in the shape the shared right-button menu wants (lib/menus.ts).
+ *
+ * Every row on this screen that links to a work log or a bug opens the same Open / Copy id /
+ * Copy title / Copy link menu the work list and the bug board open, because it is the same
+ * record — and this is the screen a reader lands on first.
+ */
+const workRef = (w: WorklogSummary, slug: string): RecordRef => ({
+  kind: "work",
+  id: w.id,
+  title: w.title,
+  slug,
+});
+const bugRef = (b: BugSummary, slug: string): RecordRef => ({
+  kind: "bug",
+  id: b.id,
+  title: b.title,
+  slug,
+});
 
 /** The one filter on this screen, kept in the URL like every other view state. */
 const DEFAULTS = { range: "all" };
@@ -243,6 +265,20 @@ export function DashboardPage() {
    */
   const anyAbandoned = works.some((w) => w.status === "abandoned" && w.finished);
   const anyClosedUnfixed = bugs.some((b) => b.status === "closed" && !b.resolved);
+
+  /**
+   * Every record in this project, by id.
+   *
+   * A feed line carries a `ref` — "WORK-0012" — and a summary, not a title, so this is what
+   * lets a right-click on a feed row offer the same Copy title the identical row on the work
+   * list offers. Built from lists the screen has already read; nothing extra is fetched.
+   */
+  const recordsById = useMemo(() => {
+    const byId = new Map<string, RecordRef>();
+    for (const w of works) byId.set(w.id, workRef(w, slug));
+    for (const b of bugs) byId.set(b.id, bugRef(b, slug));
+    return byId;
+  }, [works, bugs, slug]);
 
   const scoped = useMemo(
     () => events.filter((e) => Date.parse(e.ts) >= axis.from),
@@ -409,7 +445,13 @@ export function DashboardPage() {
 
       <AgentsCard slug={slug} rows={agents} total={scoped.length} now={now} />
 
-      <ActivityCard slug={slug} groups={dayGroups} total={scoped.length} now={now} />
+      <ActivityCard
+        slug={slug}
+        groups={dayGroups}
+        total={scoped.length}
+        now={now}
+        records={recordsById}
+      />
     </div>
   );
 }
@@ -445,6 +487,12 @@ function InProgress({
 }) {
   const working = new Set(active.map((w) => w.agent));
   const iso = new Date(now).toISOString();
+  /* These rows are work logs, so they carry the work log menu — the same four items the
+     identical row on /work has offered since P8. The dashboard is the default landing
+     route, which made it the one screen where a reader met the right button and got
+     nothing (P8 round 2 critic). */
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
   return (
     <section className="now-panel now-panel-wide">
       <h2 className="now-label">Working right now</h2>
@@ -486,7 +534,11 @@ function InProgress({
           {lastDone && (
             <ul className="now-list">
               <li>
-                <Link className="now-row" to={`/p/${slug}/work/${lastDone.id}`}>
+                <Link
+                  className="now-row"
+                  to={`/p/${slug}/work/${lastDone.id}`}
+                  {...contextMenu(() => recordMenu(workRef(lastDone, slug)))}
+                >
                   <span className="sdot sdot-done" aria-hidden="true" />
                   <span className="now-row-main">
                     <span className="now-row-title" title={lastDone.title}>
@@ -560,6 +612,8 @@ function InProgressRow({
 }) {
   const state = freshness(work.lastActivity, now);
   const outline = noteOutline(note?.body, 3, agents);
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
   /* Two facts, two different clocks, and the row says which is which: how long this has
      been open (the hero number, which used to sit there with no label at all), and how
      long since anybody touched it. A log with no updates yet says that instead of dressing
@@ -575,7 +629,11 @@ function InProgressRow({
      agent an ask names), and a link inside a link is neither valid nor clickable. The two
      of them share one hover surface, so the pair still reads as a single row. */
   return (
-    <li className="now-item">
+    /* The menu is on the <li>, not on the <a> inside it: the row and the note quoted under
+       it share one hover surface and read as a single row about one work log, so the right
+       button answers the same way over either half. Events from the link bubble here, which
+       is also how Shift+F10 on the focused link reaches this handler. */
+    <li className="now-item" {...contextMenu(() => recordMenu(workRef(work, slug)))}>
       <Link className="now-row" to={`/p/${slug}/work/${work.id}`}>
         <span
           className={`sdot ${FRESH_DOT[state]}`}
@@ -676,6 +734,8 @@ function UnresolvedBugs({
   const counts = severityCounts(unresolved);
   const shown = unresolved.slice(0, UNRESOLVED_BUG_ROWS);
   const iso = new Date(now).toISOString();
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
   return (
     <section className="now-panel">
       <h2 className="now-label">
@@ -718,7 +778,11 @@ function UnresolvedBugs({
         <ul className="now-list">
           {shown.map((b) => (
             <li key={b.id}>
-              <Link className="now-row" to={`/p/${slug}/bugs/${b.id}`}>
+              <Link
+                className="now-row"
+                to={`/p/${slug}/bugs/${b.id}`}
+                {...contextMenu(() => recordMenu(bugRef(b, slug)))}
+              >
                 <BugStatusDot status={b.status} />
                 <span className="now-row-main">
                   {/* Three lines, not one line cut mid-word: the highest-priority item on
@@ -1069,11 +1133,14 @@ function ActivityCard({
   groups,
   total,
   now,
+  records,
 }: {
   slug: string;
   groups: ReturnType<typeof groupByDay>;
   total: number;
   now: number;
+  /** Every record in this project by id, so a feed row can name what it points at. */
+  records: Map<string, RecordRef>;
 }) {
   const [override, setOverride] = useState<Record<number, boolean>>({});
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
@@ -1189,7 +1256,13 @@ function ActivityCard({
                   {open && (
                     <ol className="feed">
                       {(expanded[g.day] ? g.events : g.events.slice(0, DAY_PREVIEW)).map((e, i) => (
-                        <FeedRow slug={slug} event={e} now={now} key={`${e.ts}-${i}`} />
+                        <FeedRow
+                          slug={slug}
+                          event={e}
+                          now={now}
+                          records={records}
+                          key={`${e.ts}-${i}`}
+                        />
                       ))}
                       {!expanded[g.day] && g.events.length > DAY_PREVIEW && (
                         <li className="feed-more-row">
@@ -1213,8 +1286,24 @@ function ActivityCard({
   );
 }
 
-function FeedRow({ slug, event, now }: { slug: string; event: VaultEvent; now: number }) {
+function FeedRow({
+  slug,
+  event,
+  now,
+  records,
+}: {
+  slug: string;
+  event: VaultEvent;
+  now: number;
+  records: Map<string, RecordRef>;
+}) {
   const href = refHref(slug, event.ref);
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
+  /* A feed line about a record is a row about that record, and gets its menu. The lines
+     about the project itself — created, renamed — link nowhere and offer nothing, which is
+     the same rule the rest of the app keeps: a menu only where there is something to do. */
+  const record = event.ref ? records.get(event.ref) : undefined;
   const body = (
     <>
       <span className="feed-icon" aria-hidden="true">
@@ -1240,7 +1329,7 @@ function FeedRow({ slug, event, now }: { slug: string; event: VaultEvent; now: n
   return (
     <li>
       {href ? (
-        <Link className={cls} to={href}>
+        <Link className={cls} to={href} {...contextMenu(() => (record ? recordMenu(record) : null))}>
           {body}
         </Link>
       ) : (

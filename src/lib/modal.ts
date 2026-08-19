@@ -24,15 +24,40 @@ export function isModalOpen(): boolean {
   return depth > 0;
 }
 
+/** How many modals are stacked. What a modal compares against to notice one arrived over it. */
+export function modalDepth(): number {
+  return depth;
+}
+
+const watchers = new Set<(depth: number) => void>();
+
+/**
+ * Be told when the stack changes.
+ *
+ * One subscriber so far: the context menu, which stands down when something else takes the
+ * keyboard over it. Ctrl+K on an open row menu used to leave the palette and the menu on
+ * screen together, straddling the palette's scrim, and cost two Escapes to get back to the
+ * page — the first of them closing a menu the reader had stopped looking at (P8 round 2
+ * critic). A menu is the shallowest thing in this app; anything that arrives over it wins.
+ */
+export function onModalChange(fn: (depth: number) => void): () => void {
+  watchers.add(fn);
+  return () => {
+    watchers.delete(fn);
+  };
+}
+
 /** Hold the modal lock for as long as `open` is true. */
 export function useModalLock(open: boolean): void {
   useEffect(() => {
     if (!open) return;
     depth += 1;
     document.documentElement.setAttribute("data-modal", "open");
+    for (const fn of [...watchers]) fn(depth);
     return () => {
       depth = Math.max(0, depth - 1);
       if (depth === 0) document.documentElement.removeAttribute("data-modal");
+      for (const fn of [...watchers]) fn(depth);
     };
   }, [open]);
 }

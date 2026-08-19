@@ -1,11 +1,14 @@
 /**
  * The two menus this app actually has, defined once.
  *
- * A project row appears in three places (the switcher, the sidebar's vault list, the
- * Projects screen) and a record row in four (the work list, the bug board, and the head of
- * each record) — so the menu they open is built here rather than beside each of them. Three
- * copies of a menu is how the same action ends up with two labels and one screen quietly
- * loses an item.
+ * A project is named in four places (the switcher card, the rows in its dropdown, the
+ * sidebar's vault list, the Projects screen) and a record in nine (the work list, the bug
+ * board, the head of each record, the Related block, and on the dashboard the working-right-
+ * now row, the last-finished row, the unresolved-bug row and every row of the activity
+ * feed) — so the menu they open is built here rather than beside each of them. Copies of a
+ * menu are how the same action ends up with two labels, and how one screen quietly loses an
+ * item: the round that introduced this file wired five of those surfaces and missed the two
+ * a reader meets first, the dashboard and the switcher card.
  *
  * Two rules the items obey:
  *

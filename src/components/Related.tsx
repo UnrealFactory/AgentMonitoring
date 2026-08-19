@@ -17,6 +17,8 @@ import { api } from "../lib/api";
 import { useVaultNonce } from "../AppContext";
 import { useAsync } from "../lib/useAsync";
 import { recordPath } from "../lib/markdown";
+import { useContextMenu } from "./ContextMenu";
+import { useRecordMenu } from "../lib/menus";
 import { BugStatusPill, RecordStatusDot, SeverityBadge, WorkStatusPill } from "./ui";
 import { BUG_NOUN, WORK_NOUN } from "../lib/words";
 import { formatDateTimeUtc, formatRelative } from "../lib/format";
@@ -72,9 +74,20 @@ export function useRelated(slug: string, id: string, refs: string[]) {
 }
 
 function RelatedRow({ slug, item }: { slug: string; item: RelatedItem }) {
+  /* A row here is a work log or a bug, so it is the same row the list screens draw and gets
+     the same right-button menu. `here` is deliberately not set: this is the *other* record,
+     the one the reader is not on, so Open is the item that matters most on it. */
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
   return (
     <li>
-      <Link className="rel-row" to={recordPath(slug, item.id)}>
+      <Link
+        className="rel-row"
+        to={recordPath(slug, item.id)}
+        {...contextMenu(() =>
+          recordMenu({ kind: item.kind, id: item.id, title: item.title, slug })
+        )}
+      >
         <RecordStatusDot
           status={item.work ? item.work.status : item.bug!.status}
           kind={item.kind}

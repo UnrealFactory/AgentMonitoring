@@ -62,7 +62,8 @@ Options (flag, or environment variable):
   --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
   --width <n>      $SHOT_WIDTH    viewport width (default 1600; the shell is judged at 1152 too)
   --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail,
-                                  projects, palette, palette-vault, menu-project, menu-record
+                                  projects, palette, palette-vault, menu-project, menu-record,
+                                  menu-dashboard, menu-switcher
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
   --project <slug> $SHOT_PROJECT  project to shoot (default: the one with the most records)
   --suffix <s>     $SHOT_SUFFIX   append to every file name, so a second project's screens
@@ -323,6 +324,30 @@ try {
         await page.waitForSelector(".work-row", { state: "visible" });
         await page.waitForFunction(() => !document.querySelector(".skeleton"));
         await page.locator(".work-row").nth(2).click({ button: "right" });
+      },
+    },
+    {
+      /* The dashboard is the default landing route, and for one round it was the one screen
+         where the right button did nothing: the hero row of "working right now" is a work
+         log, and now says so. */
+      name: "menu-dashboard",
+      path: `/p/${slug}`,
+      waitFor: ".ctx-menu",
+      prepare: async (page) => {
+        await page.waitForSelector(".now-row", { state: "visible" });
+        await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        await page.locator("a.now-row").first().click({ button: "right" });
+      },
+    },
+    {
+      // The switcher card — the other surface a reader points at before any list.
+      name: "menu-switcher",
+      path: `/p/${slug}`,
+      waitFor: ".ctx-menu",
+      prepare: async (page) => {
+        await page.waitForSelector(".nav-sub", { state: "visible" });
+        await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        await page.locator(".switcher-button").click({ button: "right", position: { x: 60, y: 20 } });
       },
     },
   ];
