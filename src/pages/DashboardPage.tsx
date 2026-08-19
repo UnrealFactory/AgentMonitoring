@@ -25,12 +25,13 @@
  */
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useProjectSlug, useVaultNonce } from "../AppContext";
+import { useApp, useProjectSlug, useVaultNonce } from "../AppContext";
 import { api, failureTitle } from "../lib/api";
 import { agentColumnWidth } from "../lib/columns";
 import { useAsync } from "../lib/useAsync";
 import { useUrlFilters } from "../lib/useUrlFilters";
 import { BurnUp, HourBars, Legend, SplitBar, useNow } from "../components/charts";
+import { EventIcon } from "../components/EventIcon";
 import {
   AgentChip,
   BugStatusDot,
@@ -52,6 +53,7 @@ import {
   bugSeries,
   DAY,
   DAY_PREVIEW,
+  eventSummary,
   eventVerb,
   freshness,
   groupByDay,
@@ -103,6 +105,9 @@ const RANGES: { value: string; label: string; days: number | null }[] = [
 
 export function DashboardPage() {
   const slug = useProjectSlug()!;
+  /** Set while the vault is unreadable — the shell says so, and this screen stops
+      advertising itself as live (AppContext). */
+  const { trouble } = useApp();
   /* Every loader on this screen takes the vault nonce, so a record an agent writes lands
      here without a navigation and without a skeleton — the flag says live, the clock ticks
      every thirty seconds, and now the numbers under them are as new as the sidebar's. */
@@ -257,13 +262,21 @@ export function DashboardPage() {
   }
 
   const rangeNote =
-    days === null
-      ? `all ${pluralize(events.length, "recorded event")}, back to ${formatDate(new Date(firstActivity).toISOString())}`
-      : `the last ${days} days`;
+    days !== null
+      ? `the last ${days} days`
+      : events.length === 1
+        ? // "all 1 recorded event" is not a sentence anybody writes.
+          `the one recorded event, from ${formatDate(new Date(firstActivity).toISOString())}`
+        : `all ${pluralize(events.length, "recorded event")}, back to ${formatDate(new Date(firstActivity).toISOString())}`;
   /** Named once, so the charts, their deltas and the sentence above them agree. */
   const scopeLabel = days === null ? null : `the last ${days} days`;
   const changeNote = scopeLabel ? `, with the change over ${scopeLabel}` : "";
-  const live = freshness(project.counts.lastActivity, now) === "live";
+  const archived = project.status === "archived";
+  /* An archived project is history, not a live board: a green LIVE flag over one is the
+     screen contradicting the Projects page that just filed it away (round 1 critic). And a
+     window that has just said it cannot read the vault may not also claim to be live. */
+  const live =
+    !archived && !trouble && freshness(project.counts.lastActivity, now) === "live";
 
   return (
     <div className="page dashboard">
@@ -277,7 +290,15 @@ export function DashboardPage() {
             and saying so beside "Last activity 19h ago" was the flag contradicting the
             sentence next to it (round 1 critic). */}
         <div className="page-head-meta tabular">
-          {live ? (
+          {archived ? (
+            <Link
+              className="pill pill-archived"
+              to="/projects"
+              title="This project is archived. Nothing was deleted — restore it on the Projects screen."
+            >
+              archived
+            </Link>
+          ) : live ? (
             <span className="live-flag" title="Something was recorded in the last two hours">
               <span className="live-dot" aria-hidden="true" />
               live
@@ -962,8 +983,8 @@ function AgentsCard({
                 cheaper than leaving a reader to add four rows up and find 83 under an
                 "85 events" heading (round 2 critic). */}
             <p className="table-note">
-              Every one of the {total} events in this range, counted against the agent who
-              recorded it — project changes included.
+              Every one of {pluralize(total, "event")} in this range, counted against the agent
+              who recorded it — project changes included.
             </p>
           </div>
         )}
@@ -1138,7 +1159,9 @@ function FeedRow({ slug, event, now }: { slug: string; event: VaultEvent; now: n
           <span className="feed-verb">{eventVerb(event.type)}</span>
           {event.ref && <span className="feed-ref mono">{event.ref}</span>}
         </span>
-        {event.summary && <span className="feed-summary">{event.summary}</span>}
+        {event.summary && (
+          <span className="feed-summary">{eventSummary(event.summary)}</span>
+        )}
       </span>
       <time className="feed-time tabular" dateTime={event.ts} title={formatDateTimeUtc(event.ts)}>
         {formatRelative(event.ts, new Date(now))}
@@ -1160,43 +1183,3 @@ function FeedRow({ slug, event, now }: { slug: string; event: VaultEvent; now: n
   );
 }
 
-/**
- * One glyph per kind of event, in the tone the rest of the app already uses for that kind:
- * blue for work in flight, green for finished, orange for a bug, purple for a fix. The
- * icon is never the only thing carrying the meaning — the verb beside it says it in words.
- */
-function EventIcon({ type }: { type: string }) {
-  const t: EventTone = tone(type);
-  const stroke = {
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.5,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
-  let path: ReactNode;
-  if (type === "work_started") path = <path d="M5 3.5 L11 7 L5 10.5 Z" {...stroke} />;
-  else if (type === "work_updated") path = <path d="M3.5 4.5 H10.5 M3.5 7 H10.5 M3.5 9.5 H7.5" {...stroke} />;
-  else if (type === "work_done" || type === "bug_resolved")
-    path = <path d="M3.5 7.2 L6 9.7 L10.5 4.3" {...stroke} strokeWidth={1.8} />;
-  else if (type === "work_abandoned") path = <path d="M3.5 3.5 L10.5 10.5 M10.5 3.5 L3.5 10.5" {...stroke} />;
-  else if (type === "bug_created")
-    path = (
-      <path
-        d="M7 3.4a1.9 1.9 0 0 1 1.9 1.9v2.6A1.9 1.9 0 0 1 7 9.8a1.9 1.9 0 0 1-1.9-1.9V5.3A1.9 1.9 0 0 1 7 3.4Z M2.6 5.6h2.5 M8.9 5.6h2.5 M2.6 8.2h2.5 M8.9 8.2h2.5"
-        {...stroke}
-        strokeWidth={1.3}
-      />
-    );
-  else if (type === "bug_claimed") path = <path d="M4 10.5V3.5h6l-1.6 2 1.6 2H4" {...stroke} />;
-  else if (type === "bug_commented")
-    path = <path d="M2.6 3.6h8.8v5.2H6.2l-2.4 2V8.8H2.6z" {...stroke} strokeWidth={1.3} />;
-  else if (type === "bug_closed") path = <path d="M7 2.8v8.4 M3.6 4.4l6.8 5.2" {...stroke} />;
-  else path = <path d="M2.6 4.4h3.4l1 1.4h4.4v5.2H2.6z" {...stroke} strokeWidth={1.3} />;
-
-  return (
-    <svg viewBox="0 0 14 14" width="14" height="14" className={`event-icon tone-${t}`}>
-      {path}
-    </svg>
-  );
-}

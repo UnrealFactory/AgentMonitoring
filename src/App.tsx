@@ -4,6 +4,7 @@ import { AppProvider, useApp } from "./AppContext";
 import { CommandPalette } from "./components/CommandPalette";
 import { Sidebar } from "./components/Sidebar";
 import { ErrorState, Skeleton } from "./components/ui";
+import { formatDateTimeUtc } from "./lib/format";
 import { useWindowTitle } from "./lib/useWindowTitle";
 import { DashboardPage } from "./pages/DashboardPage";
 import { WorkListPage } from "./pages/WorkListPage";
@@ -53,9 +54,46 @@ function Shell() {
     <div className="app">
       <Sidebar />
       <main className="main" id="main">
+        <VaultTroubleBar />
         <Outlet />
       </main>
       <CommandPalette />
+    </div>
+  );
+}
+
+/**
+ * One line, above whatever screen is open, when the vault has stopped answering.
+ *
+ * The app keeps the last good data on screen when a refresh fails — replacing a page
+ * somebody is reading with an error because one poll missed would be worse. But silence
+ * has a failure mode of its own: a board frozen on numbers from ten minutes ago looks
+ * exactly like a quiet project. This says which it is, and stays out of the way otherwise.
+ * When nothing could be read at all the page itself carries the error, so the bar defers.
+ */
+function VaultTroubleBar() {
+  const { trouble, error, reload, vault } = useApp();
+  if (!trouble || error) return null;
+  /* The backend's message is written for somebody who can act on it and can run to four
+     lines. One line here, the rest in the tooltip: a banner that shouts a paragraph over
+     the screen is a banner people learn to close. */
+  const [headline] = trouble.message.split(" — ");
+  return (
+    <div className="vault-alert-wrap">
+      <div className="vault-alert" role="status">
+        <span className="vault-alert-dot" aria-hidden="true" />
+        <span className="vault-alert-text">
+          <strong>Not reading the vault right now.</strong> Everything below is the last good
+          data{vault?.path ? ` from ${vault.path}` : ""}, as of{" "}
+          {formatDateTimeUtc(new Date(trouble.since).toISOString())}.{" "}
+          <span className="vault-alert-detail" title={trouble.message}>
+            {headline}
+          </span>
+        </span>
+        <button className="button button-sm" onClick={reload}>
+          Try again
+        </button>
+      </div>
     </div>
   );
 }

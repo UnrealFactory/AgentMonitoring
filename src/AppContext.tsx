@@ -4,13 +4,28 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useParams } from "react-router-dom";
-import { api, subscribeVaultChanges, transport } from "./lib/api";
+import { api, subscribeVaultChanges, transport, type VaultHealth } from "./lib/api";
 import { useAsync } from "./lib/useAsync";
 import type { Project, VaultInfo } from "./lib/types";
+
+/**
+ * The vault stopped answering while the app was showing it.
+ *
+ * Distinct from `error`, which means nothing could be read at all and the screen says so
+ * where the content would be. This is the other case: there is a screenful of real data,
+ * it is no longer being kept current, and without a word about it the reader has no way to
+ * tell a quiet vault from an unreachable one.
+ */
+export interface VaultTrouble {
+  message: string;
+  /** When the app last had a good answer, for "showing data from …". */
+  since: number;
+}
 
 interface AppData {
   vault: VaultInfo | undefined;
@@ -27,6 +42,8 @@ interface AppData {
   vaultNonce: number;
   /** Force that refresh — for a screen that has just written to the vault itself. */
   refresh: () => void;
+  /** Set while the vault cannot be read and the app is showing the last good data. */
+  trouble: VaultTrouble | null;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -37,14 +54,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const vault = useAsync(() => api.vaultInfo(), [], nonce);
   const projects = useAsync(() => api.listProjects(), [], nonce);
+  const [health, setHealth] = useState<VaultHealth>({ ok: true });
 
   /**
    * The one subscription in the app. It lives here rather than in the shell because the
    * nonce it feeds is what every page reads: a listener attached beside the router would
    * refresh the sidebar and leave the screen beside it stale, which is exactly the
    * self-contradiction the P4 critic caught.
+   *
+   * The second callback is the honesty half: browser mode reports a poll that failed, and
+   * either transport reports a refresh that failed, so "the vault went away" is a sentence
+   * the app can say instead of a number that quietly stops moving.
    */
-  useEffect(() => subscribeVaultChanges(refresh), [refresh]);
+  useEffect(() => subscribeVaultChanges(refresh, setHealth), [refresh]);
+
+  const badRead = health.ok ? undefined : health.error;
+  const badRefresh = vault.refreshError ?? projects.refreshError;
+  const message = badRead ?? badRefresh;
+
+  // When it started, so the banner can say how old the data on screen is. Kept in a ref
+  // rather than state: it must not restart the clock on every re-render.
+  const troubleSince = useRef<number | null>(null);
+  if (message && troubleSince.current === null) troubleSince.current = Date.now();
+  if (!message) troubleSince.current = null;
+  const trouble = message ? { message, since: troubleSince.current ?? Date.now() } : null;
 
   // Stable identity: callers subscribe to this, and a function that changed on every load
   // would tear their effects down and rebuild them each time.
@@ -63,6 +96,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       transport: transport(),
       vaultNonce: nonce,
       refresh,
+      trouble,
     }),
     [
       vault.data,
@@ -74,6 +108,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reload,
       nonce,
       refresh,
+      trouble?.message,
+      trouble?.since,
     ]
   );
 

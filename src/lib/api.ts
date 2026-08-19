@@ -255,6 +255,12 @@ export function failureTitle(error: string, status: number | undefined, id?: str
  */
 export const POLL_MS = 2_000;
 
+/** Slowest the poll backs off to while the vault keeps failing to answer. */
+export const POLL_MAX_MS = 30_000;
+
+/** Whether the vault is answering, and what it said when it stopped. */
+export type VaultHealth = { ok: true } | { ok: false; error: string };
+
 /**
  * Subscribe to vault changes. Returns an unsubscribe function.
  *
@@ -263,8 +269,17 @@ export const POLL_MS = 2_000;
  * file's size and mtime. Both end in the same callback, so nothing above this file knows
  * which one it is on — and every screen in the app hangs off that one signal, rather than
  * the sidebar refreshing while the dashboard beside it goes on printing yesterday.
+ *
+ * `onHealth` is the other half of that signal: a poll that fails is the app finding out the
+ * vault it is showing can no longer be read, and a reader looking at numbers from four
+ * minutes ago is owed that sentence (AppContext turns it into the banner in the shell).
+ * Repeated failures also back the poll off towards {@link POLL_MAX_MS}, so a dev server
+ * pointed at a directory that is gone is asked twice a minute, not thirty times.
  */
-export function subscribeVaultChanges(onChange: () => void): () => void {
+export function subscribeVaultChanges(
+  onChange: () => void,
+  onHealth?: (health: VaultHealth) => void
+): () => void {
   if (isTauri()) {
     let cancelled = false;
     let dispose = () => {};
@@ -286,6 +301,7 @@ export function subscribeVaultChanges(onChange: () => void): () => void {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let cursor: string | null = null;
+  let fails = 0;
 
   const poll = async () => {
     if (stopped) return;
@@ -296,11 +312,26 @@ export function subscribeVaultChanges(onChange: () => void): () => void {
         // same vault a moment ago, and reloading it would be a refresh nobody asked for.
         if (cursor !== null && next !== cursor) onChange();
         cursor = next;
-      } catch {
-        /* the dev server is restarting, or this build has no cursor route: try again */
+        if (fails > 0) {
+          // Back from the dead: re-read everything, because whatever happened while the
+          // vault was unreachable did not reach this window.
+          onChange();
+        }
+        fails = 0;
+        onHealth?.({ ok: true });
+      } catch (err) {
+        // One miss is a dev server restarting or a record caught mid-write, and saying so
+        // would be noise. A second is the vault not being there.
+        fails += 1;
+        if (fails >= 2) {
+          onHealth?.({ ok: false, error: err instanceof Error ? err.message : String(err) });
+        }
       }
     }
-    if (!stopped) timer = setTimeout(poll, POLL_MS);
+    if (!stopped) {
+      const wait = Math.min(POLL_MS * 2 ** Math.max(0, fails - 1), POLL_MAX_MS);
+      timer = setTimeout(poll, wait);
+    }
   };
 
   const onVisible = () => {

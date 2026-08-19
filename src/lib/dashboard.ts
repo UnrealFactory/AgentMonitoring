@@ -853,3 +853,13 @@ export const EVENT_VERB: Record<EventType, string> = {
 
 export const eventVerb = (type: string): string =>
   EVENT_VERB[type as EventType] ?? type.replace(/_/g, " ");
+
+/**
+ * An event's summary as a feed line.
+ *
+ * The CLI cuts the summary from the first line the agent wrote, and an agent whose
+ * resolution opens with `## Root cause` puts the hashes in the event log. They are markup,
+ * not words: a feed row reading "## Root cause" looks like the app failed to render
+ * something. Nothing else is touched — the sentence is still the agent's.
+ */
+export const eventSummary = (text: string): string => text.replace(/^\s*#{1,6}\s+/, "");

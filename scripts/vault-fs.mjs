@@ -25,36 +25,64 @@ export class VaultError extends Error {
 // --- vault resolution -------------------------------------------------------
 
 /**
- * Which vault this request is about.
+ * Which vault this request is about, and how that was decided.
  *
- * `override` is the browser-mode twin of the desktop app's "Open vault folder…": a
- * `?vault=<dir>` the client carries on every call for the session (src/lib/api.ts). It is
- * checked the same way the CLI checks `--vault` — the directory has to actually hold a
- * vault.json — and the error says what to do, because a mistyped path is the likeliest way
- * anybody gets here.
+ * **An explicit vault is authoritative.** `?vault=<dir>` (the browser-mode twin of the
+ * desktop app's "Open vault folder…", carried on every call by src/lib/api.ts) and
+ * `AGENTMON_VAULT` name one directory: if it cannot be opened, that is an error, never a
+ * reason to open a *different* one. This is the same rule as `Vault::resolve` in
+ * crates/agentmon-core/src/vault.rs, and the parity matters more here than anywhere else in
+ * this file. It used to be a fall-through list — env, then `<repo>/vault`, then the repo —
+ * so a configured vault that stopped being readable (a renamed folder, an unplugged drive,
+ * a typo in the variable) was silently answered with this repo's own live history, for
+ * reads *and* for writes, with nothing on screen saying the data had changed underneath the
+ * reader. Falling back is only allowed when nobody has said which vault they mean.
+ *
+ * Returns `{ dir, source }`; `source` is the truth reported by `/vault-api/vault`, so the
+ * one place a human can check which vault they are on cannot lie about it.
  */
-export function resolveVaultDir(repoRoot, override = null) {
+export function resolveVault(repoRoot, override = null) {
+  const init = (dir) => `\`agentmon init --vault "${dir}" --name "<vault name>"\``;
+
   if (override) {
     const dir = resolve(override);
-    if (existsSync(join(dir, "vault.json"))) return dir;
+    if (existsSync(join(dir, "vault.json"))) return { dir, source: "?vault=" };
     throw new VaultError(
       400,
       `no vault.json in ${dir} (?vault=) — point it at a vault directory, or create one with ` +
-        `\`agentmon init --vault ${dir} --name "<vault name>"\``
+        `${init(dir)}`
     );
   }
+
+  const env = process.env.AGENTMON_VAULT;
+  if (env) {
+    const dir = resolve(env);
+    if (existsSync(join(dir, "vault.json"))) return { dir, source: "env" };
+    throw new VaultError(
+      500,
+      `AGENTMON_VAULT names ${dir}, which has no vault.json — and a configured vault is the ` +
+        `only vault this server will serve, so it is not falling back to ${join(repoRoot, "vault")}. ` +
+        `Restore that directory, fix the variable, or create a vault there with ${init(dir)}`
+    );
+  }
+
   const candidates = [
-    process.env.AGENTMON_VAULT ? resolve(process.env.AGENTMON_VAULT) : null,
-    join(repoRoot, "vault"),
-    repoRoot,
-  ].filter(Boolean);
-  for (const dir of candidates) {
-    if (existsSync(join(dir, "vault.json"))) return dir;
+    [join(repoRoot, "vault"), "cwd/vault"],
+    [repoRoot, "cwd"],
+  ];
+  for (const [dir, source] of candidates) {
+    if (existsSync(join(dir, "vault.json"))) return { dir, source };
   }
   throw new VaultError(
     500,
-    `no vault.json found in ${candidates.join(" or ")} — set AGENTMON_VAULT or create ./vault`
+    `no vault.json found in ${candidates.map(([d]) => d).join(" or ")} — set AGENTMON_VAULT, ` +
+      `pass ?vault=<dir>, or create one with ${init(join(repoRoot, "vault"))}`
   );
+}
+
+/** [`resolveVault`] when only the directory is wanted. */
+export function resolveVaultDir(repoRoot, override = null) {
+  return resolveVault(repoRoot, override).dir;
 }
 
 // --- path safety ------------------------------------------------------------
@@ -355,7 +383,13 @@ function parseBug(path) {
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 const isOpen = (status) => status === "open" || status === "in_progress";
 
-export function createVaultReader(vaultDir) {
+/**
+ * @param {string} vaultDir
+ * @param {string} [source] how that directory was chosen — `?vault=`, `env`, `cwd/vault`,
+ *   `cwd`. Reported verbatim by `info()`, so it describes what actually happened rather
+ *   than re-guessing from the environment afterwards.
+ */
+export function createVaultReader(vaultDir, source = "flag") {
   const projectDir = (slug) => {
     const dir = join(vaultDir, "projects", checkSlug(slug));
     if (!existsSync(join(dir, "project.json"))) {
@@ -441,7 +475,7 @@ export function createVaultReader(vaultDir) {
         name: raw.name,
         createdAt: raw.createdAt ?? null,
         path: vaultDir,
-        source: process.env.AGENTMON_VAULT ? "env" : "cwd/vault",
+        source,
       };
     },
 

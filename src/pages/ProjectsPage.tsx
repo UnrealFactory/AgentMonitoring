@@ -10,16 +10,25 @@
  * Everything that writes goes through the same `agentmon-core` code the CLI writes with
  * (see src/lib/api.ts), so a project created here is indistinguishable from one an agent
  * created at a terminal, event log included.
+ *
+ * The projects are laid out as full-width rows, not as a card grid. A grid of
+ * `auto-fill, minmax(330px, 1fr)` gave a vault with two projects three tracks: two cards in
+ * the top-left and a dead one on the right, under a section rule that ran 400px past the
+ * last card — while /work and /bugs, one click away, fill the same container edge to edge.
+ * A vault screen that looks weaker than the list screens beside it is the wrong screen; the
+ * row is the form this app already uses for "a list of things you can open".
  */
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useApp } from "../AppContext";
+import { useApp, useVaultNonce } from "../AppContext";
 import { CommandLine, ErrorState, Skeleton, Tag } from "../components/ui";
+import { EventIcon } from "../components/EventIcon";
 import { useNow } from "../components/charts";
 import { api } from "../lib/api";
-import { freshness } from "../lib/dashboard";
-import { formatDate, formatRelative, pluralize } from "../lib/format";
-import type { Project } from "../lib/types";
+import { eventSummary, eventVerb, freshness, refHref, tone } from "../lib/dashboard";
+import { formatDate, formatDateTimeUtc, formatRelative, pluralize } from "../lib/format";
+import { useAsync } from "../lib/useAsync";
+import type { Project, VaultEvent } from "../lib/types";
 
 /** A display name a human types, turned into the directory-safe id the vault uses. */
 export function slugify(name: string): string {
@@ -108,7 +117,8 @@ export function ProjectsPage() {
         onError={setActionError}
         transport={transport}
         vault={vault}
-        projects={projects.length}
+        active={active.length}
+        archived={archived.length}
       />
 
       {actionError && (
@@ -147,9 +157,9 @@ export function ProjectsPage() {
                 Every project in this vault is archived. Bring one back below, or start a new one.
               </p>
             ) : (
-              <div className="project-grid">
+              <ul className="project-rows">
                 {active.map((p) => (
-                  <ProjectCard
+                  <ProjectRow
                     key={p.slug}
                     project={p}
                     now={now}
@@ -157,7 +167,7 @@ export function ProjectsPage() {
                     onArchive={() => setStatus(p, "archived")}
                   />
                 ))}
-              </div>
+              </ul>
             )}
           </section>
 
@@ -177,9 +187,9 @@ export function ProjectsPage() {
                 </button>
               </header>
               {showArchived && (
-                <div className="project-grid">
+                <ul className="project-rows">
                   {archived.map((p) => (
-                    <ProjectCard
+                    <ProjectRow
                       key={p.slug}
                       project={p}
                       now={now}
@@ -187,10 +197,12 @@ export function ProjectsPage() {
                       onRestore={() => setStatus(p, "active")}
                     />
                   ))}
-                </div>
+                </ul>
               )}
             </section>
           )}
+
+          <VaultActivity projects={projects} now={now} />
         </>
       )}
     </div>
@@ -201,19 +213,31 @@ export function ProjectsPage() {
    The vault bar
    ======================================================================= */
 
+/** Where the app got the vault it is showing, in words a human can act on. */
+const SOURCE_TEXT: Record<string, string> = {
+  "?vault=": "?vault= in this window's address",
+  env: "the AGENTMON_VAULT environment variable",
+  flag: "the folder opened in this app",
+  "cwd/vault": "./vault beside the app",
+  cwd: "the working directory",
+};
+
 function VaultBar({
   vault,
-  projects,
+  active,
+  archived,
   transport,
   onSwitched,
   onError,
 }: {
   vault: ReturnType<typeof useApp>["vault"];
-  projects: number;
+  active: number;
+  archived: number;
   transport: "tauri" | "browser";
   onSwitched: () => void;
   onError: (message: string) => void;
 }) {
+  const source = vault?.source ? SOURCE_TEXT[vault.source] ?? vault.source : null;
   return (
     <section className="vault-bar" aria-label="Vault">
       <div className="vault-bar-main">
@@ -222,11 +246,21 @@ function VaultBar({
         <p className="vault-bar-path mono" title={vault?.path ?? ""}>
           {vault?.path ?? "resolving…"}
         </p>
+        {/* Where that path came from. The app used to derive this from the environment
+            after the fact, so it said "cwd/vault" under ?vault= — the one place a human
+            could check which vault they were on was also the one place that could lie. */}
+        {source && <p className="vault-bar-source">Opened from {source}</p>}
       </div>
       <dl className="vault-bar-facts">
         <div>
-          <dt>Projects</dt>
-          <dd className="tabular">{projects}</dd>
+          {/* Named, because the sidebar counts the active ones: two labels reading
+              "Projects" with different numbers under them is the app disagreeing with
+              itself about a word. */}
+          <dt>Active projects</dt>
+          <dd className="tabular">
+            {active}
+            {archived > 0 && <span className="vault-bar-aside"> · {archived} archived</span>}
+          </dd>
         </div>
         <div>
           <dt>Schema</dt>
@@ -238,9 +272,7 @@ function VaultBar({
         </div>
         <div>
           <dt>Read by</dt>
-          <dd title={vault?.source ? `resolved from ${vault.source}` : undefined}>
-            {transport === "tauri" ? "desktop app" : "dev server"}
-          </dd>
+          <dd>{transport === "tauri" ? "desktop app" : "dev server"}</dd>
         </div>
       </dl>
       <div className="vault-bar-actions">
@@ -248,8 +280,8 @@ function VaultBar({
           <OpenVaultButton onDone={onSwitched} onError={onError} label="Open vault folder…" />
         ) : (
           <span className="vault-bar-hint">
-            Browser mode reads the vault the dev server was started with. Open another with{" "}
-            <code>?vault=&lt;dir&gt;</code> or <code>AGENTMON_VAULT</code>.
+            Open another vault with <code>?vault=&lt;dir&gt;</code>, or start the dev server
+            with <code>AGENTMON_VAULT</code>.
           </span>
         )}
       </div>
@@ -293,7 +325,7 @@ function OpenVaultButton({
    One project
    ======================================================================= */
 
-function ProjectCard({
+function ProjectRow({
   project: p,
   now,
   busy,
@@ -307,81 +339,203 @@ function ProjectCard({
   onRestore?: () => void;
 }) {
   const state = freshness(p.counts.lastActivity, now);
+  const c = p.counts;
   return (
-    <article className={`project-card${p.status === "archived" ? " is-archived" : ""}`}>
-      <div className="project-card-head">
-        <Link className="project-link" to={`/p/${p.slug}`}>
-          <span className={`sdot sdot-${state}`} aria-hidden="true" />
-          <span className="project-name">{p.name}</span>
-        </Link>
-        <span className="project-slug mono">{p.slug}</span>
-      </div>
+    <li>
+      <article className={`project-row${p.status === "archived" ? " is-archived" : ""}`}>
+        <div className="project-row-main">
+          <div className="project-row-head">
+            <Link className="project-link" to={`/p/${p.slug}`}>
+              <span
+                className={`sdot sdot-${state}`}
+                title={
+                  c.lastActivity
+                    ? `Last activity ${formatDateTimeUtc(c.lastActivity)}`
+                    : "Nothing recorded yet"
+                }
+                role="img"
+                aria-label={
+                  state === "live" ? "active in the last two hours" : `${state} project`
+                }
+              />
+              <span className="project-name">{p.name}</span>
+            </Link>
+            <span className="project-slug mono">{p.slug}</span>
+            {p.status === "archived" && <span className="pill pill-archived">archived</span>}
+            {p.tags.length > 0 && (
+              <span className="tag-row">
+                {p.tags.map((t) => (
+                  <Tag key={t}>{t}</Tag>
+                ))}
+              </span>
+            )}
+          </div>
 
-      {/* Three lines on a card, and the whole description in the tooltip — a clamp that
-          hides words without offering them anywhere is a clamp that loses them. */}
-      <p className="project-desc" title={p.description || undefined}>
-        {p.description || <span className="project-desc-none">No description yet.</span>}
-      </p>
+          {/* Never clamped. A one-or-two-sentence description cut to "In GA hardenin…" is
+              the same defect the bug board was pulled up on: the row is as wide as the
+              window, so it wraps instead. */}
+          <p className="project-desc">
+            {p.description || <span className="project-desc-none">No description yet.</span>}
+          </p>
+        </div>
 
-      {p.tags.length > 0 && (
-        <div className="tag-row">
-          {p.tags.map((t) => (
-            <Tag key={t}>{t}</Tag>
+        <dl className="project-figures">
+          <div className="project-figure">
+            <dt>Work logs</dt>
+            <dd className="tabular">{c.workTotal}</dd>
+            <span className="project-figure-note">
+              {c.workTotal === 0
+                ? "none yet"
+                : `${c.workDone} done · ${c.workInProgress} in flight`}
+            </span>
+          </div>
+          <div className="project-figure">
+            <dt>Open bugs</dt>
+            <dd className={`tabular${c.bugsOpen === 0 ? " is-zero" : ""}`}>{c.bugsOpen}</dd>
+            <span className="project-figure-note">
+              {c.bugsTotal === 0 ? "none filed" : `of ${c.bugsTotal} filed`}
+            </span>
+          </div>
+          <div className="project-figure">
+            <dt>Events</dt>
+            <dd className="tabular">{c.events}</dd>
+            <span className="project-figure-note">recorded</span>
+          </div>
+        </dl>
+
+        <div className="project-row-end">
+          <span className="project-when tabular">
+            {c.lastActivity ? (
+              <>
+                Active {formatRelative(c.lastActivity, new Date(now))}
+                <span className="project-since">started {formatDate(p.createdAt)}</span>
+              </>
+            ) : (
+              <>
+                No activity yet
+                <span className="project-since">created {formatDate(p.createdAt)}</span>
+              </>
+            )}
+          </span>
+          <span className="project-actions">
+            {onArchive && (
+              <button
+                className="link-button"
+                disabled={busy}
+                onClick={onArchive}
+                title="Hide this project from the switcher and the default list. Nothing is deleted."
+              >
+                {busy ? "Archiving…" : "Archive"}
+              </button>
+            )}
+            {onRestore && (
+              <button className="link-button" disabled={busy} onClick={onRestore}>
+                {busy ? "Restoring…" : "Unarchive"}
+              </button>
+            )}
+          </span>
+        </div>
+      </article>
+    </li>
+  );
+}
+
+/* ==========================================================================
+   The vault, as one timeline
+   ======================================================================= */
+
+/**
+ * Every project's events, merged.
+ *
+ * The per-project dashboards answer "what is happening here"; this screen is the only place
+ * that can answer "what is happening in this vault at all" — which is the question somebody
+ * arriving at the app with two projects actually has. It is also what makes this a screen
+ * rather than a menu: the same real records, read across the folder instead of inside one.
+ */
+function VaultActivity({ projects, now }: { projects: Project[]; now: number }) {
+  const nonce = useVaultNonce();
+  const key = projects.map((p) => p.slug).join(",");
+  const feed = useAsync(
+    async () => {
+      const per = await Promise.all(
+        projects.map(async (p) =>
+          (await api.listEvents(p.slug, 12)).map((event) => ({ event, project: p }))
+        )
+      );
+      return per
+        .flat()
+        .sort((a, b) => b.event.ts.localeCompare(a.event.ts))
+        .slice(0, 12);
+    },
+    [key],
+    nonce
+  );
+
+  if (!projects.length) return null;
+
+  return (
+    <section className="project-section">
+      <header className="project-section-head">
+        <h2 className="section-title">Across the vault</h2>
+        <span className="section-count tabular">
+          {feed.data?.length ? `newest ${feed.data.length}` : "recent"}
+        </span>
+      </header>
+      {feed.loading && !feed.data ? (
+        <Skeleton rows={4} />
+      ) : !feed.data?.length ? (
+        <p className="now-note">
+          Nothing has been recorded in this vault yet. The first <code>agentmon work start</code>{" "}
+          shows up here.
+        </p>
+      ) : (
+        <ol className="vault-feed">
+          {feed.data.map(({ event, project }, i) => (
+            <VaultFeedRow
+              key={`${project.slug}-${event.ts}-${event.ref ?? ""}-${i}`}
+              event={event}
+              project={project}
+              now={now}
+            />
           ))}
-        </div>
+        </ol>
       )}
+    </section>
+  );
+}
 
-      <dl className="project-counts">
-        <div title={`${p.counts.workDone} of ${p.counts.workTotal} work logs finished`}>
-          <dt>Work</dt>
-          <dd className="tabular">
-            {p.counts.workDone}<span className="project-count-of">/{p.counts.workTotal}</span>
-          </dd>
-        </div>
-        <div title={`${p.counts.workInProgress} work logs still open`}>
-          <dt>In flight</dt>
-          <dd className={`tabular${p.counts.workInProgress === 0 ? " is-zero" : ""}`}>
-            {p.counts.workInProgress}
-          </dd>
-        </div>
-        <div title={`${p.counts.bugsOpen} open of ${p.counts.bugsTotal} filed`}>
-          <dt>Open bugs</dt>
-          <dd className={`tabular${p.counts.bugsOpen === 0 ? " is-zero" : ""}`}>
-            {p.counts.bugsOpen}
-          </dd>
-        </div>
-        <div title={`${p.counts.events} events recorded`}>
-          <dt>Events</dt>
-          <dd className="tabular">{p.counts.events}</dd>
-        </div>
-      </dl>
-
-      <footer className="project-card-foot">
-        <span className="project-when tabular">
-          {p.counts.lastActivity
-            ? `Active ${formatRelative(p.counts.lastActivity, new Date(now))}`
-            : "No activity yet"}
-          {p.createdAt && <span className="project-since"> · started {formatDate(p.createdAt)}</span>}
+function VaultFeedRow({
+  event,
+  project,
+  now,
+}: {
+  event: VaultEvent;
+  project: Project;
+  now: number;
+}) {
+  const href = refHref(project.slug, event.ref) ?? `/p/${project.slug}`;
+  return (
+    <li>
+      <Link className={`feed-row tone-${tone(event.type)}`} to={href}>
+        <span className="feed-icon" aria-hidden="true">
+          <EventIcon type={event.type} />
         </span>
-        <span className="project-actions">
-          {onArchive && (
-            <button
-              className="link-button"
-              disabled={busy}
-              onClick={onArchive}
-              title="Hide this project from the default view. Nothing is deleted."
-            >
-              {busy ? "Archiving…" : "Archive"}
-            </button>
-          )}
-          {onRestore && (
-            <button className="link-button" disabled={busy} onClick={onRestore}>
-              {busy ? "Restoring…" : "Unarchive"}
-            </button>
+        <span className="feed-body">
+          <span className="feed-head">
+            <span className="feed-project">{project.name}</span>
+            <span className="feed-actor">{event.actor}</span>
+            <span className="feed-verb">{eventVerb(event.type)}</span>
+            {event.ref && <span className="feed-ref mono">{event.ref}</span>}
+          </span>
+          {event.summary && (
+            <span className="feed-summary">{eventSummary(event.summary)}</span>
           )}
         </span>
-      </footer>
-    </article>
+        <time className="feed-time tabular" dateTime={event.ts} title={formatDateTimeUtc(event.ts)}>
+          {formatRelative(event.ts, new Date(now))}
+        </time>
+      </Link>
+    </li>
   );
 }
 

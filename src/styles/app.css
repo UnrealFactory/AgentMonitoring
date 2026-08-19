@@ -169,6 +169,11 @@
   text-overflow: ellipsis;
 }
 
+.switcher-item-flag {
+  color: var(--text-tertiary);
+  font-weight: var(--weight-normal);
+}
+
 .switcher-item-meta {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
@@ -220,6 +225,10 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+  /* A vault with more projects than the column is tall scrolls its list rather than
+     pushing the vault footer off the bottom of the window. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Which project the three screens above belong to, and where the vault ones start. */
@@ -287,6 +296,50 @@
   color: var(--amber);
 }
 
+/* The vault's projects, listed under the Vault section so the column is populated on
+   every screen — including /projects, where the nav used to hold one row over 600px of
+   nothing. Indented one step, quieter than a screen link: these are places, not sections. */
+.nav-sub {
+  padding-left: var(--space-3);
+  font-weight: var(--weight-normal);
+  color: var(--text-tertiary);
+}
+
+.nav-sub.is-current,
+.nav-sub.active {
+  color: var(--text-primary);
+}
+
+.nav-bullet {
+  width: 5px;
+  height: 5px;
+  margin: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--text-tertiary);
+  flex: none;
+}
+
+.nav-sub:hover .nav-bullet,
+.nav-sub.is-current .nav-bullet {
+  background: var(--accent-text);
+}
+
+.nav-bullet.is-archived {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--text-tertiary);
+}
+
+.nav-sub-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-more .nav-sub-name {
+  color: var(--text-tertiary);
+}
+
+
 .sidebar-foot {
   margin-top: auto;
   padding-top: var(--space-3);
@@ -295,22 +348,29 @@
 
 .vault-path {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-2);
   border-radius: var(--radius-sm);
   transition: background var(--duration-fast) var(--ease);
 }
 
-.vault-path:hover {
-  background: var(--bg-hover);
+.vault-path-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-tertiary);
+  flex: none;
 }
 
-.vault-path-label {
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-  color: var(--text-tertiary);
+.vault-path-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.vault-path:hover {
+  background: var(--bg-hover);
 }
 
 .vault-path-name {
@@ -324,9 +384,10 @@
 
 .vault-path-value {
   font-size: var(--text-xs);
-  color: var(--text-secondary);
-  overflow-wrap: anywhere;
-  line-height: 1.45;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ===========================================================================
@@ -438,7 +499,7 @@
 
 .palette-meta {
   flex: none;
-  max-width: 22ch;
+  max-width: 28ch;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   overflow: hidden;
@@ -823,6 +884,62 @@
 
 .button:hover {
   background: var(--bg-active);
+}
+
+.button-sm {
+  height: 24px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* --- the vault is not answering ------------------------------------------- *
+
+   One line above the page, only while a refresh is failing. Amber, not red: the data on
+   screen is real, it is just not moving. It scrolls with the page rather than pinning
+   itself over the content — this is a fact about the app, not an alarm. */
+
+/* Same column as .page, so the bar starts exactly where the page title does — and
+   sticky, because a vault that goes away while the reader is halfway down a record is
+   exactly the moment they must not have to scroll up to find out. */
+.vault-alert-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-8) var(--space-2);
+  background: var(--bg-app);
+}
+
+.vault-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgba(242, 201, 76, 0.28);
+  border-radius: var(--radius);
+  background: var(--amber-soft);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+}
+
+.vault-alert-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--amber);
+  flex: none;
+}
+
+.vault-alert-text {
+  flex: 1;
+  min-width: 0;
+  line-height: var(--leading-snug);
+}
+
+.vault-alert-detail {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 /* --- pills, tags, agents -------------------------------------------------- */
@@ -3946,6 +4063,12 @@ a.feed-row:hover .feed-ref {
   line-height: 1.45;
 }
 
+.vault-bar-source {
+  margin-top: 3px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
 .vault-bar-facts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3979,6 +4102,13 @@ a.feed-row:hover .feed-ref {
   min-width: 0;
 }
 
+/* The qualifier on a fact: "· 1 archived", "· from the AGENTMON_VAULT variable". */
+.vault-bar-aside {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+}
+
 .vault-bar-hint {
   max-width: 34ch;
   font-size: var(--text-xs);
@@ -4001,7 +4131,7 @@ a.feed-row:hover .feed-ref {
   }
 }
 
-/* --- project cards -------------------------------------------------------- */
+/* --- project rows --------------------------------------------------------- */
 
 .project-section {
   display: flex;
@@ -4020,44 +4150,54 @@ a.feed-row:hover .feed-ref {
   flex: 1;
 }
 
-.project-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
-  gap: var(--space-4);
-}
-
-/* The card is not itself a link — it holds one, plus the buttons that act on the project.
-   The title's ::after covers the card, so the whole thing is still clickable and the
-   actions sit above it. */
-.project-card {
-  position: relative;
+.project-rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  background: var(--bg-surface);
+  gap: 1px;
+  list-style: none;
+  background: var(--border-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease);
+  overflow: hidden;
 }
 
-.project-card:hover {
+/* The row is not itself a link — it holds one, plus the buttons that act on the project.
+   The name's ::after covers the row, so the whole thing is still clickable and the
+   actions sit above it. */
+.project-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-4);
+  background: var(--bg-surface);
+  transition: background var(--duration) var(--ease);
+}
+
+.project-row:hover {
   background: var(--bg-raised);
-  border-color: var(--border);
 }
 
-.project-card.is-archived {
-  background: transparent;
+.project-row.is-archived {
+  background: var(--bg-app);
 }
 
-.project-card.is-archived .project-name {
+.project-row.is-archived .project-name {
   color: var(--text-secondary);
 }
 
-.project-card-head {
+.project-row-main {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.project-row-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
   min-width: 0;
 }
@@ -4073,7 +4213,6 @@ a.feed-row:hover .feed-ref {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: var(--radius-lg);
 }
 
 .project-link:focus-visible {
@@ -4082,11 +4221,12 @@ a.feed-row:hover .feed-ref {
 
 .project-link:focus-visible::after {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: -2px;
+  border-radius: var(--radius);
 }
 
 .project-name {
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tight);
   overflow: hidden;
@@ -4101,78 +4241,86 @@ a.feed-row:hover .feed-ref {
   flex: none;
 }
 
+.pill-archived {
+  background: var(--grey-soft);
+  color: var(--text-secondary);
+  padding: 1px 8px;
+}
+
+/* On the dashboard the pill is a link to the screen that can restore the project. */
+a.pill-archived:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+/* Wrapped, never clamped: a description cut mid-word is a description the reader has to
+   go somewhere else for, and at this width one or two sentences fit. */
 .project-desc {
   font-size: var(--text-base);
   color: var(--text-secondary);
   line-height: var(--leading-snug);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  max-width: 86ch;
 }
 
 .project-desc-none {
   color: var(--text-tertiary);
 }
 
-.project-counts {
+.project-figures {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-2);
-  margin-top: auto;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
+  grid-template-columns: repeat(3, minmax(0, 104px));
+  gap: var(--space-5);
+  margin: 0;
 }
 
-.project-counts div {
+.project-figure {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
-.project-counts dt {
+.project-figures dt {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
   color: var(--text-tertiary);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.project-counts dd {
+.project-figures dd {
   margin: 0;
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   font-weight: var(--weight-medium);
   color: var(--text-primary);
+  line-height: 1.2;
 }
 
-.project-counts dd.is-zero {
+.project-figures dd.is-zero {
   color: var(--text-tertiary);
 }
 
-.project-count-of {
-  color: var(--text-tertiary);
-  font-weight: var(--weight-normal);
-}
-
-.project-card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding-top: var(--space-1);
+.project-figure-note {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.project-row-end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
   min-width: 0;
 }
 
 .project-when {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -4180,11 +4328,67 @@ a.feed-row:hover .feed-ref {
   color: var(--text-tertiary);
 }
 
-/* above the card's stretched link, or it would not be clickable */
+/* above the row's stretched link, or it would not be clickable */
 .project-actions {
   position: relative;
   z-index: 1;
   flex: none;
+}
+
+@media (max-width: 1100px) {
+  .project-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-4);
+  }
+
+  .project-row-end {
+    grid-column: 2;
+    align-items: flex-end;
+  }
+}
+
+@media (max-width: 820px) {
+  .project-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-figures {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .project-row-end {
+    grid-column: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+}
+
+/* --- the vault-wide feed -------------------------------------------------- */
+
+.vault-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  list-style: none;
+  padding: var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+/* The project a vault-wide event belongs to — the one thing the per-project feed on the
+   dashboard never has to say. */
+.feed-project {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
 }
 
 /* --- create a project ----------------------------------------------------- */
@@ -4212,10 +4416,13 @@ a.feed-row:hover .feed-ref {
   color: var(--text-secondary);
 }
 
+/* A form is a reading measure, not a container: a Description input stretched to 1400px
+   for "one or two sentences" (round 1 critic) is a field nobody can scan. */
 .create-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
+  max-width: 780px;
 }
 
 .field {

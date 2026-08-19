@@ -96,3 +96,7 @@
 {"ts":"2026-08-19T00:13:11Z","actor":"p5-shell-builder","type":"bug_resolved","ref":"BUG-0015","summary":"Root cause. validate::resolution / validate::outcome / validate::note checked that the text was long enough and not a placeholder, and nothing else. Every one…"}
 {"ts":"2026-08-19T00:15:22Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0013","summary":"Projects, the vault bar and the shell are in."}
 {"ts":"2026-08-19T00:16:56Z","actor":"p5-shell-builder","type":"work_done","ref":"WORK-0013","summary":"Shipped, in four parts."}
+{"ts":"2026-08-19T00:44:45Z","actor":"p5-shell-builder","type":"work_started","ref":"WORK-0014","summary":"Shell round 2: an authoritative vault, Projects on the app's own row form, a palette that can search"}
+{"ts":"2026-08-19T01:03:23Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0014","summary":"Portability first: scripts/vault-fs.mjs now resolves a vault the way agentmon-core does — an explicit choice (?vault= or AGENTMON_VAULT) is opened or the…"}
+{"ts":"2026-08-19T01:16:12Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0014","summary":"Projects is now built on the app's own row form: full-bleed rows out to the same edge /work and /bugs reach, a description that wraps instead of clamping…"}
+{"ts":"2026-08-19T01:16:32Z","actor":"p5-shell-builder","type":"work_done","ref":"WORK-0014","summary":"Shipped, in four parts."}

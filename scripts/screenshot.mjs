@@ -259,7 +259,7 @@ try {
       },
     },
     { name: "bug-detail", path: `/p/${slug}/bugs/${bug.id}`, waitFor: ".record-title", full: true },
-    { name: "projects", path: "/projects", waitFor: ".project-card" },
+    { name: "projects", path: "/projects", waitFor: ".project-row" },
     {
       // The command palette is a screen like any other — it is what Ctrl+K opens — so it
       // gets photographed rather than described.
@@ -270,6 +270,24 @@ try {
         await page.waitForSelector(".page-title", { state: "visible" });
         await page.waitForFunction(() => !document.querySelector(".skeleton"));
         await page.keyboard.press("Control+K");
+      },
+    },
+    {
+      // …and again from the vault screen, which is where it used to have nothing to offer:
+      // records are loaded for every project, not only for the slug in the URL.
+      name: "palette-vault",
+      path: "/projects",
+      waitFor: ".palette-item",
+      prepare: async (page) => {
+        await page.waitForSelector(".project-row", { state: "visible" });
+        await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        await page.keyboard.press("Control+K");
+        await page.waitForSelector(".palette-input", { state: "visible" });
+        await page.waitForFunction(
+          () => document.querySelectorAll(".palette-item").length > 3,
+          null,
+          { timeout: 15_000 },
+        );
       },
     },
   ];

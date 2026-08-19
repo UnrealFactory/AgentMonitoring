@@ -4,6 +4,14 @@ export interface AsyncState<T> {
   data: T | undefined;
   error: string | undefined;
   /**
+   * A *background* refresh that failed while the screen kept its last good data.
+   *
+   * Not an error state — nothing on screen changes — but not nothing either: without it a
+   * board whose vault went unreadable freezes on stale numbers forever with no tell. The
+   * shell turns it into one line above the page (AppContext, App.tsx).
+   */
+  refreshError: string | undefined;
+  /**
    * The status the failure carried, when it carried one — 404 for a record or project
    * that is not in the vault. Screens use it to say what actually happened instead of
    * blaming the vault for a link that outlived its record.
@@ -41,6 +49,7 @@ export function useAsync<T>(
 ): AsyncState<T> {
   const [data, setData] = useState<T | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [refreshError, setRefreshError] = useState<string | undefined>(undefined);
   const [status, setStatus] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
@@ -77,14 +86,19 @@ export function useAsync<T>(
         settled.current = true;
         setData(value);
         setError(undefined);
+        setRefreshError(undefined);
         setStatus(undefined);
         setLoading(false);
       })
       .catch((err: unknown) => {
         if (id !== runId.current) return;
         // A background refresh that failed leaves the screen as it was: the reader did
-        // not ask for anything, so nothing they are looking at should change.
-        if (refresh) return;
+        // not ask for anything, so nothing they are looking at should change — but the
+        // shell says so in one line, rather than letting stale numbers pass for current.
+        if (refresh) {
+          setRefreshError(err instanceof Error ? err.message : String(err));
+          return;
+        }
         setError(err instanceof Error ? err.message : String(err));
         setStatus(statusOf(err));
         setLoading(false);
@@ -94,5 +108,5 @@ export function useAsync<T>(
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
 
-  return { data, error, status, loading, reload };
+  return { data, error, refreshError, status, loading, reload };
 }

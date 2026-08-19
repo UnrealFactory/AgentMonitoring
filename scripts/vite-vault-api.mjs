@@ -7,7 +7,7 @@ import {
   createVaultReader,
   handleVaultApi,
   handleVaultWrite,
-  resolveVaultDir,
+  resolveVault,
   VaultError,
 } from "./vault-fs.mjs";
 
@@ -51,9 +51,11 @@ function middleware(repoRoot, logger) {
     const url = new URL(req.url, "http://localhost");
     try {
       // `?vault=` points the dev server at another vault for the session — the browser-mode
-      // twin of the desktop app's "Open vault folder…" (src/lib/api.ts carries it).
-      const dir = resolveVaultDir(repoRoot, url.searchParams.get("vault"));
-      const reader = createVaultReader(dir);
+      // twin of the desktop app's "Open vault folder…" (src/lib/api.ts carries it). A
+      // configured vault that cannot be opened fails this request; it never resolves to a
+      // different vault (see resolveVault).
+      const { dir, source } = resolveVault(repoRoot, url.searchParams.get("vault"));
+      const reader = createVaultReader(dir, source);
       if (req.method === "POST") {
         const body = await readBody(req);
         send(res, 200, handleVaultWrite(reader, repoRoot, url.pathname, body));
@@ -90,7 +92,7 @@ export function vaultApiPlugin(options = {}) {
          The vault is still excluded from Vite's own watcher below, so a record write cannot
          trip module-graph invalidation either. */
       try {
-        const dir = resolveVaultDir(repoRoot);
+        const { dir } = resolveVault(repoRoot);
         server.watcher.unwatch(dir);
       } catch (err) {
         server.config.logger.warn(`[vault-api] ${err.message}`);

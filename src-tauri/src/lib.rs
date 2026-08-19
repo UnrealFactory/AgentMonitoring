@@ -540,6 +540,68 @@ mod tests {
         fs::remove_dir_all(&root).ok();
     }
 
+    /**
+     * Switching vaults has to move the watcher, not add one.
+     *
+     * `rearm_watcher` assigns the new watcher into the state slot, which drops the old one —
+     * that drop is what closes its channel and ends its debounce thread. If it did not, a
+     * human who opened a second vault would get refreshes from the first one they had
+     * stopped looking at, and the two vaults' events would interleave. This exercises the
+     * assignment directly (the command wrapper around it needs a Tauri AppHandle; the
+     * behaviour that can go wrong is here).
+     */
+    #[test]
+    fn re_arming_the_watcher_moves_it_to_the_new_vault() {
+        let old = tmp_vault("rearm-old");
+        let new = tmp_vault("rearm-new");
+        let (tx, rx) = channel::<VaultChanged>();
+        let tx_new = tx.clone();
+
+        let mut slot: Option<RecommendedWatcher> = Some(
+            spawn_vault_watcher(&old, move |c| {
+                let _ = tx.send(c);
+            })
+            .expect("watcher starts on the first vault"),
+        );
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(slot.is_some(), "the first vault is being watched");
+
+        // What switch_vault does: the new watcher takes the slot, and the old one drops.
+        slot = Some(
+            spawn_vault_watcher(&new, move |c| {
+                let _ = tx_new.send(c);
+            })
+            .expect("watcher starts on the second vault"),
+        );
+        std::thread::sleep(Duration::from_millis(300));
+
+        let record = |root: &PathBuf, body: &str| {
+            fs::write(
+                root.join("projects").join("demo").join("worklogs").join("WORK-0001.md"),
+                body,
+            )
+            .unwrap();
+        };
+
+        record(&old, "---\nid: WORK-0001\n---\n\n## What\n\nold vault\n");
+        assert!(
+            rx.recv_timeout(Duration::from_millis(1500)).is_err(),
+            "the vault that was switched away from must not report changes any more"
+        );
+
+        record(&new, "---\nid: WORK-0001\n---\n\n## What\n\nnew vault\n");
+        let change = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("a write to the newly opened vault is reported");
+        assert_eq!(change.vault, new.display().to_string());
+        assert_eq!(change.projects, vec!["demo".to_string()]);
+
+        assert!(slot.is_some(), "the app holds exactly one watcher");
+        drop(slot);
+        fs::remove_dir_all(&old).ok();
+        fs::remove_dir_all(&new).ok();
+    }
+
     #[test]
     fn temp_files_and_lock_files_are_not_changes() {
         let ev = |name: &str| notify::Event {
