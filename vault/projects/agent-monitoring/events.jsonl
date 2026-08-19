@@ -100,3 +100,9 @@
 {"ts":"2026-08-19T01:03:23Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0014","summary":"Portability first: scripts/vault-fs.mjs now resolves a vault the way agentmon-core does — an explicit choice (?vault= or AGENTMON_VAULT) is opened or the…"}
 {"ts":"2026-08-19T01:16:12Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0014","summary":"Projects is now built on the app's own row form: full-bleed rows out to the same edge /work and /bugs reach, a description that wraps instead of clamping…"}
 {"ts":"2026-08-19T01:16:32Z","actor":"p5-shell-builder","type":"work_done","ref":"WORK-0014","summary":"Shipped, in four parts."}
+{"ts":"2026-08-19T01:45:00Z","actor":"p5-shell-builder","type":"work_started","ref":"WORK-0015","summary":"Palette keyboard contract, sidebar current-location fix, CRLF parity"}
+{"ts":"2026-08-19T02:05:00Z","actor":"p5-shell-builder","type":"bug_created","ref":"BUG-0016","summary":"cargo test --workspace failed once in ~16 runs in write_roundtrip.rs, and the failing test name was not captured"}
+{"ts":"2026-08-19T02:00:00Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0015","summary":"The palette is a modal now, in the sense the word is supposed to carry."}
+{"ts":"2026-08-19T02:07:00Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0015","summary":"Sidebar: the shell no longer says you are in two places at once, and the gate found two cases where it did rather than the one that was reported."}
+{"ts":"2026-08-19T02:12:00Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0015","summary":"Portability: browser mode now reads CRLF the way agentmon-core does."}
+{"ts":"2026-08-19T02:18:00Z","actor":"p5-shell-builder","type":"work_done","ref":"WORK-0015","summary":"### Shipped"}

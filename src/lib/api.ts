@@ -258,6 +258,17 @@ export const POLL_MS = 2_000;
 /** Slowest the poll backs off to while the vault keeps failing to answer. */
 export const POLL_MAX_MS = 30_000;
 
+/**
+ * How often the desktop app checks that the vault it is watching is still there.
+ *
+ * The watcher is the only thing that moves the desktop app, and a `notify` handle on a
+ * directory that has been renamed or unplugged does not fail — it simply never fires again.
+ * Browser mode polls and can say "not reading the vault right now"; without this the desktop
+ * app, which is the product, would sit on stale numbers indefinitely with no tell. One read
+ * of vault.json is a rounding error next to the file watch itself.
+ */
+export const DESKTOP_HEALTH_MS = 15_000;
+
 /** Whether the vault is answering, and what it said when it stopped. */
 export type VaultHealth = { ok: true } | { ok: false; error: string };
 
@@ -292,8 +303,29 @@ export function subscribeVaultChanges(
         else dispose = un;
       })
       .catch(() => {});
+
+    /* The honesty half, desktop side (see DESKTOP_HEALTH_MS): a heartbeat read of the
+       vault, so a watcher that has quietly stopped firing is a sentence on screen rather
+       than numbers that never move again. Same rule as the browser poll — one miss is
+       noise, two is the vault not being there — and coming back re-reads everything. */
+    let fails = 0;
+    const beat = setInterval(async () => {
+      try {
+        await api.vaultInfo();
+        if (fails > 0) onChange();
+        fails = 0;
+        onHealth?.({ ok: true });
+      } catch (err) {
+        fails += 1;
+        if (fails >= 2) {
+          onHealth?.({ ok: false, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    }, DESKTOP_HEALTH_MS);
+
     return () => {
       cancelled = true;
+      clearInterval(beat);
       dispose();
     };
   }

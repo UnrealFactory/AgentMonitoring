@@ -466,6 +466,8 @@
   color: var(--text-tertiary);
 }
 
+/* An option, not a button: the rows are driven by aria-activedescendant from the input, so
+   they are never focused and never tab stops — which is what let Tab out of the dialog. */
 .palette-item {
   display: flex;
   align-items: center;
@@ -475,6 +477,7 @@
   border-radius: var(--radius);
   text-align: left;
   min-width: 0;
+  cursor: pointer;
 }
 
 .palette-item.is-active {
@@ -940,6 +943,11 @@
 .vault-alert-detail {
   color: var(--text-secondary);
   overflow-wrap: anywhere;
+}
+
+/* The same bar, inside a page, for a record that stopped being readable under the reader. */
+.vault-alert-inline {
+  margin-bottom: var(--space-4);
 }
 
 /* --- pills, tags, agents -------------------------------------------------- */
@@ -3070,13 +3078,15 @@ kbd {
   text-overflow: ellipsis;
 }
 
-/* A bug title is the thing being triaged, so it gets two lines before it gives up any
-   words — and it breaks at a word, never mid-word. */
+/* A bug title is the thing being triaged, so it gets three lines before it gives up any
+   words — and it breaks at a word, never mid-word. Three, not two: the longest titles in
+   this vault run to ~120 characters, which is three lines in this column, and two of them
+   clamped the highest-priority item on the screen while the card stood empty below it. */
 .now-row-title.is-wrap {
   white-space: normal;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: break-word;

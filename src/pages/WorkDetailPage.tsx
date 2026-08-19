@@ -28,6 +28,7 @@ import {
   ErrorState,
   RecordTitle,
   Skeleton,
+  StaleRecordBar,
   Tag,
   WorkStatusPill,
 } from "../components/ui";
@@ -59,7 +60,7 @@ export function WorkDetailPage() {
   const slug = useProjectSlug()!;
   const project = useCurrentProject();
   const { id = "" } = useParams<{ id: string }>();
-  const { data, error, status, loading, reload } = useAsync(
+  const { data, error, refreshError, status, loading, reload } = useAsync(
     () => api.getWorklog(slug, id),
     [slug, id],
     useVaultNonce()
@@ -115,6 +116,23 @@ export function WorkDetailPage() {
 
   return (
     <div className="page page-detail">
+      {/* The record moved out from under the reader — deleted, or the vault stopped
+          answering. The page keeps what it had and says so. */}
+      {refreshError && (
+        <StaleRecordBar
+          id={work.id}
+          message={refreshError}
+          status={status}
+          onRetry={reload}
+          action={
+            status === 404 ? (
+              <Link className="button button-sm" to={`/p/${slug}/work`}>
+                Work list
+              </Link>
+            ) : undefined
+          }
+        />
+      )}
       <nav className="breadcrumb">
         <Link to={`/p/${slug}`}>{project?.name ?? slug}</Link>
         <span aria-hidden="true">/</span>

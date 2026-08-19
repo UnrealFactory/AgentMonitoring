@@ -35,6 +35,7 @@ import {
   RecordTitle,
   SeverityBadge,
   Skeleton,
+  StaleRecordBar,
   Tag,
 } from "../components/ui";
 import {
@@ -62,7 +63,7 @@ export function BugDetailPage() {
   const slug = useProjectSlug()!;
   const project = useCurrentProject();
   const { id = "" } = useParams<{ id: string }>();
-  const { data, error, status, loading, reload } = useAsync(
+  const { data, error, refreshError, status, loading, reload } = useAsync(
     () => api.getBug(slug, id),
     [slug, id],
     useVaultNonce()
@@ -141,6 +142,23 @@ export function BugDetailPage() {
 
   return (
     <div className="page page-detail">
+      {/* The record moved out from under the reader — deleted, or the vault stopped
+          answering. The page keeps what it had and says so. */}
+      {refreshError && (
+        <StaleRecordBar
+          id={bug.id}
+          message={refreshError}
+          status={status}
+          onRetry={reload}
+          action={
+            status === 404 ? (
+              <Link className="button button-sm" to={`/p/${slug}/bugs`}>
+                Bug board
+              </Link>
+            ) : undefined
+          }
+        />
+      )}
       <nav className="breadcrumb">
         <Link to={`/p/${slug}`}>{project?.name ?? slug}</Link>
         <span aria-hidden="true">/</span>

@@ -7,10 +7,13 @@
  *   /  ⌘F ⌃F    focus the search box   esc clear the query and drop focus
  *
  * Arrow keys are handed back to a focused <select>, and letters are handed back to any
- * text field, so typing "j" into search types a j.
+ * text field, so typing "j" into search types a j. And the whole thing stands down while a
+ * modal is open: this handler is on `window`, so without that check the command palette's
+ * arrows moved *this* cursor behind the scrim and ↵ navigated the page under it.
  */
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useNavigate } from "react-router-dom";
+import { isModalOpen } from "./modal";
 
 export function useListKeyboard<T>(opts: {
   /** Rows in the order they appear on screen. */
@@ -35,8 +38,9 @@ export function useListKeyboard<T>(opts: {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       // A control that has already acted on this key owns it: an open filter menu moves
-      // its own cursor with the arrows, and the list must not move too.
-      if (e.defaultPrevented || el?.closest?.(".select-root")) return;
+      // its own cursor with the arrows, and the list must not move too. A modal owns every
+      // key while it is up — including Escape, which is how it gets closed.
+      if (e.defaultPrevented || isModalOpen() || el?.closest?.(".select-root")) return;
       const typing =
         !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT");
 

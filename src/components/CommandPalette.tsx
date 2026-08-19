@@ -12,12 +12,22 @@
  * Deliberately small: it navigates, it does not act. Nothing in this app is destructive
  * enough to need a command surface, and a palette that can quietly change data is a palette
  * people stop trusting with their fingers.
+ *
+ * **It is a modal, and it behaves like one.** The three keys printed along its bottom edge
+ * work wherever the focus is, because they are handled on `window` in the capture phase for
+ * as long as it is open — not on the search input, which is what it used to do: one Tab put
+ * focus on a result row, and from there esc did nothing while the arrows drove the list
+ * screen *behind* the scrim and ↵ navigated it. The results are not tab stops at all now;
+ * they are options the input points at with `aria-activedescendant`, the way a combobox is
+ * supposed to work. Tab is trapped, focus goes back where it came from on close, and the
+ * modal lock (src/lib/modal.ts) tells the list screens' own key handler to stand down.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../AppContext";
 import { api } from "../lib/api";
 import { pluralize } from "../lib/format";
+import { trapTab, useModalLock } from "../lib/modal";
 import type { BugSummary, Project, WorklogSummary } from "../lib/types";
 
 /** Fire this from anywhere in the app (the sidebar's search button) to open the palette. */
@@ -27,6 +37,9 @@ export const openPalette = () => window.dispatchEvent(new CustomEvent(PALETTE_EV
 
 /** How many records the default (empty-query) menu shows. */
 const DEFAULT_RECORDS = 6;
+
+/** The id `aria-activedescendant` points at — the option is not focused, it is named. */
+const optionId = (i: number) => `palette-option-${i}`;
 
 interface Item {
   id: string;
@@ -80,12 +93,28 @@ export function CommandPalette() {
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  /** Whatever had the keyboard when the palette opened, to hand it back on close. */
+  const returnFocus = useRef<HTMLElement | null>(null);
 
   const slug = location.pathname.startsWith("/p/")
     ? location.pathname.split("/")[2]
     : undefined;
 
   const close = useCallback(() => setOpen(false), []);
+
+  /** Open what the highlight is on, and get out of the way. */
+  const run = useCallback(
+    (item: Item | undefined) => {
+      if (!item) return;
+      setOpen(false);
+      navigate(item.to);
+    },
+    [navigate]
+  );
+
+  // Every screen-level key handler in the app asks this first (src/lib/modal.ts).
+  useModalLock(open);
 
   // Ctrl/Cmd+K anywhere, including from inside a search box — and the same key closes it.
   useEffect(() => {
@@ -105,7 +134,15 @@ export function CommandPalette() {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      // Back where it came from — the row, the search box or the nav link the reader was on.
+      const back = returnFocus.current;
+      returnFocus.current = null;
+      if (back && back.isConnected) back.focus();
+      return;
+    }
+    const el = document.activeElement;
+    returnFocus.current = el instanceof HTMLElement && el !== document.body ? el : null;
     setQuery("");
     setActive(0);
     inputRef.current?.focus();
@@ -259,29 +296,81 @@ export function CommandPalette() {
     });
   }, [active, items.length]);
 
+  /**
+   * A modal that cannot be dismissed from the keyboard is not a modal, so its keys are bound
+   * to the **window, in the capture phase**, for as long as it is open: they are answered
+   * before anything below can see them, wherever the focus happens to be, and
+   * `stopPropagation` keeps them off the screen behind the scrim. Bound to the input alone —
+   * as they were — one Tab was enough to leave a dialog that esc could not close and arrows
+   * that drove the list underneath.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      const handled = () => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      const move = (delta: number) =>
+        setActive((i) => (items.length ? (i + delta + items.length) % items.length : 0));
+
+      switch (e.key) {
+        case "Escape":
+          handled();
+          close();
+          return;
+        case "ArrowDown":
+          handled();
+          move(1);
+          return;
+        case "ArrowUp":
+          handled();
+          move(-1);
+          return;
+        case "Home":
+          handled();
+          setActive(0);
+          return;
+        case "End":
+          handled();
+          setActive(Math.max(0, items.length - 1));
+          return;
+        case "Enter":
+          handled();
+          run(items[active]);
+          return;
+        case "Tab": {
+          // Tab used to walk straight out of an aria-modal dialog into the sidebar behind it.
+          const root = dialogRef.current;
+          if (root && trapTab(root, e.shiftKey)) handled();
+          return;
+        }
+        default:
+          // A character typed while the focus has drifted (a click on the scrim, say)
+          // belongs in the query box, which is the only thing here that takes typing.
+          if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+            if (!dialogRef.current?.contains(document.activeElement)) inputRef.current?.focus();
+          }
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, items, active, close, run]);
+
+  /* The other half of the trap: focus that lands outside the dialog by any route the keys
+     do not cover (a click on the scrim's padding, the window coming back) comes home. */
+  useEffect(() => {
+    if (!open) return;
+    const onFocusIn = (e: FocusEvent) => {
+      const root = dialogRef.current;
+      if (root && e.target instanceof Node && !root.contains(e.target)) inputRef.current?.focus();
+    };
+    document.addEventListener("focusin", onFocusIn);
+    return () => document.removeEventListener("focusin", onFocusIn);
+  }, [open]);
+
   if (!open) return null;
-
-  const run = (item: Item | undefined) => {
-    if (!item) return;
-    close();
-    navigate(item.to);
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      close();
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive((i) => (items.length ? (i + 1) % items.length : 0));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive((i) => (items.length ? (i - 1 + items.length) % items.length : 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      run(items[active]);
-    }
-  };
 
   const searchable = (records?.loaded ?? []).reduce(
     (n, l) => n + l.works.length + l.bugs.length,
@@ -293,6 +382,7 @@ export function CommandPalette() {
     <div className="palette-scrim" onMouseDown={close} role="presentation">
       <div
         className="palette"
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
@@ -308,14 +398,21 @@ export function CommandPalette() {
               strokeLinecap="round"
             />
           </svg>
+          {/* A combobox over a listbox: the input keeps the focus and *names* the
+              highlighted option, so the arrows can move a highlight the reader can see
+              without the focus ever leaving the box they are typing in. */}
           <input
             ref={inputRef}
             className="palette-input"
             value={query}
+            role="combobox"
+            aria-expanded={items.length > 0}
+            aria-controls="palette-results"
+            aria-autocomplete="list"
+            aria-activedescendant={items.length ? optionId(active) : undefined}
             aria-label="Search records, projects and screens"
             placeholder="Record id or title, project, screen…"
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={onKeyDown}
           />
         </div>
 
@@ -332,14 +429,27 @@ export function CommandPalette() {
               : "No records are loaded yet — this vault has none, or they could not be read."}
           </p>
         ) : (
-          <ul className="palette-list" ref={listRef} role="listbox" aria-label="Results">
+          <ul
+            className="palette-list"
+            ref={listRef}
+            id="palette-results"
+            role="listbox"
+            aria-label="Results"
+          >
             {items.map((item, i) => {
               const head = item.group !== lastGroup ? item.group : null;
               lastGroup = item.group;
+              /* Options, not buttons. A button here is a tab stop, and tab stops inside a
+                 modal are how the focus got out of it in the first place. */
               return (
-                <li key={item.id}>
-                  {head && <p className="palette-group">{head}</p>}
-                  <button
+                <Fragment key={item.id}>
+                  {head && (
+                    <li className="palette-group" role="presentation">
+                      {head}
+                    </li>
+                  )}
+                  <li
+                    id={optionId(i)}
                     className={`palette-item${i === active ? " is-active" : ""}`}
                     role="option"
                     aria-selected={i === active}
@@ -350,8 +460,8 @@ export function CommandPalette() {
                     <span className="palette-label">{item.label}</span>
                     {item.hint && <span className="palette-hint mono">{item.hint}</span>}
                     {item.meta && <span className="palette-meta">{item.meta}</span>}
-                  </button>
-                </li>
+                  </li>
+                </Fragment>
               );
             })}
           </ul>

@@ -181,7 +181,10 @@ function parseFrontmatter(text) {
 }
 
 export function splitFrontmatter(text) {
-  const src = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  // Belt and braces with readText(): this one is exported, so it can be handed a string
+  // that never went through the reader, and a stray \r changes what the parsers below see.
+  const noCr = text.includes("\r") ? text.replace(/\r\n/g, "\n") : text;
+  const src = noCr.charCodeAt(0) === 0xfeff ? noCr.slice(1) : noCr;
   const m = src.match(/^---\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/);
   if (!m) return null;
   return { frontmatter: m[1], body: src.slice(m[0].length) };
@@ -286,9 +289,27 @@ function excerpt(text, maxChars = 180) {
 
 // --- records ----------------------------------------------------------------
 
+/**
+ * Every byte this reader takes off disk comes through here, with CRLF normalised to LF.
+ *
+ * Parity, and not a cosmetic kind. `agentmon-core` parses with `str::lines()`, which drops
+ * the `\r` — so the Rust side of the app never sees one. This file used to keep them, and
+ * they survived all the way to `noteOutline()` in src/lib/dashboard.ts, which splits
+ * paragraphs on /\n{2,}/: against `\r\n\r\n` that never matches, the whole note collapses
+ * into one paragraph, and the dashboard silently drops the sentences a reader is there for
+ * ("waiting on nova", "Deliberately not doing the production swap this week"). Same vault,
+ * two transports, different screens — the one thing this file exists not to do.
+ *
+ * CRLF is not exotic: it is what `git clone` writes on Windows with core.autocrlf=true, and
+ * what Notepad saves.
+ */
+function readText(path) {
+  return readFileSync(path, "utf8").replace(/\r\n/g, "\n");
+}
+
 function readJson(path, what) {
   try {
-    return JSON.parse(readFileSync(path, "utf8"));
+    return JSON.parse(readText(path));
   } catch (e) {
     throw new VaultError(500, `${path}: invalid ${what}: ${e.message}`);
   }
@@ -299,7 +320,7 @@ const list = (v) => (Array.isArray(v) ? v.map(String) : v === null || v === unde
 const nullable = (v) => (v === null || v === undefined || v === "" ? null : String(v));
 
 function parseWorklog(path) {
-  const raw = readFileSync(path, "utf8");
+  const raw = readText(path);
   const split = splitFrontmatter(raw);
   if (!split) throw new VaultError(500, `${path}: missing YAML frontmatter (see SPEC.md)`);
   const fm = parseFrontmatter(split.frontmatter);
@@ -341,7 +362,7 @@ function parseWorklog(path) {
 }
 
 function parseBug(path) {
-  const raw = readFileSync(path, "utf8");
+  const raw = readText(path);
   const split = splitFrontmatter(raw);
   if (!split) throw new VaultError(500, `${path}: missing YAML frontmatter (see SPEC.md)`);
   const fm = parseFrontmatter(split.frontmatter);
@@ -587,7 +608,7 @@ export function createVaultReader(vaultDir, source = "flag") {
     listEvents(slug, limit) {
       const path = join(projectDir(slug), "events.jsonl");
       if (!existsSync(path)) return [];
-      const events = readFileSync(path, "utf8")
+      const events = readText(path)
         .split("\n")
         .filter((l) => l.trim())
         .map((l) => {

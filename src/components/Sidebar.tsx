@@ -12,7 +12,7 @@
  *     from every screen, and the list doubles as the switcher's flat form.
  */
 import { useEffect, useRef, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp, useCurrentProject } from "../AppContext";
 import { openPalette } from "./CommandPalette";
 import { pluralize } from "../lib/format";
@@ -41,21 +41,63 @@ export function Sidebar() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  /** The menu's items in screen order, for the arrow keys. */
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
+
+  /* A role="menu" whose arrows do nothing is a menu in name only. Opening puts the keyboard
+     on the project you are standing in; ↑ ↓ walk the list, Home/End jump, esc closes and
+     gives the button back its focus, Tab leaves the way it does in every other menu. */
+  useEffect(() => {
+    if (!menuOpen) return;
+    const items = () =>
+      itemRefs.current.filter((el): el is HTMLButtonElement => !!el && el.isConnected);
+    const focusAt = (i: number) => {
+      const list = items();
+      if (list.length) list[(i + list.length) % list.length].focus();
+    };
+    const current = itemRefs.current.findIndex(
+      (el) => el?.classList.contains("is-current") ?? false
+    );
+    focusAt(Math.max(0, current));
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        buttonRef.current?.focus();
+        return;
+      }
+      if (!menuRef.current?.contains(document.activeElement)) return;
+      const list = items();
+      const at = list.indexOf(document.activeElement as HTMLButtonElement);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        focusAt(at + 1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        focusAt(at - 1);
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        focusAt(0);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        focusAt(list.length - 1);
+      } else if (e.key === "Tab") {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("mousedown", onDown);
   }, [menuOpen]);
 
   const base = current ? `/p/${current.slug}` : undefined;
@@ -82,6 +124,7 @@ export function Sidebar() {
       <div className="project-switcher" ref={menuRef}>
         <button
           className="switcher-button"
+          ref={buttonRef}
           onClick={() => setMenuOpen((v) => !v)}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
@@ -111,10 +154,13 @@ export function Sidebar() {
 
         {menuOpen && (
           <div className="switcher-menu" role="menu">
-            {switchable.map((p) => (
+            {switchable.map((p, i) => (
               <button
                 key={p.slug}
                 role="menuitem"
+                ref={(el) => {
+                  itemRefs.current[i] = el;
+                }}
                 className={`switcher-item${p.slug === current?.slug ? " is-current" : ""}`}
                 onClick={() => navigate(`/p/${p.slug}`)}
               >
@@ -135,6 +181,9 @@ export function Sidebar() {
             <div className="switcher-sep" />
             <button
               role="menuitem"
+              ref={(el) => {
+                itemRefs.current[switchable.length] = el;
+              }}
               className="switcher-item"
               onClick={() => navigate("/projects")}
             >
@@ -212,11 +261,17 @@ export function Sidebar() {
           </span>
         </NavLink>
 
+        {/* A list of places in the vault, not a second set of screen links — so these mark
+            themselves with aria-current="location" (where you are in the vault) and leave
+            "page" to the nav item above that names the screen you are actually on. As
+            NavLinks they matched by prefix, so standing on /p/relay/work lit both "Work" and
+            "Relay" as the current page: two rows, two claims, one reader. */}
         {listed.map((p) => (
-          <NavLink
+          <Link
             key={p.slug}
             to={`/p/${p.slug}`}
             className={`nav-item nav-sub${p.slug === current?.slug ? " is-current" : ""}`}
+            aria-current={p.slug === current?.slug ? "location" : undefined}
             title={`${p.name} — ${pluralize(p.counts.workTotal, "work log")}, ${pluralize(
               p.counts.bugsOpen,
               "open bug"
@@ -230,24 +285,39 @@ export function Sidebar() {
             {/* One measure only, and it says which: a bare number here would be the third
                 different denominator in this column. */}
             {p.counts.bugsOpen > 0 && (
-              <span className="nav-count nav-count-open tabular">{p.counts.bugsOpen} open</span>
+              <span
+                className="nav-count nav-count-open tabular"
+                title={`${p.counts.bugsOpen} open of ${p.counts.bugsTotal} bugs filed in ${p.name}`}
+              >
+                {p.counts.bugsOpen} open
+              </span>
             )}
-          </NavLink>
+          </Link>
         ))}
+        {/* Deliberately a plain link, not a NavLink: it points at the Projects screen, and
+            a NavLink would mark itself current there — so standing on /projects lit two rows
+            at once and the shell told the reader they were in two places. It is a pointer to
+            the rest of the list, not a second name for where you are. */}
         {switchable.length > listed.length && (
-          <NavLink to="/projects" className="nav-item nav-sub nav-more">
+          <Link
+            to="/projects"
+            className="nav-item nav-sub nav-more"
+            title={`This vault has ${switchable.length} projects. See them all on the Projects screen.`}
+          >
             <span className="nav-bullet" aria-hidden="true" />
             <span className="nav-sub-name">
-              {switchable.length - listed.length} more…
+              {switchable.length - listed.length} more on Projects…
             </span>
-          </NavLink>
+          </Link>
         )}
       </nav>
 
       <div className="sidebar-foot">
         {/* The vault, named once. Its path is on the Projects screen, which is where the
-            reader can act on it — and is one click away through this link. */}
-        <NavLink className="vault-path" to="/projects" title={vault?.path ?? ""}>
+            reader can act on it — and is one click away through this link. A plain Link:
+            as a NavLink this footer marked itself the current page on /projects, which lit
+            two rows in one column at once. */}
+        <Link className="vault-path" to="/projects" title={vault?.path ?? ""}>
           <svg className="vault-path-icon" viewBox="0 0 16 16" aria-hidden="true">
             <path
               d="M2.5 4.5 h4 l1.2 1.6 h5.8 v6.4 h-11 z"
@@ -274,7 +344,7 @@ export function Sidebar() {
                   : "resolving…"}
             </span>
           </span>
-        </NavLink>
+        </Link>
       </div>
     </aside>
   );

@@ -662,9 +662,10 @@ function OpenBugs({
               <Link className="now-row" to={`/p/${slug}/bugs/${b.id}`}>
                 <BugStatusDot status={b.status} />
                 <span className="now-row-main">
-                  {/* Two lines, not one line cut mid-word: the highest-priority item on the
-                      screen used to read "…rate-limited endp…" with a third of the card
-                      standing empty below it (round 2 critic). */}
+                  {/* Three lines, not one line cut mid-word: the highest-priority item on
+                      the screen used to read "…rate-limited endp…" with a third of the card
+                      standing empty below it (round 2 critic), and two lines still clamped
+                      this vault's longest titles into that same empty space. */}
                   <span className="now-row-title is-wrap" title={b.title}>
                     {b.title}
                   </span>

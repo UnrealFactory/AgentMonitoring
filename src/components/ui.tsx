@@ -284,6 +284,76 @@ export function Skeleton({ rows = 4 }: { rows?: number }) {
 }
 
 /**
+ * The record on screen stopped being re-readable while somebody was reading it.
+ *
+ * A background refresh that fails leaves the last good copy on the page, which is right —
+ * nobody asked for their reading to be replaced by an error. But a *deleted* record has no
+ * tell at all without this: the board drops the row and the open detail tab goes on
+ * rendering the record in full, indefinitely, so two windows on the same vault disagree and
+ * neither says why. Same amber bar as the shell's, one page down.
+ */
+export function StaleRecordBar({
+  id,
+  message,
+  status,
+  onRetry,
+  action,
+}: {
+  id: string;
+  message: string;
+  status?: number;
+  onRetry?: () => void;
+  action?: ReactNode;
+}) {
+  const [headline] = message.split(" — ");
+  return (
+    <div className="vault-alert vault-alert-inline" role="status">
+      <span className="vault-alert-dot" aria-hidden="true" />
+      <span className="vault-alert-text">
+        <strong>
+          {status === 404
+            ? `${id} is no longer in this vault.`
+            : `${id} could not be read again.`}
+        </strong>{" "}
+        Everything below is the copy that was on screen when it was last read.{" "}
+        <span className="vault-alert-detail" title={message}>
+          <InlineCode text={headline} />
+        </span>
+      </span>
+      {onRetry && (
+        <button className="button button-sm" onClick={onRetry}>
+          Try again
+        </button>
+      )}
+      {action}
+    </div>
+  );
+}
+
+/**
+ * Backticked spans in a backend message, rendered as code rather than printed as backticks.
+ *
+ * The CLI and the dev server write their errors for a human to act on, and the actionable
+ * half is always a command: `agentmon init --vault "…"`. Those messages are shared with the
+ * terminal, where the backticks are the convention — so the app renders them instead of
+ * leaking the markup onto the screen.
+ */
+export function InlineCode({ text }: { text: string }) {
+  const parts = text.split("`");
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <code key={i}>{part}</code>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
+/**
  * A failure, said in the reader's terms first and the backend's second.
  *
  * The headline used to be "Could not read the vault" for every failure, which is a
@@ -307,7 +377,9 @@ export function ErrorState({
   return (
     <div className="error-state" role="alert">
       <p className="error-title">{title}</p>
-      <p className="error-message">{message}</p>
+      <p className="error-message">
+        <InlineCode text={message} />
+      </p>
       {(onRetry || action) && (
         <div className="error-actions">
           {onRetry && (

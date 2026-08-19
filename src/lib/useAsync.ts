@@ -14,7 +14,8 @@ export interface AsyncState<T> {
   /**
    * The status the failure carried, when it carried one — 404 for a record or project
    * that is not in the vault. Screens use it to say what actually happened instead of
-   * blaming the vault for a link that outlived its record.
+   * blaming the vault for a link that outlived its record. Set for a failed background
+   * refresh too, which is how an open record notices it has been deleted underneath.
    */
   status: number | undefined;
   loading: boolean;
@@ -97,6 +98,9 @@ export function useAsync<T>(
         // shell says so in one line, rather than letting stale numbers pass for current.
         if (refresh) {
           setRefreshError(err instanceof Error ? err.message : String(err));
+          // Which kind of failure it was, so a record that has been *deleted* under an open
+          // page can say that rather than "the vault is unreadable".
+          setStatus(statusOf(err));
           return;
         }
         setError(err instanceof Error ? err.message : String(err));

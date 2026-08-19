@@ -26,12 +26,17 @@
  *      which vault they are on.
  *   4. **A vault is portable.** The same directory copied somewhere else — under a name with
  *      spaces and parentheses — serves byte-identical payloads.
+ *   5. **Line endings are not data.** The same vault written with CRLF — what `git clone`
+ *      produces on Windows with core.autocrlf=true, and what Notepad saves — serves the same
+ *      payloads, byte for byte, with no `\r` anywhere in them. It did not: the JS reader kept
+ *      the carriage returns the Rust core drops, and the dashboard's note outline silently
+ *      lost every paragraph break because of it.
  *
  * It never writes to ./vault: the one write it attempts is required to fail, and the vault
  * is hashed before and after to prove it did.
  */
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { chromium } from "playwright";
@@ -524,6 +529,86 @@ try {
     differing.length === 0,
     `differ: ${differing.join(", ")}`,
   );
+
+  /* ------------------------------------------------------------------ *
+     5. A vault that arrived with Windows line endings
+
+     `git clone` on Windows with core.autocrlf=true writes CRLF, and so does Notepad;
+     agentmon-core parses with str::lines(), which drops the \r, so the CLI and the desktop
+     app never see one. The JS twin used to keep them, and they reached noteOutline() in
+     src/lib/dashboard.ts, which splits paragraphs on /\n{2,}/ — never true of \r\n\r\n, so
+     a whole note collapsed into one paragraph and the dashboard quietly dropped the lines
+     a reader is there for. Same bytes, same JSON, whatever the line endings.
+     ------------------------------------------------------------------ */
+
+  const crlfHome = join(temp("agentmon-crlf-"), "vault-crlf");
+  mkdirSync(crlfHome, { recursive: true });
+  cpSync(REPO_VAULT, crlfHome, { recursive: true });
+  let converted = 0;
+  const toCrlf = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        toCrlf(path);
+      } else if (/\.(md|jsonl|json)$/.test(entry.name)) {
+        const text = readFileSync(path, "utf8");
+        writeFileSync(path, text.replace(/\r?\n/g, "\r\n"));
+        converted += 1;
+      }
+    }
+  };
+  toCrlf(crlfHome);
+
+  let crlfSame = 0;
+  const crlfDiffer = [];
+  for (const route of routes) {
+    const lf = await raw(route);
+    const crlf = await raw(`${route}${route.includes("?") ? "&" : "?"}vault=${enc(crlfHome)}`);
+    if (lf.text === crlf.text) crlfSame += 1;
+    else crlfDiffer.push(route);
+  }
+  check(
+    `CRLF line endings change nothing in the payloads (${crlfSame}/${routes.length}, ${converted} files converted)`,
+    crlfDiffer.length === 0 && converted > 0,
+    `differ: ${crlfDiffer.join(", ")}`,
+  );
+
+  // And the record bodies themselves, which is where the dropped sentences lived: one
+  // detail route per project, compared whole.
+  const details = [];
+  for (const p of (await json("/vault-api/projects")).body) {
+    const works = (await json(`/vault-api/projects/${enc(p.slug)}/worklogs`)).body;
+    const bugs = (await json(`/vault-api/projects/${enc(p.slug)}/bugs`)).body;
+    for (const w of works.slice(0, 3)) details.push(`/vault-api/projects/${enc(p.slug)}/worklogs/${w.id}`);
+    for (const b of bugs.slice(0, 3)) details.push(`/vault-api/projects/${enc(p.slug)}/bugs/${b.id}`);
+  }
+  const bodyDiffer = [];
+  for (const route of details) {
+    const lf = await raw(route);
+    const crlf = await raw(`${route}?vault=${enc(crlfHome)}`);
+    if (lf.text !== crlf.text) bodyDiffer.push(route);
+  }
+  check(
+    `…including every record body, carriage returns and all (${details.length - bodyDiffer.length}/${details.length})`,
+    bodyDiffer.length === 0,
+    `differ: ${bodyDiffer.join(", ")}`,
+  );
+
+  /* The claim under all of it: no carriage return ever reaches the app. Checked on the
+     *decoded* values, not on the JSON text — several of this vault's own records discuss
+     line endings, so the two characters `\` and `r` appear in the payload as prose. */
+  const hasCr = (v) =>
+    typeof v === "string"
+      ? v.includes("\r")
+      : v && typeof v === "object"
+        ? Object.values(v).some(hasCr)
+        : false;
+  const anyCr = [];
+  for (const route of [...routes, ...details]) {
+    const { body } = await json(`${route}${route.includes("?") ? "&" : "?"}vault=${enc(crlfHome)}`);
+    if (hasCr(body)) anyCr.push(route);
+  }
+  check("no payload from the CRLF vault contains a carriage return", anyCr.length === 0, anyCr.join(", "));
 
   const repoAfter = fingerprint(REPO_VAULT);
   const changed = diffFingerprints(repoBefore, repoAfter);

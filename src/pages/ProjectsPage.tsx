@@ -77,7 +77,16 @@ export function ProjectsPage() {
             ) : undefined
           }
         />
-        <Onboarding vault={null} transport={transport} />
+        {/* The directory the failure was about, taken out of the message two inches above:
+            this screen used to print "<vault dir>" as a placeholder in the init command
+            while the error beside it named the real path. And no "press New project" here —
+            there is no such button on this screen. */}
+        <Onboarding
+          dir={vaultDirFromError(error)}
+          opened={false}
+          canCreate={false}
+          transport={transport}
+        />
       </div>
     );
   }
@@ -144,7 +153,7 @@ export function ProjectsPage() {
       {loading && projects.length === 0 ? (
         <Skeleton rows={3} />
       ) : projects.length === 0 ? (
-        <Onboarding vault={vault?.path ?? null} transport={transport} />
+        <Onboarding dir={vault?.path ?? null} opened canCreate transport={transport} />
       ) : (
         <>
           <section className="project-section">
@@ -338,11 +347,15 @@ function ProjectRow({
   onArchive?: () => void;
   onRestore?: () => void;
 }) {
-  const state = freshness(p.counts.lastActivity, now);
+  /* An archived project is never "live", whatever the clock says. Archiving is itself an
+     event, so the last thing that happened in one is usually the archiving — which lit the
+     filled dot and printed "Active just now" beside the word "archived". */
+  const archived = p.status === "archived";
+  const state = archived ? "stale" : freshness(p.counts.lastActivity, now);
   const c = p.counts;
   return (
     <li>
-      <article className={`project-row${p.status === "archived" ? " is-archived" : ""}`}>
+      <article className={`project-row${archived ? " is-archived" : ""}`}>
         <div className="project-row-main">
           <div className="project-row-head">
             <Link className="project-link" to={`/p/${p.slug}`}>
@@ -355,7 +368,11 @@ function ProjectRow({
                 }
                 role="img"
                 aria-label={
-                  state === "live" ? "active in the last two hours" : `${state} project`
+                  archived
+                    ? "archived project"
+                    : state === "live"
+                      ? "active in the last two hours"
+                      : `${state} project`
                 }
               />
               <span className="project-name">{p.name}</span>
@@ -407,7 +424,8 @@ function ProjectRow({
           <span className="project-when tabular">
             {c.lastActivity ? (
               <>
-                Active {formatRelative(c.lastActivity, new Date(now))}
+                {archived ? "Last active " : "Active "}
+                {formatRelative(c.lastActivity, new Date(now))}
                 <span className="project-since">started {formatDate(p.createdAt)}</span>
               </>
             ) : (
@@ -670,18 +688,44 @@ function CreateProject({
    ======================================================================= */
 
 /**
+ * The directory a failed vault read was about, read out of the message the backend wrote.
+ *
+ * Every one of those messages ends in the exact `agentmon init --vault "<dir>"` for the
+ * directory it could not open, because it is written for somebody who can act on it. That
+ * makes the path recoverable here, so the onboarding below can print the command for the
+ * real directory instead of a `<vault dir>` placeholder under an error that names it.
+ */
+function vaultDirFromError(message: string): string | null {
+  return /--vault "([^"]+)"/.exec(message)?.[1] ?? null;
+}
+
+/**
  * The first screen of a vault nobody has written to yet.
  *
  * Not a shrug and an icon: the three commands that take this vault from empty to a project
  * with a record in it, in the order they are run, with the real flags. An agent reading the
  * manual and a human reading this screen should be typing the same thing.
+ *
+ * `opened` is whether there is a vault at all (an empty one, or none); `dir` is the best
+ * known directory for the command lines either way; `canCreate` is whether the screen this
+ * is on actually carries the New project button it would otherwise point at.
  */
-function Onboarding({ vault, transport }: { vault: string | null; transport: "tauri" | "browser" }) {
-  const dir = vault ?? "<vault dir>";
+function Onboarding({
+  dir: known,
+  opened,
+  canCreate,
+  transport,
+}: {
+  dir: string | null;
+  opened: boolean;
+  canCreate: boolean;
+  transport: "tauri" | "browser";
+}) {
+  const dir = known ?? "<vault dir>";
   return (
     <section className="onboarding">
       <h2 className="onboarding-title">
-        {vault ? "This vault has no projects yet" : "There is no vault here yet"}
+        {opened ? "This vault has no projects yet" : "There is no vault here yet"}
       </h2>
       <p className="onboarding-sub">
         A vault is a directory of plain files: <code>vault.json</code>, then one folder per
@@ -689,7 +733,7 @@ function Onboarding({ vault, transport }: { vault: string | null; transport: "ta
         <code>agentmon</code> CLI; this app reads it.
       </p>
       <ol className="onboarding-steps">
-        {!vault && (
+        {!opened && (
           <li>
             <p className="onboarding-step">Make the vault</p>
             <CommandLine text={`agentmon init --vault "${dir}" --name "My vault"`} />
@@ -700,9 +744,11 @@ function Onboarding({ vault, transport }: { vault: string | null; transport: "ta
           <CommandLine
             text={`agentmon project create checkout-rewrite --name "Checkout rewrite" --description "Replace the legacy checkout flow."`}
           />
-          <p className="onboarding-note">
-            Or press <strong>New project</strong> above — it writes the same files.
-          </p>
+          {canCreate && (
+            <p className="onboarding-note">
+              Or press <strong>New project</strong> above — it writes the same files.
+            </p>
+          )}
         </li>
         <li>
           <p className="onboarding-step">Record the first piece of work</p>
