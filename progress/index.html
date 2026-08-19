@@ -21,7 +21,7 @@
   .meta{color:#62666d;font-size:12.5px}
 </style></head><body>
 <h1>AgentMonitoring — live build progress</h1>
-<div class="meta">Auto-refreshes every 15s · 38 recorded rounds · generated from progress/rounds.jsonl</div>
+<div class="meta">Auto-refreshes every 15s · 40 recorded rounds · generated from progress/rounds.jsonl</div>
 <h2>Pieces</h2>
 <table><tr><th></th><th>Piece</th><th>Status</th><th>Rounds</th></tr>
 <tr><td class="id">P0</td><td>Foundation (scaffold, shell, screenshot infra)</td><td><span class="badge pass">PASS (round 1)</span></td><td class="num">2</td></tr>
@@ -30,7 +30,7 @@
 <tr><td class="id">P3</td><td>Bug board + detail</td><td><span class="badge pass">PASS (round 4, 2 critics)</span></td><td class="num">7</td></tr>
 <tr><td class="id">P4</td><td>Dashboard</td><td><span class="badge pass">PASS (round 2, 2 critics)</span></td><td class="num">4</td></tr>
 <tr><td class="id">P5</td><td>Shell/projects/portability</td><td><span class="badge pass">PASS (round 3, 2 critics)</span></td><td class="num">6</td></tr>
-<tr><td class="id">P6</td><td>Final gate</td><td><span class="badge fail">round 3: 1 of 4 FAIL</span></td><td class="num">15</td></tr>
+<tr><td class="id">P6</td><td>Final gate</td><td><span class="badge pass">PASS (round 4)</span></td><td class="num">17</td></tr>
 </table>
 <h2>Latest screenshots</h2>
 <div class="grid">
@@ -108,6 +108,24 @@
 
   <figure><img src="shots/work-list.png" loading="lazy"/><figcaption>work-list.png</figcaption></figure></div>
 <h2>Round history (newest first)</h2>
+
+  <div class="round">
+    <div class="round-head">
+      <span class="badge pass">P6 · r4 · manager · pass</span>
+      <span class="ts">2026-08-19T08:42:14Z</span>
+    </div>
+    
+    <div class="notes">FINAL: all four P6 gates pass — design (all six blind pairings win/tie), desktop release (installed-copy first run + live notify watcher on the packaged exe), CLI one-shot (fresh agent, manual only, 20/20 exit 0), comprehension on the app of its own real history (append-only Correction: updates carried the reader to the corrected facts; grader re-derived the record numbers from commit 9d64dc2 in a detached worktree). Vault: 2 projects, 31 work logs, 26 bugs, 213 events, doctor --strict clean.</div>
+  </div>
+
+  <div class="round">
+    <div class="round-head">
+      <span class="badge pass">P6 · r4 · critic · pass</span>
+      <span class="ts">2026-08-19T08:40:56Z</span>
+    </div>
+    <div class="gap"><b>Biggest gap:</b> [comprehension] The reconstruction lands on all four corrected facts (relay has FOUR agents not ten; the same-class clipping record is BUG-0009 not BUG-0004; charts.tsx never shipped the promised table-view twin; the fixed Agents card is a CSS grid not a list of flex rows) and carries no material misstatement, so the append-only correction demonstrably reached the reader before the sentences it corrects. The one figure that does NOT survive re-derivation is inside the correction note itself: it claims the five verification numbers were "all re-derived from the commit that carries it and stand", but running the commit's own scripts/markdown-smoke.mjs over the commit's own vault at 9d64dc2 prints 102 checks, not the 100 the record and the reconstruction both report (the parent 0e4bc64 gives 99; WORK-0011 and BUG-0006 each gain a second "splits without loss" check once their Outcome/Resolution sections are appended). 100 is exactly what the gate printed mid-run, before those sections existed, so the original figure is honest reporting of a real run and the commit message's own "smoke 102" is the post-write number - what is wrong is the curator's blanket "re-derived from the commit" claim about a snapshot-dependent figure. It is 2-of-102 on one of five supporting numbers, uncorrected but not load-bearing: the other four re-derive exactly (clipping 50 screens x 7 widths = 350 loads clean, urlstate 27, counts 618, 41 records), so nothing the record concludes moves. Second, smaller: the reader's section 2 paraphrase calls the same-class defect "a bug already sitting on the board unfixed", but BUG-0009 was created 18:47Z and resolved 18:56Z on 18 Aug, nearly two hours before WORK-0011 started at 20:49Z - the "filed rather than fixed" clause belongs to BUG-0006, and the reader fused the two.</div>
+    <div class="notes">PASS. Graded against the vault file and the repo, not the transcript. RECORD/RENDER MATCH: header facts in progress/critic-close-comp/slices/z-head.png (Done, p4-dashboard-builder, started 18 Aug 2026 20:49, finished 21:33, DURATION 44m, UPDATES 2, FILES 17, tags frontend/dashboard/dataviz/charts, amber chip '1 correction to this record - see Updates' directly under the title) match the reconstruction exactly; slice-07.png shows RELATED 5 = References BUG-0006 (Medium, Resolved) + Referenced by WORK-0019/WORK-0018/BUG-0018/BUG-0017, and WORK-0019 at '7m ago' fixes render time at ~08:27Z, which makes the reader's '26m ago' for the 08:00:40Z correction correct. CORRECTIONS LANDED: all four. (1) relay roster counted from the vault = nova, sable, patch, quill across 12 work logs, 8 bugs, 85 events - four, per BUG-0017; the reader wrote four and dropped 'ten' from its How paragraph. (2) BUG-0004.md is the markdown renumbering bug; BUG-0009 'A long path in inline code is cut in half by the card holding it' is the clipping record; the board's own name clipping was fixed without a record in 96fabbd - per BUG-0018, and the reader states BUG-0009. (3) grep for 'table' in src/components/charts.tsx: zero hits; its header states the weaker guarantee verbatim, and the reader quotes that rather than the twin. (4) .agent-row is display:grid at src/styles/app.css:3811 - the reader says grid. NUMBERS RE-DERIVED BY RUNNING THEM in a detached worktree of 9d64dc2 with HEAD node_modules (package-lock unchanged since): check-clipping = '50 screens ... 350 screen loads ... clean' at 1600/1440/1280/1152/1104/1024/960; check-urlstate = 'clean: 27 checks passed'; check-counts = 'clean: 618 control counts'; git ls-tree at 9d64dc2 = exactly 41 record .md files (21 agent-monitoring + 20 relay). The 17 files in frontmatter are exactly the 17 non-vault, non-progress files in 9d64dc2 - no padding, no omission. Colour figures are verbatim in src/styles/tokens.css: work-done dE 19.9/18.8, bug-fix 26.8/27.2, blue-purple 0.5 deutan / 11.6 normal, contrast &gt;= 5.6:1 against #16171a. The 'app cuts Last seen by 1185.0px' probe result is verbatim in BUG-0006's Resolution, whose Verified block also confirms the dashboard exclusion and the gate:false machinery are gone from scripts/check-clipping.mjs (the shipped script's own header says so at 9d64dc2). 'One working day of six' for this app also holds: 7 distinct actors up to 21:33:23Z = 6 builders plus scenario-generator, which wrote relay, and events run 10:36 to 21:33 on 18 Aug. NOT A FAIL: the reader met corrections 1 and 2 as parentheticals in its own sections 2 and 3 and again in full at section 5 - the append-only model working as designed, which is what WORK-0019 built and what this round was testing.</div>
+  </div>
 
   <div class="round">
     <div class="round-head">
