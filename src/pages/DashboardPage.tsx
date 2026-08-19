@@ -5,11 +5,11 @@
  *
  *   1. **Now** — is anything happening, is anything broken, did anything move today. Live
  *      facts only: durations that count up, ages in hours, the last twenty-four hours as a
- *      shape, and for each thing still in flight the outline of its newest note. This band
+ *      shape, and for each work log in progress the outline of its newest note. This band
  *      ignores the time range below it, because "now" is not a range.
  *   2. **Trend** — the two burn-ups. Work started against work finished, bugs filed against
- *      bugs fixed; in both the shaded gap between the lines is the thing that matters
- *      (what is in flight, what is still open). Cumulative rather than per-day columns
+ *      bugs resolved; in both the shaded gap between the lines is the thing that matters
+ *      (what is in progress, what is unresolved). Cumulative rather than per-day columns
  *      because these projects are small: eight bugs over three weeks drawn as columns is
  *      mostly empty air, while two lines read the same at any density.
  *   3. **Who and what** — the agents, each with the split of what they have been doing, and
@@ -17,9 +17,12 @@
  *
  * Two rules the whole screen obeys:
  *
- *   * **Live means recent, not open.** A count of open records says nothing about whether
- *     anybody is at the keyboard; the clock does. So the LIVE flag, the dots on the rows
- *     and the words beside them all come from how long ago the last thing happened.
+ *   * **Live means recent, not in progress.** A count of unfinished work says nothing about
+ *     whether anybody is at the keyboard; the clock does. So the LIVE flag, the dots on the
+ *     rows and the words beside them all come from how long ago the last thing happened.
+ *   * **One word per state.** Work is in progress, done or abandoned; a bug is open, in
+ *     progress, resolved or closed; the two that need somebody are unresolved. The words are
+ *     in lib/words.ts, so this screen and the lists it links to cannot drift apart.
  *   * **Every number is somewhere you can go.** A work log, a bug, a filtered board, a
  *     record in the feed. A dashboard a reader cannot click out of is a poster.
  */
@@ -46,8 +49,17 @@ import {
   formatDuration,
   formatRelative,
   pluralize,
-  SEVERITY_LABEL,
 } from "../lib/format";
+import {
+  bugLower,
+  IN_PROGRESS,
+  inProgressOf,
+  SEVERITY_LABEL,
+  UNRESOLVED,
+  UNRESOLVED_MEANS,
+  workLogs,
+  workLower,
+} from "../lib/words";
 import {
   agentRows,
   bugSeries,
@@ -91,8 +103,8 @@ const NO_EVENTS: VaultEvent[] = [];
 const NO_NOTES: Record<string, WorkUpdate | undefined> = {};
 
 /** How many rows the two lists in the NOW strip print before they hand over to a board. */
-const IN_FLIGHT_ROWS = 3;
-const OPEN_BUG_ROWS = 3;
+const IN_PROGRESS_ROWS = 3;
+const UNRESOLVED_BUG_ROWS = 3;
 
 /** The one filter on this screen, kept in the URL like every other view state. */
 const DEFAULTS = { range: "all" };
@@ -170,7 +182,7 @@ export function DashboardPage() {
   );
 
   /**
-   * The newest note on each work log that is still open.
+   * The newest note on each work log that is still in progress.
    *
    * `events.jsonl` carries a *summary* of an update, cut to its first clause — enough for a
    * feed line, and not enough to know that the newest note on relay's WORK-0012 reports a
@@ -179,7 +191,7 @@ export function DashboardPage() {
    * than the three rows it prints).
    */
   const activeIds = activeWork
-    .slice(0, IN_FLIGHT_ROWS)
+    .slice(0, IN_PROGRESS_ROWS)
     .map((w) => w.id)
     .join(",");
   const { data: notes } = useAsync<Record<string, WorkUpdate | undefined>>(async () => {
@@ -285,8 +297,8 @@ export function DashboardPage() {
           <h1 className="page-title">{project.name}</h1>
           <p className="page-sub">{project.description}</p>
         </div>
-        {/* Live is a statement about the clock, not about how many records are open: a
-            project with two open work logs nobody has touched since yesterday is not live,
+        {/* Live is a statement about the clock, not about how much is unfinished: a
+            project with two work logs in progress nobody has touched since yesterday is not live,
             and saying so beside "Last activity 19h ago" was the flag contradicting the
             sentence next to it (round 1 critic). */}
         <div className="page-head-meta tabular">
@@ -309,15 +321,16 @@ export function DashboardPage() {
       </header>
 
       <section className="now-strip" aria-label="Current state">
-        <InFlight
+        <InProgress
           slug={slug}
           active={activeWork}
+          total={works.length}
           lastDone={lastDone}
           notes={notes ?? NO_NOTES}
           agents={knownAgents}
           now={now}
         />
-        <OpenBugs slug={slug} open={openBugs} total={bugs.length} now={now} />
+        <UnresolvedBugs slug={slug} unresolved={openBugs} total={bugs.length} now={now} />
         <LastDay recent={recent} events={events} now={now} />
       </section>
 
@@ -342,10 +355,12 @@ export function DashboardPage() {
         </p>
       </div>
 
+      {/* The legends are the list screens' words: a chart that says "in flight" over a
+          list that says "In progress" is two names for one fact (lib/words.ts). */}
       <div className="grid-2">
         <ChartCard
           title="Work"
-          sub={`Started against finished, running total${changeNote}`}
+          sub={`Started against done, running total${changeNote}`}
           action={
             <Link className="card-action" to={`/p/${slug}/work`}>
               All work
@@ -355,19 +370,20 @@ export function DashboardPage() {
           <BurnUp
             series={work}
             upper={{ label: "started", color: "var(--series-work)" }}
-            lower={{
-              label: anyAbandoned ? "finished or abandoned" : "finished",
-              color: "var(--series-done)",
-            }}
-            gap={{ label: "in flight", wash: "var(--series-work-wash)" }}
+            lower={{ label: workLower(anyAbandoned), color: "var(--series-done)" }}
+            gap={{ label: IN_PROGRESS, wash: "var(--series-work-wash)" }}
             noun="work logs"
             scope={scopeLabel}
+            empty={{
+              title: "No work logs yet",
+              hint: `This chart draws itself the moment an agent runs \`agentmon work start -p ${slug}\`.`,
+            }}
           />
         </ChartCard>
 
         <ChartCard
           title="Bugs"
-          sub={`Filed against fixed, running total${changeNote}`}
+          sub={`Filed against resolved, running total${changeNote}`}
           action={
             <Link className="card-action" to={`/p/${slug}/bugs?tab=all`}>
               Bug board
@@ -377,13 +393,14 @@ export function DashboardPage() {
           <BurnUp
             series={bug}
             upper={{ label: "filed", color: "var(--series-bug)" }}
-            lower={{
-              label: anyClosedUnfixed ? "fixed or closed" : "fixed",
-              color: "var(--series-fix)",
-            }}
-            gap={{ label: "still open", wash: "var(--series-bug-wash)" }}
+            lower={{ label: bugLower(anyClosedUnfixed), color: "var(--series-fix)" }}
+            gap={{ label: UNRESOLVED, wash: "var(--series-bug-wash)" }}
             noun="bugs"
             scope={scopeLabel}
+            empty={{
+              title: "No bugs filed yet",
+              hint: "Nothing to plot, which on this chart is the good state.",
+            }}
           />
         </ChartCard>
       </div>
@@ -406,9 +423,10 @@ const FRESH_DOT: Record<Freshness, string> = {
   stale: "sdot-stale",
 };
 
-function InFlight({
+function InProgress({
   slug,
   active,
+  total,
   lastDone,
   notes,
   agents,
@@ -416,6 +434,8 @@ function InFlight({
 }: {
   slug: string;
   active: WorklogSummary[];
+  /** Every work log this project has ever had — the denominator of the hero figure. */
+  total: number;
   lastDone: WorklogSummary | undefined;
   notes: Record<string, WorkUpdate | undefined>;
   agents: string[];
@@ -426,12 +446,30 @@ function InFlight({
   return (
     <section className="now-panel now-panel-wide">
       <h2 className="now-label">Working right now</h2>
-      <p className="now-hero">
-        <span className={`now-hero-value${working.size === 0 ? " is-quiet" : ""}`}>
-          {working.size}
+      {/* The same fact the switcher, the nav tooltip and the Work chart print — counted the
+          same way and named with the same word, out of the same denominator. The agents
+          holding it are the sentence underneath, because "2 work logs" and "2 agents" are
+          not the same number in a project where one agent holds two. */}
+      <p
+        className="now-hero"
+        title={total === 0 ? undefined : `${inProgressOf(active.length, total)} work logs`}
+      >
+        <span className={`now-hero-value${active.length === 0 ? " is-quiet" : ""}`}>
+          {active.length}
         </span>
         <span className="now-hero-unit">
-          {working.size === 1 ? "agent has work open" : "agents have work open"}
+          {/* "0 of 0 in progress" is arithmetic, not a sentence: a project with no work
+              logs at all says that instead. */}
+          {total === 0 ? (
+            "work logs in this project"
+          ) : (
+            <>
+              of {total} {active.length === 1 ? "work log" : "work logs"} {IN_PROGRESS}
+              {working.size > 0 && (
+                <span className="now-hero-aside"> · {pluralize(working.size, "agent")}</span>
+              )}
+            </>
+          )}
         </span>
       </p>
 
@@ -470,13 +508,13 @@ function InFlight({
           <p className="now-note">
             {lastDone
               ? "Nothing is in progress — the most recent work log is above."
-              : "No work has been recorded here yet. Agents open a log with `agentmon work start` before they touch code."}
+              : "No work has been recorded here yet. Agents start a work log with `agentmon work start` before they touch code."}
           </p>
         </>
       ) : (
         <ul className="now-list">
-          {active.slice(0, IN_FLIGHT_ROWS).map((w) => (
-            <InFlightRow
+          {active.slice(0, IN_PROGRESS_ROWS).map((w) => (
+            <InProgressRow
               key={w.id}
               slug={slug}
               work={w}
@@ -486,10 +524,10 @@ function InFlight({
               iso={iso}
             />
           ))}
-          {active.length > IN_FLIGHT_ROWS && (
+          {active.length > IN_PROGRESS_ROWS && (
             <li>
               <Link className="now-more" to={`/p/${slug}/work?status=in_progress`}>
-                {active.length - IN_FLIGHT_ROWS} more in progress
+                {active.length - IN_PROGRESS_ROWS} more in progress
               </Link>
             </li>
           )}
@@ -499,7 +537,7 @@ function InFlight({
   );
 }
 
-function InFlightRow({
+function InProgressRow({
   slug,
   work,
   note,
@@ -549,11 +587,14 @@ function InFlightRow({
           </span>
         </span>
         <span className="now-row-time">
+          {/* "open for 3h" is what the bug panel says about a bug. Work is never open;
+              it is in progress (lib/words.ts). */}
           <span
             className={`now-row-dur is-${state} tabular`}
             title={`Started ${formatDateTimeUtc(work.started)}`}
           >
-            <span className="now-row-durlabel">open for</span> {formatDuration(work.started, iso)}
+            <span className="now-row-durlabel">in progress</span>{" "}
+            {formatDuration(work.started, iso)}
           </span>
           <span className="now-row-since tabular" title={formatDateTimeUtc(work.lastActivity)}>
             {since}
@@ -604,39 +645,50 @@ function InFlightRow({
 }
 
 /**
- * Open bugs: the counts, and then the bugs themselves.
+ * Unresolved bugs — open or in progress — as counts and then as the bugs themselves.
  *
- * Counting by severity says two are open and one of them is high; it does not say *which*,
- * or whether anybody has it. The one bug this panel used to name was the oldest — which in
- * relay is the medium one an agent had already claimed and planned a fix for, while the
- * high-severity GA blocker nobody had touched went unnamed (round 1 critic). So the panel
- * lists them in the order somebody triaging would take them, and prints ownership as a
- * state rather than leaving it to be inferred from an event that is missing.
+ * Counting by severity says two need somebody and one of them is high; it does not say
+ * *which*, or whether anybody has it. The one bug this panel used to name was the oldest —
+ * which in relay is the medium one an agent had already claimed and planned a fix for,
+ * while the high-severity GA blocker nobody had touched went unnamed (round 1 critic). So
+ * the panel lists them in the order somebody triaging would take them, and prints ownership
+ * as a state rather than leaving it to be inferred from an event that is missing.
+ *
+ * It is titled "Unresolved", not "Open": one of the bugs under it is claimed and *in
+ * progress*, and a heading that calls it open contradicts the pill on its own row.
  */
-function OpenBugs({
+function UnresolvedBugs({
   slug,
-  open,
+  unresolved,
   total,
   now,
 }: {
   slug: string;
-  open: BugSummary[];
+  unresolved: BugSummary[];
   total: number;
   now: number;
 }) {
-  const counts = severityCounts(open);
-  const shown = open.slice(0, OPEN_BUG_ROWS);
+  const counts = severityCounts(unresolved);
+  const shown = unresolved.slice(0, UNRESOLVED_BUG_ROWS);
   const iso = new Date(now).toISOString();
   return (
     <section className="now-panel">
       <h2 className="now-label">
-        <Link className="now-label-link" to={`/p/${slug}/bugs`}>
-          Open bugs
+        <Link
+          className="now-label-link"
+          to={`/p/${slug}/bugs`}
+          title={`Bugs that are ${UNRESOLVED_MEANS}`}
+        >
+          Unresolved bugs
         </Link>
       </h2>
       <p className="now-figure">
-        <span className={`now-figure-value${open.length === 0 ? " is-quiet" : ""}`}>{open.length}</span>
-        <span className="now-figure-unit">still open of {total} filed</span>
+        <span className={`now-figure-value${unresolved.length === 0 ? " is-quiet" : ""}`}>
+          {unresolved.length}
+        </span>
+        <span className="now-figure-unit">
+          {total === 0 ? "bugs filed here" : `${UNRESOLVED} of ${total} filed`}
+        </span>
       </p>
 
       <ul className="now-sev">
@@ -645,7 +697,9 @@ function OpenBugs({
             <Link
               className={`sev-chip sev-chip-${severity}${count === 0 ? " is-zero" : ""}`}
               to={`/p/${slug}/bugs?severity=${severity}`}
-              title={`${count} open ${SEVERITY_LABEL[severity].toLowerCase()}`}
+              title={`${count} ${UNRESOLVED} ${SEVERITY_LABEL[severity].toLowerCase()}-severity ${
+                count === 1 ? "bug" : "bugs"
+              }`}
             >
               <span className="sev-chip-dot" aria-hidden="true" />
               <span className="sev-chip-label">{SEVERITY_LABEL[severity]}</span>
@@ -716,10 +770,10 @@ function OpenBugs({
               </Link>
             </li>
           ))}
-          {open.length > shown.length && (
+          {unresolved.length > shown.length && (
             <li>
               <Link className="now-more" to={`/p/${slug}/bugs`}>
-                {open.length - shown.length} more open
+                {unresolved.length - shown.length} more {UNRESOLVED}
               </Link>
             </li>
           )}
@@ -727,7 +781,7 @@ function OpenBugs({
       )}
 
       <p className="now-note">
-        {open.length > 0 ? (
+        {unresolved.length > 0 ? (
           <>Worst first; inside a severity, the ones nobody has claimed come first.</>
         ) : total === 0 ? (
           <>No bugs have been filed in this project.</>
@@ -903,21 +957,21 @@ function AgentsCard({
             <div className="agent-head" role="row">
               <span className="agent-cell-name">Agent</span>
               <span className="agent-cell-bar">Activity</span>
-              <span className="agent-cell-num" title="Work logs finished">
+              <span className="agent-cell-num" title="Work logs this agent marked done">
                 Done
               </span>
-              <span className="agent-cell-num" title="Bugs filed">
+              <span className="agent-cell-num" title="Bugs this agent filed">
                 Filed
               </span>
-              <span className="agent-cell-num" title="Bugs resolved">
-                Fixed
+              <span className="agent-cell-num" title="Bugs this agent resolved">
+                Resolved
               </span>
               <span className="agent-cell-seen">Last seen</span>
             </div>
             <ul className="agent-rows">
               {rows.map((r) => {
-                /* The dot means "has work open"; how bright it is means "and was here
-                   recently". An agent holding an open log who has not been seen since
+                /* The dot means "has a work log in progress"; how bright it is means "and
+                   was here recently". An agent holding one who has not been seen since
                    yesterday gets the same hollow dot their idle colleagues get, because
                    that is what is true. */
                 const state = freshness(r.lastActivity, now);
@@ -936,8 +990,8 @@ function AgentsCard({
                           <span
                             className={`sdot ${FRESH_DOT[state]}`}
                             role="img"
-                            aria-label={`${pluralize(r.activeNow, "work log")} open`}
-                            title={`${pluralize(r.activeNow, "work log")} open · last seen ${formatRelative(r.lastActivity, new Date(now))}`}
+                            aria-label={`${workLogs(r.activeNow)} ${IN_PROGRESS}`}
+                            title={`${workLogs(r.activeNow)} ${IN_PROGRESS} · last seen ${formatRelative(r.lastActivity, new Date(now))}`}
                           />
                         ) : (
                           /* "Who is free right now" was inferable only from a hollow circle
@@ -945,8 +999,8 @@ function AgentsCard({
                           <span
                             className="sdot sdot-idle"
                             role="img"
-                            aria-label="No work log open"
-                            title={`No work log open · last seen ${formatRelative(r.lastActivity, new Date(now))}`}
+                            aria-label="No work log in progress"
+                            title={`No work log ${IN_PROGRESS} · last seen ${formatRelative(r.lastActivity, new Date(now))}`}
                           />
                         )}
                         <AgentChip name={r.agent} />

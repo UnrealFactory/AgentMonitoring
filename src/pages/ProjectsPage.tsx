@@ -27,6 +27,7 @@ import { useNow } from "../components/charts";
 import { api } from "../lib/api";
 import { eventSummary, eventVerb, freshness, refHref, tone } from "../lib/dashboard";
 import { formatDate, formatDateTimeUtc, formatRelative, pluralize } from "../lib/format";
+import { DONE, IN_PROGRESS, UNRESOLVED_MEANS } from "../lib/words";
 import { useAsync } from "../lib/useAsync";
 import type { Project, VaultEvent } from "../lib/types";
 
@@ -50,6 +51,16 @@ export function ProjectsPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  /**
+   * The project the last Archive click moved, so it can be moved back.
+   *
+   * Archiving is one click, it is the only action on this screen that changes what the app
+   * shows, and it happens to a row that then leaves the list — which is the shape of thing
+   * that needs a way back (P5 critic). Not a toast that fades: it stays until it is used,
+   * dismissed or the screen is left, because a reader who looks up three seconds later has
+   * the same right to it as one who was watching.
+   */
+  const [undo, setUndo] = useState<Project | null>(null);
 
   const active = useMemo(() => projects.filter((p) => p.status !== "archived"), [projects]);
   const archived = useMemo(() => projects.filter((p) => p.status === "archived"), [projects]);
@@ -96,6 +107,7 @@ export function ProjectsPage() {
     setActionError(null);
     try {
       await api.setProjectStatus(project.slug, status);
+      setUndo(status === "archived" ? project : null);
       refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -134,6 +146,29 @@ export function ProjectsPage() {
         <p className="form-error" role="alert">
           {actionError}
         </p>
+      )}
+
+      {undo && (
+        <div className="undo-bar" role="status">
+          <span className="undo-text">
+            <strong>{undo.name}</strong> is archived. Nothing was deleted — its work logs,
+            bugs and events are still in the vault, and the project is still readable.
+          </span>
+          <button
+            className="button button-sm"
+            disabled={busy === undo.slug}
+            onClick={() => setStatus(undo, "active")}
+          >
+            {busy === undo.slug ? "Restoring…" : "Undo"}
+          </button>
+          <button
+            className="undo-dismiss"
+            aria-label="Dismiss"
+            onClick={() => setUndo(null)}
+          >
+            ×
+          </button>
+        </div>
       )}
 
       {creating && (
@@ -403,11 +438,11 @@ function ProjectRow({
             <span className="project-figure-note">
               {c.workTotal === 0
                 ? "none yet"
-                : `${c.workDone} done · ${c.workInProgress} in flight`}
+                : `${c.workDone} ${DONE} · ${c.workInProgress} ${IN_PROGRESS}`}
             </span>
           </div>
-          <div className="project-figure">
-            <dt>Open bugs</dt>
+          <div className="project-figure" title={`Unresolved means ${UNRESOLVED_MEANS}`}>
+            <dt>Unresolved bugs</dt>
             <dd className={`tabular${c.bugsOpen === 0 ? " is-zero" : ""}`}>{c.bugsOpen}</dd>
             <span className="project-figure-note">
               {c.bugsTotal === 0 ? "none filed" : `of ${c.bugsTotal} filed`}
@@ -441,7 +476,7 @@ function ProjectRow({
                 className="link-button"
                 disabled={busy}
                 onClick={onArchive}
-                title="Hide this project from the switcher and the default list. Nothing is deleted."
+                title="Hide this project from the switcher and the default list. Nothing is deleted, and the next line offers Undo."
               >
                 {busy ? "Archiving…" : "Archive"}
               </button>

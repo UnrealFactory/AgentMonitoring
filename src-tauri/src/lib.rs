@@ -21,10 +21,18 @@ use tauri_plugin_dialog::DialogExt;
 /// vault they copied to another machine (SPEC: portability).
 struct VaultState(Mutex<Option<PathBuf>>);
 
-/// The live filesystem watcher. Dropping it stops watching, so it has to be held
-/// somewhere for the lifetime of the app — and replaced (not added to) when the vault
-/// changes, or the app would keep reporting changes from the old directory.
-struct WatcherState(Mutex<Option<RecommendedWatcher>>);
+/// The live filesystem watcher, and the directory it is watching.
+///
+/// Dropping the watcher stops watching, so it has to be held somewhere for the lifetime of
+/// the app — and replaced (not added to) when the vault changes, or the app would keep
+/// reporting changes from the old directory. The root is kept beside it because the
+/// watchdog below has to answer one question every few seconds: *is what we are watching
+/// still the vault we are showing?*
+#[derive(Default)]
+struct WatcherState {
+    watcher: Mutex<Option<RecommendedWatcher>>,
+    root: Mutex<Option<PathBuf>>,
+}
 
 type CmdResult<T> = std::result::Result<T, String>;
 
@@ -198,21 +206,145 @@ struct VaultChanged {
     projects: Vec<String>,
 }
 
-fn rearm_watcher(app: &AppHandle, state: &State<'_, WatcherState>, root: &Path) {
+fn rearm_watcher(app: &AppHandle, state: &WatcherState, root: &Path) {
     match watch_vault(app, root) {
         Ok(w) => {
-            if let Ok(mut slot) = state.0.lock() {
+            if let Ok(mut slot) = state.watcher.lock() {
                 // Assigning drops the previous watcher, which closes its channel and
                 // ends its debounce thread.
                 *slot = Some(w);
             }
+            if let Ok(mut at) = state.root.lock() {
+                *at = Some(root.to_path_buf());
+            }
         }
-        Err(e) => eprintln!(
-            "agentmonitoring: not watching {} for changes ({e}); the app will still read it, \
-             but screens will not refresh on their own",
-            root.display()
-        ),
+        Err(e) => {
+            // Leave the slot empty rather than half-armed: the watchdog re-tries every
+            // few seconds, so a directory that comes back is watched again by itself.
+            if let Ok(mut slot) = state.watcher.lock() {
+                *slot = None;
+            }
+            if let Ok(mut at) = state.root.lock() {
+                *at = None;
+            }
+            eprintln!(
+                "agentmonitoring: not watching {} for changes ({e}); the app will still read \
+                 it, but screens will not refresh on their own until it comes back",
+                root.display()
+            )
+        }
     }
+}
+
+// ---------------------------------------------------------------------------
+// watcher health (the desktop half of "not reading the vault right now")
+// ---------------------------------------------------------------------------
+
+/// How often the app checks that the vault it is watching is still there.
+///
+/// A `notify` handle on a directory that has been renamed, unmounted or unplugged does not
+/// fail — it simply never fires again. Browser mode polls the dev server and can say "not
+/// reading the vault right now"; without this the desktop app, which is the product, would
+/// sit on stale numbers indefinitely with no tell, and would *stay* frozen after the vault
+/// came back because the dead watcher is never replaced. One `vault.json` read every five
+/// seconds is a rounding error next to the file watch itself.
+const HEALTH_INTERVAL: Duration = Duration::from_secs(5);
+
+/// What the UI is told about the vault's reachability. `src/lib/api.ts` turns it into the
+/// same banner the browser poll raises, so both transports say the same sentence.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultHealth {
+    ok: bool,
+    error: Option<String>,
+    vault: Option<String>,
+}
+
+/// One tick of the watchdog, as a decision. Pure, so the rule is testable without a window.
+#[derive(Debug, PartialEq)]
+enum Beat {
+    /// Readable, and already watched: say nothing.
+    Steady,
+    /// Readable but not watched — first tick after it came back, or after a switch.
+    /// Re-arm on this root and tell the UI to re-read what it missed.
+    Rearm(PathBuf),
+    /// The vault stopped answering.
+    Lost(String),
+}
+
+fn beat(found: Result<PathBuf, String>, watching: Option<&Path>) -> Beat {
+    match found {
+        Ok(root) => match watching {
+            Some(at) if at == root => Beat::Steady,
+            _ => Beat::Rearm(root),
+        },
+        Err(e) => Beat::Lost(e),
+    }
+}
+
+/// Watch the watcher: emit `vault-health` when the vault goes away, and re-arm when it
+/// comes back. Started once, from `setup`, and it outlives every vault switch.
+fn spawn_watchdog(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut healthy = true;
+        loop {
+            std::thread::sleep(HEALTH_INTERVAL);
+            let vault_state: State<'_, VaultState> = app.state();
+            let watcher: State<'_, WatcherState> = app.state();
+            let found = open(&vault_state).map(|v| v.root().to_path_buf());
+            let watching = watcher.root.lock().ok().and_then(|r| r.clone());
+            match beat(found, watching.as_deref()) {
+                Beat::Steady => {
+                    if !healthy {
+                        healthy = true;
+                        let _ = app.emit(
+                            "vault-health",
+                            VaultHealth { ok: true, error: None, vault: None },
+                        );
+                    }
+                }
+                Beat::Rearm(root) => {
+                    rearm_watcher(&app, &watcher, &root);
+                    let _ = app.emit(
+                        "vault-health",
+                        VaultHealth {
+                            ok: true,
+                            error: None,
+                            vault: Some(root.display().to_string()),
+                        },
+                    );
+                    // Whatever happened while it was unreachable never reached this window.
+                    if !healthy {
+                        let _ = app.emit(
+                            "vault-changed",
+                            VaultChanged {
+                                vault: root.display().to_string(),
+                                projects: Vec::new(),
+                            },
+                        );
+                    }
+                    healthy = true;
+                }
+                Beat::Lost(error) => {
+                    // The watcher is on a directory that is not there any more; drop it so
+                    // the tick that finds the vault again arms a live one.
+                    if let Ok(mut slot) = watcher.watcher.lock() {
+                        *slot = None;
+                    }
+                    if let Ok(mut at) = watcher.root.lock() {
+                        *at = None;
+                    }
+                    if healthy {
+                        healthy = false;
+                        let _ = app.emit(
+                            "vault-health",
+                            VaultHealth { ok: false, error: Some(error), vault: None },
+                        );
+                    }
+                }
+            }
+        }
+    });
 }
 
 /// Watch `<vault>/projects` recursively and emit a debounced `vault-changed`.
@@ -442,7 +574,7 @@ pub fn run() {
         .manage(VaultState(Mutex::new(
             std::env::var_os("AGENTMON_VAULT").map(PathBuf::from),
         )))
-        .manage(WatcherState(Mutex::new(None)))
+        .manage(WatcherState::default())
         .setup(|app| {
             let state: State<'_, VaultState> = app.state();
             // Resolution order, most explicit first: AGENTMON_VAULT (how a launcher pins a
@@ -465,6 +597,9 @@ pub fn run() {
                 let watcher: State<'_, WatcherState> = app.state();
                 rearm_watcher(app.handle(), &watcher, vault.root());
             }
+            // …and watch the watcher, so a vault that goes away says so instead of the
+            // window quietly freezing on the last numbers it read.
+            spawn_watchdog(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -622,6 +757,49 @@ mod tests {
         let mut read = ev("WORK-0001.md");
         read.kind = EventKind::Access(notify::event::AccessKind::Read);
         assert!(!is_record_change(&read), "reading a record is not a change");
+    }
+
+    /**
+     * The watchdog's rule, without a window: a vault that is readable and already watched
+     * is left alone; one that is readable but *not* watched is re-armed (this is the tick
+     * that un-freezes the app after the drive comes back); one that cannot be read at all
+     * is reported, so the desktop raises the same banner browser mode does.
+     */
+    #[test]
+    fn the_watchdog_re_arms_a_dead_watcher_and_reports_a_vault_that_went_away() {
+        let root = PathBuf::from("/v");
+        let other = PathBuf::from("/w");
+
+        assert_eq!(beat(Ok(root.clone()), Some(&root)), Beat::Steady);
+
+        // Nothing is being watched — the state a failed arm, a fresh start, or an outage
+        // that has just ended leaves behind.
+        assert_eq!(beat(Ok(root.clone()), None), Beat::Rearm(root.clone()));
+        // Watching the wrong directory is the same defect with a different cause.
+        assert_eq!(beat(Ok(root.clone()), Some(&other)), Beat::Rearm(root.clone()));
+
+        let lost = beat(Err("no vault.json in /v".into()), Some(&root));
+        assert_eq!(lost, Beat::Lost("no vault.json in /v".into()));
+    }
+
+    /// And the real thing: a vault that disappears is unreadable, and readable again when
+    /// it comes back — which is what the watchdog's `found` argument is built from.
+    #[test]
+    fn a_vault_that_goes_away_stops_opening_and_opens_again_when_it_returns() {
+        let root = tmp_vault("health");
+        let read = || Vault::open(&root).map(|v| v.root().to_path_buf()).map_err(|e| e.to_string());
+
+        assert!(matches!(beat(read(), Some(&root)), Beat::Steady));
+
+        let moved = root.with_extension("moved");
+        fs::rename(&root, &moved).unwrap();
+        let lost = beat(read(), Some(&root));
+        assert!(matches!(lost, Beat::Lost(_)), "a vault that is gone must be reported: {lost:?}");
+
+        fs::rename(&moved, &root).unwrap();
+        // Back, but nothing is watching it any more — so the next tick re-arms.
+        assert_eq!(beat(read(), None), Beat::Rearm(root.clone()));
+        fs::remove_dir_all(&root).ok();
     }
 
     #[test]

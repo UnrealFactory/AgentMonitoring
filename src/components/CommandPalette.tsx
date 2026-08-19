@@ -1,13 +1,20 @@
 /**
  * Ctrl/Cmd+K — the whole app from the keyboard.
  *
- * Three kinds of thing, in the order somebody in a hurry wants them: the record they can
- * half-remember (by id or by title), the project they want to be in, and the screen they
- * want to be on. Records are read once per vault change, for **every** project rather than
- * only the one in the URL — the palette used to be opened from /projects, where it offered
- * two projects and one screen and then told the reader to "try a record id", advice that
- * screen could not honour. After the first open everything is answered from memory, so
- * typing never waits on the vault.
+ * Three kinds of thing, in the order somebody in a hurry wants them: the work log or bug
+ * they can half-remember (by id or by title), the project they want to be in, and the
+ * screen they want to be on. Records are read once per vault change, for **every** project
+ * rather than only the one in the URL — the palette used to be opened from /projects, where
+ * it offered two projects and one screen and then told the reader to "try a record id",
+ * advice that screen could not honour. After the first open everything is answered from
+ * memory, so typing never waits on the vault.
+ *
+ * **The meta column says what each of its values is.** Ids are per-project by SPEC, so a
+ * search for "WORK-2" on /p/relay/work returns two rows both headed WORK-0002 — and the
+ * only thing telling them apart used to be one unlabelled slot holding "quill · done" on
+ * one and "AgentMonitoring · done" on the other, which asks the reader to know that quill
+ * is an agent and AgentMonitoring is a project (P5 critic). Each part now carries its own
+ * class, its own colour and, for the project, the folder glyph the nav uses for one.
  *
  * Deliberately small: it navigates, it does not act. Nothing in this app is destructive
  * enough to need a command surface, and a palette that can quietly change data is a palette
@@ -27,6 +34,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../AppContext";
 import { api } from "../lib/api";
 import { pluralize } from "../lib/format";
+import { UNRESOLVED, workLogs } from "../lib/words";
 import { trapTab, useModalLock } from "../lib/modal";
 import type { BugSummary, Project, WorklogSummary } from "../lib/types";
 
@@ -41,12 +49,20 @@ const DEFAULT_RECORDS = 6;
 /** The id `aria-activedescendant` points at — the option is not focused, it is named. */
 const optionId = (i: number) => `palette-option-${i}`;
 
+/** One labelled fact in a row's meta column: what it is decides how it is drawn. */
+type MetaPart =
+  | { kind: "project"; text: string }
+  | { kind: "agent"; text: string }
+  | { kind: "severity"; text: string }
+  | { kind: "state"; text: string }
+  | { kind: "count"; text: string };
+
 interface Item {
   id: string;
-  group: "Records" | "Projects" | "Go to";
+  group: "Work logs & bugs" | "Projects" | "Go to";
   label: string;
   hint?: string;
-  meta?: string;
+  meta?: MetaPart[];
   to: string;
   /** How well it matched the query; higher sorts first inside its group. */
   score: number;
@@ -68,6 +84,46 @@ function score(text: string, query: string): number {
   if (i < 0) return 0;
   if (i === 0) return 100 - Math.min(50, text.length / 4);
   return (/[\s\-_/]/.test(haystack[i - 1]) ? 60 : 30) - Math.min(20, i / 4);
+}
+
+/** `in_progress` → `in progress`: the app's word for the state, in the row's small type. */
+const state = (status: string): string => status.replace(/_/g, " ");
+
+/**
+ * The meta column: one span per fact, each saying what kind of fact it is.
+ *
+ * The project wears the folder glyph the nav gives a project and the app's dimmest text;
+ * an agent is a name; a state is the word the lists use. A reader who does not know the
+ * vault can tell which is which without knowing any of the names in it.
+ */
+function Meta({ parts }: { parts: MetaPart[] }) {
+  return (
+    <span className="palette-meta">
+      {parts.map((part, i) => (
+        <Fragment key={`${part.kind}-${part.text}`}>
+          {i > 0 && (
+            <span className="palette-meta-sep" aria-hidden="true">
+              ·
+            </span>
+          )}
+          <span className={`palette-meta-part is-${part.kind}`}>
+            {part.kind === "project" && (
+              <svg className="palette-meta-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M2.5 4.5 h4 l1.2 1.6 h5.8 v6.4 h-11 z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+            {part.text}
+          </span>
+        </Fragment>
+      ))}
+    </span>
+  );
 }
 
 /** "w12", "work 12", "WORK-0012", "12" → the id a record would have. */
@@ -206,7 +262,7 @@ export function CommandPalette() {
       /* Inside a project the useful second fact is who has it; from the vault screen it is
          which project it is in — the two together do not fit on one row and would cut the
          project name in half, which is the fact that stops the reader guessing. */
-      const add = (r: WorklogSummary | BugSummary, kind: "work" | "bug", meta: string) => {
+      const add = (r: WorklogSummary | BugSummary, kind: "work" | "bug", meta: MetaPart[]) => {
         const byId = ids.includes(r.id) ? 200 : score(r.id, q);
         const byTitle = score(r.title, q);
         let s = Math.max(byId, byTitle);
@@ -217,20 +273,29 @@ export function CommandPalette() {
         if (here) s += q ? 4 : 0.5;
         out.push({
           id: `${project.slug}/${r.id}`,
-          group: "Records",
+          group: "Work logs & bugs",
           label: r.title,
           hint: r.id,
-          meta: here ? meta : `${project.name} · ${meta}`,
+          meta: here ? meta : [{ kind: "project", text: project.name } as MetaPart, ...meta],
           to: `/p/${project.slug}/${kind === "work" ? "work" : "bugs"}/${r.id}`,
           score: s,
           kind,
         });
       };
+      /* Inside the project the reader is standing in there is room for who has it; from
+         the vault screen that room goes to the project name, which is the fact that stops
+         them guessing. */
       for (const w of works) {
-        add(w, "work", here ? `${w.agent} · ${w.status.replace("_", " ")}` : w.status.replace("_", " "));
+        add(w, "work", [
+          ...(here ? [{ kind: "agent", text: w.agent } as MetaPart] : []),
+          { kind: "state", text: state(w.status) },
+        ]);
       }
       for (const b of bugs) {
-        add(b, "bug", here ? `${b.severity} · ${b.status.replace("_", " ")}` : b.status.replace("_", " "));
+        add(b, "bug", [
+          ...(here ? [{ kind: "severity", text: b.severity } as MetaPart] : []),
+          { kind: "state", text: state(b.status) },
+        ]);
       }
     }
 
@@ -242,7 +307,10 @@ export function CommandPalette() {
           group: "Projects",
           label: p.name,
           hint: p.slug,
-          meta: `${pluralize(p.counts.workTotal, "log")} · ${p.counts.bugsOpen} open`,
+          meta: [
+            { kind: "count", text: workLogs(p.counts.workTotal) },
+            { kind: "count", text: `${p.counts.bugsOpen} ${UNRESOLVED}` },
+          ],
           to: `/p/${p.slug}`,
           score: s + (p.slug === slug ? 5 : 0),
         });
@@ -276,12 +344,12 @@ export function CommandPalette() {
     /* On an empty query the record group is capped: enough to make the shape obvious, and
        it leaves the projects and the screens on screen instead of pushing them under
        thirty rows nobody asked for. */
-    const order = { Records: 0, Projects: 1, "Go to": 2 } as const;
+    const order = { "Work logs & bugs": 0, Projects: 1, "Go to": 2 } as const;
     const byScore = out.sort((a, b) => b.score - a.score);
     const topRecords = byScore
-      .filter((i) => i.group === "Records")
+      .filter((i) => i.group === "Work logs & bugs")
       .slice(0, q ? 20 : DEFAULT_RECORDS);
-    const rest = byScore.filter((i) => i.group !== "Records");
+    const rest = byScore.filter((i) => i.group !== "Work logs & bugs");
     return [...topRecords, ...rest].sort(
       (a, b) => order[a.group] - order[b.group] || b.score - a.score
     );
@@ -410,7 +478,7 @@ export function CommandPalette() {
             aria-controls="palette-results"
             aria-autocomplete="list"
             aria-activedescendant={items.length ? optionId(active) : undefined}
-            aria-label="Search records, projects and screens"
+            aria-label="Search work logs, bugs, projects and screens"
             placeholder="Record id or title, project, screen…"
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -422,11 +490,11 @@ export function CommandPalette() {
                 "try a record id" on a screen where no record was loaded. */}
             Nothing matches “{query}”.{" "}
             {searchable > 0
-              ? `Searching ${pluralize(searchable, "record")} across ${pluralize(
+              ? `Searching ${searchable} work logs and bugs across ${pluralize(
                   projects.length,
                   "project"
                 )} by id (WORK-12) and by title.`
-              : "No records are loaded yet — this vault has none, or they could not be read."}
+              : "Nothing is loaded yet — this vault has no work logs or bugs, or they could not be read."}
           </p>
         ) : (
           <ul
@@ -459,7 +527,7 @@ export function CommandPalette() {
                     {item.kind && <span className={`palette-kind is-${item.kind}`}>{item.kind}</span>}
                     <span className="palette-label">{item.label}</span>
                     {item.hint && <span className="palette-hint mono">{item.hint}</span>}
-                    {item.meta && <span className="palette-meta">{item.meta}</span>}
+                    {item.meta && <Meta parts={item.meta} />}
                   </li>
                 </Fragment>
               );

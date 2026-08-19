@@ -4,6 +4,9 @@
  * page is then only layout, and the arithmetic behind every number on screen is in one
  * file a reader can check.
  *
+ * The words every label here uses are the app's words (lib/words.ts): work is in progress,
+ * done or abandoned; a bug is open, in progress, resolved or closed.
+ *
  * Two rules the rest of the file obeys:
  *
  *   * **UTC, like the records.** Every timestamp in the vault is UTC ISO8601 and the app
@@ -44,7 +47,7 @@ const ms = (iso: string | null | undefined): number | null => {
 
 /** How recent the newest thing has to be for the project to read as live. */
 export const LIVE_WITHIN = 2 * HOUR;
-/** After this much silence an in-flight record stops being "in progress" to the eye. */
+/** After this much silence a record in progress stops looking like it to the eye. */
 export const STALE_AFTER = DAY;
 
 export type Freshness = "live" | "quiet" | "stale";
@@ -262,7 +265,7 @@ export function bucketLabel(bucket: Bucket, axis: TimeAxis): string {
    over three weeks is twenty-two columns of which fourteen are empty and the
    rest are one unit tall. Cumulative lines read the same at any density — the
    slope is the rate, and the gap between the two lines is the quantity the
-   reader came for (work still in flight, bugs still open).
+   reader came for (work in progress, bugs unresolved).
    ----------------------------------------------------------------------- */
 
 export interface CumulativePoint {
@@ -330,14 +333,14 @@ function cumulative(items: Stamped[], axis: TimeAxis): CumulativeSeries {
   };
 }
 
-/** Work started vs work finished, cumulative. The gap is what is in flight. */
+/** Work started vs work done, cumulative. The gap is what is in progress. */
 export const workSeries = (works: WorklogSummary[], axis: TimeAxis): CumulativeSeries =>
   cumulative(
     works.map((w) => ({ id: w.id, upper: ms(w.started), lower: ms(w.finished) })),
     axis
   );
 
-/** Bugs filed vs bugs fixed, cumulative. The gap is the open backlog. */
+/** Bugs filed vs bugs resolved, cumulative. The gap is what is unresolved. */
 export const bugSeries = (bugs: BugSummary[], axis: TimeAxis): CumulativeSeries =>
   cumulative(
     bugs.map((b) => ({
@@ -375,7 +378,7 @@ export interface AgentRow {
   done: number;
   filed: number;
   fixed: number;
-  /** Unfinished work logs this agent is holding *now*: a live fact, never scoped. */
+  /** Work logs in progress this agent is holding *now*: a live fact, never scoped. */
   activeNow: number;
   /** Whether the work list has anything to show for this agent, so a row links somewhere. */
   hasWorklogs: boolean;
@@ -426,7 +429,7 @@ export function agentRows(events: VaultEvent[], works: WorklogSummary[]): AgentR
 
   for (const w of works) {
     // Not `row()`: an agent whose only work log predates the window keeps their row out
-    // of the table, but if that log is still open they are working right now and the
+    // of the table, but if that work log is still in progress they are working right now and the
     // strip above has already said so.
     const r = rows.get(w.agent);
     if (!r) continue;
@@ -491,9 +494,9 @@ export const TONE_ORDER: EventTone[] = ["work", "done", "bug", "resolved", "neut
  */
 export const TONE_LABEL: Record<EventTone, string> = {
   work: "work",
-  done: "finished",
+  done: "done",
   bug: "bugs",
-  resolved: "fixed",
+  resolved: "resolved",
   neutral: "project",
 };
 
@@ -602,11 +605,13 @@ const RECENT_LABEL: Record<string, string> = {
   // A comment on a bug and an update on a work log are the same act — somebody wrote
   // something down — and counting them apart only lengthens the sentence.
   bug_commented: "notes",
-  work_done: "finished",
+  // The state words, not synonyms for them: a work log that reached the end is "done" here,
+  // on the work list, in the chart legend and in the pill on its own page (lib/words.ts).
+  work_done: "done",
   work_abandoned: "abandoned",
   bug_created: "filed",
   bug_claimed: "claimed",
-  bug_resolved: "fixed",
+  bug_resolved: "resolved",
   bug_closed: "closed",
   project_created: "project",
   project_updated: "project",
@@ -615,10 +620,10 @@ const RECENT_LABEL: Record<string, string> = {
 /** The order the parts are printed in: what a reader looks for first. */
 const RECENT_ORDER = [
   "started",
-  "finished",
+  "done",
   "notes",
   "filed",
-  "fixed",
+  "resolved",
   "claimed",
   "abandoned",
   "closed",
@@ -667,7 +672,7 @@ export function summarise(
 export const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"];
 const SEVERITY_RANK: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-/** Open bugs by severity, in triage order, including the empty ones. */
+/** Unresolved bugs by severity, in triage order, including the empty ones. */
 export function severityCounts(openBugs: BugSummary[]): { severity: Severity; count: number }[] {
   return SEVERITY_ORDER.map((severity) => ({
     severity,

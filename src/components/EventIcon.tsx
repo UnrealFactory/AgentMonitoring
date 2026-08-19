@@ -3,7 +3,7 @@ import { tone, type EventTone } from "../lib/dashboard";
 
 /**
  * One glyph per kind of event, in the tone the rest of the app already uses for that kind:
- * blue for work in flight, green for finished, orange for a bug, purple for a fix. The
+ * blue for work in progress, green for done, orange for a bug, purple for a fix. The
  * icon is never the only thing carrying the meaning — the verb beside it says it in words.
  *
  * Shared by the dashboard's activity feed and the vault-wide feed on the Projects screen,

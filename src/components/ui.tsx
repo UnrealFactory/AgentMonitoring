@@ -4,7 +4,7 @@
  */
 import { useState, type ReactNode } from "react";
 import type { BugStatus, Severity, WorkStatus } from "../lib/types";
-import { BUG_STATUS_LABEL, SEVERITY_LABEL, WORK_STATUS_LABEL } from "../lib/format";
+import { BUG_STATUS_LABEL, SEVERITY_LABEL, WORK_STATUS_LABEL } from "../lib/words";
 
 export function WorkStatusPill({ status }: { status: WorkStatus }) {
   return (

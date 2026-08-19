@@ -65,6 +65,8 @@ Options (flag, or environment variable):
                                   projects, palette, palette-vault
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
   --project <slug> $SHOT_PROJECT  project to shoot (default: the one with the most records)
+  --suffix <s>     $SHOT_SUFFIX   append to every file name, so a second project's screens
+                                  sit beside the first: --project relay --suffix -relay
   --record <ids>   $SHOT_RECORD   record ids for the detail screens, e.g. WORK-0009 or
                                   WORK-0009,BUG-0004 (default: a finished work log and a
                                   resolved bug, so Outcome and Resolution are on screen)
@@ -96,6 +98,14 @@ const shotsDir = outArg
   : join(root, "progress", "shots");
 const KEEP = flag("--keep-server") || args.includes("--url");
 const WANT_PROJECT = (value("--project", process.env.SHOT_PROJECT) || "").trim();
+/* The canonical set is shot for every project in the vault, and two projects cannot both
+   be "dashboard.png". A suffix keeps them in one directory, in one alphabetical list, on
+   the progress page. */
+const SUFFIX = (value("--suffix", process.env.SHOT_SUFFIX) || "").trim();
+if (SUFFIX && !/^[A-Za-z0-9._-]+$/.test(SUFFIX)) {
+  console.error(`[screenshot] FAILED: --suffix/$SHOT_SUFFIX must be a file-name fragment, got "${SUFFIX}"`);
+  process.exit(1);
+}
 const WANT_RECORDS = (value("--record", process.env.SHOT_RECORD) || "")
   .split(",")
   .map((s) => s.trim().toUpperCase())
@@ -139,7 +149,7 @@ async function shoot(page, { name, path, waitFor, prepare, full }) {
   await page.waitForFunction(() =>
     [...document.querySelectorAll(".chart-plot")].every((p) => p.querySelector("svg")),
   );
-  const file = join(shotsDir, `${name}.png`);
+  const file = join(shotsDir, `${name}${SUFFIX}.png`);
   await page.screenshot({ path: file });
   log(`${name.padEnd(12)} ${path}`);
 
@@ -148,7 +158,7 @@ async function shoot(page, { name, path, waitFor, prepare, full }) {
   if (full) {
     const style = await page.addStyleTag({ content: FULL_PAGE_CSS });
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
-    await page.screenshot({ path: join(shotsDir, `${name}-full.png`), fullPage: true });
+    await page.screenshot({ path: join(shotsDir, `${name}${SUFFIX}-full.png`), fullPage: true });
     await style.evaluate((el) => el.remove());
     log(`${`${name}-full`.padEnd(12)} ${path} (full page)`);
   }
@@ -241,20 +251,22 @@ try {
       name: "bugs",
       path: `/p/${slug}/bugs`,
       waitFor: ".work-rows .bug-row, .empty-title",
-      // The board opens on "Open", which is the right default for the app and a poor
-      // photograph of it: this vault has two open bugs and six fixed ones, so the default
-      // tab shows a quarter of the board. Below four open rows the shot switches to "All"
-      // (every state, every severity) and says so in the log, rather than photographing
-      // the emptiest view of a screen whose job is density.
+      // The board opens on "Unresolved", which is the right default for the app and a
+      // poor photograph of it: this vault has two unresolved bugs and six resolved ones, so
+      // the default tab shows a quarter of the board. Below four rows the shot switches to
+      // "All" (every state, every severity) and says so in the log, rather than
+      // photographing the emptiest view of a screen whose job is density.
       prepare: async (page) => {
         await page.waitForSelector(".segmented [role=tab]", { state: "visible" });
         await page.waitForFunction(
           () => !!document.querySelector(".work-rows .bug-row, .empty-title"),
         );
-        const open = await page.locator(".work-rows .bug-row").count();
-        if (open < 4) {
+        const shown = await page.locator(".work-rows .bug-row").count();
+        if (shown < 4) {
           await page.getByRole("tab", { name: /^All/ }).click();
-          log(`bugs: captured the All tab (${open} open bug(s) — the Open tab is the default)`);
+          log(
+            `bugs: captured the All tab (${shown} unresolved bug(s) — Unresolved is the default)`,
+          );
         }
       },
     },
@@ -302,8 +314,8 @@ try {
   const screens = ONLY.length ? all.filter((s) => ONLY.includes(s.name)) : all;
 
   for (const s of screens) {
-    rmSync(join(shotsDir, `${s.name}.png`), { force: true });
-    if (s.full) rmSync(join(shotsDir, `${s.name}-full.png`), { force: true });
+    rmSync(join(shotsDir, `${s.name}${SUFFIX}.png`), { force: true });
+    if (s.full) rmSync(join(shotsDir, `${s.name}${SUFFIX}-full.png`), { force: true });
   }
 
   browser = await chromium.launch();

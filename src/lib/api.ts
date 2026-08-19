@@ -259,13 +259,15 @@ export const POLL_MS = 2_000;
 export const POLL_MAX_MS = 30_000;
 
 /**
- * How often the desktop app checks that the vault it is watching is still there.
+ * How often the desktop app checks, from this side, that the vault is still answering.
  *
- * The watcher is the only thing that moves the desktop app, and a `notify` handle on a
- * directory that has been renamed or unplugged does not fail — it simply never fires again.
- * Browser mode polls and can say "not reading the vault right now"; without this the desktop
- * app, which is the product, would sit on stale numbers indefinitely with no tell. One read
- * of vault.json is a rounding error next to the file watch itself.
+ * The Rust watchdog (src-tauri/src/lib.rs) is the primary tell: it probes every five
+ * seconds, emits `vault-health`, and — the part only it can do — re-arms the file watcher
+ * when the directory comes back, because a `notify` handle on a folder that was renamed or
+ * unplugged never fires again. This slower beat is the backstop for the case that watchdog
+ * cannot report on: the event channel itself. One read of vault.json a quarter-minute is a
+ * rounding error, and between the two of them the desktop app can never sit silently on
+ * numbers that stopped moving.
  */
 export const DESKTOP_HEALTH_MS = 15_000;
 
@@ -293,14 +295,28 @@ export function subscribeVaultChanges(
 ): () => void {
   if (isTauri()) {
     let cancelled = false;
-    let dispose = () => {};
+    const disposers: (() => void)[] = [];
+    const register = (un: () => void) => {
+      // Unmounted while the listener was still being registered: drop it immediately
+      // rather than leaving an orphan behind.
+      if (cancelled) un();
+      else disposers.push(un);
+    };
     import("@tauri-apps/api/event")
-      .then(({ listen }) => listen("vault-changed", () => onChange()))
-      .then((un) => {
-        // Unmounted while the listener was still being registered: drop it immediately
-        // rather than leaving an orphan behind.
-        if (cancelled) un();
-        else dispose = un;
+      .then(async ({ listen }) => {
+        register(await listen("vault-changed", () => onChange()));
+        /* The desktop's honesty channel, emitted by the Rust watchdog: the vault stopped
+           answering, or started again. Same shape as the browser poll's, so the shell
+           raises the same banner either way. */
+        register(
+          await listen<{ ok: boolean; error: string | null }>("vault-health", (event) => {
+            onHealth?.(
+              event.payload.ok
+                ? { ok: true }
+                : { ok: false, error: event.payload.error ?? "the vault stopped answering" }
+            );
+          })
+        );
       })
       .catch(() => {});
 
@@ -326,7 +342,8 @@ export function subscribeVaultChanges(
     return () => {
       cancelled = true;
       clearInterval(beat);
-      dispose();
+      for (const un of disposers) un();
+      disposers.length = 0;
     };
   }
 

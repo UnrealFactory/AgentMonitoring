@@ -175,7 +175,7 @@ export function WorkDetailPage() {
               {work.finished ? (
                 <Stamp iso={work.finished} relative={false} />
               ) : (
-                <span className="muted">still running</span>
+                <span className="muted">in progress</span>
               )}
             </li>
             <li>
@@ -291,7 +291,7 @@ export function WorkDetailPage() {
                       <span className="side-rel">{formatRelative(work.finished)}</span>
                     </>
                   ) : (
-                    <span className="muted">still open</span>
+                    <span className="muted">in progress</span>
                   )}
                 </dd>
               </div>
@@ -447,7 +447,7 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
                   {formatDuration(work.started, work.finished)} in total
                 </span>
               ) : (
-                <span>running for {formatDuration(work.started, null)}</span>
+                <span>{formatDuration(work.started, null)} so far</span>
               )}
             </span>
           </div>

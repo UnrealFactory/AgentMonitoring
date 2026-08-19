@@ -10,10 +10,13 @@
  * so Back, reload and a pasted link all reproduce the view (see lib/useUrlFilters).
  *
  * Two words for two different things, which used to be one word for both: the tabs slice
- * the board by whether a bug is finished (Open / Resolved / All), and the group headings
- * name the exact status underneath — an untouched bug is **Unclaimed**, a claimed one is
- * **In progress**. "Open 5" above a group also called "Open 3" was the reading of the
- * screen that critics kept getting wrong.
+ * the board by whether a bug still needs somebody (**Unresolved** / Resolved / All), and
+ * the group headings name the exact status underneath — Open, In progress, Resolved,
+ * Closed, the four words this app uses for a bug everywhere (lib/words.ts).
+ *
+ * The tab is deliberately *not* called "Open". It holds two states, and spending the name
+ * of one of them on the pair is what put an "Open 5" tab above an "Open 3" group — and,
+ * worse, a claimed bug under a heading that said nobody had it.
  */
 import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
@@ -34,10 +37,18 @@ import {
   Skeleton,
   Tag,
 } from "../components/ui";
-import { formatDateTimeUtc, formatRelative, pluralize, SEVERITY_LABEL } from "../lib/format";
+import { formatDateTimeUtc, formatRelative, pluralize } from "../lib/format";
+import {
+  BUG_STATUS_LABEL,
+  bugCount,
+  SEVERITY_LABEL,
+  UNRESOLVED,
+  UNRESOLVED_LABEL,
+  UNRESOLVED_MEANS,
+} from "../lib/words";
 import type { BugStatus, BugSummary, Severity } from "../lib/types";
 
-type Tab = "open" | "resolved" | "all";
+type Tab = "unresolved" | "resolved" | "all";
 /**
  * The dimensions a filter can slice on — and therefore the ones a count can be *exempt*
  * from. A count printed on a control must not be filtered by that control (see `matches`).
@@ -46,24 +57,15 @@ type Dim = "tab" | "severity" | "label" | "assignee" | "reporter";
 
 const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];
 const SEVERITY_RANK: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-/** Open first, and inside "open" the ones somebody has already picked up come second. */
+/** Open first, and inside the unresolved half the ones nobody holds come first. */
 const GROUP_ORDER: BugStatus[] = ["open", "in_progress", "resolved", "closed"];
-/**
- * Group headings, which say what the *status* is. `open` is spelled "Unclaimed" here
- * because that is what it means on a board — nobody has picked it up — and because the tab
- * above already owns the word "Open" for the wider sense of "not finished".
- */
-const GROUP_LABEL: Record<BugStatus, string> = {
-  open: "Unclaimed",
-  in_progress: "In progress",
-  resolved: "Resolved",
-  closed: "Closed",
-};
+/** Group headings: the status itself, in the app's one word for it. */
+const GROUP_LABEL = BUG_STATUS_LABEL;
 const MAX_LABELS = 2;
 
 /** Filters, and their defaults; anything at its default stays out of the URL. */
 const DEFAULTS = {
-  tab: "open",
+  tab: "unresolved",
   severity: "all",
   label: "all",
   assignee: "all",
@@ -71,28 +73,29 @@ const DEFAULTS = {
   q: "",
 };
 const ALLOWED = {
-  tab: ["open", "resolved", "all"],
+  tab: ["unresolved", "resolved", "all"],
   severity: ["all", ...SEVERITIES],
 } as const;
 
-const isOpenStatus = (s: BugStatus) => s === "open" || s === "in_progress";
-const isOpen = (b: BugSummary) => isOpenStatus(b.status);
+const isUnresolvedStatus = (s: BugStatus) => s === "open" || s === "in_progress";
+const isUnresolved = (b: BugSummary) => isUnresolvedStatus(b.status);
 
-/** What the row's time column measures: how old, or how long since it was fixed. */
-const rowTime = (b: BugSummary) => (isOpen(b) ? b.created : (b.resolved ?? b.lastActivity));
+/** What the row's time column measures: how old, or how long since it was resolved. */
+const rowTime = (b: BugSummary) =>
+  isUnresolved(b) ? b.created : (b.resolved ?? b.lastActivity);
 
 /**
  * The footer describes the sort of what is actually on the screen — on the All tab that is
  * two different sorts, and a note claiming one of them is a note the reader can catch out.
  */
 function sortNote(groups: { status: BugStatus }[]): string {
-  const open = groups.some((g) => isOpenStatus(g.status));
-  const done = groups.some((g) => !isOpenStatus(g.status));
-  if (open && done) {
-    return "Open bugs sort by severity, then by when they were filed; finished ones by when they were closed.";
+  const unresolved = groups.some((g) => isUnresolvedStatus(g.status));
+  const settled = groups.some((g) => !isUnresolvedStatus(g.status));
+  if (unresolved && settled) {
+    return "Unresolved bugs sort by severity, then by when they were filed; the rest by when they were resolved.";
   }
-  if (open) return "Sorted by severity, then by how recently they were filed.";
-  return "Sorted by when they were closed, newest first.";
+  if (unresolved) return "Sorted by severity, then by how recently they were filed.";
+  return "Sorted by when they were resolved, newest first.";
 }
 
 export function BugsPage() {
@@ -108,7 +111,7 @@ export function BugsPage() {
   const searchRef = useRef<HTMLInputElement>(null);
   const bugs = useMemo(() => data ?? [], [data]);
   /** The project's own numbers, ignoring the filters — for the page header. */
-  const totalOpen = bugs.filter(isOpen).length;
+  const totalUnresolved = bugs.filter(isUnresolved).length;
 
   /**
    * The values each menu offers, taken from the whole project rather than the current view:
@@ -195,7 +198,8 @@ export function BugsPage() {
    */
   const matches = useCallback(
     (b: BugSummary, skip: Dim | null = null) => {
-      if (skip !== "tab" && tab !== "all" && isOpen(b) !== (tab === "open")) return false;
+      if (skip !== "tab" && tab !== "all" && isUnresolved(b) !== (tab === "unresolved"))
+        return false;
       if (skip !== "severity" && severity !== "all" && b.severity !== severity) return false;
       if (skip !== "label" && label !== "all" && !b.labels.includes(label)) return false;
       if (
@@ -221,8 +225,8 @@ export function BugsPage() {
 
   const tabCounts = useMemo(() => {
     const scope = bugs.filter((b) => matches(b, "tab"));
-    const open = scope.filter(isOpen).length;
-    return { open, resolved: scope.length - open, all: scope.length };
+    const unresolved = scope.filter(isUnresolved).length;
+    return { unresolved, resolved: scope.length - unresolved, all: scope.length };
   }, [bugs, matches]);
 
   /**
@@ -249,7 +253,7 @@ export function BugsPage() {
         items: filtered
           .filter((b) => b.status === status)
           .sort((a, b) =>
-            isOpen(a)
+            isUnresolved(a)
               ? SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
                 rowTime(b).localeCompare(rowTime(a))
               : rowTime(b).localeCompare(rowTime(a))
@@ -305,24 +309,33 @@ export function BugsPage() {
             fixed.
           </p>
         </div>
-        <div className="page-head-meta tabular">
+        <div
+          className="page-head-meta tabular"
+          title={loading ? undefined : `Unresolved means ${UNRESOLVED_MEANS}`}
+        >
           {loading
             ? "loading…"
-            : `${pluralize(bugs.length, "bug")}${totalOpen ? ` · ${totalOpen} open` : " · none open"}`}
+            : `${bugCount(bugs.length)} · ${
+                totalUnresolved ? `${totalUnresolved} ${UNRESOLVED}` : `none ${UNRESOLVED}`
+              }`}
         </div>
       </header>
 
       <div className="toolbar">
         <div className="segmented" role="tablist" aria-label="Filter by state">
+          {/* Each tab says which statuses it holds, so the one word on it never has to
+              stand in for two. */}
           <button
             role="tab"
-            data-value="open"
-            aria-selected={tab === "open"}
-            className={`segment${tab === "open" ? " is-active" : ""}`}
-            onClick={() => setTab("open")}
+            data-value="unresolved"
+            aria-selected={tab === "unresolved"}
+            className={`segment${tab === "unresolved" ? " is-active" : ""}`}
+            onClick={() => setTab("unresolved")}
+            title={`Bugs that are ${UNRESOLVED_MEANS}`}
           >
             <span className="sdot sdot-bug-open" aria-hidden="true" />
-            Open<span className="segment-count tabular">{tabCounts.open}</span>
+            {UNRESOLVED_LABEL}
+            <span className="segment-count tabular">{tabCounts.unresolved}</span>
           </button>
           <button
             role="tab"
@@ -330,6 +343,7 @@ export function BugsPage() {
             aria-selected={tab === "resolved"}
             className={`segment${tab === "resolved" ? " is-active" : ""}`}
             onClick={() => setTab("resolved")}
+            title="Bugs that are resolved or closed"
           >
             <span className="sdot sdot-bug-resolved" aria-hidden="true" />
             Resolved<span className="segment-count tabular">{tabCounts.resolved}</span>
@@ -340,6 +354,7 @@ export function BugsPage() {
             aria-selected={tab === "all"}
             className={`segment${tab === "all" ? " is-active" : ""}`}
             onClick={() => setTab("all")}
+            title="Every bug ever filed in this project"
           >
             All<span className="segment-count tabular">{tabCounts.all}</span>
           </button>
@@ -438,7 +453,9 @@ export function BugsPage() {
               }`}
               onClick={() => set("severity", severity === s ? "all" : s)}
               aria-pressed={severity === s}
-              title={`${count} ${SEVERITY_LABEL[s].toLowerCase()} in this tab`}
+              title={`${count} ${SEVERITY_LABEL[s].toLowerCase()}-severity ${
+                count === 1 ? "bug" : "bugs"
+              } in this tab`}
             >
               <span className="sev-chip-dot" aria-hidden="true" />
               <span className="sev-chip-label">{SEVERITY_LABEL[s]}</span>
@@ -493,8 +510,8 @@ export function BugsPage() {
           total={bugs.length}
           tab={tab}
           filtersActive={filtersActive}
-          openCount={totalOpen}
-          resolvedCount={bugs.length - totalOpen}
+          unresolvedCount={totalUnresolved}
+          resolvedCount={bugs.length - totalUnresolved}
           onClear={clearFilters}
           onSwitchTab={setTab}
         />
@@ -509,7 +526,9 @@ export function BugsPage() {
                   <span className="work-group-count tabular">{group.items.length}</span>
                   {group.items.length > 1 && (
                     <span className="work-group-note">
-                      {isOpenStatus(group.status) ? "severity, then newest" : "newest first"}
+                      {isUnresolvedStatus(group.status)
+                        ? "severity, then newest"
+                        : "newest first"}
                     </span>
                   )}
                 </header>
@@ -546,7 +565,7 @@ export function BugsPage() {
                             className="work-row-time tabular"
                             dateTime={rowTime(b)}
                             title={
-                              isOpen(b)
+                              isUnresolved(b)
                                 ? `Filed ${formatDateTimeUtc(b.created)} · last activity ${formatDateTimeUtc(b.lastActivity)}`
                                 : `Resolved ${formatDateTimeUtc(b.resolved ?? b.lastActivity)} · filed ${formatDateTimeUtc(b.created)}`
                             }
@@ -601,7 +620,7 @@ function BoardEmpty({
   total,
   tab,
   filtersActive,
-  openCount,
+  unresolvedCount,
   resolvedCount,
   onClear,
   onSwitchTab,
@@ -610,7 +629,7 @@ function BoardEmpty({
   total: number;
   tab: Tab;
   filtersActive: boolean;
-  openCount: number;
+  unresolvedCount: number;
   resolvedCount: number;
   onClear: () => void;
   onSwitchTab: (tab: Tab) => void;
@@ -643,7 +662,7 @@ function BoardEmpty({
     );
   }
 
-  if (!filtersActive && tab === "open") {
+  if (!filtersActive && tab === "unresolved") {
     return (
       <EmptyState
         icon={
@@ -658,8 +677,8 @@ function BoardEmpty({
             />
           </svg>
         }
-        title="Nothing open"
-        hint={`Every one of the ${pluralize(resolvedCount, "bug")} filed in this project has been resolved, and each one carries the written fix.`}
+        title="Nothing unresolved"
+        hint={`Every one of the ${bugCount(resolvedCount)} filed in this project has been resolved, and each one carries the written fix.`}
         action={
           <button className="button" onClick={() => onSwitchTab("resolved")}>
             Read the resolved ones
@@ -679,10 +698,10 @@ function BoardEmpty({
           </svg>
         }
         title="Nothing resolved yet"
-        hint={`${pluralize(openCount, "bug")} still open in this project. A bug leaves this board when an agent writes the fix into it with \`agentmon bug resolve\`.`}
+        hint={`${bugCount(unresolvedCount)} unresolved in this project. A bug leaves this tab when an agent writes the fix into it with \`agentmon bug resolve\`.`}
         action={
-          <button className="button" onClick={() => onSwitchTab("open")}>
-            Show the open ones
+          <button className="button" onClick={() => onSwitchTab("unresolved")}>
+            Show the unresolved ones
           </button>
         }
       />
@@ -698,7 +717,7 @@ function BoardEmpty({
         </svg>
       }
       title="No bugs match these filters"
-      hint={`${pluralize(total, "bug")} in this project, none of them matching all of the filters above.`}
+      hint={`${bugCount(total)} in this project, none of them matching all of the filters above.`}
       action={
         <button className="button" onClick={onClear}>
           Clear filters

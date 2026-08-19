@@ -97,6 +97,7 @@ export function BurnUp({
   gap,
   noun,
   scope,
+  empty,
 }: {
   series: CumulativeSeries;
   upper: SeriesSpec;
@@ -113,6 +114,8 @@ export function BurnUp({
    * (round 1 critic). Null for an all-time chart, where the total *is* the change.
    */
   scope?: string | null;
+  /** What to draw when this project has nothing to plot at all. */
+  empty?: { title: string; hint: string };
 }) {
   const [ref, width] = useMeasure<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
@@ -148,6 +151,36 @@ export function BurnUp({
     },
     [innerW, n, ref]
   );
+
+  /**
+   * Nothing has ever happened on this series: no work log started, or no bug filed.
+   *
+   * Two flat lines pinned to zero, a full axis and a legend of noughts is a chart claiming
+   * to plot something. A project one hour old got two of them side by side (P5 critic), and
+   * the honest reading — "there is nothing here yet, and here is what puts something here" —
+   * took a reader three seconds and a squint. This is not the same as a *quiet* range: a
+   * project with records but none inside the window still draws its lines, because the level
+   * they sit at is real information.
+   */
+  if (empty && series.totalUpper === 0 && series.totalLower === 0) {
+    return (
+      <div className="chart chart-empty" role="img" aria-label={`${empty.title}. ${empty.hint}`}>
+        <div className="chart-empty-plot" style={{ height: PAD.top + PLOT_H + PAD.bottom }}>
+          <p className="chart-empty-title">{empty.title}</p>
+          <p className="chart-empty-hint">{empty.hint}</p>
+        </div>
+        {/* The legend still names the three things this chart will show, at the zero they
+            honestly stand at — so the card is the same shape as the one beside it. */}
+        <Legend
+          items={[
+            { color: upper.color, label: upper.label, value: 0 },
+            { color: lower.color, label: lower.label, value: 0 },
+            { color: gap.wash, label: gap.label, value: 0, band: true },
+          ]}
+        />
+      </div>
+    );
+  }
 
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (n === 0) return;

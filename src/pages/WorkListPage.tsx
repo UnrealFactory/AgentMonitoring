@@ -1,12 +1,13 @@
 /**
- * Every work record in the project, as a dense keyboard-driven list.
+ * Every work log in the project, as a dense keyboard-driven list.
  *
  * Filtering is client-side and instant (the vault is small enough to hold in memory and a
  * round trip per keystroke would feel like a website) and lives in the URL, so Back out of
- * a record returns to the list as it was left and a filtered view can be linked to. Rows
- * are grouped by status so "what is happening right now" is always the first thing on the
- * screen. Search reads the whole record — What, Why, How, every update and the outcome —
- * not just the line the row shows.
+ * a work log returns to the list as it was left and a filtered view can be linked to. Rows
+ * are grouped by status — in progress, done, abandoned, the three words this app uses for
+ * work everywhere (lib/words.ts) — so "what is happening right now" is always the first
+ * thing on the screen. Search reads the whole work log — What, Why, How, every update and
+ * the outcome — not just the line the row shows.
  */
 import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
@@ -25,7 +26,8 @@ import {
   Tag,
   WorkStatusDot,
 } from "../components/ui";
-import { formatDateTimeUtc, formatRelative, pluralize, WORK_STATUS_LABEL } from "../lib/format";
+import { formatDateTimeUtc, formatRelative, pluralize } from "../lib/format";
+import { IN_PROGRESS, WORK_NOUN, WORK_STATUS_LABEL, workLogs } from "../lib/words";
 import type { WorklogSummary, WorkStatus } from "../lib/types";
 
 /** The dimensions a filter slices on — and therefore the ones a count can be exempt from. */
@@ -188,13 +190,14 @@ export function WorkListPage() {
         <div>
           <h1 className="page-title">Work</h1>
           <p className="page-sub">
-            What every agent did, why they did it, and how it went — one record per unit of work.
+            What every agent did, why they did it, and how it went — one work log per unit of
+            work.
           </p>
         </div>
         <div className="page-head-meta tabular">
           {loading
             ? "loading…"
-            : `${pluralize(works.length, "record")}${inProgress ? ` · ${inProgress} in progress` : ""}`}
+            : `${workLogs(works.length)}${inProgress ? ` · ${inProgress} ${IN_PROGRESS}` : ""}`}
         </div>
       </header>
 
@@ -311,8 +314,8 @@ export function WorkListPage() {
             title="No work recorded yet"
             hint={
               <>
-                Agents open a record before they start, so the reasoning is written down while it
-                is still true:
+                Agents start a {WORK_NOUN} before they touch code, so the reasoning is written
+                down while it is still true:
                 <code className="empty-code">
                   agentmon work start -p {slug} --agent &lt;name&gt; --title &lt;title&gt;
                 </code>
@@ -333,7 +336,7 @@ export function WorkListPage() {
               </svg>
             }
             title="No work matches these filters"
-            hint={`${pluralize(works.length, "record")} in this project, none of them matching all of the filters above.`}
+            hint={`${workLogs(works.length)} in this project, none of them matching all of the filters above.`}
             action={
               <button className="button" onClick={clearFilters}>
                 Clear filters

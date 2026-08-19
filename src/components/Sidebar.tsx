@@ -15,6 +15,13 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp, useCurrentProject } from "../AppContext";
 import { openPalette } from "./CommandPalette";
+import {
+  bugTip,
+  inProgressOf,
+  unresolvedCount,
+  workLogs,
+  workTip,
+} from "../lib/words";
 import { pluralize } from "../lib/format";
 import type { Project } from "../lib/types";
 
@@ -131,13 +138,25 @@ export function Sidebar() {
         >
           <span className="switcher-label">
             <span className="switcher-name">{current?.name ?? "All projects"}</span>
-            <span className="switcher-meta tabular">
-              {current
-                ? `${current.counts.workInProgress} active · ${pluralize(
-                    current.counts.bugsOpen,
-                    "open bug"
-                  )}`
-                : pluralize(active.length, "project")}
+            {/* One measure, in the app's words, with what it is out of. The bug number is
+                on the Bugs row three lines below — printing it here too, in a second
+                vocabulary, is how one fact came to have four names in one column. */}
+            <span
+              className="switcher-meta tabular"
+              title={
+                current
+                  ? `${workTip(current.counts.workTotal, current.counts.workInProgress)} · ${bugTip(
+                      current.counts.bugsOpen,
+                      current.counts.bugsTotal
+                    )}`
+                  : undefined
+              }
+            >
+              {!current
+                ? pluralize(active.length, "project")
+                : current.counts.workTotal === 0
+                  ? "no work logs yet"
+                  : inProgressOf(current.counts.workInProgress, current.counts.workTotal)}
             </span>
           </span>
           <svg className="switcher-caret" viewBox="0 0 12 12" aria-hidden="true">
@@ -172,9 +191,15 @@ export function Sidebar() {
                 </span>
                 {/* Both numbers, both named: a bare "12" beside a bare "2" invites the
                     reader to compare two things that are not the same measure. */}
-                <span className="switcher-item-meta tabular">
-                  {p.counts.workTotal} logs
-                  {p.counts.bugsOpen > 0 && ` · ${p.counts.bugsOpen} open`}
+                <span
+                  className="switcher-item-meta tabular"
+                  title={`${workTip(p.counts.workTotal, p.counts.workInProgress, `in ${p.name}`)} · ${bugTip(
+                    p.counts.bugsOpen,
+                    p.counts.bugsTotal
+                  )}`}
+                >
+                  {workLogs(p.counts.workTotal)}
+                  {p.counts.bugsOpen > 0 && ` · ${unresolvedCount(p.counts.bugsOpen)}`}
                 </span>
               </button>
             ))}
@@ -226,12 +251,12 @@ export function Sidebar() {
               <NavIcon name="work" />
               Work
               {/* "Work 12" and "Bugs 2" used to sit here identically styled while counting
-                  different things — every log ever written against only the open bugs. Each
-                  count now says which it is. */}
+                  different things — every work log ever written against only the bugs that
+                  still need somebody. Each count now says which it is. */}
               {current.counts.workTotal > 0 && (
                 <span
                   className="nav-count tabular"
-                  title={`${current.counts.workTotal} work logs in this project, ${current.counts.workInProgress} still open`}
+                  title={workTip(current.counts.workTotal, current.counts.workInProgress)}
                 >
                   {current.counts.workTotal}
                 </span>
@@ -243,9 +268,9 @@ export function Sidebar() {
               {current.counts.bugsOpen > 0 && (
                 <span
                   className="nav-count nav-count-open tabular"
-                  title={`${current.counts.bugsOpen} open of ${current.counts.bugsTotal} bugs ever filed here`}
+                  title={bugTip(current.counts.bugsOpen, current.counts.bugsTotal, "filed here")}
                 >
-                  {current.counts.bugsOpen} open
+                  {unresolvedCount(current.counts.bugsOpen)}
                 </span>
               )}
             </NavLink>
@@ -272,10 +297,11 @@ export function Sidebar() {
             to={`/p/${p.slug}`}
             className={`nav-item nav-sub${p.slug === current?.slug ? " is-current" : ""}`}
             aria-current={p.slug === current?.slug ? "location" : undefined}
-            title={`${p.name} — ${pluralize(p.counts.workTotal, "work log")}, ${pluralize(
-              p.counts.bugsOpen,
-              "open bug"
-            )}`}
+            title={`${p.name} — ${workTip(
+              p.counts.workTotal,
+              p.counts.workInProgress,
+              "here"
+            )} · ${bugTip(p.counts.bugsOpen, p.counts.bugsTotal)}`}
           >
             <span
               className={`nav-bullet${p.status === "archived" ? " is-archived" : ""}`}
@@ -287,9 +313,9 @@ export function Sidebar() {
             {p.counts.bugsOpen > 0 && (
               <span
                 className="nav-count nav-count-open tabular"
-                title={`${p.counts.bugsOpen} open of ${p.counts.bugsTotal} bugs filed in ${p.name}`}
+                title={bugTip(p.counts.bugsOpen, p.counts.bugsTotal, `filed in ${p.name}`)}
               >
-                {p.counts.bugsOpen} open
+                {unresolvedCount(p.counts.bugsOpen)}
               </span>
             )}
           </Link>

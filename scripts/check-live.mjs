@@ -25,7 +25,7 @@
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { chromium } from "playwright";
 import { repoRoot, startServer, stopServer, waitForServer } from "./dev-server.mjs";
 
@@ -90,8 +90,8 @@ const dashboardFacts = (page) =>
       );
     const text = (el, sel) => el?.querySelector(sel)?.textContent?.trim() ?? null;
     return {
-      openBugs: text(panel("Open bugs"), ".now-figure-value"),
-      openBugsUnit: text(panel("Open bugs"), ".now-figure-unit"),
+      openBugs: text(panel("Unresolved bugs"), ".now-figure-value"),
+      openBugsUnit: text(panel("Unresolved bugs"), ".now-figure-unit"),
       lastDay: text(panel("Last 24 hours"), ".now-figure-value"),
       activity: document.querySelector("#activity .card-note")?.textContent?.trim() ?? null,
       sidebarBugs:
@@ -188,6 +188,20 @@ try {
   server = startServer(PORT, { env: { AGENTMON_VAULT: vaultCopy } });
   await waitForServer(server, ORIGIN);
 
+  /* Whose server is this? Vite moves to the next free port when the one it was given is
+     taken, and `waitForServer` is satisfied by *any* answer on the origin — so a dev
+     server somebody left running on this port answers every request in this file. That is
+     not a flaky gate, it is a gate that writes to the wrong vault: it created a project in
+     this repo's real history before this check existed. The vault has to be the copy. */
+  const serving = await api("/vault");
+  if (resolve(serving.path) !== resolve(vaultCopy)) {
+    throw new Error(
+      `something else is already listening on ${ORIGIN}: it serves ${serving.path}, not the ` +
+        `copy at ${vaultCopy}. Stop it (or pass --port/$LIVE_PORT) and run this again — this ` +
+        `gate writes records, and it must only ever write to its own copy.`,
+    );
+  }
+
   const projects = await api("/projects");
   if (!projects.length) throw new Error("the vault copy has no projects");
   const project =
@@ -264,7 +278,7 @@ try {
   };
   const factsBefore = await dashboardFacts(dash);
   loads = 0;
-  log(`baseline: open bugs ${factsBefore.openBugs}, ${factsBefore.activity}`);
+  log(`baseline: unresolved bugs ${factsBefore.openBugs}, ${factsBefore.activity}`);
 
   /* -- 3. quiet when nothing happens ---------------------------------------- */
 
@@ -315,7 +329,7 @@ try {
   check(
     `an open dashboard shows a bug filed after it loaded (within ${WAIT_MS / 1000}s)`,
     !dashResult.timedOut,
-    `open bugs read ${dashResult.value.openBugs} after ${dashResult.ms}ms, expected ${expectedBugs}`,
+    `unresolved bugs read ${dashResult.value.openBugs} after ${dashResult.ms}ms, expected ${expectedBugs}`,
   );
   if (!dashResult.timedOut) log(`dashboard caught up in ${dashResult.ms}ms`);
 
@@ -388,8 +402,8 @@ try {
 
   const facts = await dashboardFacts(dash);
   check(
-    "the sidebar and the dashboard agree about open bugs",
-    facts.sidebarBugs === `${facts.openBugs} open`,
+    "the sidebar and the dashboard agree about unresolved bugs",
+    facts.sidebarBugs === `${facts.openBugs} unresolved`,
     `sidebar "${facts.sidebarBugs}" vs card "${facts.openBugs}"`,
   );
   const activityCount = Number(/^(\d+)/.exec(facts.activity ?? "")?.[1] ?? -1);

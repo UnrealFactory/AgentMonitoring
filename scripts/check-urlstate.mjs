@@ -150,7 +150,7 @@ try {
   // Every one of them is checked, on both boards and on the dashboard, because "the two we
   // remembered" is how `?status=banana` came to be read back off the agent menu.
   const tabbed = [
-    { screen: "bugs", query: "tab=zzz", tab: /^Open/, rows: "open" },
+    { screen: "bugs", query: "tab=zzz", tab: /^Unresolved/, rows: "unresolved" },
     { screen: "work", query: "status=banana", tab: /^All/, rows: "work" },
   ];
   for (const t of tabbed) {
@@ -167,7 +167,7 @@ try {
   }
 
   for (const d of dimensions) {
-    // The bug board's default tab is Open, so its unfiltered view is the All tab; the work
+    // The bug board's default tab is Unresolved, so its unfiltered view is the All tab; the work
     // list's default already shows everything.
     const base = d.screen === "bugs" ? "tab=all&" : "";
     const url = `${ORIGIN}/p/${slug}/${d.screen}?${base}${d.query}`;

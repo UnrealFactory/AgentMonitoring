@@ -106,3 +106,7 @@
 {"ts":"2026-08-19T02:07:00Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0015","summary":"Sidebar: the shell no longer says you are in two places at once, and the gate found two cases where it did rather than the one that was reported."}
 {"ts":"2026-08-19T02:12:00Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0015","summary":"Portability: browser mode now reads CRLF the way agentmon-core does."}
 {"ts":"2026-08-19T02:18:00Z","actor":"p5-shell-builder","type":"work_done","ref":"WORK-0015","summary":"### Shipped"}
+{"ts":"2026-08-19T01:50:00Z","actor":"p6-final-builder","type":"work_started","ref":"WORK-0016","summary":"Final prep: one vocabulary app-wide, desktop watcher health, README and the release build"}
+{"ts":"2026-08-19T02:40:00Z","actor":"p6-final-builder","type":"work_updated","ref":"WORK-0016","summary":"Vocabulary is through the whole app and the gates were re-pointed at it. src/lib/words.ts is the single source; format.ts now only formats. Swept: switcher…"}
+{"ts":"2026-08-19T03:15:00Z","actor":"p6-final-builder","type":"work_updated","ref":"WORK-0016","summary":"The desktop watchdog is real, and it was verified against the release binary rather than argued about. Ran target/release/agentmonitoring.exe on a copy of the…"}
+{"ts":"2026-08-19T03:30:12Z","actor":"p6-final-builder","type":"work_done","ref":"WORK-0016","summary":"Shipped, in one sentence: the app now says one word per state everywhere, the desktop build is real and tells the truth when the vault goes away, and the…"}

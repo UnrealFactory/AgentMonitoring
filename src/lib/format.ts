@@ -1,6 +1,9 @@
-/** Formatting helpers. Timestamps in the vault are always UTC ISO8601 strings. */
-
-import type { BugStatus, Severity, WorkStatus } from "./types";
+/**
+ * Formatting helpers. Timestamps in the vault are always UTC ISO8601 strings.
+ *
+ * Words live next door in lib/words.ts — this file turns data into text, that one decides
+ * what the text is called.
+ */
 
 const parse = (iso: string | null | undefined): Date | null => {
   if (!iso) return null;
@@ -49,7 +52,12 @@ export function formatRelative(iso: string | null | undefined, now: Date = new D
   const future = seconds < 0;
   const s = Math.abs(seconds);
 
-  if (s < 45) return future ? "in a moment" : "just now";
+  /* Either side of now is "just now". The app's clock ticks every thirty seconds
+     (charts.useNow), so an event an agent wrote a second ago is routinely a few seconds in
+     the *future* of the `now` the screen is holding — and the feed printed "in a moment"
+     for the line that had just appeared in it. A write cannot be in the future; a stale
+     clock can. */
+  if (s < 45) return "just now";
 
   // Largest unit that still yields a number a human can hold in their head.
   const steps: [limit: number, per: number, suffix: string][] = [
@@ -78,27 +86,11 @@ export function formatDuration(fromIso: string, toIso: string | null): string {
   return hours % 24 ? `${days}d ${hours % 24}h` : `${days}d`;
 }
 
-export const WORK_STATUS_LABEL: Record<WorkStatus, string> = {
-  in_progress: "In progress",
-  done: "Done",
-  abandoned: "Abandoned",
-};
+/* Status and severity labels moved to lib/words.ts, which is the one place the app's
+   vocabulary is decided — a state that has two names is a screen disagreeing with the
+   screen beside it.
 
-export const BUG_STATUS_LABEL: Record<BugStatus, string> = {
-  open: "Open",
-  in_progress: "In progress",
-  resolved: "Resolved",
-  closed: "Closed",
-};
-
-export const SEVERITY_LABEL: Record<Severity, string> = {
-  critical: "Critical",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
-
-/* Event wording and event colour live with the screen that draws them (lib/dashboard.ts):
+   Event wording and event colour live with the screen that draws them (lib/dashboard.ts):
    they are one vocabulary — the verb, the icon and the tone have to be chosen together —
    and splitting them across two files is how they drift apart. */
 

@@ -1,12 +1,22 @@
+# Build output and dependencies
 node_modules/
 dist/
 target/
+.vite/
+src-tauri/gen/
+
+# Logs, OS litter, secrets
 *.log
 .DS_Store
 Thumbs.db
-.vite/
-# Critic scratch shots (SHOT_OUT=progress/critic-*): evidence for one round, tens of MB.
-progress/critic-*/
 .env
 .env.local
-src-tauri/gen/
+
+# Scratch. Critics and builders drive the app with throwaway scripts and shoot tens of
+# megabytes of evidence for a single round (SHOT_OUT=progress/critic-*); none of it is the
+# product. Curated evidence goes in progress/<piece>/ and is committed on purpose.
+progress/critic-*/
+.critic-tmp/
+.tmp-probe/
+scripts/critic-*
+scripts/.crit-*

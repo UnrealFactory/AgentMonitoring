@@ -18,6 +18,12 @@
 
 /* --- sidebar -------------------------------------------------------------- */
 
+/* Two scrolls, on purpose. The nav takes the pressure first (a vault with twelve projects
+   scrolls its list and keeps the vault footer on the floor of the window), and the column
+   itself scrolls as the last resort — under about 560px of window height the brand, the
+   switcher, the search row and the footer alone are taller than the viewport, and with
+   `overflow: hidden` the bottom rows were simply unreachable (P5 critic). Everything that
+   is not the nav keeps its size rather than squashing. */
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -25,7 +31,16 @@
   padding: var(--space-3) var(--space-3) var(--space-2);
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border-subtle);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.brand,
+.project-switcher,
+.sidebar-search,
+.sidebar-foot {
+  flex: none;
 }
 
 .brand {
@@ -226,9 +241,11 @@
   flex-direction: column;
   gap: 1px;
   /* A vault with more projects than the column is tall scrolls its list rather than
-     pushing the vault footer off the bottom of the window. */
-  min-height: 0;
+     pushing the vault footer off the bottom of the window — but it never squeezes itself
+     down to a two-row porthole: past that the whole column scrolls instead (.sidebar). */
+  min-height: 96px;
   overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 /* Which project the three screens above belong to, and where the vault ones start. */
@@ -500,14 +517,59 @@
   color: var(--text-tertiary);
 }
 
+/* The meta column is two or three labelled facts, not one string: ids are per-project, so
+   this column is the only thing telling two WORK-0002s apart, and it has to say which of
+   its values is a project and which is an agent without the reader knowing either name. */
 .palette-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   flex: none;
-  max-width: 28ch;
+  max-width: 30ch;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.palette-meta-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-meta-sep {
+  color: var(--text-tertiary);
+  opacity: 0.7;
+}
+
+/* A project is a place — same folder glyph the nav uses for one — and it is the value most
+   likely to be the reason two rows look identical, so it is the brightest thing here. */
+.palette-meta-part.is-project {
+  color: var(--text-secondary);
+}
+
+.palette-meta-icon {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  color: var(--text-tertiary);
+}
+
+/* An agent is a name: the same tint agent chips wear everywhere else. */
+.palette-meta-part.is-agent {
+  color: var(--accent-text);
+}
+
+.palette-meta-part.is-severity {
+  text-transform: lowercase;
+}
+
+.palette-meta-part.is-state {
+  color: var(--text-tertiary);
 }
 
 .palette-kind {
@@ -2970,6 +3032,12 @@ kbd {
   min-width: 0;
 }
 
+/* "2 of 12 work logs in progress · 2 agents": the second fact is a different measure of the
+   same moment, so it is quieter than the one the figure is counting. */
+.now-hero-aside {
+  color: var(--text-tertiary);
+}
+
 .now-note {
   margin-top: auto;
   font-size: var(--text-sm);
@@ -3466,6 +3534,40 @@ kbd {
   border-radius: var(--radius-sm);
 }
 
+/* Nothing to plot yet. A designed state rather than two flat lines on a zero axis: the
+   dotted field says "a chart belongs here" without drawing marks that stand for no data,
+   and the card keeps the height of the one beside it so a one-hour-old project does not
+   get a ragged dashboard. */
+.chart-empty-plot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--space-4);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+
+.chart-empty-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.chart-empty-hint {
+  max-width: 46ch;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* Zeroes in the legend of an empty chart are true, not loud. */
+.chart-empty .legend-value {
+  color: var(--text-tertiary);
+}
+
 .chart-plot:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
@@ -3597,10 +3699,12 @@ kbd {
 .agent-head,
 .agent-row {
   display: grid;
+  /* The number columns are as wide as the word above them: "Resolved" is the app's one
+     word for a fixed bug (lib/words.ts), and a 46px column turned it into "RES…". */
   grid-template-columns:
     minmax(0, var(--agent-col, 160px))
     minmax(56px, 1fr)
-    46px 46px 46px
+    46px 46px 62px
     78px;
   gap: var(--space-3);
   align-items: center;
@@ -4031,6 +4135,50 @@ a.feed-row:hover .feed-ref {
   color: #f4a0a0;
   font-size: var(--text-base);
   border: 1px solid rgba(235, 87, 87, 0.3);
+}
+
+/* The way back from the one action on this screen that moves a row out of the list.
+   It sits in the layout rather than floating over it, and it waits: a toast that fades
+   after four seconds is an undo for people who were already looking. */
+.undo-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.undo-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.undo-text strong {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.undo-dismiss {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.undo-dismiss:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* --- the vault bar -------------------------------------------------------- */

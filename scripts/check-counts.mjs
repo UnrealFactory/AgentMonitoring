@@ -290,7 +290,7 @@ try {
         path: `/p/${p.slug}/bugs`,
         board: true,
         states: [
-          { q: "", state: { tab: "open" } },
+          { q: "", state: { tab: "unresolved" } },
           { q: "?tab=all", state: { tab: "all" } },
           { q: "?tab=all&severity=high", state: { tab: "all", severity: "high" } },
           {
@@ -304,7 +304,7 @@ try {
             selector: ".segmented .segment",
             countSelector: ".segment-count",
             activeClass: "is-active",
-            deflt: "open",
+            deflt: "unresolved",
           }),
           CONTROLS.buttons(page, {
             key: "severity",
