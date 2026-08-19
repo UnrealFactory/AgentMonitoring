@@ -284,10 +284,7 @@ dt {
  * range control. It is legible and it is wrong, in the way a hyphenless English hyphenation
  * would be. `keep-all` breaks at the spaces the author left instead.
  *
- * Deliberately **not** applied to `.prose` or to a record's title: that text belongs to the
- * agent who wrote it, this app does not reflow it beyond what the browser does for any
- * paragraph, and long unbroken tokens in a record (a path, a stack frame) still need the
- * anywhere-break the record styles already give them.
+ * The surfaces that print the *reader's* own words are below, and get the same rule.
  */
 .page-sub,
 .dash-scope,
@@ -330,6 +327,35 @@ dt {
 .claim-when,
 .strip-meta,
 .side-rel {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/*
+ * …and the same rule again for the text that is **not** the app's: a record body, a project
+ * description, the title of the thing on the dashboard, the first clause of a note in the
+ * feed.
+ *
+ * These four were excluded on purpose for six rounds, on the grounds that an agent's words
+ * are the agent's and "this app does not reflow them beyond what the browser does for any
+ * paragraph". That reason does not survive being written down. The browser breaks English
+ * only at spaces and Korean between any two syllables, so "the same as any paragraph" is not
+ * neutral treatment — it is worse-than-English, and it shipped: a Korean team's vault printed
+ * 결과 as "재시도 규칙은 한곳에 모았습니" over a lone "다.", and this repo's own feed cut
+ * "시작 27 · 완" / "료 27" in half (P9 round 6 critic, 59 splits over 11 screens × 7 widths on
+ * a Korean vault, 10 on the live one, against zero in the chrome beside them at the same
+ * widths). Line breaking is not the author's text; it is what this app does to it, and it is
+ * the one thing on these surfaces that *is* the app's business.
+ *
+ * `overflow-wrap: break-word` is the escape hatch, and it is why the record's long tokens are
+ * safe: a path or a stack frame that cannot fit a column at all still breaks, and `.prose
+ * code` keeps its own `anywhere` for the ones that need to break mid-token. A record's title
+ * needs nothing here — it is an `h1`, and the heading rule above already carries both.
+ */
+.prose,
+.project-desc,
+.now-row-title,
+.feed-summary {
   word-break: keep-all;
   overflow-wrap: break-word;
 }

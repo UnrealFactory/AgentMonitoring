@@ -249,6 +249,27 @@ export function CommandLine({ text }: { text: string }) {
 }
 
 /**
+ * The monogram an agent's avatar wears, and the one the palette draws beside a handle —
+ * one function, because two of them were two answers to the same question.
+ *
+ * `p0-foundation-builder` → `PF`: the first letter of each of the first two parts, which is
+ * what an initial *is* in a Latin script. A Hangul handle is not that. 결제팀-에이전트 wore
+ * "결에" — the first syllable of each part, glued into a word that is not one, which is the
+ * thing src/lib/i18n/ko.ts's own header forbids in as many words: a Hangul syllable is not an
+ * initial (P9 round 6 critic). 결 is a syllable somebody wrote; 결에 is not.
+ *
+ * So a handle with any Hangul in it takes one glyph — the first syllable of its first part,
+ * which is where a Korean reader looks anyway. No case folding is needed or possible: Hangul
+ * has no case, and `toUpperCase()` on it is the identity.
+ */
+export const agentInitials = (name: string): string => {
+  const parts = name.split(/[-_\s]/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (/[가-힣]/.test(name)) return parts[0][0];
+  return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+};
+
+/**
  * Agent identity. `md` is the byline size (the record's author, as on a PR page);
  * `sm` is the in-a-row size. `hideName` keeps the avatar and moves the name into the
  * tooltip — for narrow rows, where a name would push the title out instead.
@@ -262,12 +283,7 @@ export function AgentChip({
   size?: "sm" | "md";
   hideName?: boolean;
 }) {
-  const initials = name
-    .split(/[-_\s]/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
+  const initials = agentInitials(name);
   return (
     <span
       className={`agent${size === "md" ? " agent-md" : ""}${hideName ? " agent-compact" : ""}`}

@@ -3980,23 +3980,32 @@ kbd {
    flex box and `counted()` in components/charts.tsx orders the children — value then name in
    English, name then value in Korean, the same swap the legend under the plot makes.
 
-   Neither of them shrinks. A tip pinned near the right edge of its plot is laid out in the
-   space left of that edge, so it comes out at its 168px floor rather than its 260px ceiling,
-   and the row's three flex items were all shrinkable: the series name was handed 19px for a
-   word that measures 21, and Korean broke it — 시작 became 시 over 작, one syllable per line,
-   in the tooltip's own label (found while gating this file's word order). `.tip-added` is the
-   part that is allowed to give: it is the ids that also sit in the card below, and it has had
-   an ellipsis for exactly this since it was written. `keep-all` is the same rule the vault
-   bar's cells carry — Korean may break at a space and nowhere else. */
+   Both of them shrink, and `keep-all` is what keeps Korean whole while they do. A tip pinned
+   near the right edge of its plot is laid out in the space left of that edge, so it comes out
+   at its 168px floor rather than its 260px ceiling, and the series name is handed less room
+   than the word measures. Korean broke there — 시작 became 시 over 작, one syllable per line,
+   in the tooltip's own label. `keep-all` alone fixes that (it is the same rule the vault bar's
+   cells carry: Korean may break at a space and nowhere else), and `flex: none` was tried
+   beside it and bought nothing: mutation-tested at the same crosshair, keep-all without it
+   keeps 시작 and 완료 on one line, and removing keep-all reproduces the break whether the item
+   shrinks or not.
+
+   It also cost English a tooltip. `flex: none` on a 168px row means an English label wider
+   than the room left — "done or abandoned" is 116px of it — cannot wrap at its own spaces, so
+   it paints its last letters outside the rounded border, over the plot, at every width from
+   1280 up (48 of 1792 readings, P9 round 6 critic; check:clipping never opened a tip, so it
+   passed). Shrinkable, the same row wraps at a space and stays inside the card ChartTip's own
+   doc comment promises it will not leave. `.tip-added` gives first: it is the ids that also
+   sit in the card below, and it has had an ellipsis for exactly this since it was written. */
 .tip-value {
-  flex: none;
+  flex: 0 1 auto;
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 
 .tip-label {
-  flex: none;
+  flex: 0 1 auto;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   word-break: keep-all;

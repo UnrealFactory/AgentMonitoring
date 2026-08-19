@@ -13,7 +13,7 @@
     "tauri:build": "node scripts/bundle-cli.mjs && tauri build --config src-tauri/tauri.release.conf.json",
     "screenshot": "node scripts/screenshot.mjs",
     "smoke": "node scripts/markdown-smoke.mjs",
-    "check:clipping": "node scripts/check-clipping.mjs",
+    "check:clipping": "node scripts/check-clipping.mjs --locale ko && node scripts/check-clipping.mjs --locale en",
     "capture-refs": "node scripts/capture-refs.mjs",
     "progress": "node scripts/build-progress.mjs",
     "check:keys": "node scripts/check-keys.mjs",

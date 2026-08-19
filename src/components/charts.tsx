@@ -495,7 +495,15 @@ export function HourBars({
   hours: { start: number; count: number }[];
   label: string;
 }) {
-  const max = Math.max(1, ...hours.map((h) => h.count));
+  /* Two numbers, because they answer two questions. `peak` is the busiest hour, which is
+     what the caption states; `scale` is what the bars are drawn against, and it floors at 1
+     so that dividing by it is safe on a day with nothing in it. They were one number, and
+     the floor was printed as the fact: a strip over "0 events recorded" captioned itself
+     "가장 바쁜 시간대 이벤트 1건" / "1 event in the busiest hour", in both languages, naming
+     an event that does not exist (P9 round 5 and 6 critic). A drawing constant is not a
+     reading. */
+  const peak = Math.max(0, ...hours.map((h) => h.count));
+  const scale = Math.max(1, peak);
   const n = hours.length;
   /** Every sixth hour, and the right-hand end, which is the hour we are standing in. */
   const ticks = hours
@@ -509,7 +517,7 @@ export function HourBars({
           <span
             key={h.start}
             className={`hour-bar${i === n - 1 ? " is-now" : ""}${h.count === 0 ? " is-empty" : ""}`}
-            style={{ height: `${h.count === 0 ? 2 : Math.max(3, Math.round((h.count / max) * HOUR_BAR_H))}px` }}
+            style={{ height: `${h.count === 0 ? 2 : Math.max(3, Math.round((h.count / scale) * HOUR_BAR_H))}px` }}
             title={t("chart.hourTip", axisLabel(h.start, "hour"), h.count)}
           />
         ))}
@@ -538,8 +546,8 @@ export function HourBars({
           Korean ("가장 바쁜 시간대 이벤트 9건"). */}
       <p className="hour-scale">
         {t("chart.busiestHourPre")}
-        <span className="hour-scale-max tabular">{max}</span>
-        {t("chart.busiestHour", max)}
+        <span className="hour-scale-max tabular">{peak}</span>
+        {t("chart.busiestHour", peak)}
       </p>
     </div>
   );

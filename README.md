@@ -155,14 +155,17 @@ Gates, all of which drive the real app with Playwright against real vault data:
 
 ```bash
 npm run smoke            # markdown rendering across every record in the vault
-npm run check:clipping   # every screen at seven widths: nothing cut, no heading truncated
+npm run check:clipping   # every screen at seven widths, both languages: nothing cut, no heading
+                         # truncated, no chart tooltip painted outside its own card
 npm run check:counts     # every filter control: the number it prints is the rows you get
 npm run check:urlstate   # view state survives reload, Back and a pasted link
 npm run check:keys       # keyboard: lists, palette, context menus, focus, one current page
 npm run check:live       # a CLI write reaches an open window without a reload
 npm run check:vault      # the vault opens from anywhere, and moving it changes nothing
 npm run check:mcp        # the MCP server over stdio: lifecycle, errors, context budgets
-npm run check:i18n       # every screen in Korean: no English left in the app's own words
+npm run check:i18n       # every screen in Korean: no English left in the app's own words, and
+                         # no Korean word broken across a line — on this vault and on one whose
+                         # records are Korean, built for the run with the release CLI
 npm run check:errors     # every backend failure, read through the app's words, on both transports
 ```
 

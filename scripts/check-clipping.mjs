@@ -6,7 +6,7 @@
  *   node scripts/check-clipping.mjs [--port 5173] [--widths 1600,1280,1104,960]
  *                                  [--project relay] [--url ORIGIN]
  *
- * Three defects, one gate, because they are the same failure seen from three sides — a box
+ * Four defects, one gate, because they are the same failure seen from four sides — a box
  * that is smaller than what it holds:
  *
  *   CLIPPED  a fixed-width box with `overflow: hidden` guillotines whatever sticks out, and
@@ -22,6 +22,12 @@
  *            which the reader needs whole to know what the numbers under it mean. The
  *            Agents table's RESOLVED column shipped as "RESOL…" through two rounds of this
  *            gate, because an ellipsis was present and no ancestor was doing the cutting.
+ *   TIP      a chart tooltip whose text is painted outside its own card. The same failure
+ *            again — a 168px box holding a 180px row — but on a surface that is not on a
+ *            loaded screen: the tip exists only under a pointer or a focus ring, so for
+ *            eight rounds this gate walked past it, and the round it was given `flex: none`
+ *            it started printing "…or abandoned" over the plot at every width from 1280 up.
+ *            It is opened at seven crosshairs per chart now, both ends included.
  *
  * All three are correctness bugs on screens whose whole job is to show a record faithfully, so
  * this walks EVERY record of EVERY project (not just the first one: the row that breaks is
@@ -52,9 +58,9 @@ const value = (name, fallback) => {
 };
 
 if (flag("--help") || flag("-h")) {
-  console.log(`Find text this app cuts in half or paints on top of itself.
+  console.log(`Find text this app cuts in half, paints on top of itself, or paints outside its box.
 
-  npm run check:clipping
+  npm run check:clipping                       ko then en
   node scripts/check-clipping.mjs --widths 1600,960 --project relay
 
 Options:
@@ -295,10 +301,85 @@ const PROBE = (slack) => {
   return { clipped, overlaps, truncated };
 };
 
+/**
+ * Where the crosshair is put on each plot, as a fraction of its width.
+ *
+ * The two near the ends are the point. A tooltip is laid out in the room left between the
+ * crosshair and the edge of the plot, so near the right edge it comes out at its 168px floor
+ * rather than its 260px ceiling — which is the only width at which the defect below exists.
+ * The five in the middle are there so a finding can be told apart from "this tip is always
+ * broken".
+ */
+const CROSSHAIRS = [0.03, 0.2, 0.4, 0.6, 0.8, 0.94, 0.99];
+
+/**
+ * Runs in the page. Returns every piece of tooltip text painted outside its own card.
+ *
+ * The three questions above walk a *loaded screen*, and a tooltip is not on one: it exists
+ * only while a chart is hovered or focused, so nothing in this repo had ever measured one.
+ * Round 6 shipped `flex: none` on the tip's value and label to stop Korean breaking inside
+ * them, and it stopped them wrapping at all: at the 168px floor an English label wider than
+ * the room left painted its last letters over the plot, outside the rounded border — 48 of
+ * 1792 readings, every one English, every one "10 done or abandoned" near the right edge
+ * (P9 round 6 critic). This gate passed it, because nothing was clipped: the card does not
+ * hide its overflow, it lets it out. `ChartTip`'s own doc comment promises the tip "flips
+ * rather than leaving the card", so the promise is now measured.
+ *
+ * Ink, not boxes, and clipped by any ancestor that bounds horizontal overflow — `.tip-added`
+ * ellipsises the ids on purpose, and an honest ellipsis is not an escape.
+ */
+const TIP_PROBE = (slack) => {
+  const style = (el) => getComputedStyle(el);
+  const bounds = (el) => /hidden|clip|auto|scroll/.test(style(el).overflowX);
+  /** The content box: the card's own padding is where its text is allowed to end. */
+  const contentBox = (el) => {
+    const b = el.getBoundingClientRect();
+    const s = style(el);
+    return {
+      left: b.left + parseFloat(s.borderLeftWidth || "0") + parseFloat(s.paddingLeft || "0"),
+      right: b.right - parseFloat(s.borderRightWidth || "0") - parseFloat(s.paddingRight || "0"),
+    };
+  };
+  const out = [];
+  for (const tip of document.querySelectorAll(".chart-tip")) {
+    const inner = contentBox(tip);
+    const walker = document.createTreeWalker(tip, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!(node.textContent || "").trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      let rects = [...range.getClientRects()].map((r) => ({ left: r.left, right: r.right }));
+      for (let el = node.parentElement; el && el !== tip; el = el.parentElement) {
+        if (!bounds(el)) continue;
+        const p = contentBox(el);
+        rects = rects
+          .map((r) => ({ left: Math.max(r.left, p.left), right: Math.min(r.right, p.right) }))
+          .filter((r) => r.right - r.left > 0.5);
+      }
+      for (const r of rects) {
+        const over = Math.max(inner.left - r.left, r.right - inner.right);
+        if (over > slack) {
+          const el = node.parentElement;
+          const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/)[0] : "";
+          out.push({
+            el: `${el.tagName.toLowerCase()}${cls ? "." + cls : ""}`,
+            text: node.textContent.trim().slice(0, 40),
+            px: Math.round(over * 10) / 10,
+            tip: Math.round(tip.getBoundingClientRect().width),
+          });
+        }
+      }
+    }
+  }
+  return out;
+};
+
 let browser = null;
 let server = null;
 let failures = 0;
 let checked = 0;
+/** How many open tooltips were measured — a screen load is not a reading of one. */
+let tipReadings = 0;
 
 try {
   ({ server } = await ensureServer({
@@ -321,7 +402,11 @@ try {
   for (const p of wanted) {
     const bugs = await api(`/projects/${p.slug}/bugs`);
     const works = await api(`/projects/${p.slug}/worklogs`);
-    screens.push({ path: `/p/${p.slug}` });
+    // `tips` marks the screens that have charts, whose tooltips are opened and measured.
+    screens.push({ path: `/p/${p.slug}`, tips: true });
+    // …and the same charts over a wider window, where a bucket holds more ids and the tip
+    // has more to fit into the same 168px.
+    screens.push({ path: `/p/${p.slug}?range=all`, tips: true });
     screens.push({ path: `/p/${p.slug}/work` });
     screens.push({ path: `/p/${p.slug}/bugs` });
     // The board opens on the bugs that still need someone; the dense view is All.
@@ -376,6 +461,55 @@ try {
           );
         }
         checked += 1;
+
+        // -- 4. a tooltip that leaves its card (see TIP_PROBE) ------------------------
+        if (screen.tips) {
+          const plots = page.locator(".chart-plot");
+          for (let i = 0; i < (await plots.count()); i += 1) {
+            const box = await plots.nth(i).boundingBox();
+            if (!box) continue;
+            for (const f of CROSSHAIRS) {
+              await page.mouse.move(box.x + box.width * f, box.y + box.height / 2);
+              /* The tip follows the crosshair one React commit later, so a probe that runs
+                 straight after the move measures the *previous* bucket in the *previous*
+                 position — which is how a 168px card at the right edge gets read as the
+                 260px one in the middle, and how this check first passed a mutation that
+                 puts `flex: none` back. So: wait until two frames running report the same
+                 card in the same place, and give up after 300ms rather than trusting a page
+                 whose frames are throttled to ever settle. */
+              await page.evaluate(
+                () =>
+                  new Promise((resolve) => {
+                    const read = () => {
+                      const tip = document.querySelector(".chart-tip");
+                      return tip
+                        ? `${Math.round(tip.getBoundingClientRect().left)}|${tip.textContent}`
+                        : "";
+                    };
+                    const deadline = performance.now() + 300;
+                    let last = read();
+                    const frame = () => {
+                      const now = read();
+                      if (now === last || performance.now() > deadline) return resolve();
+                      last = now;
+                      requestAnimationFrame(frame);
+                    };
+                    requestAnimationFrame(frame);
+                  }),
+              );
+              if (!(await page.locator(".chart-tip").count())) continue;
+              tipReadings += 1;
+              for (const o of await page.evaluate(TIP_PROBE, SLACK)) {
+                failures += 1;
+                lines.push(
+                  `TIP     ${where} ${o.el} paints ${o.px}px outside its ${o.tip}px card ` +
+                    `(plot ${i + 1}, crosshair ${f}) — "${o.text}"`,
+                );
+              }
+            }
+          }
+          await page.mouse.move(0, 0);
+        }
       }
     } finally {
       await page.close();
@@ -393,10 +527,10 @@ try {
   if (server) await stopServer(server);
 }
 
-log(`${checked} screen loads`);
+log(`${checked} screen loads, ${tipReadings} open tooltips`);
 log(
   failures === 0
-    ? "clean: nothing is cut without an ellipsis, no heading truncates itself, nothing is painted over anything"
+    ? "clean: nothing is cut without an ellipsis, no heading truncates itself, nothing is painted over anything, and no tooltip leaves its card"
     : `${failures} finding(s)`,
 );
 await new Promise((r) => setTimeout(r, 60));

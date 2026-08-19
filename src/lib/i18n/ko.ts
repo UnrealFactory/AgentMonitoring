@@ -624,7 +624,12 @@ export const ko: Dict = {
   "dash.lastThing": (when) => `여기에 마지막으로 기록된 것은 ${when}입니다.`,
   "dash.neverAnything": "여기에는 아직 아무것도 기록된 적이 없습니다.",
   "dash.quietFor": (duration) => `${duration}째 조용함`,
-  "dash.countPart": (count, label) => `${label} ${count}`,
+  /* 세는 것은 모두 이벤트이므로 단위는 `건`이다(이 파일 머리말의 "수는 단위 명사를 달고
+     다닌다"). 이 한 줄이 대시보드 첫 화면의 최근 24시간 문장과 활동 카드의 날짜 머리글을
+     함께 만드는데, 단위를 빼면 "시작 16 · 완료 16 · 노트 30 · … · 에이전트 6명"처럼 한
+     문장 안에서 여섯 번은 맨 숫자로, 한 번은 단위를 달고 세게 된다. 사람은 단위를 뺄 수
+     없어서 `명`이 남은 것이고, 나머지가 빠져 있던 것이다(P9 5·6라운드 비평). */
+  "dash.countPart": (count, label) => `${label} ${count}건`,
   "dash.hoursLabel": (counts) => `최근 24시간의 시간대별 이벤트 수, 오래된 순: ${counts}`,
 
   "dash.chartWork": "작업",
@@ -665,8 +670,10 @@ export const ko: Dict = {
   "dash.legendWork": "작업",
   "dash.legendBugs": "버그",
   "dash.legendProject": "프로젝트",
+  /* 앞의 합계만 `건`을 달고 뒤의 내역은 맨 숫자로 두면 한 문장 안에서 세는 방식이 두 가지가
+     된다. 내역도 같은 이벤트를 세므로 같은 단위를 단다(dash.countPart와 같은 이유). */
   "dash.agentBarTip": (total, work, bugs, project) =>
-    `이벤트 ${total}건 — 작업 ${work}, 버그 ${bugs}${project ? `, 프로젝트 ${project}` : ""}`,
+    `이벤트 ${total}건 — 작업 ${work}건, 버그 ${bugs}건${project ? `, 프로젝트 ${project}건` : ""}`,
   "dash.agentDotTip": (count, inProgress, seen) => `${count} ${inProgress} · 마지막 기록 ${seen}`,
   "dash.agentIdleTip": (inProgress, seen) => `${inProgress}인 작업 로그 없음 · 마지막 기록 ${seen}`,
   "dash.agentIdleLabel": "진행 중인 작업 로그 없음",
@@ -680,6 +687,8 @@ export const ko: Dict = {
   "dash.activityEmpty": "이 기간에 기록된 것이 없습니다",
   "dash.activityEmptyHint":
     "CLI로 무언가 바꿀 때마다 events.jsonl에 한 줄이 추가됩니다. 위에서 기간을 넓히면 이전 기록도 볼 수 있습니다.",
+  /* `parts`는 dash.countPart가 만들고, 거기서 이미 단위를 달고 온다 —
+     "이벤트 77건 — 작업 42건, 완료 15건, 버그 12건, 해결 8건". */
   "dash.dayMix": (events, parts) => `이벤트 ${events}건 — ${parts}`,
   "dash.showOther": (n, day) => `${day} 나머지 ${n}건 보기`,
   "dash.today": "오늘",

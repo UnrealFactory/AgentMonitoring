@@ -43,6 +43,9 @@ import {
 } from "../lib/words";
 import { trapTab, useModalLock } from "../lib/modal";
 import type { BugSummary, Project, WorklogSummary } from "../lib/types";
+/* The avatar's monogram is the avatar's, wherever it is drawn: one function, so a Korean
+   handle cannot wear two different marks on two screens (components/ui.tsx). */
+import { agentInitials } from "./ui";
 
 /** Fire this from anywhere in the app (the sidebar's search button) to open the palette. */
 export const PALETTE_EVENT = "agentmon:palette";
@@ -110,15 +113,6 @@ const META_KIND: Record<MetaPart["kind"], () => string> = {
   count: () => "",
 };
 
-/** `nova` → `NV`, the same two letters the agent's avatar wears everywhere else. */
-const initials = (name: string) =>
-  name
-    .split(/[-_\s]/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("") || "?";
-
 /**
  * The meta column: one span per fact, each saying what kind of fact it is.
  *
@@ -157,7 +151,7 @@ function Meta({ parts }: { parts: MetaPart[] }) {
             )}
             {part.kind === "agent" && (
               <span className="palette-meta-avatar" aria-hidden="true">
-                {initials(part.text)}
+                {agentInitials(part.text)}
               </span>
             )}
             {part.text}

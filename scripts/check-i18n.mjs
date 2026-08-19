@@ -59,14 +59,30 @@
  * opens it, by pointer and by arrow key, on both charts of both projects and at every width
  * in the sweep.
  *
+ * **And a fifth: whose Korean?** The third question was asked only of the app's own words:
+ * the sweep was handed {@link AUTHOR}, and `.prose`, `.feed-summary`, `.project-desc` and
+ * `.now-row-title` — every surface that prints the *reader's* Korean — were on that list. So
+ * the chrome measured clean at every width while a record body cut 모았습니다 into 모았습니
+ * and 다 (P9 round 6 critic). It is asked of the whole page now, minus {@link BREAKABLE}: a
+ * code span and a file path are strings, not words, and they are meant to break anywhere.
+ *
+ * Under that one: **nothing here had ever pointed the app at a vault holding Korean records**,
+ * so five rounds of Korean review read Korean chrome over English data. The sweep now runs a
+ * second time against a vault built for it with the release CLI (scripts/ko-vault.mjs) — a
+ * Korean project, Korean titles, Korean bodies, Korean handles — on its own dev server, in a
+ * temp directory that is deleted when the gate ends.
+ *
  * Everything else must be Korean — and `--locale en` is the same walk with the alphabets
  * swapped, because a Korean string typed into a component is just as invisible to `tsc` as
  * an English one, and the app ships in two languages. Runs against the live vault read-only.
  */
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright";
-import { ensureServer, stopServer } from "./dev-server.mjs";
+import { ensureServer, startServer, stopServer, waitForServer } from "./dev-server.mjs";
 import { t, useLocale } from "./i18n.mjs";
+import { buildKoreanVault } from "./ko-vault.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -98,18 +114,24 @@ Options:
                      (default ko)
   --port <n>         dev-server port to boot on / check against (default 5173)
   --url <origin>     check an already-running server instead of booting one
+  --ko-port <n>      port for the Korean-content fixture vault's own server (default port+4)
   --narrow <n>       the second viewport the reflowing screens are read at, where the
                      container queries fire (default 960, the desktop window's minimum)
   --widths a,b,c     the widths the Korean word-integrity sweep runs at
                      (default ${SWEEP_DEFAULT})
   --sweep-only       run only that sweep — reproducing one wrapping finding takes seconds
                      rather than the whole screen walk
-  --verbose          list every screen walked, not only the findings`);
+  --verbose          list every screen walked, not only the findings
+
+The Korean run also builds a vault whose records are Korean and sweeps that too, so it
+needs the release CLI: cargo build --release -p agentmon-cli`);
   process.exit(0);
 }
 
 const PORT = Number(value("--port", process.env.SHOT_PORT || 5173));
 const ORIGIN = value("--url", `http://localhost:${PORT}`).replace(/\/$/, "");
+/** The Korean-content fixture gets its own server, because a vault is a whole server's. */
+const KO_PORT = Number(value("--ko-port", PORT + 4));
 const LOCALE = value("--locale", "ko");
 const VERBOSE = flag("--verbose");
 /** The two widths every reflowing screen is read at: roomy, and the narrowest the app may be. */
@@ -389,49 +411,90 @@ const ORDER_PAIRS = [
 ];
 
 /**
- * The screens whose Korean is swept, and what makes each one wrap-sensitive.
+ * Where a mid-token break is what somebody asked for, and the only place Hangul may be cut.
  *
- * Not all 149: this asks a question about *layout*, and the answer only changes where a box
- * is narrow enough to break a line and holds numbers the app itself wrote. That is the vault
- * bar and the project cards on /projects, and the dashboard's facts — the strip, the hero
- * unit, the 24-hour line, the record rows' durations — plus the two boards, which reflow
- * hardest. Every text node on them is read, minus the author containers: how an agent's own
- * English sentence wraps is not the app's business.
+ * The Korean word question below is asked of the *whole* page rather than of a list of
+ * boxes, because the list was the bug: for six rounds the sweep was handed {@link AUTHOR}
+ * and the four surfaces that print a reader's own Korean were all on it. So the exemptions
+ * here are by intent, not by ownership — a code span, a shell command, a file path and an
+ * id are strings whose characters do not form words, and the styles that hold them ask for
+ * `overflow-wrap: anywhere` on purpose so a 60-character path cannot leave the column.
+ * Everything else on the screen, the record's own prose included, must keep its words whole.
  */
-const SWEEP_SCREENS = (slug) => [
-  { name: "projects", path: "/projects", wait: ".project-row" },
-  { name: `dashboard ${slug}`, path: `/p/${slug}`, wait: ".now-strip .now-hero-value" },
-  { name: `work ${slug}`, path: `/p/${slug}/work`, wait: ".work-rows .work-row" },
-  { name: `bugs ${slug}`, path: `/p/${slug}/bugs?tab=all`, wait: ".work-rows .bug-row" },
-  /* The tooltips, open, at every width in the list — the state the burn-up tip is read in
-     and the one no gate had ever rendered (see openTips). */
-  {
-    name: `dashboard ${slug} chart tips`,
-    path: `/p/${slug}`,
-    wait: ".chart-tip",
-    prepare: openTips(true),
-  },
+const BREAKABLE = [
+  "code",
+  "pre",
+  "kbd",
+  ".mono", // ids, slugs, routes, paths
+  ".command-text",
+  ".empty-code",
+  ".vault-bar-path",
+  ".file-item",
+  ".sr-only", // never painted, so it has no lines to be broken across
 ];
 
 /**
- * Runs in the page. Returns every number+counter pair the line breaker split in two.
+ * The screens whose Korean is swept, and what makes each one wrap-sensitive.
  *
- * Measured, not guessed: a Range is laid over the pair as it was rendered and asked for its
- * client rects. Two rects on two different lines is a break inside the word — whatever CSS
- * property allowed it, whatever the DOM looks like. The pairs are found in a *flat* string
+ * Not all 149: this asks a question about *layout*, and the answer only changes where a box
+ * is narrow enough to break a line. That is the vault bar and the project cards on /projects,
+ * the dashboard's facts — the strip, the hero unit, the 24-hour line, the record rows'
+ * durations — the two boards, which reflow hardest, and a record of each kind, which is where
+ * the longest Korean on the screen is: the body an agent wrote. The record screens are new
+ * this round, and they are the ones that would have caught the round-6 defect: `.prose` was
+ * exempt from the question *and* absent from the list, so the sweep never loaded a body at a
+ * width where it wraps.
+ */
+const SWEEP_SCREENS = (projects) => [
+  { name: "projects", path: "/projects", wait: ".project-row" },
+  ...projects.flatMap(({ slug, work, bug }) => [
+    { name: `dashboard ${slug}`, path: `/p/${slug}`, wait: ".now-strip .now-hero-value" },
+    { name: `work ${slug}`, path: `/p/${slug}/work`, wait: ".work-rows .work-row" },
+    { name: `bugs ${slug}`, path: `/p/${slug}/bugs?tab=all`, wait: ".work-rows .bug-row" },
+    ...(work
+      ? [{ name: `work detail ${work}`, path: `/p/${slug}/work/${work}`, wait: ".record-title" }]
+      : []),
+    ...(bug
+      ? [{ name: `bug detail ${bug}`, path: `/p/${slug}/bugs/${bug}`, wait: ".record-title" }]
+      : []),
+    /* The tooltips, open, at every width in the list — the state the burn-up tip is read in
+       and the one no gate had ever rendered (see openTips). */
+    {
+      name: `dashboard ${slug} chart tips`,
+      path: `/p/${slug}`,
+      wait: ".chart-tip",
+      prepare: openTips(true),
+    },
+  ]),
+];
+
+/**
+ * Runs in the page. Returns every Korean word the line breaker split in two.
+ *
+ * Measured, not guessed: a Range is laid over the word as it was rendered and asked for its
+ * client rects. Rects on two different lines is a break inside the word — whatever CSS
+ * property allowed it, whatever the DOM looks like. The words are found in a *flat* string
  * per block container rather than per text node, so `{n}<span>개</span>` is read as the one
  * word it looks like on screen; whitespace nodes stay in that string, which is why a pair is
  * only a pair when nothing at all sits between the digits and the counter.
+ *
+ * Asked twice per screen, of two different shapes and two different halves of the page:
+ *
+ *   * `counters`/`words` over everything except {@link AUTHOR} — a number and its 의존명사 are
+ *     one word, and so is each of the app's own state words.
+ *   * `hangul` over everything except {@link BREAKABLE} — *any* run of two or more syllables
+ *     is a word, wherever it came from. This is the question the sweep did not ask for six
+ *     rounds: the app's own chrome was covered by keep-all and measured clean, while every
+ *     surface that prints the reader's Korean was on the exempt list and cut mid-syllable
+ *     ("재시도 규칙은 한곳에 모았습니" ⏎ "다.", 59 times over one Korean vault; P9 round 6).
+ *     Author *content* is not the app's business; what the app's line breaker does to it is.
  */
-const BREAK_PROBE = ({ counters, words, exempt }) => {
-  /* Two shapes, one question. A number and its 의존명사 are one word; so is each of the app's
-     own state words, which have no space in them and may not gain one from the line breaker —
-     the chart tooltip printed 시작 as 시 over 작, one syllable per line, because the row's
-     flex items were all shrinkable and the label was handed 19px for a 21px word. */
-  const re = new RegExp(
-    `\\d+(?:[.,]\\d+)?(?:${counters.join("|")})` + (words.length ? `|${words.join("|")}` : ""),
-    "g",
-  );
+const BREAK_PROBE = ({ counters, words, exempt, hangul }) => {
+  const shapes = [];
+  if (counters.length) shapes.push(`\\d+(?:[.,]\\d+)?(?:${counters.join("|")})`);
+  if (words.length) shapes.push(words.join("|"));
+  if (hangul) shapes.push("[가-힣]{2,}");
+  const re = new RegExp(shapes.join("|"), "g");
   /* The block container whose line boxes a text node lives in: an inline element shares its
      parent's lines, anything else starts its own. */
   const blockOf = (node) => {
@@ -489,13 +552,24 @@ const BREAK_PROBE = ({ counters, words, exempt }) => {
       range.setStart(from.node, from.offset);
       range.setEnd(to.node, to.offset);
       /* Zero-width rects appear at a range's boundaries and can sit on the line before it;
-         only painted ink counts as a second line. */
-      const lines = new Set(
-        [...range.getClientRects()]
-          .filter((r) => r.width > 0.5 && r.height > 0.5)
-          .map((r) => Math.round(r.top)),
-      );
-      if (lines.size > 1) {
+         only painted ink counts as a second line.
+
+         Line membership is decided by vertical *overlap*, not by an equal top: a number is
+         set larger than the word it counts and a `<code>` run sits a pixel or two higher
+         than the prose beside it, so equal tops report splits that are not there. Two boxes
+         on one line always overlap; two line boxes never do. */
+      const rects = [...range.getClientRects()].filter((r) => r.width > 0.5 && r.height > 0.5);
+      const lines = [];
+      for (const r of rects) {
+        const line = lines.find((l) => Math.min(l.bottom, r.bottom) - Math.max(l.top, r.top) > 1);
+        if (line) {
+          line.top = Math.min(line.top, r.top);
+          line.bottom = Math.max(line.bottom, r.bottom);
+        } else {
+          lines.push({ top: r.top, bottom: r.bottom });
+        }
+      }
+      if (lines.length > 1) {
         found.push({
           pair: m[0],
           at: label(from.node.parentElement),
@@ -776,6 +850,9 @@ const OTHER = LOCALE === "en" ? "Korean" : "English";
 
 let browser = null;
 let server = null;
+/** The dev server for the Korean-content fixture, and the directory it is built in. */
+let koServer = null;
+const temps = [];
 
 try {
   ({ server } = await ensureServer({
@@ -799,9 +876,12 @@ try {
   /** A record of each kind in the first project, for the screens that toggle in place. */
   let firstWork = null;
   let firstBug = null;
+  /** Each project and one record of each kind in it — what the width sweep walks. */
+  const sweepProjects = [];
   for (const p of projects) {
     const works = await api(`/projects/${p.slug}/worklogs`);
     const bugs = await api(`/projects/${p.slug}/bugs`);
+    sweepProjects.push({ slug: p.slug, work: works[0]?.id ?? null, bug: bugs[0]?.id ?? null });
     for (const w of works) {
       vaultWords.add(w.agent);
       for (const tag of w.tags ?? []) vaultWords.add(tag);
@@ -1127,6 +1207,27 @@ try {
         bad += 1;
         findings.push({ screen: `${screen.name} @${width}`, ...item });
       }
+
+      /* …and a fifth: is every Korean word on this screen still whole? The width sweep below
+         asks the same question harder, but only of the screens that reflow; this asks it of
+         every screen and every record in the vault, at the two widths already loaded. Both
+         languages: a Korean sentence quoted inside an English record is Korean, and the line
+         breaker does not know which window it is in. */
+      for (const item of await page.evaluate(BREAK_PROBE, {
+        counters: [],
+        words: [],
+        exempt: BREAKABLE,
+        hangul: true,
+      })) {
+        bad += 1;
+        findings.push({
+          screen: `${screen.name} @${width}`,
+          kind: "word split",
+          text: item.context,
+          at: item.at,
+          words: [`“${item.pair}” is broken across two lines — a word lost a syllable`],
+        });
+      }
       if (VERBOSE || bad) log(`${screen.name} @${width}: ${printed.length} strings, ${bad} bad`);
     }
   };
@@ -1177,25 +1278,42 @@ try {
    * The same readings answer the word-order question (COUNTED_KEYS): the critic photographed
    * the tooltip at 1440, so the sweep opens the dashboard's tips at every width in the list
    * rather than trusting that word order is a thing that cannot depend on layout. */
-  if (LOCALE === "ko") {
+  /**
+   * One vault, swept at every width. `where` names it in the findings, because "@1200" over
+   * a body nobody recognises is not a place somebody can go and look.
+   */
+  const sweep = async (origin, sweepProjects, where) => {
     for (const width of SWEEP_WIDTHS) {
       const ctx = await browser.newContext(view(width));
       await useLocale(ctx, LOCALE);
       const sweepPage = await ctx.newPage();
-      for (const screen of SWEEP_SCREENS(slug)) {
-        await sweepPage.goto(`${ORIGIN}${screen.path}`, { waitUntil: "domcontentloaded" });
+      for (const screen of SWEEP_SCREENS(sweepProjects)) {
+        const at = `${where}${screen.name} @${width}`;
+        await sweepPage.goto(`${origin}${screen.path}`, { waitUntil: "domcontentloaded" });
         if (screen.prepare) await screen.prepare(sweepPage);
         await sweepPage.waitForSelector(screen.wait, { state: "visible", timeout: 15_000 });
         await sweepPage.waitForFunction(() => !document.querySelector(".skeleton"));
-        const broken = await sweepPage.evaluate(BREAK_PROBE, {
-          counters: COUNTERS,
-          words: wholeWords,
-          exempt: AUTHOR,
-        });
+        await sweepPage.evaluate(() => document.fonts.ready);
+        const broken = [
+          // The app's own counted words and its numbers, minus what the author wrote.
+          ...(await sweepPage.evaluate(BREAK_PROBE, {
+            counters: COUNTERS,
+            words: wholeWords,
+            exempt: AUTHOR,
+            hangul: false,
+          })),
+          // Every Korean word on the screen, the record's own included (see BREAKABLE).
+          ...(await sweepPage.evaluate(BREAK_PROBE, {
+            counters: [],
+            words: [],
+            exempt: BREAKABLE,
+            hangul: true,
+          })),
+        ];
         swept += 1;
         for (const item of broken) {
           findings.push({
-            screen: `${screen.name} @${width}`,
+            screen: at,
             kind: "word split",
             text: item.context,
             at: item.at,
@@ -1206,18 +1324,48 @@ try {
           });
         }
         const misordered = await orderProbe(sweepPage);
-        for (const item of misordered) {
-          findings.push({ screen: `${screen.name} @${width}`, ...item });
-        }
+        for (const item of misordered) findings.push({ screen: at, ...item });
         if (VERBOSE || broken.length || misordered.length) {
           log(
-            `${screen.name} @${width}: ${broken.length} split word(s), ` +
-              `${misordered.length} misordered count(s)`,
+            `${at}: ${broken.length} split word(s), ${misordered.length} misordered count(s)`,
           );
         }
       }
       await ctx.close();
     }
+  };
+
+  if (LOCALE === "ko") {
+    await sweep(ORIGIN, sweepProjects, "");
+
+    /* ---- and again over a vault whose *records* are Korean --------------------
+     *
+     * Everything above reads this repo's own vault, and this repo writes its records in
+     * English. So five rounds of Korean review read Korean chrome over English data, and the
+     * question "what does this app do to a Korean paragraph" was one no gate here could ask:
+     * `.prose`, `.feed-summary`, `.project-desc` and `.now-row-title` held English, which
+     * breaks at spaces that were already there (P9 round 6 critic).
+     *
+     * So the sweep is run a second time against a vault built for it with the release CLI —
+     * Korean project names and descriptions, Korean titles, Korean ## What/## Why/## How,
+     * progress notes, outcomes, bug reports and resolutions, and Korean agent handles
+     * (scripts/ko-vault.mjs). Built rather than committed, in a temp directory that is
+     * deleted at the end, on its own dev server: the live vault is never pointed at, written
+     * to or read by anything but the walk above. */
+    const koVault = mkdtempSync(join(tmpdir(), "agentmon-ko-"));
+    temps.push(koVault);
+    log(`building a Korean-content vault with the release CLI in ${koVault}…`);
+    buildKoreanVault(koVault);
+    koServer = startServer(KO_PORT, { env: { AGENTMON_VAULT: koVault } });
+    const koOrigin = `http://localhost:${KO_PORT}`;
+    await waitForServer(koServer, koOrigin);
+    const koProjects = [];
+    for (const p of await (await fetch(`${koOrigin}/vault-api/projects`)).json()) {
+      const works = await (await fetch(`${koOrigin}/vault-api/projects/${p.slug}/worklogs`)).json();
+      const bugs = await (await fetch(`${koOrigin}/vault-api/projects/${p.slug}/bugs`)).json();
+      koProjects.push({ slug: p.slug, work: works[0]?.id ?? null, bug: bugs[0]?.id ?? null });
+    }
+    await sweep(koOrigin, koProjects, "ko-vault ");
   }
 
   if (findings.length) {
@@ -1251,13 +1399,15 @@ try {
 } finally {
   if (browser) await browser.close();
   if (server) await stopServer(server);
+  if (koServer) await stopServer(koServer);
+  for (const dir of temps) rmSync(dir, { recursive: true, force: true });
 }
 
 const span = `${SWEEP_WIDTHS[0]}–${SWEEP_WIDTHS[SWEEP_WIDTHS.length - 1]}px`;
 const sweepNote =
   LOCALE === "ko"
-    ? `, and whole and correctly ordered across ${swept} readings at ${SWEEP_WIDTHS.length} widths ${span}`
-    : " (the word-integrity sweep is Korean's; English breaks at spaces)";
+    ? `, and whole and correctly ordered across ${swept} readings at ${SWEEP_WIDTHS.length} widths ${span} on this vault and on a Korean-content one`
+    : " (the width sweep is Korean's; English breaks at spaces)";
 log(
   failures !== 0
     ? `${failures} finding(s) on ${checked} screens and ${swept} sweep readings`
