@@ -6,6 +6,7 @@ import { ContextMenuProvider } from "./components/ContextMenu";
 import { Sidebar } from "./components/Sidebar";
 import { Skeleton } from "./components/ui";
 import { formatDateTimeUtc } from "./lib/format";
+import { t } from "./lib/i18n";
 import { useWindowTitle } from "./lib/useWindowTitle";
 import { DashboardPage } from "./pages/DashboardPage";
 import { WorkListPage } from "./pages/WorkListPage";
@@ -89,15 +90,18 @@ function VaultTroubleBar() {
       <div className="vault-alert" role="status">
         <span className="vault-alert-dot" aria-hidden="true" />
         <span className="vault-alert-text">
-          <strong>Not reading the vault right now.</strong> Everything below is the last good
-          data{vault?.path ? ` from ${vault.path}` : ""}, as of{" "}
-          {formatDateTimeUtc(new Date(trouble.since).toISOString())}.{" "}
+          <strong>{t("shell.trouble.headline")}</strong>{" "}
+          {t(
+            "shell.trouble.body",
+            vault?.path ?? null,
+            formatDateTimeUtc(new Date(trouble.since).toISOString())
+          )}{" "}
           <span className="vault-alert-detail" title={trouble.message}>
             {headline}
           </span>
         </span>
         <button className="button button-sm" onClick={reload}>
-          Try again
+          {t("app.retry")}
         </button>
       </div>
     </div>
@@ -108,8 +112,8 @@ function NotFound() {
   return (
     <div className="page">
       <div className="page-head">
-        <h1 className="page-title">Nothing here</h1>
-        <p className="page-sub">That address does not match a screen in this app.</p>
+        <h1 className="page-title">{t("app.notFound.title")}</h1>
+        <p className="page-sub">{t("app.notFound.sub")}</p>
       </div>
     </div>
   );

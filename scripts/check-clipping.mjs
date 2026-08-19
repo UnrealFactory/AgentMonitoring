@@ -42,6 +42,7 @@
  */
 import { chromium } from "playwright";
 import { ensureServer, stopServer } from "./dev-server.mjs";
+import { useLocale } from "./i18n.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -61,7 +62,8 @@ Options:
   --port <n>            dev-server port to boot on / check against (default 5173)
   --url <origin>        check an already-running server instead of booting one
   --project <slug>      only this project (default: every project in the vault)
-  --slack <px>          how much overflow is rounding rather than a defect (default 0.75)`);
+  --slack <px>          how much overflow is rounding rather than a defect (default 0.75)
+  --locale ko|en        which language to measure (default ko)`);
   process.exit(0);
 }
 
@@ -73,6 +75,9 @@ const WIDTHS = value("--widths", "1600,1440,1280,1152,1104,1024,960")
   .filter(Boolean);
 const WANT_PROJECT = (value("--project", "") || "").trim();
 const SLACK = Number(value("--slack", "0.75"));
+/* Which language's strings are being measured. Korean is shorter in most labels and wider
+   per glyph, so a box that fits one can cut the other: both are walked (`--locale en`). */
+const LOCALE = value("--locale", process.env.SHOT_LOCALE || "ko");
 
 const log = (...m) => console.log("[check-clipping]", ...m);
 
@@ -328,7 +333,7 @@ try {
 
   const records = screens.filter((s) => /\/(work|bugs)\/[A-Z]/.test(s.path)).length;
   log(
-    `${screens.length} screens (${records} records in ${wanted.length} project(s)) × ${WIDTHS.length} widths`,
+    `${screens.length} screens (${records} records in ${wanted.length} project(s)) × ${WIDTHS.length} widths · ${LOCALE}`,
   );
 
   browser = await chromium.launch();
@@ -340,6 +345,7 @@ try {
       colorScheme: "dark",
       reducedMotion: "reduce",
     });
+    await useLocale(page, LOCALE);
     const lines = [];
     try {
       for (const screen of screens) {

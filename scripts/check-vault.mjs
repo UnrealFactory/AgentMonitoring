@@ -41,6 +41,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { chromium } from "playwright";
 import { repoRoot, startServer, stopServer, waitForServer } from "./dev-server.mjs";
+import { t, useLocale } from "./i18n.mjs";
 
 const args = process.argv.slice(2);
 const value = (name, fallback) => {
@@ -64,6 +65,9 @@ Never writes to ./vault (and proves it: the vault is hashed before and after).`)
 const PORT = Number(value("--port", process.env.VAULT_PORT || 5201));
 const ORIGIN = `http://localhost:${PORT}`;
 const KEEP = args.includes("--keep");
+/* The vault bar's labels are words; `--locale en` walks the English build. */
+const LOCALE = value("--locale", process.env.SHOT_LOCALE || "ko");
+const T = (key, ...args) => t(LOCALE, key, ...args);
 const log = (...m) => console.log("[check:vault]", ...m);
 
 let failures = 0;
@@ -315,9 +319,13 @@ try {
   const slug = [...all].sort((a, b) => b.counts.events - a.counts.events)[0].slug;
 
   browser = await chromium.launch();
-  const page = await (
-    await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" })
-  ).newPage();
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    colorScheme: "dark",
+  });
+  await useLocale(context, LOCALE);
+  log(`language: ${LOCALE}`);
+  const page = await context.newPage();
   let loads = 0;
   page.on("load", () => (loads += 1));
   await page.goto(`${ORIGIN}/p/${slug}/work`, { waitUntil: "domcontentloaded" });
@@ -412,22 +420,25 @@ try {
   await page.goto(`${ORIGIN}/projects`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".project-row", { state: "visible" });
   await page.waitForFunction(() => !document.querySelector(".skeleton"));
-  const counts = await page.evaluate(() => {
-    const fact = (label) =>
-      [...document.querySelectorAll(".vault-bar-facts div")]
-        .find((d) => d.querySelector("dt")?.textContent?.trim() === label)
-        ?.querySelector("dd")
-        ?.textContent?.trim() ?? null;
-    return {
-      vaultBar: fact("Active projects"),
-      sidebar:
-        [...document.querySelectorAll(".nav-item")]
-          .find((n) => n.textContent?.trim().startsWith("Projects"))
-          ?.querySelector(".nav-count")
-          ?.textContent?.trim() ?? null,
-      activeRows: document.querySelectorAll(".project-section .project-rows .project-row").length,
-    };
-  });
+  const counts = await page.evaluate(
+    ([activeProjects, projectsNav]) => {
+      const fact = (label) =>
+        [...document.querySelectorAll(".vault-bar-facts div")]
+          .find((d) => d.querySelector("dt")?.textContent?.trim() === label)
+          ?.querySelector("dd")
+          ?.textContent?.trim() ?? null;
+      return {
+        vaultBar: fact(activeProjects),
+        sidebar:
+          [...document.querySelectorAll(".nav-item")]
+            .find((n) => n.textContent?.trim().startsWith(projectsNav))
+            ?.querySelector(".nav-count")
+            ?.textContent?.trim() ?? null,
+        activeRows: document.querySelectorAll(".project-section .project-rows .project-row").length,
+      };
+    },
+    [T("vault.activeProjects"), T("nav.projects")],
+  );
   check(
     "the vault bar and the sidebar count the same projects after an archive",
     counts.sidebar === String(all.length - 1) && counts.vaultBar?.startsWith(String(all.length - 1)),
@@ -435,7 +446,7 @@ try {
   );
   check(
     "…and the vault bar says how many are archived rather than hiding them",
-    (counts.vaultBar ?? "").includes("1 archived"),
+    (counts.vaultBar ?? "").includes(T("vault.archivedAside", 1).trim().replace(/^·s*/, "")),
     `vault bar reads "${counts.vaultBar}"`,
   );
 

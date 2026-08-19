@@ -31,6 +31,7 @@ import {
   CorrectionNotice,
   ErrorState,
   RecordTitle,
+  RichText,
   Skeleton,
   StaleRecordBar,
   Tag,
@@ -42,8 +43,9 @@ import {
   formatDateTimeUtc,
   formatDuration,
   formatRelative,
-  pluralize,
 } from "../lib/format";
+import { t } from "../lib/i18n";
+import { inProgress } from "../lib/words";
 import type { WorklogDetail } from "../lib/types";
 
 /** A stable empty array, so the related-index memo is not invalidated every render. */
@@ -86,16 +88,18 @@ export function WorkDetailPage() {
   const sections = useMemo(() => {
     if (!work) return [] as TocEntry[];
     const out: TocEntry[] = [
-      { id: "what", label: "What", count: 0 },
-      { id: "why", label: "Why", count: 0 },
-      { id: "how", label: "How", count: 0 },
+      { id: "what", label: t("wd.what"), count: 0 },
+      { id: "why", label: t("wd.why"), count: 0 },
+      { id: "how", label: t("wd.how"), count: 0 },
     ];
-    if (work.files.length) out.push({ id: "files", label: "Files", count: work.files.length });
-    out.push({ id: "updates", label: "Updates", count: work.updates.length });
-    if (work.outcome) {
-      out.push({ id: "outcome", label: "Outcome", count: 0 }, ...partsToc(outcome));
+    if (work.files.length) {
+      out.push({ id: "files", label: t("wd.files"), count: work.files.length });
     }
-    if (related.count) out.push({ id: "related", label: "Related", count: related.count });
+    out.push({ id: "updates", label: t("wd.updates"), count: work.updates.length });
+    if (work.outcome) {
+      out.push({ id: "outcome", label: t("wd.outcome"), count: 0 }, ...partsToc(outcome));
+    }
+    if (related.count) out.push({ id: "related", label: t("rec.related"), count: related.count });
     return out;
   }, [work, related.count, outcome]);
   const active = useActiveSection(sections.map((s) => s.id));
@@ -110,7 +114,7 @@ export function WorkDetailPage() {
           onRetry={missing ? undefined : reload}
           action={
             <Link className="button" to={`/p/${slug}/work`}>
-              Back to the work list
+              {t("wd.backToList")}
             </Link>
           }
         />
@@ -141,7 +145,7 @@ export function WorkDetailPage() {
             action={
               status === 404 ? (
                 <Link className="button button-sm" to={`/p/${slug}/work`}>
-                  Work list
+                  {t("wd.workList")}
                 </Link>
               ) : undefined
             }
@@ -158,7 +162,7 @@ export function WorkDetailPage() {
             {project?.name ?? slug}
           </Link>
           <span aria-hidden="true">/</span>
-          <Link to={`/p/${slug}/work`}>Work</Link>
+          <Link to={`/p/${slug}/work`}>{t("nav.work")}</Link>
           <span aria-hidden="true">/</span>
           <span className="mono">{work.id}</span>
         </nav>
@@ -173,7 +177,7 @@ export function WorkDetailPage() {
 
           {/* Above What/Why/How, because a correction the reader meets after the sentence it
               corrects is a correction they have already believed the wrong version of. */}
-          <CorrectionNotice count={corrections} href="#updates" where="Updates" />
+          <CorrectionNotice count={corrections} href="#updates" where={t("rec.inUpdates")} />
 
           <div className="rec-byline">
             <WorkStatusPill status={work.status} />
@@ -181,15 +185,15 @@ export function WorkDetailPage() {
             <span className="rec-byline-text">
               {work.status === "done" && work.finished ? (
                 <>
-                  finished this work on <Stamp iso={work.finished} />
+                  {t("wd.bylineDone")} <Stamp iso={work.finished} />
                 </>
               ) : work.status === "abandoned" && work.finished ? (
                 <>
-                  stopped this work on <Stamp iso={work.finished} />
+                  {t("wd.bylineAbandoned")} <Stamp iso={work.finished} />
                 </>
               ) : (
                 <>
-                  has been working on this since <Stamp iso={work.started} />
+                  {t("wd.bylineRunning")} <Stamp iso={work.started} />
                 </>
               )}
             </span>
@@ -198,27 +202,27 @@ export function WorkDetailPage() {
           <div className="rec-facts">
             <ul className="rec-fact-list">
               <li>
-                <span className="rec-fact-label">Started</span>
+                <span className="rec-fact-label">{t("wd.started")}</span>
                 <Stamp iso={work.started} relative={false} />
               </li>
               <li>
-                <span className="rec-fact-label">Finished</span>
+                <span className="rec-fact-label">{t("wd.finished")}</span>
                 {work.finished ? (
                   <Stamp iso={work.finished} relative={false} />
                 ) : (
-                  <span className="muted">in progress</span>
+                  <span className="muted">{inProgress()}</span>
                 )}
               </li>
               <li>
-                <span className="rec-fact-label">Duration</span>
+                <span className="rec-fact-label">{t("wd.duration")}</span>
                 <span className="tabular">{duration}</span>
               </li>
               <li>
-                <span className="rec-fact-label">Updates</span>
+                <span className="rec-fact-label">{t("wd.updates")}</span>
                 <span className="tabular">{work.updates.length}</span>
               </li>
               <li>
-                <span className="rec-fact-label">Files</span>
+                <span className="rec-fact-label">{t("wd.files")}</span>
                 <span className="tabular">{work.files.length}</span>
               </li>
             </ul>
@@ -235,9 +239,13 @@ export function WorkDetailPage() {
 
         <div className="detail-layout">
           <article className="detail-main">
-            <Body id="what" title="What" source={work.what} />
-            <Body id="why" title="Why" source={work.why} />
-            <Body id="how" title="How" source={work.how} />
+            {/* `section` is the literal heading in the record file (`## What`), which stays
+                English because it is what the vault holds; `title` is what this screen calls
+                it. The empty-state sentence names the literal one, so a reader who goes to
+                fix the record knows what to type. */}
+            <Body id="what" title={t("wd.what")} section="What" source={work.what} />
+            <Body id="why" title={t("wd.why")} section="Why" source={work.why} />
+            <Body id="how" title={t("wd.how")} section="How" source={work.how} />
 
             {work.files.length > 0 && <FilesSection files={work.files} />}
 
@@ -259,18 +267,18 @@ export function WorkDetailPage() {
                         />
                       </svg>
                     </span>
-                    <h2 className="outcome-title">Outcome</h2>
+                    <h2 className="outcome-title">{t("wd.outcome")}</h2>
                     <span className="outcome-when">
                       {work.finished ? (
                         <>
-                          shipped <Stamp iso={work.finished} />
+                          {t("wd.shipped")} <Stamp iso={work.finished} />
                         </>
                       ) : (
-                        "recorded"
+                        t("wd.recorded")
                       )}
                     </span>
                   </header>
-                  <PartsJump result={outcome} label="Inside this outcome" />
+                  <PartsJump result={outcome} label={t("wd.insideOutcome")} />
                   <div className="outcome-body">
                     <PartsBody result={outcome} />
                   </div>
@@ -294,29 +302,29 @@ export function WorkDetailPage() {
             <div className="side-card">
               {/* The object's own noun, the way the bug page's twin card says Bug. "Record"
                   is the word lib/words.ts exists to keep off the screens. */}
-              <div className="side-card-title">Work log</div>
+              <div className="side-card-title">{t("wd.workLog")}</div>
               <dl className="side-facts">
                 <div>
-                  <dt>Status</dt>
+                  <dt>{t("wd.status")}</dt>
                   <dd>
                     <WorkStatusPill status={work.status} />
                   </dd>
                 </div>
                 <div>
-                  <dt>Agent</dt>
+                  <dt>{t("wd.agent")}</dt>
                   <dd>
                     <AgentChip name={work.agent} />
                   </dd>
                 </div>
                 <div>
-                  <dt>Started</dt>
+                  <dt>{t("wd.started")}</dt>
                   <dd className="tabular" title={formatDateTimeUtc(work.started)}>
                     {formatDateTime(work.started)}
                     <span className="side-rel">{formatRelative(work.started)}</span>
                   </dd>
                 </div>
                 <div>
-                  <dt>Finished</dt>
+                  <dt>{t("wd.finished")}</dt>
                   <dd className="tabular" title={work.finished ? formatDateTimeUtc(work.finished) : ""}>
                     {work.finished ? (
                       <>
@@ -324,19 +332,19 @@ export function WorkDetailPage() {
                         <span className="side-rel">{formatRelative(work.finished)}</span>
                       </>
                     ) : (
-                      <span className="muted">in progress</span>
+                      <span className="muted">{inProgress()}</span>
                     )}
                   </dd>
                 </div>
                 <div>
-                  <dt>Duration</dt>
+                  <dt>{t("wd.duration")}</dt>
                   <dd className="tabular">
                     {duration}
-                    {!work.finished && <span className="side-rel">and counting</span>}
+                    {!work.finished && <span className="side-rel">{t("wd.andCounting")}</span>}
                   </dd>
                 </div>
                 <div>
-                  <dt>Last activity</dt>
+                  <dt>{t("wd.lastActivity")}</dt>
                   <dd className="tabular" title={formatDateTimeUtc(work.lastActivity)}>
                     {formatRelative(work.lastActivity)}
                   </dd>
@@ -351,7 +359,18 @@ export function WorkDetailPage() {
 }
 
 /** One of the three body sections. A section the agent left empty says so. */
-function Body({ id, title, source }: { id: string; title: string; source: string }) {
+function Body({
+  id,
+  title,
+  section,
+  source,
+}: {
+  id: string;
+  title: string;
+  /** The heading as it is written in the record file — never translated. */
+  section: string;
+  source: string;
+}) {
   return (
     <section className="record-section" id={id}>
       <h2 className="section-title">{title}</h2>
@@ -359,7 +378,7 @@ function Body({ id, title, source }: { id: string; title: string; source: string
         <Markdown source={source} />
       ) : (
         <p className="muted">
-          This record has no <code>## {title}</code> section.
+          <RichText text={t("wd.noSection", section)} />
         </p>
       )}
     </section>
@@ -373,7 +392,7 @@ function FilesSection({ files }: { files: string[] }) {
   return (
     <section className="record-section" id="files">
       <h2 className="section-title">
-        Files touched <span className="section-count tabular">{files.length}</span>
+        {t("wd.filesTouched")} <span className="section-count tabular">{files.length}</span>
       </h2>
       <div className="files-card">
         <div className="files-head">
@@ -386,9 +405,7 @@ function FilesSection({ files }: { files: string[] }) {
               strokeLinejoin="round"
             />
           </svg>
-          <span>
-            {pluralize(files.length, "file")} across {pluralize(dirs.size, "directory", "directories")}
-          </span>
+          <span>{t("wd.filesAcross", files.length, dirs.size)}</span>
         </div>
         <ul className="file-grid">
           {sorted.map((f) => {
@@ -415,17 +432,17 @@ function FilesSection({ files }: { files: string[] }) {
 function UpdatesSection({ work }: { work: WorklogDetail }) {
   const endLabel =
     work.status === "done"
-      ? "Marked done"
+      ? t("wd.endDone")
       : work.status === "abandoned"
-        ? "Abandoned"
-        : "Still in progress";
+        ? t("wd.endAbandoned")
+        : t("wd.endRunning");
   const endTone =
     work.status === "done" ? "done" : work.status === "abandoned" ? "abandoned" : "open";
 
   return (
     <section className="record-section" id="updates">
       <h2 className="section-title">
-        Updates
+        {t("wd.updates")}
         {work.updates.length > 0 && (
           <span className="section-count tabular">{work.updates.length}</span>
         )}
@@ -435,7 +452,7 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
         <li className="trail-node trail-edge">
           <span className="trail-dot trail-dot-start" aria-hidden="true" />
           <div className="trail-edge-text">
-            <span className="trail-edge-label">{work.agent} started this work</span>
+            <span className="trail-edge-label">{t("wd.startedThisWork", work.agent)}</span>
             <span className="trail-edge-time tabular" title={formatDateTimeUtc(work.started)}>
               {formatDateTime(work.started)} · {formatRelative(work.started)}
             </span>
@@ -446,7 +463,7 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
           <li className="trail-node trail-empty">
             <span className="trail-dot trail-dot-muted" aria-hidden="true" />
             <p className="trail-empty-text">
-              No progress notes yet. Agents add them with{" "}
+              {t("wd.noNotes")}{" "}
               <code>agentmon work update {work.id} --message …</code>
             </p>
           </li>
@@ -467,10 +484,10 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
                   {fix ? (
                     <span className="update-flag">
                       <CorrectionMark />
-                      Correction
+                      {t("rec.correction")}
                     </span>
                   ) : (
-                    <span className="update-verb">posted update {i + 1}</span>
+                    <span className="update-verb">{t("wd.postedUpdate", i + 1)}</span>
                   )}
                   <time className="update-ts tabular" dateTime={u.ts} title={formatDateTimeUtc(u.ts)}>
                     {formatDateTime(u.ts)} · {formatRelative(u.ts)}
@@ -492,10 +509,10 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
               {work.finished ? (
                 <span title={formatDateTimeUtc(work.finished)}>
                   {formatDateTime(work.finished)} · {formatRelative(work.finished)} ·{" "}
-                  {formatDuration(work.started, work.finished)} in total
+                  {t("wd.inTotal", formatDuration(work.started, work.finished))}
                 </span>
               ) : (
-                <span>{formatDuration(work.started, null)} so far</span>
+                <span>{t("wd.soFar", formatDuration(work.started, null))}</span>
               )}
             </span>
           </div>

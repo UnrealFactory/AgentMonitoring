@@ -35,20 +35,23 @@ import {
   EmptyState,
   ErrorState,
   Handoff,
+  RichText,
   SeverityBadge,
   Skeleton,
   Tag,
 } from "../components/ui";
-import { formatDateTimeUtc, formatRelative, pluralize } from "../lib/format";
+import { formatDateTimeUtc, formatRelative } from "../lib/format";
+import { t } from "../lib/i18n";
 import {
-  BUG_STATUS_LABEL,
   bugCount,
-  SEVERITY_LABEL,
-  UNASSIGNED,
-  UNASSIGNED_LABEL,
-  UNRESOLVED,
-  UNRESOLVED_LABEL,
-  UNRESOLVED_MEANS,
+  bugStatusLabel,
+  severityLabel,
+  unassigned,
+  unassignedLabel,
+  unresolved,
+  unresolvedCount,
+  unresolvedLabel,
+  unresolvedMeans,
 } from "../lib/words";
 import type { BugStatus, BugSummary, Severity } from "../lib/types";
 
@@ -63,8 +66,6 @@ const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];
 const SEVERITY_RANK: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 /** Open first, and inside the unresolved half the ones nobody holds come first. */
 const GROUP_ORDER: BugStatus[] = ["open", "in_progress", "resolved", "closed"];
-/** Group headings: the status itself, in the app's one word for it. */
-const GROUP_LABEL = BUG_STATUS_LABEL;
 const MAX_LABELS = 2;
 
 /** Filters, and their defaults; anything at its default stays out of the URL. */
@@ -93,13 +94,11 @@ const rowTime = (b: BugSummary) =>
  * two different sorts, and a note claiming one of them is a note the reader can catch out.
  */
 function sortNote(groups: { status: BugStatus }[]): string {
-  const unresolved = groups.some((g) => isUnresolvedStatus(g.status));
+  const anyUnresolved = groups.some((g) => isUnresolvedStatus(g.status));
   const settled = groups.some((g) => !isUnresolvedStatus(g.status));
-  if (unresolved && settled) {
-    return "Unresolved bugs sort by severity, then by when they were filed; the rest by when they were resolved.";
-  }
-  if (unresolved) return "Sorted by severity, then by how recently they were filed.";
-  return "Sorted by when they were resolved, newest first.";
+  if (anyUnresolved && settled) return t("bugs.sortMixed");
+  if (anyUnresolved) return t("bugs.sortUnresolved");
+  return t("bugs.sortSettled");
 }
 
 export function BugsPage() {
@@ -169,8 +168,11 @@ export function BugsPage() {
    * than the filtered ones, so the column does not twitch while somebody types in search.
    * `chrome` is the two avatars, the arrow and their gaps, measured: 62px.
    */
+  /* The word for an empty assignee is measured with the names, because it is drawn in the
+     same column and it is the app's own vocabulary rather than a slug: "unassigned" is ten
+     narrow characters, `담당자 없음` is five wide ones (see lib/columns.ts). */
   const peopleWidth = useMemo(
-    () => agentColumnWidth(bugs.map((b) => b.assignee ?? "unassigned"), { chrome: 62, min: 118 }),
+    () => agentColumnWidth(bugs.map((b) => b.assignee ?? unassigned()), { chrome: 62, min: 118 }),
     [bugs]
   );
 
@@ -296,7 +298,7 @@ export function BugsPage() {
           onRetry={httpStatus === 404 ? undefined : reload}
           action={
             <Link className="button" to="/projects">
-              All projects
+              {t("nav.allProjects")}
             </Link>
           }
         />
@@ -310,25 +312,25 @@ export function BugsPage() {
     <div className="page">
       <header className="page-head">
         <div>
-          <h1 className="page-title">Bugs</h1>
-          <p className="page-sub">
-            Every defect an agent found, who owns it now, and how each one was resolved.
-          </p>
+          <h1 className="page-title">{t("bugs.title")}</h1>
+          <p className="page-sub">{t("bugs.sub")}</p>
         </div>
         <div
           className="page-head-meta tabular"
-          title={loading ? undefined : `Unresolved means ${UNRESOLVED_MEANS}`}
+          title={loading ? undefined : t("bugs.unresolvedMeansTip", unresolvedLabel(), unresolvedMeans())}
         >
           {loading
-            ? "loading…"
+            ? t("app.loadingShort")
             : `${bugCount(bugs.length)} · ${
-                totalUnresolved ? `${totalUnresolved} ${UNRESOLVED}` : `none ${UNRESOLVED}`
+                totalUnresolved
+                  ? unresolvedCount(totalUnresolved)
+                  : t("bugs.noneUnresolved", unresolved())
               }`}
         </div>
       </header>
 
       <div className="toolbar">
-        <div className="segmented" role="tablist" aria-label="Filter by status">
+        <div className="segmented" role="tablist" aria-label={t("filter.byStatus")}>
           {/* Each tab says which statuses it holds, so the one word on it never has to
               stand in for two. */}
           <button
@@ -337,10 +339,10 @@ export function BugsPage() {
             aria-selected={tab === "unresolved"}
             className={`segment${tab === "unresolved" ? " is-active" : ""}`}
             onClick={() => setTab("unresolved")}
-            title={`Bugs that are ${UNRESOLVED_MEANS}`}
+            title={t("bugs.tabUnresolvedTip", unresolvedMeans())}
           >
             <span className="sdot sdot-bug-open" aria-hidden="true" />
-            {UNRESOLVED_LABEL}
+            {unresolvedLabel()}
             <span className="segment-count tabular">{tabCounts.unresolved}</span>
           </button>
           <button
@@ -349,10 +351,11 @@ export function BugsPage() {
             aria-selected={tab === "resolved"}
             className={`segment${tab === "resolved" ? " is-active" : ""}`}
             onClick={() => setTab("resolved")}
-            title="Bugs that are resolved or closed"
+            title={t("bugs.tabResolvedTip")}
           >
             <span className="sdot sdot-bug-resolved" aria-hidden="true" />
-            Resolved<span className="segment-count tabular">{tabCounts.resolved}</span>
+            {bugStatusLabel("resolved")}
+            <span className="segment-count tabular">{tabCounts.resolved}</span>
           </button>
           <button
             role="tab"
@@ -360,32 +363,33 @@ export function BugsPage() {
             aria-selected={tab === "all"}
             className={`segment${tab === "all" ? " is-active" : ""}`}
             onClick={() => setTab("all")}
-            title="Every bug ever filed in this project"
+            title={t("bugs.tabAllTip")}
           >
-            All<span className="segment-count tabular">{tabCounts.all}</span>
+            {t("filter.all")}
+            <span className="segment-count tabular">{tabCounts.all}</span>
           </button>
         </div>
 
         <div className="toolbar-right">
           <Select
-            label="Filter by severity"
+            label={t("filter.bySeverity")}
             value={severity}
             onChange={(v) => set("severity", v)}
             options={[
-              { value: "all", label: "All severities" },
+              { value: "all", label: t("filter.allSeverities") },
               ...severityCounts.map(({ severity: s, count }) => ({
                 value: s,
-                label: SEVERITY_LABEL[s],
+                label: severityLabel(s),
                 hint: count,
               })),
             ]}
           />
           <Select
-            label="Filter by label"
+            label={t("filter.byLabel")}
             value={label}
             onChange={(v) => set("label", v)}
             options={[
-              { value: "all", label: "All labels" },
+              { value: "all", label: t("filter.allLabels") },
               ...labels.map((l) => ({
                 value: l,
                 label: l,
@@ -394,14 +398,14 @@ export function BugsPage() {
             ]}
           />
           <Select
-            label="Filter by assignee"
+            label={t("filter.byAssignee")}
             value={assignee}
             onChange={(v) => set("assignee", v)}
             options={[
-              { value: "all", label: "All assignees" },
+              { value: "all", label: t("filter.allAssignees") },
               {
                 value: "none",
-                label: UNASSIGNED_LABEL,
+                label: unassignedLabel(),
                 hint: facet("assignee", (b) => !b.assignee),
               },
               ...assignees.map((a) => ({
@@ -412,11 +416,11 @@ export function BugsPage() {
             ]}
           />
           <Select
-            label="Filter by reporter"
+            label={t("filter.byReporter")}
             value={reporter}
             onChange={(v) => set("reporter", v)}
             options={[
-              { value: "all", label: "All reporters" },
+              { value: "all", label: t("filter.allReporters") },
               ...reporters.map((r) => ({
                 value: r,
                 label: r,
@@ -439,9 +443,9 @@ export function BugsPage() {
               className="input search-input"
               type="search"
               value={query}
-              placeholder="Search bugs"
+              placeholder={t("bugs.searchPlaceholder")}
               onChange={(e) => set("q", e.target.value)}
-              aria-label="Search bugs"
+              aria-label={t("bugs.searchLabel")}
             />
             {!query && <kbd className="search-kbd">/</kbd>}
           </div>
@@ -449,7 +453,7 @@ export function BugsPage() {
       </div>
 
       {!loading && bugs.length > 0 && (
-        <div className="sev-bar" aria-label="Severity breakdown">
+        <div className="sev-bar" aria-label={t("bugs.severityBreakdown")}>
           {severityCounts.map(({ severity: s, count }) => (
             <button
               key={s}
@@ -459,12 +463,10 @@ export function BugsPage() {
               }`}
               onClick={() => set("severity", severity === s ? "all" : s)}
               aria-pressed={severity === s}
-              title={`${count} ${SEVERITY_LABEL[s].toLowerCase()}-severity ${
-                count === 1 ? "bug" : "bugs"
-              } in this tab`}
+              title={t("bugs.severityChipTip", count, severityLabel(s))}
             >
               <span className="sev-chip-dot" aria-hidden="true" />
-              <span className="sev-chip-label">{SEVERITY_LABEL[s]}</span>
+              <span className="sev-chip-label">{severityLabel(s)}</span>
               <span className="sev-chip-count tabular">{count}</span>
             </button>
           ))}
@@ -473,37 +475,36 @@ export function BugsPage() {
 
       {filtersActive && (
         <div className="filter-summary">
-          <span className="filter-count tabular">
-            {pluralize(filtered.length, "match", "matches")}
-          </span>
+          <span className="filter-count tabular">{t("filter.matches", filtered.length)}</span>
           {severity !== "all" && (
             <button className="filter-chip" onClick={() => set("severity", "all")}>
-              Severity: {SEVERITY_LABEL[severity]} <span aria-hidden="true">×</span>
+              {t("filter.chipSeverity", severityLabel(severity))}{" "}
+              <span aria-hidden="true">×</span>
             </button>
           )}
           {label !== "all" && (
             <button className="filter-chip" onClick={() => set("label", "all")}>
-              Label: {label} <span aria-hidden="true">×</span>
+              {t("filter.chipLabel", label)} <span aria-hidden="true">×</span>
             </button>
           )}
           {assignee !== "all" && (
             <button className="filter-chip" onClick={() => set("assignee", "all")}>
-              Assignee: {assignee === "none" ? UNASSIGNED : assignee}{" "}
+              {t("filter.chipAssignee", assignee === "none" ? unassigned() : assignee)}{" "}
               <span aria-hidden="true">×</span>
             </button>
           )}
           {reporter !== "all" && (
             <button className="filter-chip" onClick={() => set("reporter", "all")}>
-              Reporter: {reporter} <span aria-hidden="true">×</span>
+              {t("filter.chipReporter", reporter)} <span aria-hidden="true">×</span>
             </button>
           )}
           {query.trim() && (
             <button className="filter-chip" onClick={clearQuery}>
-              “{query.trim()}” <span aria-hidden="true">×</span>
+              {t("filter.chipQuery", query.trim())} <span aria-hidden="true">×</span>
             </button>
           )}
           <button className="filter-clear" onClick={clearFilters}>
-            Clear all
+            {t("filter.clearAll")}
           </button>
         </div>
       )}
@@ -516,7 +517,7 @@ export function BugsPage() {
           total={bugs.length}
           tab={tab}
           filtersActive={filtersActive}
-          unresolvedCount={totalUnresolved}
+          unresolvedTotal={totalUnresolved}
           resolvedCount={bugs.length - totalUnresolved}
           onClear={clearFilters}
           onSwitchTab={setTab}
@@ -528,13 +529,13 @@ export function BugsPage() {
               <section className="work-group" key={group.status}>
                 <header className="work-group-head">
                   <BugStatusDot status={group.status} />
-                  <h2 className="work-group-title">{GROUP_LABEL[group.status]}</h2>
+                  <h2 className="work-group-title">{bugStatusLabel(group.status)}</h2>
                   <span className="work-group-count tabular">{group.items.length}</span>
                   {group.items.length > 1 && (
                     <span className="work-group-note">
                       {isUnresolvedStatus(group.status)
-                        ? "severity, then newest"
-                        : "newest first"}
+                        ? t("bugs.groupNoteUnresolved")
+                        : t("bugs.groupNoteSettled")}
                     </span>
                   )}
                 </header>
@@ -575,8 +576,16 @@ export function BugsPage() {
                             dateTime={rowTime(b)}
                             title={
                               isUnresolved(b)
-                                ? `Filed ${formatDateTimeUtc(b.created)} · last activity ${formatDateTimeUtc(b.lastActivity)}`
-                                : `Resolved ${formatDateTimeUtc(b.resolved ?? b.lastActivity)} · filed ${formatDateTimeUtc(b.created)}`
+                                ? t(
+                                    "bugs.rowTimeUnresolved",
+                                    formatDateTimeUtc(b.created),
+                                    formatDateTimeUtc(b.lastActivity)
+                                  )
+                                : t(
+                                    "bugs.rowTimeSettled",
+                                    formatDateTimeUtc(b.resolved ?? b.lastActivity),
+                                    formatDateTimeUtc(b.created)
+                                  )
                             }
                           >
                             {formatRelative(rowTime(b))}
@@ -593,7 +602,8 @@ export function BugsPage() {
           <p className="list-hints">
             <span className="list-hints-left">{sortNote(groups)}</span>
             <kbd>↑</kbd>
-            <kbd>↓</kbd> move · <kbd>↵</kbd> open · <kbd>/</kbd> search
+            <kbd>↓</kbd> {t("keys.move")} · <kbd>↵</kbd> {t("keys.open")} · <kbd>/</kbd>{" "}
+            {t("keys.search")}
           </p>
         </>
       )}
@@ -629,7 +639,7 @@ function BoardEmpty({
   total,
   tab,
   filtersActive,
-  unresolvedCount,
+  unresolvedTotal,
   resolvedCount,
   onClear,
   onSwitchTab,
@@ -638,7 +648,7 @@ function BoardEmpty({
   total: number;
   tab: Tab;
   filtersActive: boolean;
-  unresolvedCount: number;
+  unresolvedTotal: number;
   resolvedCount: number;
   onClear: () => void;
   onSwitchTab: (tab: Tab) => void;
@@ -657,11 +667,10 @@ function BoardEmpty({
             />
           </svg>
         }
-        title="No bugs filed"
+        title={t("bugs.empty.title")}
         hint={
           <>
-            Agents file a bug the moment they find one, with the repro in the body so the next
-            agent can reproduce it without asking:
+            {t("bugs.empty.hint")}
             <code className="empty-code">
               agentmon bug create -p {slug} --agent &lt;name&gt; --severity high --title &lt;title&gt;
             </code>
@@ -686,11 +695,11 @@ function BoardEmpty({
             />
           </svg>
         }
-        title="Nothing unresolved"
-        hint={`Every one of the ${bugCount(resolvedCount)} filed in this project has been resolved, and each one carries the written fix.`}
+        title={t("bugs.emptyUnresolved.title")}
+        hint={t("bugs.emptyUnresolved.hint", resolvedCount)}
         action={
           <button className="button" onClick={() => onSwitchTab("resolved")}>
-            Read the resolved ones
+            {t("bugs.emptyUnresolved.action")}
           </button>
         }
       />
@@ -706,11 +715,11 @@ function BoardEmpty({
             <path d="M8 5.2v3.2l2 1.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
           </svg>
         }
-        title="Nothing resolved yet"
-        hint={`${bugCount(unresolvedCount)} unresolved in this project. A bug leaves this tab when an agent writes the fix into it with \`agentmon bug resolve\`.`}
+        title={t("bugs.emptyResolved.title")}
+        hint={<RichText text={t("bugs.emptyResolved.hint", unresolvedTotal)} />}
         action={
           <button className="button" onClick={() => onSwitchTab("unresolved")}>
-            Show the unresolved ones
+            {t("bugs.emptyResolved.action")}
           </button>
         }
       />
@@ -725,11 +734,11 @@ function BoardEmpty({
           <path d="M10.2 10.2 L13.5 13.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
         </svg>
       }
-      title="No bugs match these filters"
-      hint={`${bugCount(total)} in this project, none of them matching all of the filters above.`}
+      title={t("bugs.emptyFiltered.title")}
+      hint={t("bugs.emptyFiltered.hint", total)}
       action={
         <button className="button" onClick={onClear}>
-          Clear filters
+          {t("filter.clear")}
         </button>
       }
     />

@@ -33,8 +33,14 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../AppContext";
 import { api } from "../lib/api";
-import { pluralize } from "../lib/format";
-import { UNRESOLVED, workLogs } from "../lib/words";
+import { t } from "../lib/i18n";
+import {
+  bugStatusLabel,
+  severityLabel,
+  unresolvedCount,
+  workLogs,
+  workStatusLabel,
+} from "../lib/words";
 import { trapTab, useModalLock } from "../lib/modal";
 import type { BugSummary, Project, WorklogSummary } from "../lib/types";
 
@@ -57,9 +63,18 @@ type MetaPart =
   | { kind: "state"; text: string }
   | { kind: "count"; text: string };
 
+/** The three kinds of thing, as keys. Their headings are words, and words are translated. */
+type Group = "records" | "projects" | "pages";
+
+const GROUP_LABEL: Record<Group, () => string> = {
+  records: () => t("palette.groupRecords"),
+  projects: () => t("palette.groupProjects"),
+  pages: () => t("palette.groupGoTo"),
+};
+
 interface Item {
   id: string;
-  group: "Work logs & bugs" | "Projects" | "Go to";
+  group: Group;
   label: string;
   hint?: string;
   meta?: MetaPart[];
@@ -86,16 +101,13 @@ function score(text: string, query: string): number {
   return (/[\s\-_/]/.test(haystack[i - 1]) ? 60 : 30) - Math.min(20, i / 4);
 }
 
-/** `in_progress` → `in progress`: the app's word for the state, in the row's small type. */
-const state = (status: string): string => status.replace(/_/g, " ");
-
 /** What each kind of meta value is, for the tooltip and the screen reader. */
-const META_KIND: Record<MetaPart["kind"], string> = {
-  project: "project",
-  agent: "agent",
-  severity: "severity",
-  state: "status",
-  count: "",
+const META_KIND: Record<MetaPart["kind"], () => string> = {
+  project: () => t("palette.metaProject"),
+  agent: () => t("palette.metaAgent"),
+  severity: () => t("palette.metaSeverity"),
+  state: () => t("palette.metaState"),
+  count: () => "",
 };
 
 /** `nova` → `NV`, the same two letters the agent's avatar wears everywhere else. */
@@ -130,7 +142,7 @@ function Meta({ parts }: { parts: MetaPart[] }) {
           )}
           <span
             className={`palette-meta-part is-${part.kind}`}
-            title={META_KIND[part.kind] ? `${META_KIND[part.kind]}: ${part.text}` : undefined}
+            title={META_KIND[part.kind]() ? `${META_KIND[part.kind]()}: ${part.text}` : undefined}
           >
             {part.kind === "project" && (
               <svg className="palette-meta-icon" viewBox="0 0 16 16" aria-hidden="true">
@@ -149,7 +161,9 @@ function Meta({ parts }: { parts: MetaPart[] }) {
               </span>
             )}
             {part.text}
-            {META_KIND[part.kind] && <span className="sr-only"> ({META_KIND[part.kind]})</span>}
+            {META_KIND[part.kind]() && (
+              <span className="sr-only"> ({META_KIND[part.kind]()})</span>
+            )}
           </span>
         </Fragment>
       ))}
@@ -304,7 +318,7 @@ export function CommandPalette() {
         if (here) s += q ? 4 : 0.5;
         out.push({
           id: `${project.slug}/${r.id}`,
-          group: "Work logs & bugs",
+          group: "records",
           label: r.title,
           hint: r.id,
           meta: here ? meta : [{ kind: "project", text: project.name } as MetaPart, ...meta],
@@ -316,16 +330,20 @@ export function CommandPalette() {
       /* Inside the project the reader is standing in there is room for who has it; from
          the vault screen that room goes to the project name, which is the fact that stops
          them guessing. */
+      /* The state and the severity are the app's own words for them (lib/words.ts), not the
+         raw enum with its underscore taken out: a palette row that says `in_progress` over a
+         board that says 진행 중 is the vocabulary breaking at the one surface that reaches
+         every screen. */
       for (const w of works) {
         add(w, "work", [
           ...(here ? [{ kind: "agent", text: w.agent } as MetaPart] : []),
-          { kind: "state", text: state(w.status) },
+          { kind: "state", text: workStatusLabel(w.status) },
         ]);
       }
       for (const b of bugs) {
         add(b, "bug", [
-          ...(here ? [{ kind: "severity", text: b.severity } as MetaPart] : []),
-          { kind: "state", text: state(b.status) },
+          ...(here ? [{ kind: "severity", text: severityLabel(b.severity) } as MetaPart] : []),
+          { kind: "state", text: bugStatusLabel(b.status) },
         ]);
       }
     }
@@ -335,12 +353,12 @@ export function CommandPalette() {
       if (s > 0) {
         out.push({
           id: `project:${p.slug}`,
-          group: "Projects",
+          group: "projects",
           label: p.name,
           hint: p.slug,
           meta: [
             { kind: "count", text: workLogs(p.counts.workTotal) },
-            { kind: "count", text: `${p.counts.bugsOpen} ${UNRESOLVED}` },
+            { kind: "count", text: unresolvedCount(p.counts.bugsOpen) },
           ],
           to: `/p/${p.slug}`,
           score: s + (p.slug === slug ? 5 : 0),
@@ -351,19 +369,19 @@ export function CommandPalette() {
     const pages: { label: string; to: string; hint?: string }[] = [
       ...(slug
         ? [
-            { label: "Dashboard", to: `/p/${slug}`, hint: slug },
-            { label: "Work", to: `/p/${slug}/work`, hint: slug },
-            { label: "Bugs", to: `/p/${slug}/bugs`, hint: slug },
+            { label: t("nav.dashboard"), to: `/p/${slug}`, hint: slug },
+            { label: t("nav.work"), to: `/p/${slug}/work`, hint: slug },
+            { label: t("nav.bugs"), to: `/p/${slug}/bugs`, hint: slug },
           ]
         : []),
-      { label: "Projects", to: "/projects" },
+      { label: t("nav.projects"), to: "/projects" },
     ];
     for (const page of pages) {
       const s = score(page.label, q);
       if (s > 0) {
         out.push({
           id: `page:${page.to}`,
-          group: "Go to",
+          group: "pages",
           label: page.label,
           hint: page.hint,
           to: page.to,
@@ -375,12 +393,12 @@ export function CommandPalette() {
     /* On an empty query the record group is capped: enough to make the shape obvious, and
        it leaves the projects and the screens on screen instead of pushing them under
        thirty rows nobody asked for. */
-    const order = { "Work logs & bugs": 0, Projects: 1, "Go to": 2 } as const;
+    const order: Record<Group, number> = { records: 0, projects: 1, pages: 2 };
     const byScore = out.sort((a, b) => b.score - a.score);
     const topRecords = byScore
-      .filter((i) => i.group === "Work logs & bugs")
+      .filter((i) => i.group === "records")
       .slice(0, q ? 20 : DEFAULT_RECORDS);
-    const rest = byScore.filter((i) => i.group !== "Work logs & bugs");
+    const rest = byScore.filter((i) => i.group !== "records");
     return [...topRecords, ...rest].sort(
       (a, b) => order[a.group] - order[b.group] || b.score - a.score
     );
@@ -475,7 +493,7 @@ export function CommandPalette() {
     (n, l) => n + l.works.length + l.bugs.length,
     0
   );
-  let lastGroup: Item["group"] | null = null;
+  let lastGroup: Group | null = null;
 
   return (
     <div className="palette-scrim" onMouseDown={close} role="presentation">
@@ -484,7 +502,7 @@ export function CommandPalette() {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label={t("palette.title")}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="palette-input-row">
@@ -509,8 +527,8 @@ export function CommandPalette() {
             aria-controls="palette-results"
             aria-autocomplete="list"
             aria-activedescendant={items.length ? optionId(active) : undefined}
-            aria-label="Search work logs, bugs, projects and screens"
-            placeholder="Work log or bug id, a title, a project, a screen…"
+            aria-label={t("palette.inputLabel")}
+            placeholder={t("palette.placeholder")}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
@@ -519,13 +537,10 @@ export function CommandPalette() {
           <p className="palette-empty">
             {/* What the palette can actually search, said in numbers — the advice used to be
                 "try a record id" on a screen where no record was loaded. */}
-            Nothing matches “{query}”.{" "}
+            {t("palette.noMatch", query)}{" "}
             {searchable > 0
-              ? `Searching ${searchable} work logs and bugs across ${pluralize(
-                  projects.length,
-                  "project"
-                )} by id (WORK-12) and by title.`
-              : "Nothing is loaded yet — this vault has no work logs or bugs, or they could not be read."}
+              ? t("palette.searching", searchable, projects.length)
+              : t("palette.nothingLoaded")}
           </p>
         ) : (
           <ul
@@ -533,7 +548,7 @@ export function CommandPalette() {
             ref={listRef}
             id="palette-results"
             role="listbox"
-            aria-label="Results"
+            aria-label={t("palette.results")}
           >
             {items.map((item, i) => {
               const head = item.group !== lastGroup ? item.group : null;
@@ -544,7 +559,7 @@ export function CommandPalette() {
                 <Fragment key={item.id}>
                   {head && (
                     <li className="palette-group" role="presentation">
-                      {head}
+                      {GROUP_LABEL[head]()}
                     </li>
                   )}
                   <li
@@ -555,7 +570,11 @@ export function CommandPalette() {
                     onMouseMove={() => setActive(i)}
                     onClick={() => run(item)}
                   >
-                    {item.kind && <span className={`palette-kind is-${item.kind}`}>{item.kind}</span>}
+                    {item.kind && (
+                      <span className={`palette-kind is-${item.kind}`}>
+                        {item.kind === "bug" ? t("palette.kindBug") : t("palette.kindWork")}
+                      </span>
+                    )}
                     <span className="palette-label">{item.label}</span>
                     {item.hint && <span className="palette-hint mono">{item.hint}</span>}
                     {item.meta && <Meta parts={item.meta} />}
@@ -569,13 +588,13 @@ export function CommandPalette() {
         <footer className="palette-foot">
           <span>
             <kbd>↑</kbd>
-            <kbd>↓</kbd> move
+            <kbd>↓</kbd> {t("palette.move")}
           </span>
           <span>
-            <kbd>↵</kbd> open
+            <kbd>↵</kbd> {t("palette.open")}
           </span>
           <span>
-            <kbd>esc</kbd> close
+            <kbd>esc</kbd> {t("palette.close")}
           </span>
         </footer>
       </div>

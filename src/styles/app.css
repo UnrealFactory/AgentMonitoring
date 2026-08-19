@@ -407,6 +407,48 @@
   white-space: nowrap;
 }
 
+/* ---------------------------------------------------------------------------
+   The language, at the foot of the shell
+
+   The board's segmented control at the size the column has room for. Each option
+   names itself in its own language, so the way out of the wrong one is legible
+   from inside it — which means this control is the one place in the app where two
+   languages are on screen at once, on purpose.
+   ------------------------------------------------------------------------ */
+
+.locale-toggle {
+  display: flex;
+  gap: 2px;
+  margin: 0 var(--space-2) var(--space-2);
+  padding: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.locale-option {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.locale-option:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.locale-option.is-active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
 /* ===========================================================================
    COMMAND PALETTE (Ctrl/Cmd+K)
 

@@ -24,6 +24,9 @@ from work logs the agents that built it wrote as they went.
   moved in the last 24 hours, and two burn-ups over the range you pick.
 - **Live updates** — a record an agent writes appears in the open window in about a second,
   with no reload and without losing your scroll position.
+- **한국어 / English** — the whole interface, in either language, switched from the foot of
+  the sidebar and remembered. Only the app's own words change: a record stays exactly as its
+  author wrote it.
 
 ![A work log: what, why, how, the update timeline and the outcome](progress/shots/work-detail.png)
 
@@ -123,6 +126,8 @@ The full schema, the CLI surface and the quality bar for each screen are in
 
 ```
 src/                    React 18 + TypeScript frontend (plain CSS, tokens in styles/)
+src/lib/words.ts        the app's vocabulary: one word per state, one noun per object
+src/lib/i18n/           those words in 한국어 and English, and the t() that picks one
 src-tauri/              Tauri 2 shell: commands + the filesystem watcher
 crates/agentmon-core/   vault schema, parsing, validation, writes — shared by both
 crates/agentmon-cli/    the `agentmon` binary agents run
@@ -157,7 +162,12 @@ npm run check:keys       # keyboard: lists, palette, context menus, focus, one c
 npm run check:live       # a CLI write reaches an open window without a reload
 npm run check:vault      # the vault opens from anywhere, and moving it changes nothing
 npm run check:mcp        # the MCP server over stdio: lifecycle, errors, context budgets
+npm run check:i18n       # every screen in Korean: no English left in the app's own words
 ```
+
+Every gate that reads words off the screen takes `--locale ko|en` and reads its
+expectations from the same dictionaries the window does (`src/lib/i18n/`), so both
+languages are walked rather than one being tested and the other assumed.
 
 `check:live`, `check:vault` and `check:keys` write records — `check:keys` builds a
 12-project vault and archives projects in it — and only ever to a copy in the temp

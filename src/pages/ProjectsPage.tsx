@@ -21,15 +21,16 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp, useVaultNonce } from "../AppContext";
-import { CommandLine, ErrorState, Skeleton, Tag } from "../components/ui";
+import { CommandLine, ErrorState, RichText, Skeleton, Tag } from "../components/ui";
 import { useContextMenu } from "../components/ContextMenu";
 import { recordKind, useProjectMenu, useRecordMenu, type RecordRef } from "../lib/menus";
 import { EventIcon } from "../components/EventIcon";
 import { useNow } from "../components/charts";
 import { api } from "../lib/api";
-import { eventSummary, eventVerb, freshness, refHref, tone } from "../lib/dashboard";
-import { formatDate, formatDateTimeUtc, formatRelative, pluralize } from "../lib/format";
-import { DONE, IN_PROGRESS, UNRESOLVED_MEANS } from "../lib/words";
+import { eventSummary, eventVerb, freshness, refHref, tone, verbAfterRef } from "../lib/dashboard";
+import { formatDate, formatDateTimeUtc, formatRelative } from "../lib/format";
+import { t } from "../lib/i18n";
+import { done, inProgress, unresolvedLabel, unresolvedMeans } from "../lib/words";
 import { useAsync } from "../lib/useAsync";
 import type { Project, VaultEvent } from "../lib/types";
 
@@ -78,14 +79,12 @@ export function ProjectsPage() {
       <div className="page">
         <header className="page-head">
           <div>
-            <h1 className="page-title">No vault open</h1>
-            <p className="page-sub">
-              The app reads one directory of plain files. This one could not be read.
-            </p>
+            <h1 className="page-title">{t("vault.noneOpenTitle")}</h1>
+            <p className="page-sub">{t("vault.noneOpenSub")}</p>
           </div>
         </header>
         <ErrorState
-          title="Could not read the vault"
+          title={t("vault.readFailed")}
           message={error}
           onRetry={reload}
           action={
@@ -94,7 +93,7 @@ export function ProjectsPage() {
                 <OpenVaultButton
                   onDone={refresh}
                   onError={setActionError}
-                  label="Open vault folder…"
+                  label={t("vault.openFolder")}
                 />
                 <CreateVaultButton onDone={refresh} onError={setActionError} />
               </>
@@ -138,15 +137,12 @@ export function ProjectsPage() {
     <div className="page">
       <header className="page-head">
         <div>
-          <h1 className="page-title">Projects</h1>
-          <p className="page-sub">
-            Everything in one vault directory of plain files — copy it to another machine and the
-            history comes with it.
-          </p>
+          <h1 className="page-title">{t("proj.title")}</h1>
+          <p className="page-sub">{t("proj.sub")}</p>
         </div>
         <div className="page-head-actions">
           <button className="button button-primary" onClick={() => setCreating((v) => !v)}>
-            New project
+            {t("proj.new")}
           </button>
         </div>
       </header>
@@ -169,19 +165,18 @@ export function ProjectsPage() {
       {undo && (
         <div className="undo-bar" role="status">
           <span className="undo-text">
-            <strong>{undo.name}</strong> is archived. Nothing was deleted — its work logs,
-            bugs and events are still in the vault, and the project is still readable.
+            <RichText text={t("proj.undoBar", `**${undo.name}**`)} />
           </span>
           <button
             className="button button-sm"
             disabled={busy === undo.slug}
             onClick={() => setStatus(undo, "active")}
           >
-            {busy === undo.slug ? "Restoring…" : "Undo"}
+            {busy === undo.slug ? t("proj.restoring") : t("app.undo")}
           </button>
           <button
             className="undo-dismiss"
-            aria-label="Dismiss"
+            aria-label={t("app.dismiss")}
             onClick={() => setUndo(null)}
           >
             ×
@@ -211,13 +206,11 @@ export function ProjectsPage() {
         <>
           <section className="project-section">
             <header className="project-section-head">
-              <h2 className="section-title">Active</h2>
-              <span className="section-count tabular">{pluralize(active.length, "project")}</span>
+              <h2 className="section-title">{t("proj.active")}</h2>
+              <span className="section-count tabular">{t("proj.count", active.length)}</span>
             </header>
             {active.length === 0 ? (
-              <p className="now-note">
-                Every project in this vault is archived. Bring one back below, or start a new one.
-              </p>
+              <p className="now-note">{t("proj.allArchived")}</p>
             ) : (
               <ul className="project-rows">
                 {active.map((p) => (
@@ -236,16 +229,14 @@ export function ProjectsPage() {
           {archived.length > 0 && (
             <section className="project-section">
               <header className="project-section-head">
-                <h2 className="section-title">Archived</h2>
-                <span className="section-count tabular">
-                  {pluralize(archived.length, "project")}
-                </span>
+                <h2 className="section-title">{t("proj.archived")}</h2>
+                <span className="section-count tabular">{t("proj.count", archived.length)}</span>
                 <button
                   className="link-button"
                   aria-expanded={showArchived}
                   onClick={() => setShowArchived((v) => !v)}
                 >
-                  {showArchived ? "Hide" : "Show"}
+                  {showArchived ? t("proj.hide") : t("proj.show")}
                 </button>
               </header>
               {showArchived && (
@@ -276,16 +267,16 @@ export function ProjectsPage() {
    ======================================================================= */
 
 /** Where the app got the vault it is showing, in words a human can act on. */
-const SOURCE_TEXT: Record<string, string> = {
-  "?vault=": "?vault= in this window's address",
-  env: "the AGENTMON_VAULT environment variable",
-  flag: "the folder opened in this app",
-  "cwd/vault": "./vault in the working directory",
-  cwd: "the working directory",
+const SOURCE_TEXT: Record<string, () => string> = {
+  "?vault=": () => t("vault.source.query"),
+  env: () => t("vault.source.env"),
+  flag: () => t("vault.source.flag"),
+  "cwd/vault": () => t("vault.source.cwdVault"),
+  cwd: () => t("vault.source.cwd"),
   // The installed app launches from wherever the user clicked, so it also looks for a
   // vault next to its own executable. That is a different sentence from every other row
   // here — nobody opened it, nobody exported it — and it used to borrow "flag"'s.
-  "exe/vault": "the vault folder beside the app",
+  "exe/vault": () => t("vault.source.exeVault"),
 };
 
 function VaultBar({
@@ -303,51 +294,52 @@ function VaultBar({
   onSwitched: () => void;
   onError: (message: string) => void;
 }) {
-  const source = vault?.source ? SOURCE_TEXT[vault.source] ?? vault.source : null;
+  const source = vault?.source ? (SOURCE_TEXT[vault.source]?.() ?? vault.source) : null;
   return (
-    <section className="vault-bar" aria-label="Vault">
+    <section className="vault-bar" aria-label={t("vault.bar")}>
       <div className="vault-bar-main">
-        <span className="vault-bar-label">Vault</span>
+        <span className="vault-bar-label">{t("vault.label")}</span>
         <h2 className="vault-bar-name">{vault?.name ?? "—"}</h2>
         <p className="vault-bar-path mono" title={vault?.path ?? ""}>
-          {vault?.path ?? "resolving…"}
+          {vault?.path ?? t("vault.resolving")}
         </p>
         {/* Where that path came from. The app used to derive this from the environment
             after the fact, so it said "cwd/vault" under ?vault= — the one place a human
             could check which vault they were on was also the one place that could lie. */}
-        {source && <p className="vault-bar-source">Opened from {source}</p>}
+        {source && <p className="vault-bar-source">{t("vault.openedFrom", source)}</p>}
       </div>
       <dl className="vault-bar-facts">
         <div>
           {/* Named, because the sidebar counts the active ones: two labels reading
               "Projects" with different numbers under them is the app disagreeing with
               itself about a word. */}
-          <dt>Active projects</dt>
+          <dt>{t("vault.activeProjects")}</dt>
           <dd className="tabular">
             {active}
-            {archived > 0 && <span className="vault-bar-aside"> · {archived} archived</span>}
+            {archived > 0 && (
+              <span className="vault-bar-aside">{t("vault.archivedAside", archived)}</span>
+            )}
           </dd>
         </div>
         <div>
-          <dt>Schema</dt>
+          <dt>{t("vault.schema")}</dt>
           <dd className="tabular">v{vault?.version ?? "—"}</dd>
         </div>
         <div>
-          <dt>Created</dt>
+          <dt>{t("vault.created")}</dt>
           <dd className="tabular">{formatDate(vault?.createdAt)}</dd>
         </div>
         <div>
-          <dt>Read by</dt>
-          <dd>{transport === "tauri" ? "desktop app" : "dev server"}</dd>
+          <dt>{t("vault.readBy")}</dt>
+          <dd>{transport === "tauri" ? t("vault.readerDesktop") : t("vault.readerBrowser")}</dd>
         </div>
       </dl>
       <div className="vault-bar-actions">
         {transport === "tauri" ? (
-          <OpenVaultButton onDone={onSwitched} onError={onError} label="Open vault folder…" />
+          <OpenVaultButton onDone={onSwitched} onError={onError} label={t("vault.openFolder")} />
         ) : (
           <span className="vault-bar-hint">
-            Open another vault with <code>?vault=&lt;dir&gt;</code>, or start the dev server
-            with <code>AGENTMON_VAULT</code>.
+            <RichText text={t("vault.browserHint")} />
           </span>
         )}
       </div>
@@ -382,7 +374,7 @@ function OpenVaultButton({
         }
       }}
     >
-      {busy ? "Opening…" : label}
+      {busy ? t("vault.opening") : label}
     </button>
   );
 }
@@ -407,7 +399,7 @@ function CreateVaultButton({
     <button
       className="button button-primary"
       disabled={busy}
-      title="Pick a folder; the app writes vault.json and projects/ into it, exactly as `agentmon init` would."
+      title={t("vault.createTip")}
       onClick={async () => {
         setBusy(true);
         try {
@@ -420,7 +412,7 @@ function CreateVaultButton({
         }
       }}
     >
-      {busy ? "Creating…" : "Create a vault…"}
+      {busy ? t("vault.creating") : t("vault.createVault")}
     </button>
   );
 }
@@ -480,22 +472,26 @@ function ProjectRow({
                 className={`sdot sdot-${state}`}
                 title={
                   c.lastActivity
-                    ? `Last activity ${formatDateTimeUtc(c.lastActivity)}`
-                    : "Nothing recorded yet"
+                    ? t("dash.lastActivityTip", formatDateTimeUtc(c.lastActivity))
+                    : t("proj.nothingRecordedYet")
                 }
                 role="img"
                 aria-label={
                   archived
-                    ? "archived project"
+                    ? t("proj.dotArchived")
                     : state === "live"
-                      ? "something recorded in the last two hours"
-                      : `${state} project`
+                      ? t("proj.dotLive")
+                      : state === "quiet"
+                        ? t("proj.dotQuiet")
+                        : t("proj.dotStale")
                 }
               />
               <span className="project-name">{p.name}</span>
             </Link>
             <span className="project-slug mono">{p.slug}</span>
-            {p.status === "archived" && <span className="pill pill-archived">archived</span>}
+            {p.status === "archived" && (
+              <span className="pill pill-archived">{t("proj.archivedPill")}</span>
+            )}
             {p.tags.length > 0 && (
               <span className="tag-row">
                 {p.tags.map((t) => (
@@ -509,31 +505,36 @@ function ProjectRow({
               the same defect the bug board was pulled up on: the row is as wide as the
               window, so it wraps instead. */}
           <p className="project-desc">
-            {p.description || <span className="project-desc-none">No description yet.</span>}
+            {p.description || (
+              <span className="project-desc-none">{t("proj.noDescription")}</span>
+            )}
           </p>
         </div>
 
         <dl className="project-figures">
           <div className="project-figure">
-            <dt>Work logs</dt>
+            <dt>{t("proj.workLogs")}</dt>
             <dd className="tabular">{c.workTotal}</dd>
             <span className="project-figure-note">
               {c.workTotal === 0
-                ? "none yet"
-                : `${c.workDone} ${DONE} · ${c.workInProgress} ${IN_PROGRESS}`}
+                ? t("proj.noneYet")
+                : t("proj.workNote", c.workDone, c.workInProgress, done(), inProgress())}
             </span>
           </div>
-          <div className="project-figure" title={`Unresolved means ${UNRESOLVED_MEANS}`}>
-            <dt>Unresolved bugs</dt>
+          <div
+            className="project-figure"
+            title={t("bugs.unresolvedMeansTip", unresolvedLabel(), unresolvedMeans())}
+          >
+            <dt>{t("proj.unresolvedBugs")}</dt>
             <dd className={`tabular${c.bugsOpen === 0 ? " is-zero" : ""}`}>{c.bugsOpen}</dd>
             <span className="project-figure-note">
-              {c.bugsTotal === 0 ? "none filed" : `of ${c.bugsTotal} filed`}
+              {c.bugsTotal === 0 ? t("proj.noneFiled") : t("proj.ofFiled", c.bugsTotal)}
             </span>
           </div>
           <div className="project-figure">
-            <dt>Events</dt>
+            <dt>{t("proj.events")}</dt>
             <dd className="tabular">{c.events}</dd>
-            <span className="project-figure-note">recorded</span>
+            <span className="project-figure-note">{t("proj.eventsNote")}</span>
           </div>
         </dl>
 
@@ -541,14 +542,18 @@ function ProjectRow({
           <span className="project-when tabular">
             {c.lastActivity ? (
               <>
-                {"Last activity "}
+                {t("proj.lastActivity")}
                 {formatRelative(c.lastActivity, new Date(now))}
-                <span className="project-since">started {formatDate(p.createdAt)}</span>
+                <span className="project-since">
+                  {t("proj.startedOn", formatDate(p.createdAt))}
+                </span>
               </>
             ) : (
               <>
-                No activity yet
-                <span className="project-since">created {formatDate(p.createdAt)}</span>
+                {t("proj.noActivity")}
+                <span className="project-since">
+                  {t("proj.createdOn", formatDate(p.createdAt))}
+                </span>
               </>
             )}
           </span>
@@ -558,14 +563,14 @@ function ProjectRow({
                 className="link-button"
                 disabled={busy}
                 onClick={onArchive}
-                title="Hide this project from the switcher and the default list. Nothing is deleted, and the next line offers Undo."
+                title={t("proj.archiveTip")}
               >
-                {busy ? "Archiving…" : "Archive"}
+                {busy ? t("proj.archiving") : t("proj.archive")}
               </button>
             )}
             {onRestore && (
               <button className="link-button" disabled={busy} onClick={onRestore}>
-                {busy ? "Restoring…" : "Unarchive"}
+                {busy ? t("proj.restoring") : t("proj.unarchive")}
               </button>
             )}
           </span>
@@ -611,17 +616,17 @@ function VaultActivity({ projects, now }: { projects: Project[]; now: number }) 
   return (
     <section className="project-section">
       <header className="project-section-head">
-        <h2 className="section-title">Across the vault</h2>
+        <h2 className="section-title">{t("proj.acrossVault")}</h2>
         <span className="section-count tabular">
-          {feed.data?.length ? `newest ${feed.data.length}` : "recent"}
+          {feed.data?.length ? t("proj.newest", feed.data.length) : t("proj.recent")}
         </span>
       </header>
       {feed.loading && !feed.data ? (
         <Skeleton rows={4} />
       ) : !feed.data?.length ? (
         <p className="now-note">
-          Nothing has been recorded in this vault yet. The first <code>agentmon work start</code>{" "}
-          shows up here.
+          {t("proj.vaultEmptyFeed")} <code>agentmon work start</code>{" "}
+          {t("proj.vaultEmptyFeedTail")}
         </p>
       ) : (
         <ol className="vault-feed">
@@ -691,11 +696,22 @@ function VaultFeedRow({
           <EventIcon type={event.type} />
         </span>
         <span className="feed-body">
+          {/* Same order rule as the dashboard's feed: Korean closes the clause with the
+              verb, so the record it is about comes first. */}
           <span className="feed-head">
             <span className="feed-project">{project.name}</span>
             <span className="feed-actor">{event.actor}</span>
-            <span className="feed-verb">{eventVerb(event.type)}</span>
-            {event.ref && <span className="feed-ref mono">{event.ref}</span>}
+            {verbAfterRef() ? (
+              <>
+                {event.ref && <span className="feed-ref mono">{event.ref}</span>}
+                <span className="feed-verb">{eventVerb(event.type)}</span>
+              </>
+            ) : (
+              <>
+                <span className="feed-verb">{eventVerb(event.type)}</span>
+                {event.ref && <span className="feed-ref mono">{event.ref}</span>}
+              </>
+            )}
           </span>
           {event.summary && (
             <span className="feed-summary">{eventSummary(event.summary)}</span>
@@ -760,30 +776,30 @@ function CreateProject({
   return (
     <form className="create-panel" onSubmit={submit}>
       <div className="create-head">
-        <h2 className="section-title">New project</h2>
+        <h2 className="section-title">{t("proj.newTitle")}</h2>
         <p className="create-sub">
-          Writes <code>projects/{effectiveSlug || "<slug>"}/project.json</code> and its first
-          event, exactly as <code>agentmon project create</code> would.
+          <RichText text={t("proj.form.writes", effectiveSlug || "<slug>")} />{" "}
+          <code>agentmon project create</code> {t("proj.form.writesTail")}
         </p>
       </div>
 
       <div className="create-grid">
         <label className="field">
-          <span className="field-label">Name</span>
+          <span className="field-label">{t("proj.form.name")}</span>
           <input
             className="input"
             autoFocus
             value={name}
-            placeholder="Checkout rewrite"
+            placeholder={t("proj.form.namePlaceholder")}
             onChange={(e) => setName(e.target.value)}
           />
         </label>
         <label className="field">
-          <span className="field-label">Slug</span>
+          <span className="field-label">{t("proj.form.slug")}</span>
           <input
             className="input mono"
             value={effectiveSlug}
-            placeholder="checkout-rewrite"
+            placeholder={t("proj.form.slugPlaceholder")}
             onChange={(e) => {
               setSlugEdited(true);
               setSlug(e.target.value);
@@ -791,27 +807,27 @@ function CreateProject({
           />
           <span className="field-hint">
             {taken
-              ? "A project with this slug already exists in the vault."
+              ? t("proj.form.slugTaken")
               : effectiveSlug && !slugOk
-                ? "Lowercase letters, digits, - or _ only."
-                : "The directory name under projects/. Immutable once created."}
+                ? t("proj.form.slugBad")
+                : t("proj.form.slugHint")}
           </span>
         </label>
         <label className="field field-wide">
-          <span className="field-label">Description</span>
+          <span className="field-label">{t("proj.form.description")}</span>
           <input
             className="input"
             value={description}
-            placeholder="One or two sentences a reader who has never seen this project can start from."
+            placeholder={t("proj.form.descriptionPlaceholder")}
             onChange={(e) => setDescription(e.target.value)}
           />
         </label>
         <label className="field field-wide">
-          <span className="field-label">Tags</span>
+          <span className="field-label">{t("proj.form.tags")}</span>
           <input
             className="input"
             value={tags}
-            placeholder="frontend, payments"
+            placeholder={t("proj.form.tagsPlaceholder")}
             onChange={(e) => setTags(e.target.value)}
           />
         </label>
@@ -825,10 +841,10 @@ function CreateProject({
 
       <div className="create-actions">
         <button className="button button-primary" type="submit" disabled={!ready || busy}>
-          {busy ? "Creating…" : "Create project"}
+          {busy ? t("proj.creating") : t("proj.create")}
         </button>
         <button className="button" type="button" onClick={onCancel}>
-          Cancel
+          {t("app.cancel")}
         </button>
       </div>
     </form>
@@ -895,73 +911,55 @@ function Onboarding({
   return (
     <section className="onboarding">
       <h2 className="onboarding-title">
-        {opened ? "This vault has no projects yet" : "There is no vault here yet"}
+        {opened ? t("onboard.titleEmpty") : t("onboard.titleNone")}
       </h2>
       <p className="onboarding-sub">
-        A vault is a directory of plain files: <code>vault.json</code>, then one folder per
-        project holding its work logs, its bugs and its event log. Agents write it with the{" "}
-        <code>agentmon</code> CLI; this app reads it.
+        <RichText text={t("onboard.sub")} />
       </p>
       <ol className="onboarding-steps">
         {!opened && (
           <li>
-            <p className="onboarding-step">Make the vault</p>
+            <p className="onboarding-step">{t("onboard.stepVault")}</p>
             <CommandLine text={`${agentmon} init --vault "${dir}" --name "My vault"`} />
             {transport === "tauri" && (
               <p className="onboarding-note">
-                Or press <strong>Create a vault…</strong> above and pick a folder — it writes
-                the same two things, and opens it here.
+                <RichText text={t("onboard.noteCreateVault")} />
               </p>
             )}
           </li>
         )}
         <li>
-          <p className="onboarding-step">Create a project</p>
+          <p className="onboarding-step">{t("onboard.stepProject")}</p>
           <CommandLine
             text={`${agentmon} project create checkout-rewrite --name "Checkout rewrite" --description "Replace the legacy checkout flow."`}
           />
           {canCreate && (
             <p className="onboarding-note">
-              Or press <strong>New project</strong> above — it writes the same files.
+              <RichText text={t("onboard.noteNewProject")} />
             </p>
           )}
         </li>
         <li>
-          <p className="onboarding-step">Record the first piece of work</p>
+          <p className="onboarding-step">{t("onboard.stepWork")}</p>
           <CommandLine
             text={`${agentmon} work start -p checkout-rewrite --agent your-agent --title "Port the cart summary" --body-file note.md`}
           />
           <p className="onboarding-note">
-            The body needs <code>## What</code>, <code>## Why</code> and <code>## How</code>; the
-            CLI prints a template if it is missing.
+            <RichText text={t("onboard.noteBody")} />
           </p>
         </li>
       </ol>
       {cli.data && (
         <p className="onboarding-foot">
-          The <code>agentmon</code> binary ships with this app, at{" "}
-          <code className="mono">{cli.data}</code> — the commands above already point at it.
+          <RichText text={t("onboard.footCli", cli.data)} />
         </p>
       )}
       <p className="onboarding-foot">
-        {transport === "tauri" ? (
-          <>
-            Already have a vault on this machine? Use <strong>Open vault folder…</strong> above.
-          </>
-        ) : (
-          <>
-            Already have a vault? Point the dev server at it with <code>AGENTMON_VAULT</code>, or
-            this window at it with <code>?vault=&lt;dir&gt;</code>.
-          </>
-        )}{" "}
-        The full command set is in <code>{agentmon} --help</code>, and every subcommand takes{" "}
-        <code>--help</code> too.
-        {manual.data && (
-          <>
-            {" "}
-            The manual is on this machine at <code className="mono">{manual.data}</code>.
-          </>
-        )}
+        <RichText
+          text={transport === "tauri" ? t("onboard.footDesktop") : t("onboard.footBrowser")}
+        />
+        <RichText text={t("onboard.footHelp", agentmon)} />
+        {manual.data && <RichText text={t("onboard.footManual", manual.data)} />}
       </p>
     </section>
   );

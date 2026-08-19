@@ -27,6 +27,7 @@ import {
   type RefObject,
 } from "react";
 import { axisLabel, axisTicks, bucketLabel, type CumulativeSeries } from "../lib/dashboard";
+import { t } from "../lib/i18n";
 
 /* --------------------------------------------------------------------------
    Measuring
@@ -214,13 +215,28 @@ export function BurnUp({
   const at = active === null ? null : points[active];
   const openGap = series.totalUpper - series.totalLower;
   const summary =
-    `${upper.label} ${series.totalUpper}, ${lower.label} ${series.totalLower} ${noun} ` +
-    `over ${n} periods from ${bucketLabel(points[0].bucket, series.axis)} to ` +
-    `${bucketLabel(points[n - 1].bucket, series.axis)}, UTC. ` +
-    (delta
-      ? `Over ${scope}: ${signed(delta.upper)} ${upper.label}, ${signed(delta.lower)} ${lower.label}. `
+    t(
+      "chart.summary",
+      upper.label,
+      series.totalUpper,
+      lower.label,
+      series.totalLower,
+      noun,
+      n,
+      bucketLabel(points[0].bucket, series.axis),
+      bucketLabel(points[n - 1].bucket, series.axis)
+    ) +
+    (delta && scope
+      ? t(
+          "chart.summaryDelta",
+          scope,
+          signed(delta.upper),
+          upper.label,
+          signed(delta.lower),
+          lower.label
+        )
       : "") +
-    `Use the left and right arrow keys to read each period.`;
+    t("chart.summaryKeys");
 
   return (
     <div className="chart">
@@ -327,7 +343,16 @@ export function BurnUp({
       {/* Keyboard readers get the same reading the pointer does, in words. */}
       <p className="sr-only" role="status">
         {at
-          ? `${bucketLabel(at.bucket, series.axis)}: ${at.upper} ${upper.label}, ${at.lower} ${lower.label}, ${at.upper - at.lower} ${gap.label}.`
+          ? t(
+              "chart.reading",
+              bucketLabel(at.bucket, series.axis),
+              at.upper,
+              upper.label,
+              at.lower,
+              lower.label,
+              at.upper - at.lower,
+              gap.label
+            )
           : ""}
       </p>
 
@@ -341,14 +366,20 @@ export function BurnUp({
             label: upper.label,
             value: series.totalUpper,
             delta: delta?.upper,
-            deltaTitle: delta ? `${signed(delta.upper)} ${upper.label} over ${scope}` : undefined,
+            deltaTitle:
+              delta && scope
+                ? t("chart.deltaTip", signed(delta.upper), upper.label, scope)
+                : undefined,
           },
           {
             color: lower.color,
             label: lower.label,
             value: series.totalLower,
             delta: delta?.lower,
-            deltaTitle: delta ? `${signed(delta.lower)} ${lower.label} over ${scope}` : undefined,
+            deltaTitle:
+              delta && scope
+                ? t("chart.deltaTip", signed(delta.lower), lower.label, scope)
+                : undefined,
           },
           {
             color: gap.wash,
@@ -356,7 +387,10 @@ export function BurnUp({
             value: openGap,
             band: true,
             delta: delta?.gap,
-            deltaTitle: delta ? `${signed(delta.gap)} ${gap.label} over ${scope}` : undefined,
+            deltaTitle:
+              delta && scope
+                ? t("chart.deltaTip", signed(delta.gap), gap.label, scope)
+                : undefined,
           },
         ]}
       />
@@ -430,7 +464,7 @@ export function HourBars({
             key={h.start}
             className={`hour-bar${i === n - 1 ? " is-now" : ""}${h.count === 0 ? " is-empty" : ""}`}
             style={{ height: `${h.count === 0 ? 2 : Math.max(3, Math.round((h.count / max) * HOUR_BAR_H))}px` }}
-            title={`${axisLabel(h.start, "hour")} UTC — ${h.count} event${h.count === 1 ? "" : "s"}`}
+            title={t("chart.hourTip", axisLabel(h.start, "hour"), h.count)}
           />
         ))}
       </div>
@@ -449,13 +483,17 @@ export function HourBars({
                   : { left: `${(i / (n - 1)) * 100}%`, transform: "translateX(-50%)" }
             }
           >
-            {i === n - 1 ? "now" : axisLabel(h.start, "hour")}
+            {i === n - 1 ? t("chart.now") : axisLabel(h.start, "hour")}
           </span>
         ))}
       </p>
+      {/* The figure keeps its own element and the sentence is split around it, so the number
+          can sit where each language puts it: before the noun in English, after it in
+          Korean ("가장 바쁜 시간대 이벤트 9건"). */}
       <p className="hour-scale">
-        <span className="hour-scale-max tabular">{max}</span>{" "}
-        {max === 1 ? "event" : "events"} in the busiest hour · times UTC
+        {t("chart.busiestHourPre")}
+        <span className="hour-scale-max tabular">{max}</span>
+        {t("chart.busiestHour", max)}
       </p>
     </div>
   );

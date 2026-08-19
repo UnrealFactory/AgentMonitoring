@@ -17,13 +17,8 @@
  *     went into it, so a tooltip can say *which* three work logs finished on the 12th
  *     rather than only that three did.
  */
-import type {
-  BugSummary,
-  EventType,
-  Severity,
-  VaultEvent,
-  WorklogSummary,
-} from "./types";
+import { getLocale, t } from "./i18n";
+import type { BugSummary, EventType, Severity, VaultEvent, WorklogSummary } from "./types";
 
 export const HOUR = 3_600_000;
 export const DAY = 24 * HOUR;
@@ -145,27 +140,74 @@ export function timeAxis(from: number, to: number): TimeAxis {
   };
 }
 
-const HOUR_FMT = new Intl.DateTimeFormat("en-GB", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-  timeZone: "UTC",
-});
-const DAY_FMT = new Intl.DateTimeFormat("en-GB", {
+/* Dates on a chart are read at a glance and compared with the ones two cards away, so they
+   are assembled from UTC parts in both languages rather than handed to a locale formatter
+   whose output depends on the machine. Korean puts the year first and the unit after each
+   number — "8월 12일" — which is also a little wider than "12 Aug", and `axisTicks` is told
+   so through `minTickPx` below. */
+const pad2 = (n: number): string => String(n).padStart(2, "0");
+
+const HOUR_FMT = { format: (ts: number) => {
+  const d = new Date(ts);
+  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+} };
+
+const KO_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
+
+const EN_DAY = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
   timeZone: "UTC",
 });
-const DAY_FULL_FMT = new Intl.DateTimeFormat("en-GB", {
+const EN_DAY_FULL = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
   day: "numeric",
   month: "short",
   timeZone: "UTC",
 });
+const EN_DATE = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** "12 Aug" / "8월 12일" */
+const DAY_FMT = {
+  format: (ts: number) => {
+    const d = new Date(ts);
+    return getLocale() === "ko"
+      ? `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`
+      : EN_DAY.format(d);
+  },
+};
+
+/** "Tue 12 Aug" / "8월 12일 (화)" */
+const DAY_FULL_FMT = {
+  format: (ts: number) => {
+    const d = new Date(ts);
+    return getLocale() === "ko"
+      ? `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${KO_WEEKDAY[d.getUTCDay()]})`
+      : EN_DAY_FULL.format(d);
+  },
+};
+
+/** "18 Aug 2026" / "2026년 8월 18일" */
+const DATE_FMT = {
+  format: (ts: number) => {
+    const d = new Date(ts);
+    return getLocale() === "ko"
+      ? `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`
+      : EN_DATE.format(d);
+  },
+};
 
 /** "14:00" for hour buckets, "12 Aug" for day buckets. */
-export const axisLabel = (t: number, granularity: "hour" | "day"): string =>
-  granularity === "hour" ? HOUR_FMT.format(t) : DAY_FMT.format(t);
+export const axisLabel = (ts: number, granularity: "hour" | "day"): string =>
+  granularity === "hour" ? HOUR_FMT.format(ts) : DAY_FMT.format(ts);
+
+/** How much room one tick label needs. Korean dates are wider than "12 Aug". */
+export const minTickPx = (): number => (getLocale() === "ko" ? 84 : 64);
 
 /* --------------------------------------------------------------------------
    Ticks
@@ -215,7 +257,7 @@ export interface AxisTick {
  * Which buckets get a label, and what it says. `innerWidth` is the plot's width in px:
  * ticks are only useful if they fit, so the chart's real geometry picks the interval.
  */
-export function axisTicks(axis: TimeAxis, innerWidth: number, minPx = 64): AxisTick[] {
+export function axisTicks(axis: TimeAxis, innerWidth: number, minPx = minTickPx()): AxisTick[] {
   const n = axis.buckets.length;
   if (n === 0) return [];
   const perBucket = n > 1 ? innerWidth / (n - 1) : innerWidth;
@@ -228,12 +270,12 @@ export function axisTicks(axis: TimeAxis, innerWidth: number, minPx = 64): AxisT
   const ticks: AxisTick[] = [];
   let lastDate: string | null = null;
   for (let i = 0; i < n; i += 1) {
-    const t = axis.buckets[i].start;
-    if (t % interval !== 0) continue;
-    const date = DAY_FMT.format(t);
+    const at = axis.buckets[i].start;
+    if (at % interval !== 0) continue;
+    const date = DAY_FMT.format(at);
     ticks.push({
       index: i,
-      label: clock ? HOUR_FMT.format(t) : date,
+      label: clock ? HOUR_FMT.format(at) : date,
       date: clock && date !== lastDate ? date : null,
     });
     lastDate = date;
@@ -259,7 +301,12 @@ export function bucketLabel(bucket: Bucket, axis: TimeAxis): string {
       ? DAY_FULL_FMT.format(bucket.start)
       : `${DAY_FMT.format(bucket.start)} – ${DAY_FMT.format(bucket.end - 1)}`;
   }
-  return `${DAY_FMT.format(bucket.start)}, ${HOUR_FMT.format(bucket.start)} – ${HOUR_FMT.format(bucket.end)}`;
+  return t(
+    "chart.bucketHours",
+    DAY_FMT.format(bucket.start),
+    HOUR_FMT.format(bucket.start),
+    HOUR_FMT.format(bucket.end)
+  );
 }
 
 /* --------------------------------------------------------------------------
@@ -469,15 +516,8 @@ export interface DayGroup {
   actors: string[];
 }
 
-const DATE_FMT = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-const startOfUtcDay = (t: number) => {
-  const d = new Date(t);
+const startOfUtcDay = (ts: number) => {
+  const d = new Date(ts);
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 };
 
@@ -496,13 +536,16 @@ export const TONE_ORDER: EventTone[] = ["work", "done", "bug", "resolved", "neut
  * is a chart like any other: five tones with no key is decoration, so the words and the
  * colours live together here and the Activity card prints a legend from them.
  */
-export const TONE_LABEL: Record<EventTone, string> = {
-  work: "work",
-  done: "done",
-  bug: "bugs",
-  resolved: "resolved",
-  neutral: "project",
-};
+export const toneLabel = (tone: EventTone): string =>
+  tone === "work"
+    ? t("tone.work")
+    : tone === "done"
+      ? t("tone.done")
+      : tone === "bug"
+        ? t("tone.bug")
+        : tone === "resolved"
+          ? t("tone.resolved")
+          : t("tone.neutral");
 
 export const TONE_COLOR: Record<EventTone, string> = {
   work: "var(--series-work)",
@@ -531,19 +574,24 @@ export function groupByDay(events: VaultEvent[], now: number): DayGroup[] {
       const counts = new Map<EventTone, number>();
       const actors: string[] = [];
       for (const e of list) {
-        const t = tone(e.type);
-        counts.set(t, (counts.get(t) ?? 0) + 1);
+        const tn = tone(e.type);
+        counts.set(tn, (counts.get(tn) ?? 0) + 1);
         if (e.actor && !actors.includes(e.actor)) actors.push(e.actor);
       }
       const days = Math.round((today - day) / DAY);
       return {
         day,
-        label: days === 0 ? "Today" : days === 1 ? "Yesterday" : DAY_FULL_FMT.format(day),
+        label:
+          days === 0
+            ? t("dash.today")
+            : days === 1
+              ? t("dash.yesterday")
+              : DAY_FULL_FMT.format(day),
         date: DATE_FMT.format(day),
         events: list.slice().sort((a, b) => b.ts.localeCompare(a.ts)),
-        mix: TONE_ORDER.filter((t) => counts.has(t)).map((t) => ({
-          tone: t,
-          count: counts.get(t) as number,
+        mix: TONE_ORDER.filter((tn) => counts.has(tn)).map((tn) => ({
+          tone: tn,
+          count: counts.get(tn) as number,
         })),
         actors,
       };
@@ -597,42 +645,57 @@ export interface RecentWindow {
    * `total`. The old subtitle counted starts, finishes, filings and fixes only, so a day
    * of nine events was described as three: the six notes, claims and comments that were
    * most of the day's actual traffic went unmentioned (round 2 critic).
+   *
+   * `label` is already the word for the reader's language: the grouping happens in this
+   * module, so the naming does too, and the page only joins them up.
    */
   breakdown: { label: string; count: number }[];
   actors: string[];
 }
 
 /** What each event type is called when the day is summarised in a sentence. */
-const RECENT_LABEL: Record<string, string> = {
-  work_started: "started",
-  work_updated: "notes",
+const RECENT_KEY: Record<string, RecentKey> = {
+  work_started: "recent.started",
+  work_updated: "recent.notes",
   // A comment on a bug and an update on a work log are the same act — somebody wrote
   // something down — and counting them apart only lengthens the sentence.
-  bug_commented: "notes",
+  bug_commented: "recent.notes",
   // The state words, not synonyms for them: a work log that reached the end is "done" here,
   // on the work list, in the chart legend and in the pill on its own page (lib/words.ts).
-  work_done: "done",
-  work_abandoned: "abandoned",
-  bug_created: "filed",
-  bug_claimed: "claimed",
-  bug_resolved: "resolved",
-  bug_closed: "closed",
-  project_created: "project",
-  project_updated: "project",
+  work_done: "recent.done",
+  work_abandoned: "recent.abandoned",
+  bug_created: "recent.filed",
+  bug_claimed: "recent.claimed",
+  bug_resolved: "recent.resolved",
+  bug_closed: "recent.closed",
+  project_created: "recent.project",
+  project_updated: "recent.project",
 };
 
+type RecentKey =
+  | "recent.started"
+  | "recent.notes"
+  | "recent.done"
+  | "recent.abandoned"
+  | "recent.filed"
+  | "recent.claimed"
+  | "recent.resolved"
+  | "recent.closed"
+  | "recent.project"
+  | "recent.other";
+
 /** The order the parts are printed in: what a reader looks for first. */
-const RECENT_ORDER = [
-  "started",
-  "done",
-  "notes",
-  "filed",
-  "resolved",
-  "claimed",
-  "abandoned",
-  "closed",
-  "project",
-  "other",
+const RECENT_ORDER: RecentKey[] = [
+  "recent.started",
+  "recent.done",
+  "recent.notes",
+  "recent.filed",
+  "recent.resolved",
+  "recent.claimed",
+  "recent.abandoned",
+  "recent.closed",
+  "recent.project",
+  "recent.other",
 ];
 
 export function last24h(events: VaultEvent[], now: number): RecentWindow {
@@ -642,19 +705,19 @@ export function last24h(events: VaultEvent[], now: number): RecentWindow {
   const window: RecentWindow = { hours, total: 0, breakdown: [], actors: [] };
 
   for (const e of events) {
-    const t = ms(e.ts);
-    if (t === null || t < from || t > now + HOUR) continue;
-    const i = Math.min(23, Math.max(0, Math.floor((t - from) / HOUR)));
+    const at = ms(e.ts);
+    if (at === null || at < from || at > now + HOUR) continue;
+    const i = Math.min(23, Math.max(0, Math.floor((at - from) / HOUR)));
     hours[i].count += 1;
     window.total += 1;
-    const label = RECENT_LABEL[e.type] ?? "other";
-    counts.set(label, (counts.get(label) ?? 0) + 1);
+    const key = RECENT_KEY[e.type] ?? "recent.other";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
     if (e.actor && !window.actors.includes(e.actor)) window.actors.push(e.actor);
   }
 
-  window.breakdown = RECENT_ORDER.filter((l) => counts.has(l)).map((label) => ({
-    label,
-    count: counts.get(label) as number,
+  window.breakdown = RECENT_ORDER.filter((k) => counts.has(k)).map((key) => ({
+    label: t(key),
+    count: counts.get(key) as number,
   }));
   return window;
 }
@@ -670,7 +733,7 @@ export function summarise(
   if (breakdown.length <= max) return breakdown;
   const head = breakdown.slice(0, max - 1);
   const rest = breakdown.slice(max - 1).reduce((n, p) => n + p.count, 0);
-  return [...head, { label: "other", count: rest }];
+  return [...head, { label: t("recent.other"), count: rest }];
 }
 
 export const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"];
@@ -845,23 +908,34 @@ export function refHref(slug: string, ref: string | null): string | null {
   return null;
 }
 
-/** The verbs the feed prints. Kept here so the icon set and the wording stay in step. */
-export const EVENT_VERB: Record<EventType, string> = {
-  work_started: "started",
-  work_updated: "posted an update on",
-  work_done: "finished",
-  work_abandoned: "abandoned",
-  bug_created: "filed",
-  bug_claimed: "claimed",
-  bug_commented: "commented on",
-  bug_resolved: "resolved",
-  bug_closed: "closed",
-  project_created: "created this project",
-  project_updated: "updated the project",
+/**
+ * The verbs the feed prints. Kept here so the icon set and the wording stay in step.
+ *
+ * Korean is verb-final, so the row that reads "nova started WORK-0012" in English reads
+ * "nova WORK-0012 시작" in Korean: the *word* is this map's business and the *order* is the
+ * feed row's (see `verbAfterRef`), because no dictionary entry can move a sibling element.
+ */
+const VERB_KEY: Record<EventType, `verb.${EventType}`> = {
+  work_started: "verb.work_started",
+  work_updated: "verb.work_updated",
+  work_done: "verb.work_done",
+  work_abandoned: "verb.work_abandoned",
+  bug_created: "verb.bug_created",
+  bug_claimed: "verb.bug_claimed",
+  bug_commented: "verb.bug_commented",
+  bug_resolved: "verb.bug_resolved",
+  bug_closed: "verb.bug_closed",
+  project_created: "verb.project_created",
+  project_updated: "verb.project_updated",
 };
 
-export const eventVerb = (type: string): string =>
-  EVENT_VERB[type as EventType] ?? type.replace(/_/g, " ");
+export const eventVerb = (type: string): string => {
+  const key = VERB_KEY[type as EventType];
+  return key ? t(key) : type.replace(/_/g, " ");
+};
+
+/** Does this language put the verb after the record it is about? Korean does. */
+export const verbAfterRef = (): boolean => getLocale() === "ko";
 
 /**
  * An event's summary as a feed line.

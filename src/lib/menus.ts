@@ -39,6 +39,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../AppContext";
 import { useContextMenuApi, useCopy, type MenuItem, type MenuSpec } from "../components/ContextMenu";
 import { api } from "./api";
+import { t } from "./i18n";
 import { unresolvedCount, workLogs } from "./words";
 import type { Project, ProjectStatus } from "./types";
 
@@ -99,15 +100,21 @@ export function useRecordMenu() {
     (r: RecordRef): MenuSpec => {
       const route = recordRoute(r);
       const items: MenuItem[] = [];
-      if (!r.here) items.push({ id: "open", label: "Open", run: () => navigate(route) });
+      if (!r.here) items.push({ id: "open", label: t("menu.open"), run: () => navigate(route) });
       items.push(
-        { id: "copy-id", label: "Copy id", hint: r.id, separator: !r.here, run: () => copy(r.id, r.id) },
+        {
+          id: "copy-id",
+          label: t("menu.copyId"),
+          hint: r.id,
+          separator: !r.here,
+          run: () => copy(r.id, r.id),
+        },
         {
           id: "copy-title",
-          label: "Copy title",
-          run: () => copy(r.title ? r.title : () => readTitle(r), "the title"),
+          label: t("menu.copyTitle"),
+          run: () => copy(r.title ? r.title : () => readTitle(r), t("menu.theTitle")),
         },
-        { id: "copy-link", label: "Copy link", hint: route, run: () => copy(route, route) }
+        { id: "copy-link", label: t("menu.copyLink"), hint: route, run: () => copy(route, route) }
       );
       return { label: r.id, items };
     },
@@ -144,11 +151,11 @@ export function useProjectMenu(overrides?: {
         await api.setProjectStatus(project.slug, status);
         refresh();
         if (status === "archived") {
-          toast(`${project.name} is archived. Nothing was deleted.`, {
-            action: { label: "Undo", run: () => void setStatus(project, "active") },
+          toast(t("menu.archivedToast", project.name), {
+            action: { label: t("app.undo"), run: () => void setStatus(project, "active") },
           });
         } else {
-          toast(`${project.name} is back in the switcher.`);
+          toast(t("menu.restoredToast", project.name));
         }
       } catch (err) {
         toast(err instanceof Error ? err.message : String(err), { tone: "warn" });
@@ -165,22 +172,27 @@ export function useProjectMenu(overrides?: {
       return {
         label: p.name,
         items: [
-          { id: "open", label: "Open", hint: "Dashboard", run: () => navigate(`/p/${p.slug}`) },
+          {
+            id: "open",
+            label: t("menu.open"),
+            hint: t("menu.openHint"),
+            run: () => navigate(`/p/${p.slug}`),
+          },
           {
             id: "work",
-            label: "Work",
+            label: t("nav.work"),
             hint: workLogs(p.counts.workTotal),
             run: () => navigate(`/p/${p.slug}/work`),
           },
           {
             id: "bugs",
-            label: "Bugs",
+            label: t("nav.bugs"),
             hint: unresolvedCount(p.counts.bugsOpen),
             run: () => navigate(`/p/${p.slug}/bugs`),
           },
           {
             id: "copy-slug",
-            label: "Copy slug",
+            label: t("menu.copySlug"),
             hint: p.slug,
             separator: true,
             run: () => copy(p.slug, p.slug),
@@ -188,15 +200,15 @@ export function useProjectMenu(overrides?: {
           archived
             ? {
                 id: "unarchive",
-                label: "Unarchive",
-                hint: "back in the switcher",
+                label: t("menu.unarchive"),
+                hint: t("menu.unarchiveHint"),
                 separator: true,
                 run: () => archive("active"),
               }
             : {
                 id: "archive",
-                label: "Archive",
-                hint: "records are kept",
+                label: t("menu.archive"),
+                hint: t("menu.archiveHint"),
                 separator: true,
                 run: () => archive("archived"),
               },

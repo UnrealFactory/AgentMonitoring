@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useParams } from "react-router-dom";
 import { api, subscribeVaultChanges, transport, type VaultHealth } from "./lib/api";
+import { loadDesktopLocale, useLocale, type Locale } from "./lib/i18n";
 import { useAsync } from "./lib/useAsync";
 import type { Project, VaultInfo } from "./lib/types";
 
@@ -44,6 +45,16 @@ interface AppData {
   refresh: () => void;
   /** Set while the vault cannot be read and the app is showing the last good data. */
   trouble: VaultTrouble | null;
+  /**
+   * The language on screen.
+   *
+   * Held here for the same reason the vault nonce is: it is a fact the *whole* window
+   * depends on. `t()` reads the locale from a module-level store rather than from this
+   * context (lib/i18n), so that lib/words.ts and lib/format.ts — which are not components —
+   * can call it too; subscribing once at the root is what turns a change to that store into
+   * one repaint of every screen, instead of a sidebar in Korean above a board in English.
+   */
+  locale: Locale;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -51,6 +62,14 @@ const Ctx = createContext<AppData | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [nonce, setNonce] = useState(0);
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
+
+  /* The whole window's language, subscribed once. The desktop app's remembered choice
+     arrives a beat later, out of settings.json; in browser mode (and on every run after the
+     first, because the answer is mirrored into localStorage) it is already right. */
+  const locale = useLocale();
+  useEffect(() => {
+    void loadDesktopLocale();
+  }, []);
 
   const vault = useAsync(() => api.vaultInfo(), [], nonce);
   const projects = useAsync(() => api.listProjects(), [], nonce);
@@ -97,6 +116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       vaultNonce: nonce,
       refresh,
       trouble,
+      locale,
     }),
     [
       vault.data,
@@ -110,6 +130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refresh,
       trouble?.message,
       trouble?.since,
+      locale,
     ]
   );
 

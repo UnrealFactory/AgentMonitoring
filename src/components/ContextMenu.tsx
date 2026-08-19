@@ -45,6 +45,7 @@ import {
 import { useLocation } from "react-router-dom";
 import { modalDepth, onModalChange, useModalLock } from "../lib/modal";
 import { writeClipboard } from "../lib/clipboard";
+import { t } from "../lib/i18n";
 
 /** One line of a menu. Deliberately data, not JSX: the same item is built in three places. */
 export interface MenuItem {
@@ -241,14 +242,17 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
       if (!text) return;
       open(
         {
-          label: "Selection",
+          label: t("menu.selection"),
           items: [
             {
               id: "copy-selection",
-              label: "Copy",
+              label: t("app.copy"),
               run: () => {
                 void writeClipboard(text).then((ok) =>
-                  showToast(ok ? "Copied the selection" : COPY_FAILED, ok ? undefined : WARN)
+                  showToast(
+                    ok ? t("menu.copiedSelection") : t("menu.copyFailed"),
+                    ok ? undefined : WARN
+                  )
                 );
               },
             },
@@ -287,7 +291,6 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
   );
 }
 
-const COPY_FAILED = "Could not reach the clipboard — select the text and copy it.";
 const WARN: ToastOptions = { tone: "warn" };
 
 function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
@@ -520,7 +523,7 @@ function ToastBar({ toast, onDismiss }: { toast: Toast; onDismiss: () => void })
             {toast.action.label}
           </button>
         )}
-        <button className="undo-dismiss" aria-label="Dismiss" onClick={onDismiss}>
+        <button className="undo-dismiss" aria-label={t("app.dismiss")} onClick={onDismiss}>
           ×
         </button>
       </div>
@@ -627,7 +630,7 @@ export function useCopy() {
           return;
         }
         const ok = await writeClipboard(value);
-        toast(ok ? `Copied ${what}` : COPY_FAILED, ok ? undefined : WARN);
+        toast(ok ? t("menu.copiedWhat", what) : t("menu.copyFailed"), ok ? undefined : WARN);
       })();
     },
     [toast]

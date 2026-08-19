@@ -3,15 +3,15 @@
  * a small coloured dot plus a label, never a shouting block of colour.
  */
 import { useState, type ReactNode } from "react";
-import { pluralize } from "../lib/format";
+import { t } from "../lib/i18n";
 import type { BugStatus, Severity, WorkStatus } from "../lib/types";
-import { BUG_STATUS_LABEL, SEVERITY_LABEL, UNASSIGNED, WORK_STATUS_LABEL } from "../lib/words";
+import { bugStatusLabel, severityLabel, unassigned, workStatusLabel } from "../lib/words";
 
 export function WorkStatusPill({ status }: { status: WorkStatus }) {
   return (
     <span className={`pill pill-work-${status}`}>
       <span className="dot" aria-hidden="true" />
-      {WORK_STATUS_LABEL[status] ?? status}
+      {workStatusLabel(status)}
     </span>
   );
 }
@@ -20,7 +20,7 @@ export function BugStatusPill({ status }: { status: BugStatus }) {
   return (
     <span className={`pill pill-bug-${status}`}>
       <span className="dot" aria-hidden="true" />
-      {BUG_STATUS_LABEL[status] ?? status}
+      {bugStatusLabel(status)}
     </span>
   );
 }
@@ -35,9 +35,9 @@ export function BugStatusPill({ status }: { status: BugStatus }) {
  * printing the page. "C" costs seven pixels and keeps the meaning in the glyph.
  */
 export function SeverityBadge({ severity }: { severity: Severity }) {
-  const label = SEVERITY_LABEL[severity] ?? severity;
+  const label = severityLabel(severity);
   return (
-    <span className={`pill pill-sev pill-sev-${severity}`} title={`${label} severity`}>
+    <span className={`pill pill-sev pill-sev-${severity}`} title={t("ui.severityOf", label)}>
       <span className="dot" aria-hidden="true" />
       <span className="pill-text">{label}</span>
       <span className="pill-abbr" aria-hidden="true">
@@ -111,7 +111,7 @@ export function CorrectionNotice({ count, href, where }: { count: number; href: 
         <CorrectionMark />
       </span>
       <span>
-        <strong>{pluralize(count, "correction")}</strong> to this record — see {where}
+        <RichText text={t("rec.corrections", count, where)} />
       </span>
     </a>
   );
@@ -122,8 +122,8 @@ export function WorkStatusDot({ status }: { status: WorkStatus }) {
   return (
     <span
       className={`sdot sdot-${status}`}
-      title={WORK_STATUS_LABEL[status] ?? status}
-      aria-label={WORK_STATUS_LABEL[status] ?? status}
+      title={workStatusLabel(status)}
+      aria-label={workStatusLabel(status)}
       role="img"
     />
   );
@@ -133,8 +133,8 @@ export function BugStatusDot({ status }: { status: BugStatus }) {
   return (
     <span
       className={`sdot sdot-bug-${status}`}
-      title={BUG_STATUS_LABEL[status] ?? status}
-      aria-label={BUG_STATUS_LABEL[status] ?? status}
+      title={bugStatusLabel(status)}
+      aria-label={bugStatusLabel(status)}
       role="img"
     />
   );
@@ -159,7 +159,7 @@ export function RecordStatusDot({
 export function CommentCount({ count }: { count: number }) {
   if (!count) return <span className="comment-count is-empty" aria-hidden="true" />;
   return (
-    <span className="comment-count tabular" title={`${count} comment${count === 1 ? "" : "s"}`}>
+    <span className="comment-count tabular" title={t("bd.comments", count)}>
       <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
         <path
           d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"
@@ -180,7 +180,10 @@ export function CommentCount({ count }: { count: number }) {
  */
 export function Handoff({ from, to }: { from: string; to: string | null }) {
   return (
-    <span className="handoff" title={to ? `filed by ${from} · assigned to ${to}` : `filed by ${from} · ${UNASSIGNED}`}>
+    <span
+      className="handoff"
+      title={to ? t("ui.handoff", from, to) : t("ui.handoffNone", from, unassigned())}
+    >
       <AgentChip name={from} hideName />
       <span className="handoff-arrow" aria-hidden="true">
         →
@@ -190,7 +193,7 @@ export function Handoff({ from, to }: { from: string; to: string | null }) {
       ) : (
         <span className="handoff-none">
           <span className="handoff-empty" aria-hidden="true" />
-          {UNASSIGNED}
+          {unassigned()}
         </span>
       )}
     </span>
@@ -216,7 +219,7 @@ export function CommandLine({ text }: { text: string }) {
       <button
         className="command-copy"
         type="button"
-        title="Copy to clipboard"
+        title={t("app.copyToClipboard")}
         onClick={async () => {
           try {
             await navigator.clipboard.writeText(text);
@@ -227,7 +230,7 @@ export function CommandLine({ text }: { text: string }) {
           setTimeout(() => setState("idle"), 1600);
         }}
       >
-        {state === "copied" ? "Copied" : state === "failed" ? "Select it" : "Copy"}
+        {state === "copied" ? t("app.copied") : state === "failed" ? t("app.selectIt") : t("app.copy")}
       </button>
     </span>
   );
@@ -315,7 +318,7 @@ export function EmptyState({
 
 export function Skeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="skeleton-list" aria-busy="true" aria-label="Loading">
+    <div className="skeleton-list" aria-busy="true" aria-label={t("app.loading")}>
       {Array.from({ length: rows }, (_, i) => (
         <div className="skeleton-row" key={i}>
           <span className="skeleton" style={{ width: `${28 + ((i * 17) % 40)}%` }} />
@@ -353,19 +356,15 @@ export function StaleRecordBar({
     <div className="vault-alert vault-alert-inline" role="status">
       <span className="vault-alert-dot" aria-hidden="true" />
       <span className="vault-alert-text">
-        <strong>
-          {status === 404
-            ? `${id} is no longer in this vault.`
-            : `${id} could not be read again.`}
-        </strong>{" "}
-        Everything below is the copy that was on screen when it was last read.{" "}
+        <strong>{status === 404 ? t("rec.staleGone", id) : t("rec.staleUnread", id)}</strong>{" "}
+        {t("rec.staleBody")}{" "}
         <span className="vault-alert-detail" title={message}>
           <InlineCode text={headline} />
         </span>
       </span>
       {onRetry && (
         <button className="button button-sm" onClick={onRetry}>
-          Try again
+          {t("app.retry")}
         </button>
       )}
       {action}
@@ -406,7 +405,7 @@ export function InlineCode({ text }: { text: string }) {
  * looking in the wrong place. Callers that know which one it is pass the title.
  */
 export function ErrorState({
-  title = "Could not read the vault",
+  title,
   message,
   onRetry,
   action,
@@ -419,7 +418,7 @@ export function ErrorState({
 }) {
   return (
     <div className="error-state" role="alert">
-      <p className="error-title">{title}</p>
+      <p className="error-title">{title ?? t("vault.readFailed")}</p>
       <p className="error-message">
         <InlineCode text={message} />
       </p>
@@ -427,13 +426,40 @@ export function ErrorState({
         <div className="error-actions">
           {onRetry && (
             <button className="button" onClick={onRetry}>
-              Try again
+              {t("app.retry")}
             </button>
           )}
           {action}
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A line of the app's own chrome that carries two marks: `code` and **strong**.
+ *
+ * Onboarding steps, empty-state hints and the correction notice are sentences with a
+ * command or a button name inside them. Written as JSX they had to be cut into fragments at
+ * the call site — and a sentence cut into fragments cannot be translated, because the
+ * pieces land in a different order in another language. So the whole sentence lives in the
+ * dictionary, in the two marks a terminal reader and a Markdown writer both already know,
+ * and this renders them. Nothing else is interpreted; the text is still text.
+ */
+export function RichText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+          return <code key={i}>{part.slice(1, -1)}</code>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
   );
 }
 

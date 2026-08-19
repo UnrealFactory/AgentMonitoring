@@ -28,15 +28,18 @@ import {
   Tag,
   WorkStatusDot,
 } from "../components/ui";
-import { formatDateTimeUtc, formatRelative, pluralize } from "../lib/format";
-import { IN_PROGRESS, WORK_NOUN, WORK_STATUS_LABEL, workLogs } from "../lib/words";
+import { formatDateTimeUtc, formatRelative } from "../lib/format";
+import { t } from "../lib/i18n";
+import { inProgress, workLogs, workStatusLabel } from "../lib/words";
 import type { WorklogSummary, WorkStatus } from "../lib/types";
 
 /** The dimensions a filter slices on — and therefore the ones a count can be exempt from. */
 type Dim = "status" | "agent" | "tag";
 
 const STATUSES: (WorkStatus | "all")[] = ["all", "in_progress", "done", "abandoned"];
-const STATUS_TEXT: Record<string, string> = { all: "All", ...WORK_STATUS_LABEL };
+/** The tab's word: the app's one word for the state, or "All" for the tab that is not one. */
+const statusText = (status: string): string =>
+  status === "all" ? t("filter.all") : workStatusLabel(status as WorkStatus);
 /** In progress first: the list answers "what is happening" before "what happened". */
 const GROUP_ORDER: WorkStatus[] = ["in_progress", "done", "abandoned"];
 const MAX_TAGS = 3;
@@ -178,7 +181,7 @@ export function WorkListPage() {
           onRetry={httpStatus === 404 ? undefined : reload}
           action={
             <Link className="button" to="/projects">
-              All projects
+              {t("nav.allProjects")}
             </Link>
           }
         />
@@ -186,28 +189,25 @@ export function WorkListPage() {
     );
   }
 
-  const inProgress = works.filter((w) => w.status === "in_progress").length;
+  const runningCount = works.filter((w) => w.status === "in_progress").length;
   let rowIndex = -1;
 
   return (
     <div className="page">
       <header className="page-head">
         <div>
-          <h1 className="page-title">Work</h1>
-          <p className="page-sub">
-            What every agent did, why they did it, and how it went — one work log per unit of
-            work.
-          </p>
+          <h1 className="page-title">{t("work.title")}</h1>
+          <p className="page-sub">{t("work.sub")}</p>
         </div>
         <div className="page-head-meta tabular">
           {loading
-            ? "loading…"
-            : `${workLogs(works.length)}${inProgress ? ` · ${inProgress} ${IN_PROGRESS}` : ""}`}
+            ? t("app.loadingShort")
+            : `${workLogs(works.length)}${runningCount ? ` · ${runningCount} ${inProgress()}` : ""}`}
         </div>
       </header>
 
       <div className="toolbar">
-        <div className="segmented" role="tablist" aria-label="Filter by status">
+        <div className="segmented" role="tablist" aria-label={t("filter.byStatus")}>
           {STATUSES.map((s) => (
             <button
               key={s}
@@ -217,7 +217,7 @@ export function WorkListPage() {
               className={`segment${status === s ? " is-active" : ""}`}
               onClick={() => set("status", s)}
             >
-              {STATUS_TEXT[s]}
+              {statusText(s)}
               <span className="segment-count tabular">{statusCounts[s] ?? 0}</span>
             </button>
           ))}
@@ -225,11 +225,11 @@ export function WorkListPage() {
 
         <div className="toolbar-right">
           <Select
-            label="Filter by agent"
+            label={t("filter.byAgent")}
             value={agent}
             onChange={(v) => set("agent", v)}
             options={[
-              { value: "all", label: "All agents" },
+              { value: "all", label: t("filter.allAgents") },
               ...agents.map((a) => ({
                 value: a,
                 label: a,
@@ -238,11 +238,11 @@ export function WorkListPage() {
             ]}
           />
           <Select
-            label="Filter by tag"
+            label={t("filter.byTag")}
             value={tag}
             onChange={(v) => set("tag", v)}
             options={[
-              { value: "all", label: "All tags" },
+              { value: "all", label: t("filter.allTags") },
               ...tags.map((t) => ({
                 value: t,
                 label: t,
@@ -260,9 +260,9 @@ export function WorkListPage() {
               className="input search-input"
               type="search"
               value={query}
-              placeholder="Search work"
+              placeholder={t("work.searchPlaceholder")}
               onChange={(e) => set("q", e.target.value)}
-              aria-label="Search work logs"
+              aria-label={t("work.searchLabel")}
             />
             {!query && <kbd className="search-kbd">/</kbd>}
           </div>
@@ -271,31 +271,29 @@ export function WorkListPage() {
 
       {filtersActive && (
         <div className="filter-summary">
-          <span className="filter-count tabular">
-            {pluralize(filtered.length, "match", "matches")}
-          </span>
+          <span className="filter-count tabular">{t("filter.matches", filtered.length)}</span>
           {status !== "all" && (
             <button className="filter-chip" onClick={() => set("status", "all")}>
-              Status: {STATUS_TEXT[status]} <span aria-hidden="true">×</span>
+              {t("filter.chipStatus", statusText(status))} <span aria-hidden="true">×</span>
             </button>
           )}
           {agent !== "all" && (
             <button className="filter-chip" onClick={() => set("agent", "all")}>
-              Agent: {agent} <span aria-hidden="true">×</span>
+              {t("filter.chipAgent", agent)} <span aria-hidden="true">×</span>
             </button>
           )}
           {tag !== "all" && (
             <button className="filter-chip" onClick={() => set("tag", "all")}>
-              Tag: {tag} <span aria-hidden="true">×</span>
+              {t("filter.chipTag", tag)} <span aria-hidden="true">×</span>
             </button>
           )}
           {query.trim() && (
             <button className="filter-chip" onClick={clearQuery}>
-              “{query.trim()}” <span aria-hidden="true">×</span>
+              {t("filter.chipQuery", query.trim())} <span aria-hidden="true">×</span>
             </button>
           )}
           <button className="filter-clear" onClick={clearFilters}>
-            Clear all
+            {t("filter.clearAll")}
           </button>
         </div>
       )}
@@ -316,11 +314,10 @@ export function WorkListPage() {
                 />
               </svg>
             }
-            title="No work recorded yet"
+            title={t("work.empty.title")}
             hint={
               <>
-                Agents start a {WORK_NOUN} before they touch code, so the reasoning is written
-                down while it is still true:
+                {t("work.empty.hint")}
                 <code className="empty-code">
                   agentmon work start -p {slug} --agent &lt;name&gt; --title &lt;title&gt;
                 </code>
@@ -340,11 +337,11 @@ export function WorkListPage() {
                 />
               </svg>
             }
-            title="No work matches these filters"
-            hint={`${workLogs(works.length)} in this project, none of them matching all of the filters above.`}
+            title={t("work.emptyFiltered.title")}
+            hint={t("work.emptyFiltered.hint", works.length)}
             action={
               <button className="button" onClick={clearFilters}>
-                Clear filters
+                {t("filter.clear")}
               </button>
             }
           />
@@ -356,7 +353,7 @@ export function WorkListPage() {
               <section className="work-group" key={group.status}>
                 <header className="work-group-head">
                   <WorkStatusDot status={group.status} />
-                  <h2 className="work-group-title">{WORK_STATUS_LABEL[group.status]}</h2>
+                  <h2 className="work-group-title">{workStatusLabel(group.status)}</h2>
                   <span className="work-group-count tabular">{group.items.length}</span>
                 </header>
                 <ul className="work-rows">
@@ -391,7 +388,7 @@ export function WorkListPage() {
                           <time
                             className="work-row-time tabular"
                             dateTime={w.lastActivity}
-                            title={`Last activity ${formatDateTimeUtc(w.lastActivity)}`}
+                            title={t("dash.lastActivityTip", formatDateTimeUtc(w.lastActivity))}
                           >
                             {formatRelative(w.lastActivity)}
                           </time>
@@ -405,11 +402,10 @@ export function WorkListPage() {
           </div>
 
           <p className="list-hints">
-            <span className="list-hints-left">
-              Sorted by most recent activity within each group.
-            </span>
+            <span className="list-hints-left">{t("work.sortNote")}</span>
             <kbd>↑</kbd>
-            <kbd>↓</kbd> move · <kbd>↵</kbd> open · <kbd>/</kbd> search
+            <kbd>↓</kbd> {t("keys.move")} · <kbd>↵</kbd> {t("keys.open")} · <kbd>/</kbd>{" "}
+            {t("keys.search")}
           </p>
         </>
       )}

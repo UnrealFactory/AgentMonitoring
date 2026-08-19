@@ -37,6 +37,7 @@ import {
   CorrectionNotice,
   ErrorState,
   RecordTitle,
+  RichText,
   SeverityBadge,
   Skeleton,
   StaleRecordBar,
@@ -48,9 +49,9 @@ import {
   formatDateTimeUtc,
   formatDuration,
   formatRelative,
-  pluralize,
 } from "../lib/format";
-import { TIME_TO_RESOLVE, UNASSIGNED, UNASSIGNED_LABEL } from "../lib/words";
+import { t } from "../lib/i18n";
+import { timeToResolve, unassigned, unassignedLabel } from "../lib/words";
 import type { BugComment, BugDetail } from "../lib/types";
 
 /** A timestamp shown as a real date, with the relative time next to it. */
@@ -93,13 +94,13 @@ export function BugDetailPage() {
   const sections = useMemo(() => {
     if (!bug) return [] as TocEntry[];
     const out: TocEntry[] = [
-      { id: "report", label: "Report", count: 0 },
-      { id: "thread", label: "Thread", count: bug.comments.length },
+      { id: "report", label: t("bd.report"), count: 0 },
+      { id: "thread", label: t("bd.thread"), count: bug.comments.length },
     ];
     if (bug.resolution) {
-      out.push({ id: "resolution", label: "Resolution", count: 0 }, ...partsToc(resolution));
+      out.push({ id: "resolution", label: t("bd.resolution"), count: 0 }, ...partsToc(resolution));
     }
-    if (related.count) out.push({ id: "related", label: "Related", count: related.count });
+    if (related.count) out.push({ id: "related", label: t("rec.related"), count: related.count });
     return out;
   }, [bug, related.count, resolution]);
   const active = useActiveSection(sections.map((s) => s.id));
@@ -114,7 +115,7 @@ export function BugDetailPage() {
           onRetry={missing ? undefined : reload}
           action={
             <Link className="button" to={`/p/${slug}/bugs`}>
-              Back to the bug board
+              {t("bd.backToBoard")}
             </Link>
           }
         />
@@ -164,7 +165,7 @@ export function BugDetailPage() {
             action={
               status === 404 ? (
                 <Link className="button button-sm" to={`/p/${slug}/bugs`}>
-                  Bug board
+                  {t("bd.bugBoard")}
                 </Link>
               ) : undefined
             }
@@ -180,7 +181,7 @@ export function BugDetailPage() {
             {project?.name ?? slug}
           </Link>
           <span aria-hidden="true">/</span>
-          <Link to={`/p/${slug}/bugs`}>Bugs</Link>
+          <Link to={`/p/${slug}/bugs`}>{t("nav.bugs")}</Link>
           <span aria-hidden="true">/</span>
           <span className="mono">{bug.id}</span>
         </nav>
@@ -198,7 +199,7 @@ export function BugDetailPage() {
           <CorrectionNotice
             count={countCorrections(bug.comments)}
             href="#thread"
-            where="the thread"
+            where={t("rec.inThread")}
           />
 
           <div className="rec-byline">
@@ -206,16 +207,18 @@ export function BugDetailPage() {
             <SeverityBadge severity={bug.severity} />
             <AgentChip name={bug.reporter} size="md" />
             <span className="rec-byline-text">
-              filed this bug on <Stamp iso={bug.created} />
+              {t("bd.bylineFiled")} <Stamp iso={bug.created} />
+              {/* Both languages put the duration last, so the emphasised figure keeps its
+                  own element rather than being spliced into a sentence. */}
               {bug.resolved ? (
                 <>
-                  {" "}
-                  · resolved in <span className="rec-byline-strong">{openFor}</span>
+                  {` · ${t("bd.bylineResolvedInPre")}`}
+                  <span className="rec-byline-strong">{openFor}</span>
                 </>
               ) : (
                 <>
-                  {" "}
-                  · open for <span className="rec-byline-strong">{formatDuration(bug.created, null)}</span>
+                  {` · ${t("bd.bylineOpenForPre")}`}
+                  <span className="rec-byline-strong">{formatDuration(bug.created, null)}</span>
                 </>
               )}
             </span>
@@ -237,16 +240,16 @@ export function BugDetailPage() {
           <article className="detail-main">
             <section className="record-section" id="report">
               <h2 className="section-title">
-                Report
+                {t("bd.report")}
                 <span className="section-byline">
-                  by {bug.reporter}, {formatRelative(bug.created)}
+                  {t("bd.reportBy", bug.reporter, formatRelative(bug.created))}
                 </span>
               </h2>
               {bug.report.trim() ? (
                 <Markdown source={bug.report} />
               ) : (
                 <p className="muted">
-                  This bug has no <code>## Report</code> section.
+                  <RichText text={t("bd.noReportSection")} />
                 </p>
               )}
             </section>
@@ -262,11 +265,8 @@ export function BugDetailPage() {
                 <div className="notice">
                   <span className="notice-mark" aria-hidden="true" />
                   <div>
-                    <p className="notice-title">Closed without a resolution</p>
-                    <p className="notice-text">
-                      This bug was closed but no fix was written into it, so the record does not say
-                      what happened. That is a gap in the record, not in the reader.
-                    </p>
+                    <p className="notice-title">{t("bd.closedNoFix.title")}</p>
+                    <p className="notice-text">{t("bd.closedNoFix.text")}</p>
                   </div>
                 </div>
               </section>
@@ -286,38 +286,38 @@ export function BugDetailPage() {
             <ContentsRail entries={sections} active={active} />
 
             <div className="side-card">
-              <div className="side-card-title">Bug</div>
+              <div className="side-card-title">{t("bd.bug")}</div>
               <dl className="side-facts">
                 <div>
-                  <dt>Severity</dt>
+                  <dt>{t("bd.severity")}</dt>
                   <dd>
                     <SeverityBadge severity={bug.severity} />
                   </dd>
                 </div>
                 <div>
-                  <dt>Status</dt>
+                  <dt>{t("bd.status")}</dt>
                   <dd>
                     <BugStatusPill status={bug.status} />
                   </dd>
                 </div>
                 <div>
-                  <dt>Reporter</dt>
+                  <dt>{t("bd.reporter")}</dt>
                   <dd>
                     <AgentChip name={bug.reporter} />
                   </dd>
                 </div>
                 <div>
-                  <dt>Assignee</dt>
+                  <dt>{t("bd.assignee")}</dt>
                   <dd>
                     {bug.assignee ? (
                       <AgentChip name={bug.assignee} />
                     ) : (
-                      <span className="muted">{UNASSIGNED}</span>
+                      <span className="muted">{unassigned()}</span>
                     )}
                   </dd>
                 </div>
                 <div>
-                  <dt>Participants</dt>
+                  <dt>{t("bd.participants")}</dt>
                   <dd>
                     <span className="side-people" title={participants.join(", ")}>
                       {participants.map((name) => (
@@ -328,7 +328,7 @@ export function BugDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt>Last word</dt>
+                  <dt>{t("bd.lastWord")}</dt>
                   <dd>
                     {lastComment ? (
                       <span className="side-lastword">
@@ -340,26 +340,26 @@ export function BugDetailPage() {
                         </span>
                       </span>
                     ) : (
-                      <span className="muted">no replies yet</span>
+                      <span className="muted">{t("bd.noReplies")}</span>
                     )}
                   </dd>
                 </div>
                 <div>
-                  <dt>Filed</dt>
+                  <dt>{t("bd.filed")}</dt>
                   <dd className="tabular" title={formatDateTimeUtc(bug.created)}>
                     {formatDateTime(bug.created)}
                     <span className="side-rel">{formatRelative(bug.created)}</span>
                   </dd>
                 </div>
                 <div>
-                  <dt>{bug.resolved ? TIME_TO_RESOLVE : "Age"}</dt>
+                  <dt>{bug.resolved ? timeToResolve() : t("bd.age")}</dt>
                   <dd className="tabular">
                     {openFor}
-                    {!bug.resolved && <span className="side-rel">and counting</span>}
+                    {!bug.resolved && <span className="side-rel">{t("bd.andCounting")}</span>}
                   </dd>
                 </div>
                 <div>
-                  <dt>Last activity</dt>
+                  <dt>{t("bd.lastActivity")}</dt>
                   <dd className="tabular" title={formatDateTimeUtc(bug.lastActivity)}>
                     {formatRelative(bug.lastActivity)}
                   </dd>
@@ -385,7 +385,7 @@ function StatusStrip({ bug }: { bug: BugDetail }) {
   const steps = [
     {
       key: "filed",
-      label: "Filed",
+      label: t("bd.stepFiled"),
       done: true,
       who: bug.reporter,
       ts: bug.created,
@@ -393,32 +393,36 @@ function StatusStrip({ bug }: { bug: BugDetail }) {
     },
     {
       key: "claimed",
-      label: bug.claimed ? "Claimed" : UNASSIGNED_LABEL,
+      label: bug.claimed ? t("bd.stepClaimed") : unassignedLabel(),
       done: !!bug.claimed,
-      who: bug.claimed ? (bug.assignee ?? "an agent") : null,
+      who: bug.claimed ? (bug.assignee ?? t("bd.anAgent")) : null,
       ts: bug.claimed,
       gap: bug.claimed
         ? formatDuration(bug.created, bug.claimed)
-        : `${formatDuration(bug.created, null)} waiting`,
+        : t("bd.waiting", formatDuration(bug.created, null)),
     },
     {
       key: "resolved",
-      label: bug.resolved ? "Resolved" : bug.status === "closed" ? "Closed" : "Unresolved",
+      label: bug.resolved
+        ? t("bd.stepResolved")
+        : bug.status === "closed"
+          ? t("bd.stepClosed")
+          : t("bd.stepUnresolved"),
       done: !!bug.resolved || bug.status === "closed",
-      who: bug.resolved ? (bug.resolvedBy ?? "an agent") : null,
+      who: bug.resolved ? (bug.resolvedBy ?? t("bd.anAgent")) : null,
       ts: bug.resolved,
       // Nothing has elapsed on this leg until somebody starts it: an unclaimed bug shows
       // its waiting time once, on the leg it is actually waiting on.
       gap: bug.resolved
         ? formatDuration(bug.claimed ?? bug.created, bug.resolved)
         : bug.claimed
-          ? `${formatDuration(bug.claimed, null)} so far`
+          ? t("bd.soFar", formatDuration(bug.claimed, null))
           : null,
     },
   ];
 
   return (
-    <ol className="status-strip" aria-label="Status history">
+    <ol className="status-strip" aria-label={t("bd.statusHistory")}>
       {steps.map((s, i) => (
         <li key={s.key} className={`strip-step${s.done ? " is-done" : " is-pending"}`}>
           {i > 0 && (
@@ -445,7 +449,7 @@ function StatusStrip({ bug }: { bug: BugDetail }) {
                     </time>
                   </>
                 ) : (
-                  <span className="muted">not yet</span>
+                  <span className="muted">{t("bd.notYet")}</span>
                 )}
               </span>
             </span>
@@ -478,7 +482,7 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
     ...bug.comments.map((c) => ({
       kind: "comment" as const,
       ts: c.ts,
-      agent: c.agent || "unknown",
+      agent: c.agent || t("bd.unknownAgent"),
       body: c.body,
     })),
     { kind: "end" as const, ts: endTs },
@@ -487,20 +491,20 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
   ].sort((a, b) => a.ts.localeCompare(b.ts) || rank(a) - rank(b));
 
   const endLabel = bug.resolved
-    ? `${bug.resolvedBy ?? "An agent"} resolved this bug`
+    ? t("bd.endResolved", bug.resolvedBy ?? t("bd.someAgent"))
     : bug.status === "closed"
-      ? "Closed"
+      ? t("bd.endClosed")
       : bug.assignee
-        ? `${bug.assignee} is working on it`
-        : "Waiting for someone to claim it";
+        ? t("bd.endWorking", bug.assignee)
+        : t("bd.endWaiting");
   const endTone = bug.resolved ? "resolved" : bug.status === "closed" ? "abandoned" : "open";
 
   return (
     <section className="record-section" id="thread">
       <h2 className="section-title">
-        Thread
+        {t("bd.thread")}
         {bug.comments.length > 0 && (
-          <span className="section-count tabular">{pluralize(bug.comments.length, "comment")}</span>
+          <span className="section-count tabular">{t("bd.comments", bug.comments.length)}</span>
         )}
       </h2>
 
@@ -508,7 +512,7 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
         <li className="trail-node trail-edge">
           <span className="trail-dot trail-dot-start" aria-hidden="true" />
           <div className="trail-edge-text">
-            <span className="trail-edge-label">{bug.reporter} filed this bug</span>
+            <span className="trail-edge-label">{t("bd.filedThisBug", bug.reporter)}</span>
             <span className="trail-edge-time tabular" title={formatDateTimeUtc(bug.created)}>
               {formatDateTime(bug.created)} · {formatRelative(bug.created)}
             </span>
@@ -519,8 +523,7 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
           <li className="trail-node trail-empty">
             <span className="trail-dot trail-dot-muted" aria-hidden="true" />
             <p className="trail-empty-text">
-              Nobody has answered yet. Agents reply with{" "}
-              <code>agentmon bug comment {bug.id} --message …</code>
+              {t("bd.noAnswers")} <code>agentmon bug comment {bug.id} --message …</code>
             </p>
           </li>
         )}
@@ -537,14 +540,14 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
                       *after* the fix, this node is no longer the last thing in the thread
                       and has to carry its own date, or the sequence cannot be read. */}
                   {bug.resolved && bug.resolution && i === entries.length - 1 ? (
-                    <span>the fix is recorded below</span>
+                    <span>{t("bd.fixBelow")}</span>
                   ) : bug.resolved ? (
                     <span title={formatDateTimeUtc(bug.resolved)}>
                       {formatDateTime(bug.resolved)} · {formatRelative(bug.resolved)} ·{" "}
-                      {formatDuration(bug.created, bug.resolved)} after it was filed
+                      {t("bd.afterItWasFiled", formatDuration(bug.created, bug.resolved))}
                     </span>
                   ) : (
-                    <span>open for {formatDuration(bug.created, null)}</span>
+                    <span>{t("bd.openFor", formatDuration(bug.created, null))}</span>
                   )}
                 </span>
               </div>
@@ -553,11 +556,13 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
             <li className="trail-node" key={`claim-${e.ts}`}>
               <span className="trail-dot trail-dot-claim" aria-hidden="true" />
               <div className="claim-line">
-                <AgentChip name={bug.assignee ?? "an agent"} />
-                <span className="claim-verb">claimed this bug</span>
+                <AgentChip name={bug.assignee ?? t("bd.anAgent")} />
+                <span className="claim-verb">{t("bd.claimedThisBug")}</span>
                 <span className="claim-when tabular" title={formatDateTimeUtc(e.ts)}>
                   {formatDateTime(e.ts)}
-                  {claimDelay && <span className="claim-delay"> · {claimDelay} after it was filed</span>}
+                  {claimDelay && (
+                    <span className="claim-delay"> · {t("bd.afterFiled", claimDelay)}</span>
+                  )}
                 </span>
               </div>
             </li>
@@ -573,15 +578,15 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
                   {isCorrection(e.body) ? (
                     <span className="update-flag">
                       <CorrectionMark />
-                      Correction
+                      {t("rec.correction")}
                     </span>
                   ) : (
                     <span className="update-verb">
                       {e.agent === bug.reporter
-                        ? "added to the report"
+                        ? t("bd.addedToReport")
                         : e.agent === bug.assignee
-                          ? "replied as assignee"
-                          : "commented"}
+                          ? t("bd.repliedAsAssignee")
+                          : t("bd.commented")}
                     </span>
                   )}
                   <time className="update-ts tabular" dateTime={e.ts} title={formatDateTimeUtc(e.ts)}>
@@ -630,22 +635,23 @@ function ResolutionCard({
               />
             </svg>
           </span>
-          <h2 className="outcome-title">Resolution</h2>
+          <h2 className="outcome-title">{t("bd.resolution")}</h2>
           <span className="outcome-by">
-            <AgentChip name={bug.resolvedBy ?? bug.assignee ?? "an agent"} />
+            <AgentChip name={bug.resolvedBy ?? bug.assignee ?? t("bd.anAgent")} />
           </span>
           <span className="outcome-when">
             {bug.resolved ? (
               <>
-                resolved <Stamp iso={bug.resolved} /> · {openFor} after it was filed
+                {t("bd.resolvedOn")} <Stamp iso={bug.resolved} /> ·{" "}
+                {t("bd.afterItWasFiled", openFor)}
               </>
             ) : (
-              "recorded"
+              t("wd.recorded")
             )}
           </span>
         </header>
 
-        <PartsJump result={resolution} label="Inside this resolution" />
+        <PartsJump result={resolution} label={t("bd.insideResolution")} />
 
         <div className="outcome-body">
           <PartsBody result={resolution} />

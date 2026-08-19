@@ -42,6 +42,7 @@ import {
   BugStatusDot,
   EmptyState,
   ErrorState,
+  RichText,
   SeverityBadge,
   Skeleton,
 } from "../components/ui";
@@ -50,19 +51,20 @@ import {
   formatDateTimeUtc,
   formatDuration,
   formatRelative,
-  pluralize,
 } from "../lib/format";
+import { t } from "../lib/i18n";
 import {
   bugLower,
-  IN_PROGRESS,
-  SEVERITY_LABEL,
-  UNASSIGNED,
+  inProgress,
+  severityLabel,
+  unassigned,
   unassignedFor,
-  UNRESOLVED,
-  UNRESOLVED_MEANS,
+  unresolved,
+  unresolvedMeans,
   workLogs,
   workLogsInProgressOf,
   workLower,
+  workStatusLabel,
 } from "../lib/words";
 import {
   agentRows,
@@ -82,10 +84,11 @@ import {
   summarise,
   timeAxis,
   tone,
+  toneLabel,
   TONE_COLOR,
-  TONE_LABEL,
   TONE_ORDER,
   triageOrder,
+  verbAfterRef,
   workSeries,
   type EventTone,
   type Freshness,
@@ -133,10 +136,11 @@ const bugRef = (b: BugSummary, slug: string): RecordRef => ({
 /** The one filter on this screen, kept in the URL like every other view state. */
 const DEFAULTS = { range: "all" };
 const ALLOWED = { range: ["7d", "30d", "all"] } as const;
-const RANGES: { value: string; label: string; days: number | null }[] = [
-  { value: "7d", label: "7 days", days: 7 },
-  { value: "30d", label: "30 days", days: 30 },
-  { value: "all", label: "All time", days: null },
+/** The label is read at render, not at module load: the language can change under it. */
+const RANGES: { value: string; label: () => string; days: number | null }[] = [
+  { value: "7d", label: () => t("dash.range7"), days: 7 },
+  { value: "30d", label: () => t("dash.range30"), days: 30 },
+  { value: "all", label: () => t("dash.rangeAll"), days: null },
 ];
 
 export function DashboardPage() {
@@ -296,7 +300,7 @@ export function DashboardPage() {
           onRetry={status === 404 ? undefined : reload}
           action={
             <Link className="button" to="/projects">
-              All projects
+              {t("nav.allProjects")}
             </Link>
           }
         />
@@ -313,14 +317,18 @@ export function DashboardPage() {
 
   const rangeNote =
     days !== null
-      ? `the last ${days} days`
+      ? t("dash.rangeDays", days)
       : events.length === 1
         ? // "all 1 recorded event" is not a sentence anybody writes.
-          `the one recorded event, from ${formatDate(new Date(firstActivity).toISOString())}`
-        : `all ${pluralize(events.length, "recorded event")}, back to ${formatDate(new Date(firstActivity).toISOString())}`;
+          t("dash.rangeOneEvent", formatDate(new Date(firstActivity).toISOString()))
+        : t(
+            "dash.rangeAllEvents",
+            events.length,
+            formatDate(new Date(firstActivity).toISOString())
+          );
   /** Named once, so the charts, their deltas and the sentence above them agree. */
-  const scopeLabel = days === null ? null : `the last ${days} days`;
-  const changeNote = scopeLabel ? `, with the change over ${scopeLabel}` : "";
+  const scopeLabel = days === null ? null : t("dash.rangeDays", days);
+  const changeNote = scopeLabel ? t("dash.changeOver", scopeLabel) : "";
   const archived = project.status === "archived";
   /* An archived project is history, not a live board: a green LIVE flag over one is the
      screen contradicting the Projects page that just filed it away (round 1 critic). And a
@@ -341,24 +349,20 @@ export function DashboardPage() {
             sentence next to it (round 1 critic). */}
         <div className="page-head-meta tabular">
           {archived ? (
-            <Link
-              className="pill pill-archived"
-              to="/projects"
-              title="This project is archived. Nothing was deleted — restore it on the Projects screen."
-            >
-              archived
+            <Link className="pill pill-archived" to="/projects" title={t("dash.archivedTip")}>
+              {t("dash.archivedPill")}
             </Link>
           ) : live ? (
-            <span className="live-flag" title="Something was recorded in the last two hours">
+            <span className="live-flag" title={t("dash.liveTip")}>
               <span className="live-dot" aria-hidden="true" />
-              live
+              {t("dash.live")}
             </span>
           ) : null}
-          Last activity {formatRelative(project.counts.lastActivity, new Date(now))}
+          {t("dash.lastActivity", formatRelative(project.counts.lastActivity, new Date(now)))}
         </div>
       </header>
 
-      <section className="now-strip" aria-label="Current state">
+      <section className="now-strip" aria-label={t("dash.currentState")}>
         <InProgress
           slug={slug}
           active={activeWork}
@@ -368,12 +372,12 @@ export function DashboardPage() {
           agents={knownAgents}
           now={now}
         />
-        <UnresolvedBugs slug={slug} unresolved={openBugs} total={bugs.length} now={now} />
+        <UnresolvedBugs slug={slug} bugs={openBugs} total={bugs.length} now={now} />
         <LastDay recent={recent} events={events} now={now} />
       </section>
 
       <div className="dash-toolbar">
-        <div className="segmented" role="tablist" aria-label="Time range">
+        <div className="segmented" role="tablist" aria-label={t("dash.timeRange")}>
           {RANGES.map((r) => (
             <button
               key={r.value}
@@ -383,61 +387,58 @@ export function DashboardPage() {
               className={`segment${range === r.value ? " is-active" : ""}`}
               onClick={() => set("range", r.value)}
             >
-              {r.label}
+              {r.label()}
             </button>
           ))}
         </div>
-        <p className="dash-scope">
-          The charts, the agents and the feed below cover {rangeNote}. The strip above is
-          always now, and every date and time on this page is UTC.
-        </p>
+        <p className="dash-scope">{t("dash.scope", rangeNote)}</p>
       </div>
 
       {/* The legends are the list screens' words: a chart that says "in flight" over a
           list that says "In progress" is two names for one fact (lib/words.ts). */}
       <div className="grid-2">
         <ChartCard
-          title="Work"
-          sub={`Started against done, running total${changeNote}`}
+          title={t("dash.chartWork")}
+          sub={t("dash.chartWorkSub", changeNote)}
           action={
             <Link className="card-action" to={`/p/${slug}/work`}>
-              All work
+              {t("dash.allWork")}
             </Link>
           }
         >
           <BurnUp
             series={work}
-            upper={{ label: "started", color: "var(--series-work)" }}
+            upper={{ label: t("dash.seriesStarted"), color: "var(--series-work)" }}
             lower={{ label: workLower(anyAbandoned), color: "var(--series-done)" }}
-            gap={{ label: IN_PROGRESS, wash: "var(--series-work-wash)" }}
-            noun="work logs"
+            gap={{ label: inProgress(), wash: "var(--series-work-wash)" }}
+            noun={t("dash.nounWorkLogs")}
             scope={scopeLabel}
             empty={{
-              title: "No work logs yet",
-              hint: `This chart draws itself the moment an agent runs \`agentmon work start -p ${slug}\`.`,
+              title: t("dash.chartWorkEmpty"),
+              hint: t("dash.chartWorkEmptyHint", slug),
             }}
           />
         </ChartCard>
 
         <ChartCard
-          title="Bugs"
-          sub={`Filed against resolved, running total${changeNote}`}
+          title={t("dash.chartBugs")}
+          sub={t("dash.chartBugsSub", changeNote)}
           action={
             <Link className="card-action" to={`/p/${slug}/bugs?tab=all`}>
-              Bug board
+              {t("dash.bugBoard")}
             </Link>
           }
         >
           <BurnUp
             series={bug}
-            upper={{ label: "filed", color: "var(--series-bug)" }}
+            upper={{ label: t("dash.seriesFiled"), color: "var(--series-bug)" }}
             lower={{ label: bugLower(anyClosedUnfixed), color: "var(--series-fix)" }}
-            gap={{ label: UNRESOLVED, wash: "var(--series-bug-wash)" }}
-            noun="bugs"
+            gap={{ label: unresolved(), wash: "var(--series-bug-wash)" }}
+            noun={t("dash.nounBugs")}
             scope={scopeLabel}
             empty={{
-              title: "No bugs filed yet",
-              hint: "Nothing to plot, which on this chart is the good state.",
+              title: t("dash.chartBugsEmpty"),
+              hint: t("dash.chartBugsEmptyHint"),
             }}
           />
         </ChartCard>
@@ -495,7 +496,7 @@ function InProgress({
   const recordMenu = useRecordMenu();
   return (
     <section className="now-panel now-panel-wide">
-      <h2 className="now-label">Working right now</h2>
+      <h2 className="now-label">{t("dash.workingNow")}</h2>
       {/* The same fact the switcher, the nav tooltip and the Work chart print — counted the
           same way and named with the same word, out of the same denominator. The agents
           holding it are the sentence underneath, because "2 work logs" and "2 agents" are
@@ -511,15 +512,15 @@ function InProgress({
           {/* "0 of 0 in progress" is arithmetic, not a sentence: a project with no work
               logs at all says that instead. */}
           {total === 0 ? (
-            "work logs in this project"
+            t("dash.workLogsHere")
           ) : (
             <>
               {/* The noun belongs to the number it follows — the denominator. Keyed off the
                   numerator it printed "1 of 17 work log in progress" the moment one work log
                   was in progress out of seventeen. */}
-              of {workLogs(total)} {IN_PROGRESS}
+              {t("dash.heroUnit", total)}
               {working.size > 0 && (
-                <span className="now-hero-aside"> · {pluralize(working.size, "agent")}</span>
+                <span className="now-hero-aside"> · {t("dash.agents", working.size)}</span>
               )}
             </>
           )}
@@ -551,11 +552,11 @@ function InProgress({
                   </span>
                   <span className="now-row-time">
                     <span className="now-row-dur is-done tabular">
-                      <span className="now-row-durlabel">took</span>{" "}
+                      <span className="now-row-durlabel">{t("dash.took")}</span>{" "}
                       {formatDuration(lastDone.started, lastDone.finished)}
                     </span>
                     <span className="now-row-since tabular">
-                      finished {formatRelative(lastDone.finished, new Date(now))}
+                      {t("dash.finishedWhen", formatRelative(lastDone.finished, new Date(now)))}
                     </span>
                   </span>
                 </Link>
@@ -563,9 +564,7 @@ function InProgress({
             </ul>
           )}
           <p className="now-note">
-            {lastDone
-              ? "Nothing is in progress — the most recent work log is above."
-              : "No work has been recorded here yet. Agents start a work log with `agentmon work start` before they touch code."}
+            <RichText text={lastDone ? t("dash.nothingInProgress") : t("dash.noWorkYet")} />
           </p>
         </>
       ) : (
@@ -584,7 +583,7 @@ function InProgress({
           {active.length > IN_PROGRESS_ROWS && (
             <li>
               <Link className="now-more" to={`/p/${slug}/work?status=in_progress`}>
-                {active.length - IN_PROGRESS_ROWS} more in progress
+                {t("dash.moreInProgress", active.length - IN_PROGRESS_ROWS)}
               </Link>
             </li>
           )}
@@ -620,10 +619,10 @@ function InProgressRow({
      its own start time up as an update. */
   const since =
     work.updateCount === 0
-      ? "no updates yet"
+      ? t("dash.noUpdates")
       : state === "live"
-        ? `updated ${formatRelative(work.lastActivity, new Date(now))}`
-        : `no update in ${formatDuration(work.lastActivity, iso)}`;
+        ? t("dash.updatedWhen", formatRelative(work.lastActivity, new Date(now)))
+        : t("dash.noUpdateIn", formatDuration(work.lastActivity, iso));
 
   /* The quote is a sibling of the row, not a child of it: it carries its own link (the
      agent an ask names), and a link inside a link is neither valid nor clickable. The two
@@ -637,7 +636,7 @@ function InProgressRow({
       <Link className="now-row" to={`/p/${slug}/work/${work.id}`}>
         <span
           className={`sdot ${FRESH_DOT[state]}`}
-          title={`In progress · ${since}`}
+          title={t("dash.rowStateTip", workStatusLabel("in_progress"), since)}
           aria-hidden="true"
         />
         <span className="now-row-main">
@@ -654,9 +653,9 @@ function InProgressRow({
               it is in progress (lib/words.ts). */}
           <span
             className={`now-row-dur is-${state} tabular`}
-            title={`Started ${formatDateTimeUtc(work.started)}`}
+            title={t("dash.rowStartedTip", formatDateTimeUtc(work.started))}
           >
-            <span className="now-row-durlabel">in progress</span>{" "}
+            <span className="now-row-durlabel">{t("dash.rowInProgress")}</span>{" "}
             {formatDuration(work.started, iso)}
           </span>
           <span className="now-row-since tabular" title={formatDateTimeUtc(work.lastActivity)}>
@@ -670,9 +669,9 @@ function InProgressRow({
           <p className="now-quote-head">
             <span
               className="now-quote-lead"
-              title={`The opening sentence of each paragraph of the note posted ${formatDateTimeUtc(note.ts)}`}
+              title={t("dash.latestNoteTip", formatDateTimeUtc(note.ts))}
             >
-              Latest note
+              {t("dash.latestNote")}
             </span>
             {/* Only ever a name that appears in the quoted sentence, and the sentence is in
                 the tooltip: the chip is a pointer to what the agent wrote, not the app's
@@ -681,11 +680,13 @@ function InProgressRow({
               <Link
                 className="now-ask"
                 to={`/p/${slug}/work?agent=${encodeURIComponent(outline.waitingOn)}`}
-                title={`${work.agent}'s newest note says: “${
+                title={t(
+                  "dash.waitingOnTip",
+                  work.agent,
                   outline.lines.find((l) => l.ask)?.text ?? ""
-                }”`}
+                )}
               >
-                waiting on {outline.waitingOn}
+                {t("dash.waitingOn", outline.waitingOn)}
               </Link>
             )}
           </p>
@@ -722,17 +723,18 @@ function InProgressRow({
  */
 function UnresolvedBugs({
   slug,
-  unresolved,
+  bugs: unresolvedBugs,
   total,
   now,
 }: {
   slug: string;
-  unresolved: BugSummary[];
+  /** The unresolved ones, in triage order. Named for what they are, not for the panel. */
+  bugs: BugSummary[];
   total: number;
   now: number;
 }) {
-  const counts = severityCounts(unresolved);
-  const shown = unresolved.slice(0, UNRESOLVED_BUG_ROWS);
+  const counts = severityCounts(unresolvedBugs);
+  const shown = unresolvedBugs.slice(0, UNRESOLVED_BUG_ROWS);
   const iso = new Date(now).toISOString();
   const contextMenu = useContextMenu();
   const recordMenu = useRecordMenu();
@@ -742,17 +744,19 @@ function UnresolvedBugs({
         <Link
           className="now-label-link"
           to={`/p/${slug}/bugs`}
-          title={`Bugs that are ${UNRESOLVED_MEANS}`}
+          title={t("bugs.tabUnresolvedTip", unresolvedMeans())}
         >
-          Unresolved bugs
+          {t("dash.unresolvedBugs")}
         </Link>
       </h2>
       <p className="now-figure">
-        <span className={`now-figure-value${unresolved.length === 0 ? " is-quiet" : ""}`}>
-          {unresolved.length}
+        <span className={`now-figure-value${unresolvedBugs.length === 0 ? " is-quiet" : ""}`}>
+          {unresolvedBugs.length}
         </span>
         <span className="now-figure-unit">
-          {total === 0 ? "bugs filed here" : `${UNRESOLVED} of ${total} filed`}
+          {total === 0
+            ? t("dash.bugsFiledHere")
+            : t("dash.unresolvedOfFiled", unresolved(), total)}
         </span>
       </p>
 
@@ -762,12 +766,10 @@ function UnresolvedBugs({
             <Link
               className={`sev-chip sev-chip-${severity}${count === 0 ? " is-zero" : ""}`}
               to={`/p/${slug}/bugs?severity=${severity}`}
-              title={`${count} ${UNRESOLVED} ${SEVERITY_LABEL[severity].toLowerCase()}-severity ${
-                count === 1 ? "bug" : "bugs"
-              }`}
+              title={t("dash.sevChipTip", count, unresolved(), severityLabel(severity))}
             >
               <span className="sev-chip-dot" aria-hidden="true" />
-              <span className="sev-chip-label">{SEVERITY_LABEL[severity]}</span>
+              <span className="sev-chip-label">{severityLabel(severity)}</span>
               <span className="sev-chip-count tabular">{count}</span>
             </Link>
           </li>
@@ -811,13 +813,17 @@ function UnresolvedBugs({
                         className={`now-flag${needsOwner(b, now) ? " is-urgent" : ""}`}
                         title={
                           needsOwner(b, now)
-                            ? `No agent has taken this ${SEVERITY_LABEL[b.severity].toLowerCase()}-severity bug in ${formatDuration(b.created, iso)}. This screen flags critical and high bugs left unassigned for more than four hours.`
-                            : "No agent is assigned to this bug"
+                            ? t(
+                                "dash.noOwnerTip",
+                                severityLabel(b.severity),
+                                formatDuration(b.created, iso)
+                              )
+                            : t("dash.hasOwnerTip")
                         }
                       >
                         {needsOwner(b, now)
                           ? unassignedFor(formatDuration(b.created, iso))
-                          : UNASSIGNED}
+                          : unassigned()}
                       </span>
                     )}
                   </span>
@@ -825,31 +831,31 @@ function UnresolvedBugs({
                 <span className="now-row-time">
                   <span
                     className="now-row-dur is-bug tabular"
-                    title={`Filed ${formatDateTimeUtc(b.created)}`}
+                    title={t("dash.filedTip", formatDateTimeUtc(b.created))}
                   >
-                    <span className="now-row-durlabel">open for</span>{" "}
+                    <span className="now-row-durlabel">{t("dash.openFor")}</span>{" "}
                     {formatDuration(b.created, iso)}
                   </span>
                   <span
                     className="now-row-since tabular"
                     title={
                       b.lastActivity > b.created
-                        ? `Last activity ${formatDateTimeUtc(b.lastActivity)}`
-                        : "Nothing has happened on this bug since it was filed: no claim, no comment"
+                        ? t("dash.lastActivityTip", formatDateTimeUtc(b.lastActivity))
+                        : t("dash.untouchedTip")
                     }
                   >
                     {b.lastActivity > b.created
-                      ? `updated ${formatRelative(b.lastActivity, new Date(now))}`
-                      : "untouched"}
+                      ? t("dash.updatedWhen", formatRelative(b.lastActivity, new Date(now)))
+                      : t("dash.untouched")}
                   </span>
                 </span>
               </Link>
             </li>
           ))}
-          {unresolved.length > shown.length && (
+          {unresolvedBugs.length > shown.length && (
             <li>
               <Link className="now-more" to={`/p/${slug}/bugs`}>
-                {unresolved.length - shown.length} more {UNRESOLVED}
+                {t("dash.moreUnresolved", unresolvedBugs.length - shown.length, unresolved())}
               </Link>
             </li>
           )}
@@ -857,13 +863,11 @@ function UnresolvedBugs({
       )}
 
       <p className="now-note">
-        {unresolved.length > 0 ? (
-          <>Worst first; inside a severity, the {UNASSIGNED} ones come first.</>
-        ) : total === 0 ? (
-          <>No bugs have been filed in this project.</>
-        ) : (
-          <>Every bug ever filed here has been resolved.</>
-        )}
+        {unresolvedBugs.length > 0
+          ? t("dash.triageNote", unassigned())
+          : total === 0
+            ? t("dash.noBugsFiled")
+            : t("dash.allResolved")}
       </p>
     </section>
   );
@@ -893,11 +897,11 @@ function LastDay({
      them: a day of nine described as "1 started · 1 finished · 1 filed" left six events —
      the notes, claims and comments that were most of the traffic — unmentioned (round 2
      critic). Beyond four kinds the tail merges into "other" rather than being dropped. */
-  const parts = summarise(recent.breakdown).map((p) => `${p.count} ${p.label}`);
+  const parts = summarise(recent.breakdown).map((p) => t("dash.countPart", p.count, p.label));
   /* And silence is stated, not left as an absence of bars. */
   const quiet =
     events[0] && now - Date.parse(events[0].ts) >= 2 * HOUR
-      ? `quiet for ${formatDuration(events[0].ts, new Date(now).toISOString())}`
+      ? t("dash.quietFor", formatDuration(events[0].ts, new Date(now).toISOString()))
       : null;
 
   return (
@@ -907,31 +911,27 @@ function LastDay({
       <div className="day-figure">
         <h2 className="now-label">
           <a className="now-label-link" href="#activity">
-            Last 24 hours
+            {t("dash.last24h")}
           </a>
         </h2>
         <p className="now-figure">
           <span className={`now-figure-value${recent.total === 0 ? " is-quiet" : ""}`}>
             {recent.total}
           </span>
-          <span className="now-figure-unit">
-            {recent.total === 1 ? "event recorded" : "events recorded"}
-          </span>
+          <span className="now-figure-unit">{t("dash.eventsRecorded", recent.total)}</span>
         </p>
         <p className="now-note">
           {recent.total === 0 ? (
             <>
-              Quiet.{" "}
-              {events[0] ? (
-                <>The last thing recorded here was {formatRelative(events[0].ts, new Date(now))}.</>
-              ) : (
-                <>Nothing has ever been recorded here.</>
-              )}
+              {t("dash.quiet")}{" "}
+              {events[0]
+                ? t("dash.lastThing", formatRelative(events[0].ts, new Date(now)))
+                : t("dash.neverAnything")}
             </>
           ) : (
             <>
               {parts.length ? `${parts.join(" · ")} · ` : ""}
-              {pluralize(recent.actors.length, "agent")}
+              {t("dash.agents", recent.actors.length)}
               {quiet ? ` · ${quiet}` : ""}
             </>
           )}
@@ -940,9 +940,7 @@ function LastDay({
 
       <HourBars
         hours={recent.hours}
-        label={`Events per hour over the last 24 hours, oldest first: ${recent.hours
-          .map((h) => h.count)
-          .join(", ")}`}
+        label={t("dash.hoursLabel", recent.hours.map((h) => h.count).join(", "))}
       />
     </section>
   );
@@ -1010,39 +1008,36 @@ function AgentsCard({
   return (
     <section className="card">
       <header className="card-head">
-        <h2 className="card-title">Agents</h2>
+        <h2 className="card-title">{t("dash.agentsCard")}</h2>
         <Legend
           items={[
-            { color: "var(--series-work)", label: "work" },
-            { color: "var(--series-bug)", label: "bugs" },
-            ...(anyProject ? [{ color: "var(--grey)", label: "project" }] : []),
+            { color: "var(--series-work)", label: t("dash.legendWork") },
+            { color: "var(--series-bug)", label: t("dash.legendBugs") },
+            ...(anyProject ? [{ color: "var(--grey)", label: t("dash.legendProject") }] : []),
           ]}
         />
         <Link className="card-action" to={`/p/${slug}/work`}>
-          All work
+          {t("dash.allWork")}
         </Link>
       </header>
       <div className="card-body">
         {rows.length === 0 ? (
-          <EmptyState
-            title="No agent has recorded anything in this range"
-            hint="Widen the range above, or check the vault: every CLI mutation appends one line to events.jsonl."
-          />
+          <EmptyState title={t("dash.agentsEmpty")} hint={t("dash.agentsEmptyHint")} />
         ) : (
           <div className="agent-table" style={{ "--agent-col": nameWidth } as CSSProperties}>
             <div className="agent-head" role="row">
-              <span className="agent-cell-name">Agent</span>
-              <span className="agent-cell-bar">Activity</span>
-              <span className="agent-cell-num" title="Work logs this agent marked done">
-                Done
+              <span className="agent-cell-name">{t("dash.colAgent")}</span>
+              <span className="agent-cell-bar">{t("dash.colActivity")}</span>
+              <span className="agent-cell-num" title={t("wd.doneCount")}>
+                {t("dash.colDone")}
               </span>
-              <span className="agent-cell-num" title="Bugs this agent filed">
-                Filed
+              <span className="agent-cell-num" title={t("dash.colFiledTip")}>
+                {t("dash.colFiled")}
               </span>
-              <span className="agent-cell-num" title="Bugs this agent resolved">
-                Resolved
+              <span className="agent-cell-num" title={t("dash.colResolvedTip")}>
+                {t("dash.colResolved")}
               </span>
-              <span className="agent-cell-seen">Last seen</span>
+              <span className="agent-cell-seen">{t("dash.colLastSeen")}</span>
             </div>
             <ul className="agent-rows">
               {rows.map((r) => {
@@ -1066,8 +1061,13 @@ function AgentsCard({
                           <span
                             className={`sdot ${FRESH_DOT[state]}`}
                             role="img"
-                            aria-label={`${workLogs(r.activeNow)} ${IN_PROGRESS}`}
-                            title={`${workLogs(r.activeNow)} ${IN_PROGRESS} · last seen ${formatRelative(r.lastActivity, new Date(now))}`}
+                            aria-label={`${workLogs(r.activeNow)} ${inProgress()}`}
+                            title={t(
+                              "dash.agentDotTip",
+                              workLogs(r.activeNow),
+                              inProgress(),
+                              formatRelative(r.lastActivity, new Date(now))
+                            )}
                           />
                         ) : (
                           /* "Who is free right now" was inferable only from a hollow circle
@@ -1075,8 +1075,12 @@ function AgentsCard({
                           <span
                             className="sdot sdot-idle"
                             role="img"
-                            aria-label="No work log in progress"
-                            title={`No work log ${IN_PROGRESS} · last seen ${formatRelative(r.lastActivity, new Date(now))}`}
+                            aria-label={t("dash.agentIdleLabel")}
+                            title={t(
+                              "dash.agentIdleTip",
+                              inProgress(),
+                              formatRelative(r.lastActivity, new Date(now))
+                            )}
                           />
                         )}
                         <AgentChip name={r.agent} />
@@ -1085,9 +1089,7 @@ function AgentsCard({
                         <SplitBar
                           max={max}
                           total={r.total}
-                          title={`${pluralize(r.total, "event")} — ${r.work} on work, ${r.bugs} on bugs${
-                            r.project ? `, ${r.project} on the project` : ""
-                          }`}
+                          title={t("dash.agentBarTip", r.total, r.work, r.bugs, r.project)}
                           parts={[
                             { value: r.work, color: "var(--series-work)", label: "work" },
                             { value: r.bugs, color: "var(--series-bug)", label: "bugs" },
@@ -1113,10 +1115,7 @@ function AgentsCard({
             {/* The sum of this column is the number on the card below it, and saying so is
                 cheaper than leaving a reader to add four rows up and find 83 under an
                 "85 events" heading (round 2 critic). */}
-            <p className="table-note">
-              Every one of {pluralize(total, "event")} in this range, counted against the agent
-              who recorded it — project changes included.
-            </p>
+            <p className="table-note">{t("dash.agentTableNote", total)}</p>
           </div>
         )}
       </div>
@@ -1178,34 +1177,35 @@ function ActivityCard({
   return (
     <section className="card" id="activity">
       <header className="card-head">
-        <h2 className="card-title">Activity</h2>
+        <h2 className="card-title">{t("dash.activity")}</h2>
         {tones.length > 0 && (
           <Legend
-            items={tones.map((t) => ({ color: TONE_COLOR[t], label: TONE_LABEL[t], band: true }))}
+            items={tones.map((tn) => ({
+              color: TONE_COLOR[tn],
+              label: toneLabel(tn),
+              band: true,
+            }))}
           />
         )}
-        <span className="card-note tabular">
-          {pluralize(total, "event")} · {pluralize(groups.length, "day")} · UTC
-        </span>
+        <span className="card-note tabular">{t("dash.activityNote", total, groups.length)}</span>
         {groups.length > 1 && (
           <button className="card-action" onClick={() => setAll(!allOpen)}>
-            {allOpen ? "Collapse all" : "Expand all"}
+            {allOpen ? t("dash.collapseAll") : t("dash.expandAll")}
           </button>
         )}
       </header>
       <div className="card-body">
         {groups.length === 0 ? (
-          <EmptyState
-            title="Nothing recorded in this range"
-            hint="Every CLI mutation appends one line to events.jsonl; widen the range above to see older ones."
-          />
+          <EmptyState title={t("dash.activityEmpty")} hint={t("dash.activityEmptyHint")} />
         ) : (
           <ol className="day-list">
             {groups.map((g) => {
               const open = isOpen(g.day);
-              const mixLabel = `${pluralize(g.events.length, "event")} — ${g.mix
-                .map((m) => `${m.count} ${TONE_LABEL[m.tone]}`)
-                .join(", ")}`;
+              const mixLabel = t(
+                "dash.dayMix",
+                g.events.length,
+                g.mix.map((m) => t("dash.countPart", m.count, toneLabel(m.tone))).join(", ")
+              );
               return (
                 <li className={`day${open ? " is-open" : ""}`} key={g.day}>
                   <button
@@ -1270,7 +1270,7 @@ function ActivityCard({
                             className="feed-more"
                             onClick={() => setExpanded((x) => ({ ...x, [g.day]: true }))}
                           >
-                            Show the other {g.events.length - DAY_PREVIEW} from {g.label.toLowerCase()}
+                            {t("dash.showOther", g.events.length - DAY_PREVIEW, g.label)}
                           </button>
                         </li>
                       )}
@@ -1310,10 +1310,21 @@ function FeedRow({
         <EventIcon type={event.type} />
       </span>
       <span className="feed-body">
+        {/* "nova started WORK-0012" — and in Korean, where the verb closes the clause,
+            "nova WORK-0012 시작". Same three spans, same classes, one swap of order. */}
         <span className="feed-head">
           <span className="feed-actor">{event.actor}</span>
-          <span className="feed-verb">{eventVerb(event.type)}</span>
-          {event.ref && <span className="feed-ref mono">{event.ref}</span>}
+          {verbAfterRef() ? (
+            <>
+              {event.ref && <span className="feed-ref mono">{event.ref}</span>}
+              <span className="feed-verb">{eventVerb(event.type)}</span>
+            </>
+          ) : (
+            <>
+              <span className="feed-verb">{eventVerb(event.type)}</span>
+              {event.ref && <span className="feed-ref mono">{event.ref}</span>}
+            </>
+          )}
         </span>
         {event.summary && (
           <span className="feed-summary">{eventSummary(event.summary)}</span>

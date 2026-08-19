@@ -8,7 +8,7 @@
  * splitting and documents why nothing is extracted from the prose.
  */
 import { useMemo } from "react";
-import { pluralize } from "../lib/format";
+import { t } from "../lib/i18n";
 import { InlineMarkdown, Markdown } from "../lib/markdown";
 import { splitLabelledSections, type LabelledSection, type SplitResult } from "../lib/sections";
 
@@ -122,7 +122,7 @@ function Part({ part }: { part: LabelledSection }) {
           )}
         </span>
         {part.evidence && part.items > 0 && (
-          <span className="res-part-count tabular">{pluralize(part.items, "check")}</span>
+          <span className="res-part-count tabular">{t("rec.checks", part.items)}</span>
         )}
       </h3>
       <Markdown
@@ -137,8 +137,8 @@ function Part({ part }: { part: LabelledSection }) {
 /** "On this page" — the record's sections, and the parts of its closing one. */
 export function ContentsRail({ entries, active }: { entries: TocEntry[]; active: string }) {
   return (
-    <nav className="side-card contents" aria-label="On this page">
-      <div className="side-card-title">On this page</div>
+    <nav className="side-card contents" aria-label={t("rec.onThisPage")}>
+      <div className="side-card-title">{t("rec.onThisPage")}</div>
       <ul className="contents-list">
         {entries.map((entry) => (
           <li key={entry.id}>

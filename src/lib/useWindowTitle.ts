@@ -13,17 +13,17 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useApp } from "../AppContext";
 import { isTauri } from "./api";
+import { t } from "./i18n";
 
 const APP = "AgentMonitoring";
 
-const SCREEN: Record<string, string> = {
-  work: "Work",
-  bugs: "Bugs",
-};
+/** The screen's own name, in the language on screen — "Work · relay" / "작업 · relay". */
+const screenName = (segment: string): string =>
+  segment === "work" ? t("nav.work") : segment === "bugs" ? t("nav.bugs") : segment;
 
 export function useWindowTitle() {
   const location = useLocation();
-  const { vault, projects } = useApp();
+  const { vault, projects, locale } = useApp();
 
   useEffect(() => {
     const parts = location.pathname.split("/").filter(Boolean);
@@ -31,11 +31,11 @@ export function useWindowTitle() {
     const project = projects.find((p) => p.slug === slug);
 
     let where: string;
-    if (parts[0] === "projects") where = "Projects";
+    if (parts[0] === "projects") where = t("nav.projects");
     else if (!slug) where = "";
     else {
       const name = project?.name ?? slug;
-      const screen = parts[2] ? (SCREEN[parts[2]] ?? parts[2]) : null;
+      const screen = parts[2] ? screenName(parts[2]) : null;
       const record = parts[3]?.toUpperCase();
       where = record
         ? `${record} · ${name}`
@@ -68,5 +68,7 @@ export function useWindowTitle() {
           );
         });
     }
-  }, [location.pathname, projects, vault?.name]);
+    // `locale` is in the dependency list because the title is words: the window in the task
+    // switcher has to change language with the screen it names.
+  }, [location.pathname, projects, vault?.name, locale]);
 }

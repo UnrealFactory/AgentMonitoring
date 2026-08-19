@@ -125,9 +125,21 @@
   --chart-axis: #2f3035;
   --chart-empty: rgba(255, 255, 255, 0.07);
 
-  /* --- typography -------------------------------------------------------- */
-  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    system-ui, sans-serif;
+  /* --- typography --------------------------------------------------------
+     Two faces, one line. Inter carries the Latin, as it always has; Pretendard
+     Variable carries the Hangul, and only the Hangul — it is behind Inter in the
+     stack, so every glyph Inter has is still Inter's. That order is only safe
+     because Pretendard is drawn to Inter's metrics: the two faces share a cap
+     height, an x-height and a set of advance widths, so a Korean sentence with an
+     agent slug in the middle of it sits on one baseline with even colour, and a
+     row does not change height when the language does.
+
+     Both are bundled (npm: @fontsource-variable/inter, pretendard) and loaded from
+     the app's own origin — no CDN at runtime, in either language (SPEC).
+     Pretendard's dynamic subset splits the Hangul across unicode-ranges, so a
+     window only ever fetches the few dozen KB of syllables actually on screen. */
+  --font-sans: "Inter Variable", "Pretendard Variable", "Inter", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
   --font-mono: "SFMono-Regular", "JetBrains Mono", "Cascadia Mono", Consolas,
     "Liberation Mono", Menlo, monospace;
 
@@ -235,6 +247,91 @@ h6 {
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
   color: var(--text-primary);
+  /* Korean has no spaces inside a word, and the browser's default is to break CJK
+     between any two syllables — so "미해결 버그" wraps as "미해" / "결 버그" and a heading
+     stops being a word. `keep-all` breaks at the spaces the author wrote, the way it
+     breaks English; `break-word` is the escape hatch for the one long Latin token
+     (a slug, a file path) that cannot fit a narrow column at all. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* The same rule for the short labels that behave like headings: a pill, a tab, a group
+   heading and a nav row are all one word each, and one word is not a place to wrap. */
+.pill,
+.segment,
+.nav-item,
+.work-group-title,
+.now-label,
+.card-title,
+.section-title,
+.strip-label,
+.rec-fact-label,
+.side-card-title,
+.contents-label,
+.legend-label,
+.palette-group,
+.locale-option,
+dt {
+  word-break: keep-all;
+}
+
+/*
+ * …and for the app's own sentences, which is where a reader actually notices it.
+ *
+ * Korean writes without spaces inside a word, so the default rule — break anywhere — cut
+ * "이 페이지의" across two lines as "이 페 / 이지의" in the paragraph under the dashboard's
+ * range control. It is legible and it is wrong, in the way a hyphenless English hyphenation
+ * would be. `keep-all` breaks at the spaces the author left instead.
+ *
+ * Deliberately **not** applied to `.prose` or to a record's title: that text belongs to the
+ * agent who wrote it, this app does not reflow it beyond what the browser does for any
+ * paragraph, and long unbroken tokens in a record (a path, a stack frame) still need the
+ * anywhere-break the record styles already give them.
+ */
+.page-sub,
+.dash-scope,
+.now-note,
+.now-hero-unit,
+.now-figure-unit,
+.empty-title,
+.empty-hint,
+.field-hint,
+.create-sub,
+.onboarding-title,
+.onboarding-sub,
+.onboarding-step,
+.onboarding-note,
+.onboarding-foot,
+.table-note,
+.list-hints,
+.notice-title,
+.notice-text,
+.vault-alert-text,
+.vault-bar-hint,
+.undo-text,
+.toast-text,
+.trail-empty-text,
+.trail-edge-label,
+.trail-edge-time,
+.error-title,
+.error-message,
+.chart-empty-title,
+.chart-empty-hint,
+.project-figure-note,
+.rel-group-hint,
+.palette-empty,
+.work-group-note,
+.rec-byline-text,
+.section-byline,
+.correction-notice,
+.update-verb,
+.claim-verb,
+.claim-when,
+.strip-meta,
+.side-rel {
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 p {

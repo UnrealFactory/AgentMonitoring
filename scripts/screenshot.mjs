@@ -32,6 +32,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { chromium } from "playwright";
 import { ensureServer, repoRoot as root, stopServer } from "./dev-server.mjs";
+import { useLocale } from "./i18n.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -65,6 +66,7 @@ Options (flag, or environment variable):
                                   projects, palette, palette-vault, menu-project, menu-record,
                                   menu-dashboard, menu-switcher, menu-vault-feed
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
+  --locale <ko|en> $SHOT_LOCALE   language to photograph the app in (default ko)
   --project <slug> $SHOT_PROJECT  project to shoot (default: the one with the most records)
   --suffix <s>     $SHOT_SUFFIX   append to every file name, so a second project's screens
                                   sit beside the first: --project relay --suffix -relay
@@ -103,6 +105,9 @@ const WANT_PROJECT = (value("--project", process.env.SHOT_PROJECT) || "").trim()
    be "dashboard.png". A suffix keeps them in one directory, in one alphabetical list, on
    the progress page. */
 const SUFFIX = (value("--suffix", process.env.SHOT_SUFFIX) || "").trim();
+/* Which language the screens are photographed in. The app defaults to Korean, and a shot
+   run is pinned rather than inheriting whatever the last human clicked. */
+const LOCALE = (value("--locale", process.env.SHOT_LOCALE) || "ko").trim();
 if (SUFFIX && !/^[A-Za-z0-9._-]+$/.test(SUFFIX)) {
   console.error(`[screenshot] FAILED: --suffix/$SHOT_SUFFIX must be a file-name fragment, got "${SUFFIX}"`);
   process.exit(1);
@@ -242,7 +247,7 @@ try {
     bugs.find((b) => (b.status === "resolved" || b.status === "closed") && b.commentCount > 0) ??
     bugs.find((b) => b.status === "resolved" || b.status === "closed") ??
     bugs[0];
-  log(`project: ${slug} · work-detail: ${work.id} · bug-detail: ${bug.id}`);
+  log(`project: ${slug} · work-detail: ${work.id} · bug-detail: ${bug.id} · language: ${LOCALE}`);
 
   const all = [
     { name: "dashboard", path: `/p/${slug}`, waitFor: ".now-strip .now-hero-value" },
@@ -264,7 +269,9 @@ try {
         );
         const shown = await page.locator(".work-rows .bug-row").count();
         if (shown < 4) {
-          await page.getByRole("tab", { name: /^All/ }).click();
+          // By `data-value`, not by the tab's words: the app ships in two languages and a
+          // gate that reaches for "All" only works in one of them.
+          await page.locator('[role="tab"][data-value="all"]').click();
           log(
             `bugs: captured the All tab (${shown} unresolved bug(s) — Unresolved is the default)`,
           );
@@ -390,6 +397,7 @@ try {
     colorScheme: "dark",
     reducedMotion: "reduce",
   });
+  await useLocale(context, LOCALE);
   const page = await context.newPage();
 
   page.on("pageerror", (err) => {

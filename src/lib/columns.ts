@@ -22,6 +22,21 @@
  */
 const PER_CHAR = 6.4;
 
+/**
+ * A Hangul syllable is about twice the width of a Latin character at the same size, so it
+ * counts as two. The names in these columns are Latin slugs out of the vault and always
+ * will be — but the *fallback* beside them is the app's own word for an empty field, and in
+ * Korean that is `담당자 없음`. Measured as five characters it asks for 32px and needs 65,
+ * which is how a column comes to cut its own vocabulary in half.
+ */
+const CJK = /[ᄀ-ᇿ⺀-鿿ꥠ-꥿가-퟿＀-｠]/;
+
+const displayWidth = (text: string): number => {
+  let width = 0;
+  for (const ch of text) width += CJK.test(ch) ? 2 : 1;
+  return width;
+};
+
 export interface ColumnBounds {
   /** Width of everything in the cell that is not the name: avatars, arrow, gaps. */
   chrome: number;
@@ -32,7 +47,7 @@ export interface ColumnBounds {
 /** A CSS length for the column, e.g. `"196px"`. */
 export function agentColumnWidth(names: Iterable<string>, { chrome, min = 96, max = 200 }: ColumnBounds): string {
   let longest = 0;
-  for (const name of names) longest = Math.max(longest, name.length);
+  for (const name of names) longest = Math.max(longest, displayWidth(name));
   const want = chrome + longest * PER_CHAR;
   return `${Math.round(Math.min(max, Math.max(min, want)))}px`;
 }

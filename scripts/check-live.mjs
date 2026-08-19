@@ -28,6 +28,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright";
 import { repoRoot, startServer, stopServer, waitForServer } from "./dev-server.mjs";
+import { t, useLocale } from "./i18n.mjs";
 
 const args = process.argv.slice(2);
 const value = (name, fallback) => {
@@ -53,6 +54,9 @@ const PORT = Number(value("--port", process.env.LIVE_PORT || 5199));
 const WAIT_MS = Number(value("--wait", 10)) * 1000;
 const ORIGIN = `http://localhost:${PORT}`;
 const KEEP = args.includes("--keep");
+/* The panels this gate reads are found by their headings, which are words. */
+const LOCALE = value("--locale", process.env.SHOT_LOCALE || "ko");
+const T = (key, ...args) => t(LOCALE, key, ...args);
 const log = (...m) => console.log("[check:live]", ...m);
 
 let failures = 0;
@@ -81,27 +85,35 @@ const api = async (path) => {
   return res.json();
 };
 
-/** Read a number off the dashboard by the panel it lives in, not by nth-child. */
+/**
+ * Read a number off the dashboard by the panel it lives in, not by nth-child.
+ *
+ * The panels are found by their heading, which is a word in the reader's language, so the
+ * words come from the same dictionary the window uses (scripts/i18n.mjs).
+ */
 const dashboardFacts = (page) =>
-  page.evaluate(() => {
-    const panel = (label) =>
-      [...document.querySelectorAll(".now-panel")].find((p) =>
-        p.querySelector(".now-label")?.textContent?.trim().startsWith(label),
-      );
-    const text = (el, sel) => el?.querySelector(sel)?.textContent?.trim() ?? null;
-    return {
-      openBugs: text(panel("Unresolved bugs"), ".now-figure-value"),
-      openBugsUnit: text(panel("Unresolved bugs"), ".now-figure-unit"),
-      lastDay: text(panel("Last 24 hours"), ".now-figure-value"),
-      activity: document.querySelector("#activity .card-note")?.textContent?.trim() ?? null,
-      sidebarBugs:
-        [...document.querySelectorAll(".nav-item")]
-          .find((n) => n.textContent?.trim().startsWith("Bugs"))
-          ?.querySelector(".nav-count")
-          ?.textContent?.trim() ?? null,
-      feedTop: document.querySelector(".feed-summary")?.textContent?.trim() ?? null,
-    };
-  });
+  page.evaluate(
+    ([unresolvedBugs, last24h, bugsNav]) => {
+      const panel = (label) =>
+        [...document.querySelectorAll(".now-panel")].find((p) =>
+          p.querySelector(".now-label")?.textContent?.trim().startsWith(label),
+        );
+      const text = (el, sel) => el?.querySelector(sel)?.textContent?.trim() ?? null;
+      return {
+        openBugs: text(panel(unresolvedBugs), ".now-figure-value"),
+        openBugsUnit: text(panel(unresolvedBugs), ".now-figure-unit"),
+        lastDay: text(panel(last24h), ".now-figure-value"),
+        activity: document.querySelector("#activity .card-note")?.textContent?.trim() ?? null,
+        sidebarBugs:
+          [...document.querySelectorAll(".nav-item")]
+            .find((n) => n.textContent?.trim().startsWith(bugsNav))
+            ?.querySelector(".nav-count")
+            ?.textContent?.trim() ?? null,
+        feedTop: document.querySelector(".feed-summary")?.textContent?.trim() ?? null,
+      };
+    },
+    [T("dash.unresolvedBugs"), T("dash.last24h"), T("nav.bugs")],
+  );
 
 /** Everything that must survive a refresh: the page instance, its scroll, its URL. */
 const stamp = (page) =>
@@ -238,6 +250,8 @@ try {
     colorScheme: "dark",
     reducedMotion: "reduce",
   });
+  await useLocale(context, LOCALE);
+  log(`language: ${LOCALE}`);
 
   const dash = await context.newPage();
   const detail = await context.newPage();
@@ -403,11 +417,14 @@ try {
   const facts = await dashboardFacts(dash);
   check(
     "the sidebar and the dashboard agree about unresolved bugs",
-    facts.sidebarBugs === `${facts.openBugs} unresolved`,
+    facts.sidebarBugs === T("word.unresolvedCount", Number(facts.openBugs)),
     `sidebar "${facts.sidebarBugs}" vs card "${facts.openBugs}"`,
   );
-  const activityCount = Number(/^(\d+)/.exec(facts.activity ?? "")?.[1] ?? -1);
-  const beforeCount = Number(/^(\d+)/.exec(factsBefore.activity ?? "")?.[1] ?? -1);
+  /* The first number in the note, wherever the language puts it: "85 events · 3 days · UTC"
+     leads with it, "이벤트 85건 · 3일 · UTC" does not. */
+  const eventsIn = (note) => Number(/\d+/.exec(note ?? "")?.[0] ?? -1);
+  const activityCount = eventsIn(facts.activity);
+  const beforeCount = eventsIn(factsBefore.activity);
   check(
     "the activity feed counted the new events too",
     activityCount === beforeCount + 2,
@@ -471,10 +488,11 @@ try {
     dash,
     (page) =>
       page.evaluate(
-        () =>
+        (label) =>
           [...document.querySelectorAll(".nav-item")]
-            .find((n) => n.textContent?.trim().startsWith("Projects"))
+            .find((n) => n.textContent?.trim().startsWith(label))
             ?.querySelector(".nav-count")?.textContent ?? "",
+        T("nav.projects"),
       ),
     (text) => text.trim() === String(projectsNow.length),
     "sidebar",

@@ -225,6 +225,25 @@ export const api = {
   },
 
   /**
+   * The language the human last chose, out of the desktop app's `settings.json`.
+   *
+   * The same file that remembers which vault they opened (src-tauri/src/lib.rs): a
+   * preference the app asks for once is a preference it must still have tomorrow. Browser
+   * mode answers null — there the choice lives in localStorage, which is the browser's own
+   * equivalent and needs no round trip (src/lib/i18n/index.ts).
+   */
+  getLocale: async (): Promise<string | null> => {
+    if (!isTauri()) return null;
+    return invokeCommand<string | null>("get_locale", {});
+  },
+
+  /** Remember it. Desktop only, for the same reason. */
+  setLocale: async (locale: string): Promise<void> => {
+    if (!isTauri()) return;
+    await invokeCommand<null>("set_locale", { locale });
+  },
+
+  /**
    * Create a project. Both transports end in the same `agentmon-core` code: the desktop app
    * calls it in-process, and the dev middleware runs the `agentmon` binary, so there is one
    * implementation of a write and browser mode cannot drift from it.

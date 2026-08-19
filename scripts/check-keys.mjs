@@ -58,6 +58,7 @@ import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { chromium } from "playwright";
 import { ensureServer, repoRoot, startServer, stopServer, waitForServer } from "./dev-server.mjs";
+import { t, useLocale } from "./i18n.mjs";
 
 const args = process.argv.slice(2);
 const value = (name, fallback) => {
@@ -67,6 +68,12 @@ const value = (name, fallback) => {
 const PORT = Number(value("--port", process.env.SHOT_PORT || 5173));
 const ORIGIN = value("--url", `http://localhost:${PORT}`).replace(/\/$/, "");
 const MANY_PORT = Number(value("--many-port", PORT + 61));
+/* Menus and nav rows are words. `--locale en` walks the same 126 checks in English. */
+const LOCALE = value("--locale", process.env.SHOT_LOCALE || "ko");
+const T = (key, ...args) => t(LOCALE, key, ...args);
+/* "There is deliberately no Delete in this menu" is a claim about meaning, not about
+   English: a menu that offered 삭제 would break the same promise. */
+const DESTRUCTIVE = /delete|remove|discard|삭제|제거|지우기/i;
 const log = (...m) => console.log("[check-keys]", ...m);
 
 let failures = 0;
@@ -161,6 +168,8 @@ try {
 
   browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, colorScheme: "dark" });
+  await useLocale(page, LOCALE);
+  log(`language: ${LOCALE}`);
 
   const screens = [
     { name: "bug board", url: `${ORIGIN}/p/${slug}/bugs?tab=all` },
@@ -314,11 +323,13 @@ try {
       `[aria-current="${kind}"]`,
       (els) => els.map((el) => (el.textContent || "").replace(/\s+/g, " ").trim()),
     );
+  /* The nav rows are named in the reader's language, so the expectation is read from the
+     same dictionary the window is (scripts/i18n.mjs) rather than spelled in English. */
   const expected = [
-    { path: "/projects", page: /^Projects/, location: 0 },
-    { path: `/p/${slug}`, page: /^Dashboard/, location: 1 },
-    { path: `/p/${slug}/work`, page: /^Work/, location: 1 },
-    { path: `/p/${slug}/bugs`, page: /^Bugs/, location: 1 },
+    { path: "/projects", page: T("nav.projects"), location: 0 },
+    { path: `/p/${slug}`, page: T("nav.dashboard"), location: 1 },
+    { path: `/p/${slug}/work`, page: T("nav.work"), location: 1 },
+    { path: `/p/${slug}/bugs`, page: T("nav.bugs"), location: 1 },
   ];
   for (const e of expected) {
     await page.goto(`${ORIGIN}${e.path}`, { waitUntil: "domcontentloaded" });
@@ -327,7 +338,7 @@ try {
     const places = await currents(page, "location");
     check(
       `exactly one row is the current page on ${e.path}, and it is the right one`,
-      marked.length === 1 && e.page.test(marked[0]),
+      marked.length === 1 && marked[0].startsWith(e.page),
       `page: ${JSON.stringify(marked)}`,
     );
     check(
@@ -371,7 +382,7 @@ try {
   );
   check(
     "…and nothing that deletes (the vault is append-only)",
-    !/delete|remove|discard/i.test((await page.locator(".ctx-menu").textContent()) ?? ""),
+    !DESTRUCTIVE.test((await page.locator(".ctx-menu").textContent()) ?? ""),
   );
   check(
     "an open menu declares the modal lock, so the list keyboard stands down",
@@ -714,7 +725,7 @@ try {
   );
   check(
     "…and still nothing that deletes",
-    !/delete|remove|discard/i.test((await page.locator(".ctx-menu").textContent()) ?? ""),
+    !DESTRUCTIVE.test((await page.locator(".ctx-menu").textContent()) ?? ""),
   );
   check(
     "…and right-clicking it did not also drop its dropdown open",
@@ -884,6 +895,7 @@ try {
   const manyOrigin = `http://localhost:${MANY_PORT}`;
   await waitForServer(manyServer, manyOrigin);
   const wide = await browser.newPage({ viewport: { width: 1600, height: 1000 }, colorScheme: "dark" });
+  await useLocale(wide, LOCALE);
   await wide.goto(`${manyOrigin}/projects`, { waitUntil: "domcontentloaded" });
   await ready(wide);
   const navRows = await wide.locator(".nav-sub").count();
@@ -896,7 +908,7 @@ try {
   const markedMany = await currents(wide, "page");
   check(
     "on /projects with an overflow row, exactly one element is the current page",
-    markedMany.length === 1 && markedMany[0].startsWith("Projects"),
+    markedMany.length === 1 && markedMany[0].startsWith(T("nav.projects")),
     `marked: ${JSON.stringify(markedMany)}`,
   );
   check(
@@ -949,11 +961,11 @@ try {
   check(
     "the project menu says what Archive costs before the click",
     ((await wide.locator('.ctx-item[data-item="archive"] .ctx-hint').textContent()) ?? "").trim() ===
-      "records are kept",
+      T("menu.archiveHint"),
   );
   check(
     "…and there is deliberately no Delete in it",
-    !/delete|remove|discard/i.test((await wide.locator(".ctx-menu").textContent()) ?? ""),
+    !DESTRUCTIVE.test((await wide.locator(".ctx-menu").textContent()) ?? ""),
   );
   /* This row is below the fold in a 12-project vault, so reaching it scrolls the page —
      and a scroll still settling as the menu opens used to dismiss it on the spot. */
@@ -993,7 +1005,7 @@ try {
   check(`archiving ${pickedSlug} from the sidebar archives it`, await settles(pickedSlug, "archived"));
   check(
     "…and answers with a toast offering the way back",
-    ((await wide.locator(".toast .button").textContent()) ?? "").trim() === "Undo",
+    ((await wide.locator(".toast .button").textContent()) ?? "").trim() === T("app.undo"),
   );
   // An undo that fades is an undo for people who were already looking (the P5 rule).
   await wide.waitForTimeout(3_000);

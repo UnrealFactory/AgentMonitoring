@@ -19,12 +19,15 @@ import { useContextMenu } from "./ContextMenu";
 import { useProjectMenu } from "../lib/menus";
 import {
   bugTip,
+  bugTipHere,
   inProgressOf,
   unresolvedCount,
   workLogs,
   workTip,
+  workTipHere,
 } from "../lib/words";
-import { pluralize } from "../lib/format";
+import { t } from "../lib/i18n";
+import { LocaleToggle } from "./LocaleToggle";
 import type { Project } from "../lib/types";
 
 /** How many projects the nav lists before it stops and points at the Projects screen. */
@@ -153,7 +156,7 @@ export function Sidebar() {
           {...contextMenu(() => (current ? projectMenu(current) : null))}
         >
           <span className="switcher-label">
-            <span className="switcher-name">{current?.name ?? "All projects"}</span>
+            <span className="switcher-name">{current?.name ?? t("nav.allProjects")}</span>
             {/* One measure, in the app's words, with what it is out of. The bug number is
                 on the Bugs row three lines below — printing it here too, in a second
                 vocabulary, is how one fact came to have four names in one column. */}
@@ -169,9 +172,9 @@ export function Sidebar() {
               }
             >
               {!current
-                ? pluralize(active.length, "project")
+                ? t("proj.count", active.length)
                 : current.counts.workTotal === 0
-                  ? "no work logs yet"
+                  ? t("nav.noWorkYet")
                   : inProgressOf(current.counts.workInProgress, current.counts.workTotal)}
             </span>
           </span>
@@ -203,14 +206,14 @@ export function Sidebar() {
                 <span className="switcher-item-name">
                   {p.name}
                   {p.status === "archived" && (
-                    <span className="switcher-item-flag"> archived</span>
+                    <span className="switcher-item-flag">{t("nav.archivedFlag")}</span>
                   )}
                 </span>
                 {/* Both numbers, both named: a bare "12" beside a bare "2" invites the
                     reader to compare two things that are not the same measure. */}
                 <span
                   className="switcher-item-meta tabular"
-                  title={`${workTip(p.counts.workTotal, p.counts.workInProgress, `in ${p.name}`)} · ${bugTip(
+                  title={`${workTip(p.counts.workTotal, p.counts.workInProgress, p.name)} · ${bugTip(
                     p.counts.bugsOpen,
                     p.counts.bugsTotal
                   )}`}
@@ -229,13 +232,13 @@ export function Sidebar() {
               className="switcher-item"
               onClick={() => navigate("/projects")}
             >
-              <span className="switcher-item-name">Manage projects…</span>
+              <span className="switcher-item-name">{t("nav.manageProjects")}</span>
             </button>
           </div>
         )}
       </div>
 
-      <button className="sidebar-search" onClick={openPalette} title="Search (Ctrl+K)">
+      <button className="sidebar-search" onClick={openPalette} title={t("nav.searchTip")}>
         <svg className="nav-icon" viewBox="0 0 16 16" aria-hidden="true">
           <path
             d="M7 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z M10.4 10.4 L13.5 13.5"
@@ -245,11 +248,11 @@ export function Sidebar() {
             strokeLinecap="round"
           />
         </svg>
-        Search
+        {t("nav.search")}
         <kbd className="sidebar-kbd">Ctrl K</kbd>
       </button>
 
-      <nav className="nav" aria-label="Main">
+      <nav className="nav" aria-label={t("app.mainNav")}>
         {/* The three project screens only exist inside a project: pointing them at "/" when
             there is no current one gives a reader three links that all go somewhere else. */}
         {current && base && (
@@ -258,15 +261,15 @@ export function Sidebar() {
                 list below marks it again — three copies of one word in a 232px column is
                 the defect this shell was pulled up for. */}
             <p className="nav-section" title={current.name}>
-              Project
+              {t("nav.project")}
             </p>
             <NavLink to={base} end className="nav-item">
               <NavIcon name="dashboard" />
-              Dashboard
+              {t("nav.dashboard")}
             </NavLink>
             <NavLink to={`${base}/work`} className="nav-item">
               <NavIcon name="work" />
-              Work
+              {t("nav.work")}
               {/* "Work 12" and "Bugs 2" used to sit here identically styled while counting
                   different things — every work log ever written against only the bugs that
                   still need somebody. Each count now says which it is. */}
@@ -281,11 +284,11 @@ export function Sidebar() {
             </NavLink>
             <NavLink to={`${base}/bugs`} className="nav-item">
               <NavIcon name="bug" />
-              Bugs
+              {t("nav.bugs")}
               {current.counts.bugsOpen > 0 && (
                 <span
                   className="nav-count nav-count-open tabular"
-                  title={bugTip(current.counts.bugsOpen, current.counts.bugsTotal, "filed here")}
+                  title={bugTipHere(current.counts.bugsOpen, current.counts.bugsTotal)}
                 >
                   {unresolvedCount(current.counts.bugsOpen)}
                 </span>
@@ -294,11 +297,11 @@ export function Sidebar() {
           </>
         )}
 
-        <p className="nav-section">Vault</p>
+        <p className="nav-section">{t("nav.vault")}</p>
         <NavLink to="/projects" className="nav-item">
           <NavIcon name="projects" />
-          Projects
-          <span className="nav-count tabular" title={`${active.length} active projects`}>
+          {t("nav.projects")}
+          <span className="nav-count tabular" title={t("nav.activeProjects", active.length)}>
             {active.length}
           </span>
         </NavLink>
@@ -314,10 +317,9 @@ export function Sidebar() {
             to={`/p/${p.slug}`}
             className={`nav-item nav-sub${p.slug === current?.slug ? " is-current" : ""}`}
             aria-current={p.slug === current?.slug ? "location" : undefined}
-            title={`${p.name} — ${workTip(
+            title={`${p.name} — ${workTipHere(
               p.counts.workTotal,
-              p.counts.workInProgress,
-              "here"
+              p.counts.workInProgress
             )} · ${bugTip(p.counts.bugsOpen, p.counts.bugsTotal)}`}
             {...contextMenu(() => projectMenu(p))}
           >
@@ -331,7 +333,7 @@ export function Sidebar() {
             {p.counts.bugsOpen > 0 && (
               <span
                 className="nav-count nav-count-open tabular"
-                title={bugTip(p.counts.bugsOpen, p.counts.bugsTotal, `filed in ${p.name}`)}
+                title={bugTip(p.counts.bugsOpen, p.counts.bugsTotal, p.name)}
               >
                 {unresolvedCount(p.counts.bugsOpen)}
               </span>
@@ -346,17 +348,21 @@ export function Sidebar() {
           <Link
             to="/projects"
             className="nav-item nav-sub nav-more"
-            title={`This vault has ${switchable.length} projects. See them all on the Projects screen.`}
+            title={t("nav.moreTip", switchable.length)}
           >
             <span className="nav-bullet" aria-hidden="true" />
             <span className="nav-sub-name">
-              {switchable.length - listed.length} more on Projects…
+              {t("nav.moreOnProjects", switchable.length - listed.length)}
             </span>
           </Link>
         )}
       </nav>
 
       <div className="sidebar-foot">
+        {/* The language, where a reader looks for it: at the bottom of the shell, under the
+            vault it names. One control, two words, applied to the whole window on click
+            (src/components/LocaleToggle.tsx). */}
+        <LocaleToggle />
         {/* The vault, named once. Its path is on the Projects screen, which is where the
             reader can act on it — and is one click away through this link. A plain Link:
             as a NavLink this footer marked itself the current page on /projects, which lit
@@ -373,7 +379,7 @@ export function Sidebar() {
           </svg>
           <span className="vault-path-text">
             <span className="vault-path-name">
-              {vault?.name ?? (error ? "no vault open" : "—")}
+              {vault?.name ?? (error ? t("vault.none") : "—")}
             </span>
             {/* The folder, not the whole path: enough to tell two vaults apart from any
                 screen — which is how a reader notices they are not where they thought —
@@ -382,10 +388,10 @@ export function Sidebar() {
                 forever: a vault that failed to open says so. */}
             <span className="vault-path-value">
               {vault
-                ? `${transport === "tauri" ? "desktop app" : "dev server"} · ${folder}`
+                ? `${transport === "tauri" ? t("vault.readerDesktop") : t("vault.readerBrowser")} · ${folder}`
                 : error
-                  ? "could not be read — open one"
-                  : "resolving…"}
+                  ? t("vault.unreadable")
+                  : t("vault.resolving")}
             </span>
           </span>
         </Link>

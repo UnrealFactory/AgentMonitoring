@@ -17,6 +17,7 @@
     "capture-refs": "node scripts/capture-refs.mjs",
     "progress": "node scripts/build-progress.mjs",
     "check:keys": "node scripts/check-keys.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
     "check:urlstate": "node scripts/check-urlstate.mjs",
     "check:counts": "node scripts/check-counts.mjs",
     "check:live": "node scripts/check-live.mjs",
@@ -26,6 +27,7 @@
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
     "@tauri-apps/api": "^2.9.0",
+    "pretendard": "^1.3.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.1"

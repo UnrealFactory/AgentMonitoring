@@ -25,6 +25,7 @@
  */
 import { chromium } from "playwright";
 import { ensureServer, stopServer } from "./dev-server.mjs";
+import { t, useLocale } from "./i18n.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -51,6 +52,10 @@ const PORT = Number(value("--port", process.env.SHOT_PORT || 5173));
 const ORIGIN = value("--url", `http://localhost:${PORT}`).replace(/\/$/, "");
 const WANT_PROJECT = (value("--project", "") || "").trim();
 const VERBOSE = flag("--verbose");
+/* The filter menus are found by their accessible name, which is a word — so the gate has to
+   know which language the window is in. `--locale en` walks the English build. */
+const LOCALE = value("--locale", process.env.SHOT_LOCALE || "ko");
+const T = (key, ...args) => t(LOCALE, key, ...args);
 
 const log = (...m) => console.log("[check-counts]", ...m);
 
@@ -225,7 +230,7 @@ async function probeSeverityAgreement(page, where) {
     .evaluateAll((els) =>
       els.map((el) => `${el.dataset.value}=${(el.querySelector(".sev-chip-count")?.textContent || "").trim()}`),
     );
-  const menu = CONTROLS.menu(page, { key: "severity", label: "Filter by severity", deflt: "all" });
+  const menu = CONTROLS.menu(page, { key: "severity", label: T("filter.bySeverity"), deflt: "all" });
   const options = (await menu.read())
     .filter((o) => o.value !== "all")
     .map((o) => `${o.value}=${o.count}`);
@@ -275,6 +280,8 @@ try {
     colorScheme: "dark",
     reducedMotion: "reduce",
   });
+  await useLocale(page, LOCALE);
+  log(`language: ${LOCALE}`);
 
   for (const p of wanted) {
     const bugs = await api(`/projects/${p.slug}/bugs`);
@@ -314,10 +321,10 @@ try {
             deflt: "all",
             toggle: true,
           }),
-          CONTROLS.menu(page, { key: "severity", label: "Filter by severity", deflt: "all" }),
-          CONTROLS.menu(page, { key: "label", label: "Filter by label", deflt: "all" }),
-          CONTROLS.menu(page, { key: "assignee", label: "Filter by assignee", deflt: "all" }),
-          CONTROLS.menu(page, { key: "reporter", label: "Filter by reporter", deflt: "all" }),
+          CONTROLS.menu(page, { key: "severity", label: T("filter.bySeverity"), deflt: "all" }),
+          CONTROLS.menu(page, { key: "label", label: T("filter.byLabel"), deflt: "all" }),
+          CONTROLS.menu(page, { key: "assignee", label: T("filter.byAssignee"), deflt: "all" }),
+          CONTROLS.menu(page, { key: "reporter", label: T("filter.byReporter"), deflt: "all" }),
         ],
       },
       {
@@ -337,8 +344,8 @@ try {
             activeClass: "is-active",
             deflt: "all",
           }),
-          CONTROLS.menu(page, { key: "agent", label: "Filter by agent", deflt: "all" }),
-          CONTROLS.menu(page, { key: "tag", label: "Filter by tag", deflt: "all" }),
+          CONTROLS.menu(page, { key: "agent", label: T("filter.byAgent"), deflt: "all" }),
+          CONTROLS.menu(page, { key: "tag", label: T("filter.byTag"), deflt: "all" }),
         ],
       },
     ];

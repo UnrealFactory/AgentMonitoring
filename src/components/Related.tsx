@@ -20,8 +20,9 @@ import { recordPath } from "../lib/markdown";
 import { useContextMenu } from "./ContextMenu";
 import { useRecordMenu } from "../lib/menus";
 import { BugStatusPill, RecordStatusDot, SeverityBadge, WorkStatusPill } from "./ui";
-import { BUG_NOUN, WORK_NOUN } from "../lib/words";
+import { bugNoun, workNoun } from "../lib/words";
 import { formatDateTimeUtc, formatRelative } from "../lib/format";
+import { t } from "../lib/i18n";
 import type { BugSummary, WorklogSummary } from "../lib/types";
 
 type RecordKind = "work" | "bug";
@@ -106,7 +107,7 @@ function RelatedRow({ slug, item }: { slug: string; item: RelatedItem }) {
           <time
             className="rel-time tabular"
             dateTime={item.lastActivity}
-            title={`Last activity ${formatDateTimeUtc(item.lastActivity)}`}
+            title={t("dash.lastActivityTip", formatDateTimeUtc(item.lastActivity))}
           >
             {formatRelative(item.lastActivity)}
           </time>
@@ -123,7 +124,7 @@ function MissingRow({ id }: { id: string }) {
       <span className="rel-row is-missing">
         <span className="sdot sdot-missing" aria-hidden="true" />
         <span className="rel-id mono">{id}</span>
-        <span className="rel-title muted">no work log or bug with this id in this project</span>
+        <span className="rel-title muted">{t("rec.missingRef")}</span>
       </span>
     </li>
   );
@@ -142,14 +143,14 @@ export function RelatedSection({
 }) {
   const { outgoing, incoming, count } = related;
   /* The object's own noun, from lib/words.ts: a work log is a work log on every screen. */
-  const noun = kind === "bug" ? BUG_NOUN : WORK_NOUN;
+  const noun = kind === "bug" ? bugNoun() : workNoun();
 
   if (count === 0) return null;
 
   return (
     <section className="record-section" id="related">
       <h2 className="section-title">
-        Related
+        {t("rec.related")}
         <span className="section-count tabular">{count}</span>
       </h2>
 
@@ -160,8 +161,8 @@ export function RelatedSection({
               <span className="rel-arrow" aria-hidden="true">
                 →
               </span>
-              <span className="rel-group-label">References</span>
-              <span className="rel-group-hint">written into this {noun}’s refs</span>
+              <span className="rel-group-label">{t("rec.references")}</span>
+              <span className="rel-group-hint">{t("rec.referencesHint", noun)}</span>
             </div>
             <ul className="rel-rows">
               {outgoing.map((item) =>
@@ -181,10 +182,8 @@ export function RelatedSection({
               <span className="rel-arrow" aria-hidden="true">
                 ←
               </span>
-              <span className="rel-group-label">Referenced by</span>
-              <span className="rel-group-hint">
-                work logs and bugs that point back at {id}
-              </span>
+              <span className="rel-group-label">{t("rec.referencedBy")}</span>
+              <span className="rel-group-hint">{t("rec.referencedByHint", id)}</span>
             </div>
             <ul className="rel-rows">
               {incoming.map((item) => (

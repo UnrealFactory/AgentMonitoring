@@ -86,20 +86,64 @@ fn saved_vault(app: &AppHandle) -> Option<PathBuf> {
     Vault::open(&path).ok().map(|_| path)
 }
 
-fn remember_vault(app: &AppHandle, path: &Path) {
+/// Read settings.json, or an empty object when there is not one yet.
+///
+/// One file holds every choice the human has made about this window — which vault, which
+/// language — so writing one of them must not drop the other. It used to be written whole
+/// from a single key, which is fine while there is a single key and a data-loss bug the
+/// moment there are two.
+fn read_settings(app: &AppHandle) -> serde_json::Map<String, serde_json::Value> {
+    settings_file(app)
+        .and_then(|f| std::fs::read_to_string(f).ok())
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default()
+}
+
+fn write_settings(app: &AppHandle, settings: &serde_json::Map<String, serde_json::Value>) {
     let Some(file) = settings_file(app) else { return };
     if let Some(dir) = file.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    let json = serde_json::json!({ "vaultPath": path.display().to_string() });
+    let json = serde_json::Value::Object(settings.clone());
     if let Err(e) = std::fs::write(&file, format!("{}\n", serde_json::to_string_pretty(&json).unwrap()))
     {
         eprintln!(
-            "agentmonitoring: could not remember the vault choice in {} ({e}); the app will \
-             use it for this session only",
+            "agentmonitoring: could not write {} ({e}); this window's choices will be used \
+             for this session only",
             file.display()
         );
     }
+}
+
+fn remember_vault(app: &AppHandle, path: &Path) {
+    let mut settings = read_settings(app);
+    settings.insert(
+        "vaultPath".into(),
+        serde_json::Value::String(path.display().to_string()),
+    );
+    write_settings(app, &settings);
+}
+
+/// The language the human last chose, out of the same file the vault path lives in.
+///
+/// `None` on a machine that has never answered — the window then keeps its default, which
+/// is Korean (src/lib/i18n/index.ts). Deliberately not validated here: the frontend owns
+/// the list of languages it can draw, and a value it does not recognise is ignored there.
+#[tauri::command]
+fn get_locale(app: AppHandle) -> Option<String> {
+    read_settings(&app)
+        .get("locale")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
+
+/// Remember it, beside the vault choice, without disturbing it.
+#[tauri::command]
+fn set_locale(app: AppHandle, locale: String) {
+    let mut settings = read_settings(&app);
+    settings.insert("locale".into(), serde_json::Value::String(locale));
+    write_settings(&app, &settings);
 }
 
 /// Everything switching vaults has to do, in one place: read it, remember it, watch it,
@@ -696,6 +740,8 @@ pub fn run() {
             create_vault_folder,
             cli_path,
             manual_path,
+            get_locale,
+            set_locale,
             list_projects,
             get_project,
             create_project,

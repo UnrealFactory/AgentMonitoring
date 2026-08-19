@@ -16,6 +16,7 @@
  */
 import { chromium } from "playwright";
 import { ensureServer, stopServer } from "./dev-server.mjs";
+import { t, useLocale } from "./i18n.mjs";
 
 const args = process.argv.slice(2);
 const value = (name, fallback) => {
@@ -23,6 +24,11 @@ const value = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 const PORT = Number(value("--port", process.env.SHOT_PORT || 5173));
+/* Which language this run walks. The app ships in two and the URL contract is the same in
+   both, so the gate is parameterised rather than pinned to the one it was written in:
+   `--locale en` re-runs every check below against the English words. */
+const LOCALE = value("--locale", process.env.SHOT_LOCALE || "ko");
+const T = (key, ...args) => t(LOCALE, key, ...args);
 const ORIGIN = value("--url", `http://localhost:${PORT}`).replace(/\/$/, "");
 const log = (...m) => console.log("[check-urlstate]", ...m);
 
@@ -61,16 +67,21 @@ try {
   log(`checking /p/${slug}`);
 
   browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, colorScheme: "dark" });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, colorScheme: "dark" });
+  await useLocale(context, LOCALE);
+  log(`language: ${LOCALE}`);
+  const page = await context.newPage();
 
   // -- the bug board keeps tab + filters + query in the URL --------------------------------
   await page.goto(`${ORIGIN}/p/${slug}/bugs`, { waitUntil: "domcontentloaded" });
   await ready(page);
   check("board opens clean (no query string on the default view)", search(page) === "");
 
-  await page.getByRole("tab", { name: /^All/ }).click();
-  await page.locator(".sev-chip-label", { hasText: "Critical" }).click();
-  await page.getByLabel("Search bugs").fill("pg_stat_activity");
+  // Tabs and chips by `data-value`: what they are called is the dictionary's business,
+  // and this gate is about the URL.
+  await page.locator('[role="tab"][data-value="all"]').click();
+  await page.locator('.sev-chip[data-value="critical"]').click();
+  await page.getByLabel(T("bugs.searchLabel")).fill("pg_stat_activity");
   await page.waitForFunction(() => document.querySelectorAll(".work-rows .work-row").length === 1);
 
   const params = new URLSearchParams(search(page));
@@ -101,17 +112,17 @@ try {
   check("…with the rows it had", JSON.stringify(await rowIds(page)) === JSON.stringify(matched));
   check(
     "…and the search box still holding the query",
-    (await page.getByLabel("Search bugs").inputValue()) === "pg_stat_activity",
+    (await page.getByLabel(T("bugs.searchLabel")).inputValue()) === "pg_stat_activity",
   );
 
   // -- the same URL in a window that has never seen the app --------------------------------
-  const fresh = await browser.newPage({ viewport: { width: 1440, height: 1000 }, colorScheme: "dark" });
+  const fresh = await context.newPage();
   await fresh.goto(filtered, { waitUntil: "domcontentloaded" });
   await ready(fresh);
   check("a pasted link reproduces the view", JSON.stringify(await rowIds(fresh)) === JSON.stringify(matched));
   check(
     "…including the tab",
-    (await fresh.getByRole("tab", { name: /^All/ }).getAttribute("aria-selected")) === "true",
+    (await fresh.locator('[role="tab"][data-value="all"]').getAttribute("aria-selected")) === "true",
   );
 
   // -- nonsense in the URL is ignored rather than obeyed ------------------------------------
@@ -126,12 +137,12 @@ try {
   // `q` is deliberately absent: free text has no vocabulary, and a search for a word this
   // project does not contain *should* come back empty.
   const dimensions = [
-    { screen: "bugs", query: "severity=urgent", control: "Filter by severity", reads: "All severities" },
-    { screen: "bugs", query: "label=nonexistent-label", control: "Filter by label", reads: "All labels" },
-    { screen: "bugs", query: "assignee=nobody-at-all", control: "Filter by assignee", reads: "All assignees" },
-    { screen: "bugs", query: "reporter=nobody-at-all", control: "Filter by reporter", reads: "All reporters" },
-    { screen: "work", query: "agent=nobody-at-all", control: "Filter by agent", reads: "All agents" },
-    { screen: "work", query: "tag=nonexistent-tag", control: "Filter by tag", reads: "All tags" },
+    { screen: "bugs", query: "severity=urgent", control: T("filter.bySeverity"), reads: T("filter.allSeverities") },
+    { screen: "bugs", query: "label=nonexistent-label", control: T("filter.byLabel"), reads: T("filter.allLabels") },
+    { screen: "bugs", query: "assignee=nobody-at-all", control: T("filter.byAssignee"), reads: T("filter.allAssignees") },
+    { screen: "bugs", query: "reporter=nobody-at-all", control: T("filter.byReporter"), reads: T("filter.allReporters") },
+    { screen: "work", query: "agent=nobody-at-all", control: T("filter.byAgent"), reads: T("filter.allAgents") },
+    { screen: "work", query: "tag=nonexistent-tag", control: T("filter.byTag"), reads: T("filter.allTags") },
   ];
 
   /** How many rows each board shows with nothing filtered — the number to fall back to. */
@@ -150,14 +161,16 @@ try {
   // Every one of them is checked, on both boards and on the dashboard, because "the two we
   // remembered" is how `?status=banana` came to be read back off the agent menu.
   const tabbed = [
-    { screen: "bugs", query: "tab=zzz", tab: /^Unresolved/, rows: "unresolved" },
-    { screen: "work", query: "status=banana", tab: /^All/, rows: "work" },
+    { screen: "bugs", query: "tab=zzz", tab: "unresolved", rows: "unresolved" },
+    { screen: "work", query: "status=banana", tab: "all", rows: "work" },
   ];
   for (const t of tabbed) {
     await fresh.goto(`${ORIGIN}/p/${slug}/${t.screen}?${t.query}`, { waitUntil: "domcontentloaded" });
     await ready(fresh);
     const selected =
-      (await fresh.getByRole("tab", { name: t.tab }).getAttribute("aria-selected")) === "true";
+      (await fresh
+        .locator(`[role="tab"][data-value="${t.tab}"]`)
+        .getAttribute("aria-selected")) === "true";
     const rows = await fresh.locator(".work-rows .work-row").count();
     check(
       `?${t.query} falls back to the default tab on /${t.screen}`,
@@ -189,15 +202,15 @@ try {
   const allBugs = await (await fetch(`${ORIGIN}/vault-api/projects/${slug}/bugs`)).json();
   const allWork = await (await fetch(`${ORIGIN}/vault-api/projects/${slug}/worklogs`)).json();
   const real = [
-    { screen: "bugs", key: "label", value: allBugs.flatMap((b) => b.labels)[0], control: "Filter by label" },
+    { screen: "bugs", key: "label", value: allBugs.flatMap((b) => b.labels)[0], control: T("filter.byLabel") },
     {
       screen: "bugs",
       key: "reporter",
       value: allBugs[0]?.reporter,
-      control: "Filter by reporter",
+      control: T("filter.byReporter"),
     },
-    { screen: "work", key: "agent", value: allWork[0]?.agent, control: "Filter by agent" },
-    { screen: "work", key: "tag", value: allWork.flatMap((w) => w.tags)[0], control: "Filter by tag" },
+    { screen: "work", key: "agent", value: allWork[0]?.agent, control: T("filter.byAgent") },
+    { screen: "work", key: "tag", value: allWork.flatMap((w) => w.tags)[0], control: T("filter.byTag") },
   ];
   for (const r of real) {
     const base = r.screen === "bugs" ? "tab=all&" : "";
@@ -219,7 +232,7 @@ try {
   await ready(fresh);
   check(
     "?range=decade falls back to All time on the dashboard",
-    (await fresh.getByRole("tab", { name: "All time" }).getAttribute("aria-selected")) === "true",
+    (await fresh.locator('[role="tab"][data-value="all"]').getAttribute("aria-selected")) === "true",
   );
   await fresh.goto(`${ORIGIN}/p/${slug}?range=7d`, { waitUntil: "domcontentloaded" });
   await ready(fresh);
@@ -228,7 +241,7 @@ try {
   );
   check(
     "…and a known range is obeyed",
-    (await fresh.getByRole("tab", { name: "7 days" }).getAttribute("aria-selected")) === "true",
+    (await fresh.locator('[role="tab"][data-value="7d"]').getAttribute("aria-selected")) === "true",
   );
 
   // A range in the URL that changes nothing on the screen is the same defect as a filter
@@ -245,9 +258,11 @@ try {
   // And the axis has to say which days it covers. Sub-daily buckets used to label a whole
   // week "12:00 · 00:00 · 12:00" — clock times with no date anywhere on the chart.
   const ticks = await fresh.locator(".chart-tick").allTextContents();
+  // "12 Aug" in English, "8월 12일" in Korean — a date either way, which is the claim.
+  const DATE_TICK = LOCALE === "ko" ? /^\d{1,2}월 \d{1,2}일$/ : /^\d{1,2} [A-Z][a-z]{2}$/;
   check(
     "…and the axis names dates, not only clock times",
-    ticks.some((t) => /^\d{1,2} [A-Z][a-z]{2}$/.test(t.trim())),
+    ticks.some((tick) => DATE_TICK.test(tick.trim())),
     `ticks: ${JSON.stringify(ticks.slice(0, 14))}`,
   );
 
@@ -265,8 +280,8 @@ try {
   // -- the work list does the same -----------------------------------------------------------
   await page.goto(`${ORIGIN}/p/${slug}/work`, { waitUntil: "domcontentloaded" });
   await ready(page);
-  await page.getByRole("tab", { name: /^Done/ }).click();
-  await page.getByLabel("Search work logs").fill("sqlx");
+  await page.locator('[role="tab"][data-value="done"]').click();
+  await page.getByLabel(T("work.searchLabel")).fill("sqlx");
   await page.waitForFunction(() => !!document.querySelector(".work-rows .work-row, .empty-title"));
   const workParams = new URLSearchParams(search(page));
   check(
