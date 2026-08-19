@@ -569,6 +569,12 @@ date -u +%Y-%m-%dT%H:%M:%SZ          # 2026-08-18T12:41:07Z
 date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ
 ```
 
+**Careful with multi-unit `ago`.** GNU date negates only the trailing unit, so
+`date -u -d '4 hours 15 minutes ago'` resolves to the *future* (now **+** 3h45m), not
+4h15m back. Use a single unit (`'255 minutes ago'`) or write the literal timestamp.
+agentmon rejects future stamps with exit 2, so the mistake fails loudly instead of
+writing a wrong time into the record — if you hit that error, this is usually why.
+
 ---
 
 ## Command reference
