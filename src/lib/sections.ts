@@ -65,6 +65,10 @@ const LIST_LINE = /^\s*(?:[-*+]|\d{1,9}[.)])\s+\S/;
 const MAX_LABEL = 80;
 /** How much may ride along on the heading line before it is prose in its own right. */
 const MAX_TRAILER = 140;
+/** Punctuation that glues the rest of the line to the label instead of opening a sentence. */
+const BOUND = /^[,;:]/;
+/** A colon that closes a clause: followed by a space or the end of the line, not by a `/`. */
+const CLAUSE_END = /:(?=\s|$)/g;
 
 const EVIDENCE = /^(?:verified|verification|proof|evidence|tested|testing)\b/i;
 
@@ -74,6 +78,80 @@ const slug = (text: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 32) || "part";
+
+/**
+ * Where a clause that is glued to the label ends — the only place the label may be lifted
+ * out of its own sentence.
+ *
+ * `**Fix**, in `validate.rs`: a new check runs on all four bodies…` is one sentence whose
+ * subject is the bolded word. Promoting "Fix" to a heading and dropping the remainder into
+ * the body leaves the reader a paragraph that opens on the author's comma — the record
+ * renderer rewriting the vault, which is the one thing this app exists not to do. So the
+ * clause is carved off only at a boundary the author wrote:
+ *
+ *   * the paragraph ends with the clause ("**Fix**, two rules in `app.css`:" + a list) —
+ *     the whole clause rides on the heading, wrapped source lines and all; or
+ *   * the clause closes on a colon and prose follows it — the heading takes the clause up
+ *     to and including that colon, and the body starts at the author's next word.
+ *
+ * Anything else (a bound clause that runs on as prose, or one longer than a heading line)
+ * returns null, and the caller leaves the whole paragraph where it is with its bold lead-in
+ * intact. A weaker landmark is a smaller loss than a severed sentence.
+ *
+ * @param rest   the text after `**Label**` on the label's own line, starting with `,;:`
+ * @param follow every line after it, in source order
+ */
+function carveTrailer(
+  rest: string,
+  follow: string[],
+): { trailer: string; head: string; skip: number } | null {
+  let clause = "";
+  let line = rest;
+
+  // j is the index in `follow` of the line under consideration; -1 is the label's own line,
+  // which is why the bound is inclusive — a label on the last line of a record has no
+  // `follow` at all, and its clause still ends its paragraph.
+  for (let j = -1; j <= follow.length; j += 1) {
+    const cut = clauseEnd(clause, line);
+    if (cut !== null) {
+      const trailer = join(clause, line.slice(0, cut));
+      const head = line.slice(cut).trim();
+      // "::" — the next clause is bound too; there is no clean cut here.
+      if (trailer.length > MAX_TRAILER || BOUND.test(head)) return null;
+      return { trailer: punctuationOnly(trailer) ? "" : trailer, head, skip: j + 1 };
+    }
+
+    clause = join(clause, line);
+    if (clause.length > MAX_TRAILER) return null;
+
+    // A blank line, a list or a fence ends the paragraph the label opened.
+    const next = follow[j + 1] ?? "";
+    if (!next.trim() || LIST_LINE.test(next) || FENCE.test(next)) {
+      return { trailer: punctuationOnly(clause) ? "" : clause, head: "", skip: j + 1 };
+    }
+    line = next;
+  }
+  return null;
+}
+
+const join = (a: string, b: string) => (a ? `${a} ${b.trim()}` : b.trim()).trim();
+const punctuationOnly = (text: string) => /^[,;:\s]*$/.test(text);
+
+/**
+ * The index just past the clause-closing colon in `line`, or null if it has none.
+ *
+ * Colons inside inline code (`npm run check:counts`) and inside URLs (`https://…`) close
+ * nothing, so the candidate must be followed by whitespace and sit outside a code span —
+ * counted across the clause so far, since a span may have opened on an earlier line.
+ */
+function clauseEnd(clause: string, line: string): number | null {
+  CLAUSE_END.lastIndex = 0;
+  for (let m = CLAUSE_END.exec(line); m; m = CLAUSE_END.exec(line)) {
+    const ticks = (clause.match(/`/g)?.length ?? 0) + (line.slice(0, m.index).match(/`/g)?.length ?? 0);
+    if (ticks % 2 === 0) return m.index + 1;
+  }
+  return null;
+}
 
 /**
  * Split a record body into the sub-sections its author labelled.
@@ -87,7 +165,8 @@ export function splitLabelledSections(source: string): SplitResult {
   const text = (source ?? "").replace(/\r\n/g, "\n");
   const lines = text.split("\n");
 
-  const starts: { line: number; label: string; rest: string; consumed: number }[] = [];
+  /** `head` is the body's first line — what is left of the label's line after the cut. */
+  const starts: { line: number; label: string; trailer: string; head: string; from: number }[] = [];
   let inFence = false;
 
   for (let i = 0; i < lines.length; i += 1) {
@@ -111,7 +190,28 @@ export function splitLabelledSections(source: string): SplitResult {
     if (!m) continue;
     const label = m[1].trim();
     if (!label || label.length > MAX_LABEL) continue;
-    starts.push({ line: i, label, rest: m[2], consumed });
+
+    const rest = m[2].trim();
+    const from = i + consumed;
+
+    // ", in `relay-worker/src/dispatcher.rs` and `relay-store/src/queue.rs`:" is not the
+    // first sentence of the section — it is the rest of its title, and it rides on the
+    // heading where the author put it. A clause with no honest end (see carveTrailer) is
+    // not a heading at all: the paragraph keeps its bold lead-in and stays in the prose.
+    if (BOUND.test(rest)) {
+      const carved = carveTrailer(rest, lines.slice(from));
+      if (!carved) continue;
+      starts.push({
+        line: i,
+        label,
+        trailer: carved.trailer,
+        head: carved.head,
+        from: from + carved.skip,
+      });
+      continue;
+    }
+
+    starts.push({ line: i, label, trailer: "", head: rest, from });
   }
 
   if (starts.length < 2) return { preamble: text, sections: [] };
@@ -119,19 +219,10 @@ export function splitLabelledSections(source: string): SplitResult {
   const used = new Set<string>();
   const sections = starts.map((start, idx) => {
     const end = idx + 1 < starts.length ? starts[idx + 1].line : lines.length;
-    const rest = start.rest.trim();
-    const after = lines.slice(start.line + start.consumed, end);
 
-    // ", in `relay-worker/src/dispatcher.rs` and `relay-store/src/queue.rs`:" is not the
-    // first sentence of the section — it is the rest of its title. It rides on the heading
-    // when it is short and the paragraph ends with it.
-    const nextLine = after[0] ?? "";
-    const binds =
-      /^[,;:]/.test(rest) &&
-      rest.length <= MAX_TRAILER &&
-      (!nextLine.trim() || LIST_LINE.test(nextLine));
-
-    const body = [binds ? "" : rest, ...after].join("\n").replace(/^\n+|\s+$/g, "");
+    const body = [start.head, ...lines.slice(start.from, end)]
+      .join("\n")
+      .replace(/^\n+|\s+$/g, "");
     const label = start.label.replace(/[.,:;]+$/, "").trim();
     const firstClause = label.split(",")[0].trim();
     const short = firstClause.length >= 3 ? firstClause : label;
@@ -147,7 +238,7 @@ export function splitLabelledSections(source: string): SplitResult {
       id,
       label,
       short,
-      trailer: binds ? rest : "",
+      trailer: start.trailer,
       body,
       items,
       evidence: EVIDENCE.test(short),

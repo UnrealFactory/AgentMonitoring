@@ -1,10 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions for the main AgentMonitoring window: read the vault through our own commands, open a folder picker to relocate the vault, and open referenced files in the system handler.",
+  "description": "Permissions for the main AgentMonitoring window: read the vault through our own commands, keep the window title on the record the reader is looking at, open a folder picker to relocate the vault, and open referenced files in the system handler.",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-set-title",
     "dialog:default",
     "opener:default"
   ]

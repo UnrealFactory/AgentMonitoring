@@ -188,6 +188,59 @@ console.log("fixtures");
   );
 }
 
+// 10b. A clause bound to the label is never amputated from it. Six live records used to
+// render an <h3> "Fix" above a paragraph starting ", in the new src/lib/markdown-parse.ts…"
+// — the renderer cutting the author's sentence in half (P6 round 2 design critic).
+{
+  // The clause wraps onto a second line and ends the paragraph: all of it is the title.
+  const wrapped = [
+    "**Root cause.** The paragraph loop tested the raw line.",
+    "",
+    "**Fix**, in the new `src/lib/markdown-parse.ts` (the parser, split out of",
+    "`src/lib/markdown.tsx` so it can be run without React):",
+    "",
+    "1. `interruptsParagraph(line)` replaces the regex test.",
+  ].join("\n");
+  const wrap = splitLabelledSections(wrapped).sections[1];
+  eq("a wrapped clause rides on the heading whole", wrap.trailer.endsWith("without React):"), true);
+  check("…and the body starts on the author's next word", wrap.body.startsWith("1. `interruptsParagraph"), wrap.body);
+
+  // The clause closes on a colon and prose runs on after it: the heading takes the clause.
+  const colon = [
+    "**Root cause.** `validate::resolution` checked only the top level.",
+    "",
+    "**Fix**, in `crates/agentmon-core/src/validate.rs`: a new `reject_section_headings()` runs",
+    "on all four bodies after the existing unwrap step.",
+  ].join("\n");
+  const cut = splitLabelledSections(colon).sections[1];
+  eq("a clause that closes on a colon is cut there", cut.trailer, ", in `crates/agentmon-core/src/validate.rs`:");
+  check("…and the body keeps the prose after it", cut.body.startsWith("a new `reject_section_headings()`"), cut.body);
+
+  // "**Screenshots**: <prose>" — the colon binds nothing but the label to its own prose.
+  const plain = "**Backdating**: `time.rs` parses the stamps.\n\n**Screenshots**: `screenshot.mjs` takes `SHOT_PORT`.";
+  const two = splitLabelledSections(plain).sections;
+  eq("a bare binding colon leaves the label alone", two[1].trailer, "");
+  eq("…and the body opens on a word", two[1].body, "`screenshot.mjs` takes `SHOT_PORT`.");
+
+  // The last line of a record is still the end of its paragraph.
+  const last = "**Root cause.** The loop tested the raw line.\n\n**Fix**, one rule in `app.css`.";
+  const end = splitLabelledSections(last).sections[1];
+  eq("a clause on the record's last line still rides the heading", end.trailer, ", one rule in `app.css`.");
+  eq("…leaving no body behind it", end.body, "");
+
+  // A bound clause that just runs on as prose has no honest cut: the paragraph is left
+  // whole, bold lead-in and all, rather than beheaded.
+  const runOn = [
+    "**Root cause.** The loop tested the raw line.",
+    "",
+    "**Fix**, which took three attempts and a rewrite of the block scanner before the",
+    "paragraph loop stopped renumbering the author's own sentences on every render.",
+  ].join("\n");
+  const kept = splitLabelledSections(runOn);
+  eq("an uncuttable clause is not promoted", kept.sections.length, 0);
+  check("…and its paragraph keeps its label", kept.preamble.includes("**Fix**, which took"), kept.preamble);
+}
+
 // 11. A resolution written as plain prose is left exactly as it is — no invented headings.
 {
   const src = "Replaced the capturing closure with a free function.\n\nVerified with `cargo build`.";
@@ -241,6 +294,16 @@ function sweep(file) {
   );
   const dropped = lost(section, out);
   check(`${name} splits without loss`, dropped.length === 0, dropped.slice(0, 6).join(" · "));
+
+  // …and never by beheading a sentence: a body that opens on the author's comma is a label
+  // that was lifted out of its own clause.
+  for (const s of sections) {
+    check(
+      `${name} keeps “${s.short}” in one piece`,
+      !/^[,;:]/.test(s.body),
+      `body starts "${s.body.slice(0, 60)}…"`,
+    );
+  }
 }
 
 if (!existsSync(vault)) {

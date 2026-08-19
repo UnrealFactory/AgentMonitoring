@@ -14,6 +14,10 @@
  *   * **One word per state.** A work log is `in progress`, `done` or `abandoned`. A bug is
  *     `open`, `in progress`, `resolved` or `closed`. Never active, in flight, still open,
  *     unclaimed, finished or fixed — those are the same states wearing different clothes.
+ *   * **One word per attribute, too.** A bug nobody holds is `unassigned`, on the board,
+ *     in its side panel, in the filter menu, on the dashboard and in its own status strip.
+ *     It used to be "unclaimed" in the strip, "unassigned" 700px below it and "needs an
+ *     owner" on the dashboard: three names for one empty field (P6 round 2 critic).
  *   * **One noun per object.** A work log is a **work log**, on every screen. Not a record,
  *     not a log, not an entry.
  *   * **"Open" is a bug word.** It never describes work. Work that is running is
@@ -80,6 +84,32 @@ export const CLOSED = "closed";
 export const UNRESOLVED = "unresolved";
 export const UNRESOLVED_LABEL = "Unresolved";
 export const UNRESOLVED_MEANS = "open or in progress";
+
+/**
+ * A bug with an empty `assignee`: nobody is holding it.
+ *
+ * Not a state — the states are open / in progress / resolved / closed — but the same
+ * discipline applies, because a reader who meets "Unclaimed" in the status strip and
+ * "unassigned" in the side panel of the same bug has to work out whether they are the same
+ * fact. They are. The verb an agent runs is still `agentmon bug claim`: claiming is the
+ * action, unassigned is the condition it ends.
+ */
+export const UNASSIGNED = "unassigned";
+export const UNASSIGNED_LABEL = "Unassigned";
+
+/** "unassigned for 6h" — the same word, carrying how long it has been true. */
+export const unassignedFor = (duration: string): string => `${UNASSIGNED} for ${duration}`;
+
+/**
+ * How long a bug took to reach `resolved`, said the way every other surface says it.
+ *
+ * "Fixed in 11m" in the byline, "Time to fix" in the panel and "fixed 05:02" on the
+ * resolution banner were three more names for `resolved`, all on one screen, while the
+ * pill, the strip, the tab, the chart legend and the CLI verb said resolved (P6 round 2
+ * critic). A resolution may or may not contain a fix — a bug can be resolved by finding
+ * the report wrong — so the state word is also the more truthful one.
+ */
+export const TIME_TO_RESOLVE = "Time to resolve";
 
 /* -- counts ----------------------------------------------------------------- */
 

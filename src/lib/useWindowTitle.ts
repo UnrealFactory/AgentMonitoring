@@ -53,8 +53,19 @@ export function useWindowTitle() {
     if (isTauri()) {
       import("@tauri-apps/api/window")
         .then(({ getCurrentWindow }) => getCurrentWindow().setTitle(title))
-        .catch(() => {
-          /* an older webview, or no window: the document title is still right */
+        .catch((err) => {
+          /* The document title is still right, so nothing on screen is wrong — but this is
+             exactly how the packaged app came to sit on a bare "AgentMonitoring" for a
+             whole round: `core:window:allow-set-title` was not in the capability, every
+             call was denied, and a bare `.catch(() => {})` ate the rejection while browser
+             mode (which never makes the call) passed every gate (P6 round 2 desktop
+             critic). A swallowed permission error is a silent feature. */
+          console.warn(
+            `agentmonitoring: could not set the window title to "${title}" — the document ` +
+              `title is still correct. Check core:window:allow-set-title in ` +
+              `src-tauri/capabilities/default.json.`,
+            err
+          );
         });
     }
   }, [location.pathname, projects, vault?.name]);

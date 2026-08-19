@@ -62,7 +62,12 @@ export function useRelated(slug: string, id: string, refs: string[]) {
       .filter((r) => !refs.includes(r.id))
       .sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
 
-    return { loading, outgoing, incoming, count: outgoing.length + incoming.length };
+    /* The same index, keyed for the prose: an id written into a sentence gets the title of
+       the record it names (lib/markdown.tsx). Withheld until both lists are in, so a chip
+       is never drawn as "no such record" while the vault is still being read. */
+    const titles = loading ? null : new Map(all.map((r) => [r.id, r.title]));
+
+    return { loading, outgoing, incoming, titles, count: outgoing.length + incoming.length };
   }, [works.data, works.loading, bugs.data, bugs.loading, refs, id]);
 }
 

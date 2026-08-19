@@ -13,7 +13,7 @@ import { useCurrentProject, useProjectSlug, useVaultNonce } from "../AppContext"
 import { api, failureTitle } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useActiveSection } from "../lib/useActiveSection";
-import { Markdown } from "../lib/markdown";
+import { Markdown, RecordTitles } from "../lib/markdown";
 import {
   ContentsRail,
   PartsBody,
@@ -115,206 +115,208 @@ export function WorkDetailPage() {
   const duration = formatDuration(work.started, work.finished);
 
   return (
-    <div className="page page-detail">
-      {/* The record moved out from under the reader — deleted, or the vault stopped
-          answering. The page keeps what it had and says so. */}
-      {refreshError && (
-        <StaleRecordBar
-          id={work.id}
-          message={refreshError}
-          status={status}
-          onRetry={reload}
-          action={
-            status === 404 ? (
-              <Link className="button button-sm" to={`/p/${slug}/work`}>
-                Work list
-              </Link>
-            ) : undefined
-          }
-        />
-      )}
-      <nav className="breadcrumb">
-        <Link to={`/p/${slug}`}>{project?.name ?? slug}</Link>
-        <span aria-hidden="true">/</span>
-        <Link to={`/p/${slug}/work`}>Work</Link>
-        <span aria-hidden="true">/</span>
-        <span className="mono">{work.id}</span>
-      </nav>
+    <RecordTitles.Provider value={related.titles}>
+      <div className="page page-detail">
+        {/* The record moved out from under the reader — deleted, or the vault stopped
+            answering. The page keeps what it had and says so. */}
+        {refreshError && (
+          <StaleRecordBar
+            id={work.id}
+            message={refreshError}
+            status={status}
+            onRetry={reload}
+            action={
+              status === 404 ? (
+                <Link className="button button-sm" to={`/p/${slug}/work`}>
+                  Work list
+                </Link>
+              ) : undefined
+            }
+          />
+        )}
+        <nav className="breadcrumb">
+          <Link to={`/p/${slug}`}>{project?.name ?? slug}</Link>
+          <span aria-hidden="true">/</span>
+          <Link to={`/p/${slug}/work`}>Work</Link>
+          <span aria-hidden="true">/</span>
+          <span className="mono">{work.id}</span>
+        </nav>
 
-      <header className="record-head">
-        <RecordTitle title={work.title} id={work.id} />
+        <header className="record-head">
+          <RecordTitle title={work.title} id={work.id} />
 
-        <div className="rec-byline">
-          <WorkStatusPill status={work.status} />
-          <AgentChip name={work.agent} size="md" />
-          <span className="rec-byline-text">
-            {work.status === "done" && work.finished ? (
-              <>
-                finished this work on <Stamp iso={work.finished} />
-              </>
-            ) : work.status === "abandoned" && work.finished ? (
-              <>
-                stopped this work on <Stamp iso={work.finished} />
-              </>
-            ) : (
-              <>
-                has been working on this since <Stamp iso={work.started} />
-              </>
-            )}
-          </span>
-        </div>
-
-        <div className="rec-facts">
-          <ul className="rec-fact-list">
-            <li>
-              <span className="rec-fact-label">Started</span>
-              <Stamp iso={work.started} relative={false} />
-            </li>
-            <li>
-              <span className="rec-fact-label">Finished</span>
-              {work.finished ? (
-                <Stamp iso={work.finished} relative={false} />
+          <div className="rec-byline">
+            <WorkStatusPill status={work.status} />
+            <AgentChip name={work.agent} size="md" />
+            <span className="rec-byline-text">
+              {work.status === "done" && work.finished ? (
+                <>
+                  finished this work on <Stamp iso={work.finished} />
+                </>
+              ) : work.status === "abandoned" && work.finished ? (
+                <>
+                  stopped this work on <Stamp iso={work.finished} />
+                </>
               ) : (
-                <span className="muted">in progress</span>
+                <>
+                  has been working on this since <Stamp iso={work.started} />
+                </>
               )}
-            </li>
-            <li>
-              <span className="rec-fact-label">Duration</span>
-              <span className="tabular">{duration}</span>
-            </li>
-            <li>
-              <span className="rec-fact-label">Updates</span>
-              <span className="tabular">{work.updates.length}</span>
-            </li>
-            <li>
-              <span className="rec-fact-label">Files</span>
-              <span className="tabular">{work.files.length}</span>
-            </li>
-          </ul>
+            </span>
+          </div>
 
-          {work.tags.length > 0 && (
-            <div className="rec-chips">
-              {work.tags.map((t) => (
-                <Tag key={t}>{t}</Tag>
-              ))}
-            </div>
-          )}
-        </div>
-      </header>
+          <div className="rec-facts">
+            <ul className="rec-fact-list">
+              <li>
+                <span className="rec-fact-label">Started</span>
+                <Stamp iso={work.started} relative={false} />
+              </li>
+              <li>
+                <span className="rec-fact-label">Finished</span>
+                {work.finished ? (
+                  <Stamp iso={work.finished} relative={false} />
+                ) : (
+                  <span className="muted">in progress</span>
+                )}
+              </li>
+              <li>
+                <span className="rec-fact-label">Duration</span>
+                <span className="tabular">{duration}</span>
+              </li>
+              <li>
+                <span className="rec-fact-label">Updates</span>
+                <span className="tabular">{work.updates.length}</span>
+              </li>
+              <li>
+                <span className="rec-fact-label">Files</span>
+                <span className="tabular">{work.files.length}</span>
+              </li>
+            </ul>
 
-      <div className="detail-layout">
-        <article className="detail-main">
-          <Body id="what" title="What" source={work.what} />
-          <Body id="why" title="Why" source={work.why} />
-          <Body id="how" title="How" source={work.how} />
+            {work.tags.length > 0 && (
+              <div className="rec-chips">
+                {work.tags.map((t) => (
+                  <Tag key={t}>{t}</Tag>
+                ))}
+              </div>
+            )}
+          </div>
+        </header>
 
-          {work.files.length > 0 && <FilesSection files={work.files} />}
+        <div className="detail-layout">
+          <article className="detail-main">
+            <Body id="what" title="What" source={work.what} />
+            <Body id="why" title="Why" source={work.why} />
+            <Body id="how" title="How" source={work.how} />
 
-          <UpdatesSection work={work} />
+            {work.files.length > 0 && <FilesSection files={work.files} />}
 
-          {work.outcome && (
-            <section className="record-section" id="outcome">
-              <div className="outcome-card">
-                <header className="outcome-head">
-                  <span className="outcome-mark" aria-hidden="true">
-                    <svg viewBox="0 0 16 16" width="11" height="11">
-                      <path
-                        d="M3.5 8.5 L6.5 11.5 L12.5 4.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  <h2 className="outcome-title">Outcome</h2>
-                  <span className="outcome-when">
+            <UpdatesSection work={work} />
+
+            {work.outcome && (
+              <section className="record-section" id="outcome">
+                <div className="outcome-card">
+                  <header className="outcome-head">
+                    <span className="outcome-mark" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" width="11" height="11">
+                        <path
+                          d="M3.5 8.5 L6.5 11.5 L12.5 4.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <h2 className="outcome-title">Outcome</h2>
+                    <span className="outcome-when">
+                      {work.finished ? (
+                        <>
+                          shipped <Stamp iso={work.finished} />
+                        </>
+                      ) : (
+                        "recorded"
+                      )}
+                    </span>
+                  </header>
+                  <PartsJump result={outcome} label="Inside this outcome" />
+                  <div className="outcome-body">
+                    <PartsBody result={outcome} />
+                  </div>
+                </div>
+              </section>
+            )}
+
+            <RelatedSection slug={slug} id={work.id} kind="work" related={related} />
+
+            {work.extraSections.map((s) => (
+              <section className="record-section" key={s.title}>
+                <h2 className="section-title">{s.title}</h2>
+                <Markdown source={s.body} />
+              </section>
+            ))}
+          </article>
+
+          <aside className="detail-side">
+            <ContentsRail entries={sections} active={active} />
+
+            <div className="side-card">
+              {/* The object's own noun, the way the bug page's twin card says Bug. "Record"
+                  is the word lib/words.ts exists to keep off the screens. */}
+              <div className="side-card-title">Work log</div>
+              <dl className="side-facts">
+                <div>
+                  <dt>Status</dt>
+                  <dd>
+                    <WorkStatusPill status={work.status} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Agent</dt>
+                  <dd>
+                    <AgentChip name={work.agent} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Started</dt>
+                  <dd className="tabular" title={formatDateTimeUtc(work.started)}>
+                    {formatDateTime(work.started)}
+                    <span className="side-rel">{formatRelative(work.started)}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Finished</dt>
+                  <dd className="tabular" title={work.finished ? formatDateTimeUtc(work.finished) : ""}>
                     {work.finished ? (
                       <>
-                        shipped <Stamp iso={work.finished} />
+                        {formatDateTime(work.finished)}
+                        <span className="side-rel">{formatRelative(work.finished)}</span>
                       </>
                     ) : (
-                      "recorded"
+                      <span className="muted">in progress</span>
                     )}
-                  </span>
-                </header>
-                <PartsJump result={outcome} label="Inside this outcome" />
-                <div className="outcome-body">
-                  <PartsBody result={outcome} />
+                  </dd>
                 </div>
-              </div>
-            </section>
-          )}
-
-          <RelatedSection slug={slug} id={work.id} kind="work" related={related} />
-
-          {work.extraSections.map((s) => (
-            <section className="record-section" key={s.title}>
-              <h2 className="section-title">{s.title}</h2>
-              <Markdown source={s.body} />
-            </section>
-          ))}
-        </article>
-
-        <aside className="detail-side">
-          <ContentsRail entries={sections} active={active} />
-
-          <div className="side-card">
-            {/* The object's own noun, the way the bug page's twin card says Bug. "Record"
-                is the word lib/words.ts exists to keep off the screens. */}
-            <div className="side-card-title">Work log</div>
-            <dl className="side-facts">
-              <div>
-                <dt>Status</dt>
-                <dd>
-                  <WorkStatusPill status={work.status} />
-                </dd>
-              </div>
-              <div>
-                <dt>Agent</dt>
-                <dd>
-                  <AgentChip name={work.agent} />
-                </dd>
-              </div>
-              <div>
-                <dt>Started</dt>
-                <dd className="tabular" title={formatDateTimeUtc(work.started)}>
-                  {formatDateTime(work.started)}
-                  <span className="side-rel">{formatRelative(work.started)}</span>
-                </dd>
-              </div>
-              <div>
-                <dt>Finished</dt>
-                <dd className="tabular" title={work.finished ? formatDateTimeUtc(work.finished) : ""}>
-                  {work.finished ? (
-                    <>
-                      {formatDateTime(work.finished)}
-                      <span className="side-rel">{formatRelative(work.finished)}</span>
-                    </>
-                  ) : (
-                    <span className="muted">in progress</span>
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt>Duration</dt>
-                <dd className="tabular">
-                  {duration}
-                  {!work.finished && <span className="side-rel">and counting</span>}
-                </dd>
-              </div>
-              <div>
-                <dt>Last activity</dt>
-                <dd className="tabular" title={formatDateTimeUtc(work.lastActivity)}>
-                  {formatRelative(work.lastActivity)}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </aside>
+                <div>
+                  <dt>Duration</dt>
+                  <dd className="tabular">
+                    {duration}
+                    {!work.finished && <span className="side-rel">and counting</span>}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Last activity</dt>
+                  <dd className="tabular" title={formatDateTimeUtc(work.lastActivity)}>
+                    {formatRelative(work.lastActivity)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </aside>
+        </div>
       </div>
-    </div>
+    </RecordTitles.Provider>
   );
 }
 

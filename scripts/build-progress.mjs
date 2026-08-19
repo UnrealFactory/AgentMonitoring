@@ -30,13 +30,29 @@ const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 const byPiece = {};
 for (const r of rounds) (byPiece[r.piece] ??= []).push(r);
 
+/**
+ * A piece's status, from every critic who graded its latest round — not from whichever one
+ * appended last.
+ *
+ * A round is graded by several critics at once (design, comprehension, desktop, CLI), and
+ * taking the last row let one pass overwrite three fails written minutes earlier: the P6
+ * badge read PASS while the design critic's fail was still open, which the desktop critic
+ * had to warn the manager about in prose. A round passes when nobody failed it, and the
+ * badge says how many graded it.
+ */
 const statusOf = (id) => {
   const rs = byPiece[id] ?? [];
-  const critic = [...rs].reverse().find((r) => r.role === "critic");
   if (!rs.length) return { label: "not started", cls: "idle" };
-  if (critic?.verdict === "pass") return { label: `PASS (round ${critic.round})`, cls: "pass" };
-  if (critic) return { label: `round ${critic.round}: FAIL`, cls: "fail" };
-  return { label: "building…", cls: "run" };
+  const critics = rs.filter((r) => r.role === "critic");
+  if (!critics.length) return { label: "building…", cls: "run" };
+  const latest = Math.max(...critics.map((r) => Number(r.round) || 0));
+  const graded = critics.filter((r) => (Number(r.round) || 0) === latest);
+  const failed = graded.filter((r) => r.verdict !== "pass");
+  const of = graded.length > 1 ? ` of ${graded.length}` : "";
+  if (failed.length) {
+    return { label: `round ${latest}: ${failed.length}${of} FAIL`, cls: "fail" };
+  }
+  return { label: `PASS (round ${latest}${of ? `, ${graded.length} critics` : ""})`, cls: "pass" };
 };
 
 const shotsDir = join(root, "progress", "shots");

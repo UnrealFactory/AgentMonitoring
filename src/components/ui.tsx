@@ -4,7 +4,7 @@
  */
 import { useState, type ReactNode } from "react";
 import type { BugStatus, Severity, WorkStatus } from "../lib/types";
-import { BUG_STATUS_LABEL, SEVERITY_LABEL, WORK_STATUS_LABEL } from "../lib/words";
+import { BUG_STATUS_LABEL, SEVERITY_LABEL, UNASSIGNED, WORK_STATUS_LABEL } from "../lib/words";
 
 export function WorkStatusPill({ status }: { status: WorkStatus }) {
   return (
@@ -137,7 +137,7 @@ export function CommentCount({ count }: { count: number }) {
  */
 export function Handoff({ from, to }: { from: string; to: string | null }) {
   return (
-    <span className="handoff" title={to ? `filed by ${from} · assigned to ${to}` : `filed by ${from} · unassigned`}>
+    <span className="handoff" title={to ? `filed by ${from} · assigned to ${to}` : `filed by ${from} · ${UNASSIGNED}`}>
       <AgentChip name={from} hideName />
       <span className="handoff-arrow" aria-hidden="true">
         →
@@ -147,7 +147,7 @@ export function Handoff({ from, to }: { from: string; to: string | null }) {
       ) : (
         <span className="handoff-none">
           <span className="handoff-empty" aria-hidden="true" />
-          unassigned
+          {UNASSIGNED}
         </span>
       )}
     </span>

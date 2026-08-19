@@ -438,7 +438,12 @@ function ProjectRow({
 }) {
   /* An archived project is never "live", whatever the clock says. Archiving is itself an
      event, so the last thing that happened in one is usually the archiving — which lit the
-     filled dot and printed "Active just now" beside the word "archived". */
+     filled dot and printed "Active just now" beside the word "archived".
+
+     The row says "Last activity 3h ago" rather than "Active 3h ago" for the same reason
+     the section above it is headed Active: on this screen `active` is a project's status,
+     the opposite of archived, and one word may not also mean "somebody wrote something
+     recently" (lib/words.ts). */
   const archived = p.status === "archived";
   const state = archived ? "stale" : freshness(p.counts.lastActivity, now);
   const c = p.counts;
@@ -460,7 +465,7 @@ function ProjectRow({
                   archived
                     ? "archived project"
                     : state === "live"
-                      ? "active in the last two hours"
+                      ? "something recorded in the last two hours"
                       : `${state} project`
                 }
               />
@@ -513,7 +518,7 @@ function ProjectRow({
           <span className="project-when tabular">
             {c.lastActivity ? (
               <>
-                {archived ? "Last active " : "Active "}
+                {"Last activity "}
                 {formatRelative(c.lastActivity, new Date(now))}
                 <span className="project-since">started {formatDate(p.createdAt)}</span>
               </>

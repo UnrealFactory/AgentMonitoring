@@ -8,15 +8,29 @@
  * those records — an agent writing "see BUG-0004" is making a cross-reference, and a
  * reader should be able to follow it. Ids inside code spans stay literal.
  */
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { parseBlocks, parseInline, type Inline } from "./markdown-parse";
 
 /** Resolves a record id to a route, or null when we are not inside a project. */
 type RefLinker = ((id: string) => string) | null;
 
+/**
+ * What the ids in this project's prose are called — `BUG-0004` → its title.
+ *
+ * An id written into a sentence is a claim about another record, and until this existed the
+ * chip printed the id alone: a reader who followed "the same class BUG-0004 was on the bug
+ * board" landed on an unrelated bug, and the mis-citation was invisible on the page where
+ * it was written (P6 round 2 comprehension critic). With the title on the chip, a wrong id
+ * announces itself where it stands. The map is what the record pages have already loaded
+ * for the Related block; `null` means nothing has been loaded yet, which is not the same as
+ * "this id does not exist" and must not be drawn as if it were.
+ */
+export const RecordTitles = createContext<Map<string, string> | null>(null);
+
 interface Opts {
   link: RefLinker;
+  titles: Map<string, string> | null;
   /** Set figures in tabular numerals and full-strength ink. See `withFigures`. */
   figures?: boolean;
 }
@@ -66,14 +80,27 @@ function renderInline(nodes: Inline[], keyPrefix: string, opts: Opts): ReactNode
         return opts.figures ? withFigures(node.text, key) : node.text;
       case "code":
         return <code key={key}>{node.text}</code>;
-      case "ref":
-        return link ? (
-          <Link key={key} className="ref-inline mono" to={link(node.id)}>
+      case "ref": {
+        if (!link) return node.id;
+        const title = opts.titles?.get(node.id);
+        const unknown = !!opts.titles && !title;
+        return (
+          <Link
+            key={key}
+            className={`ref-inline mono${unknown ? " is-unknown" : ""}`}
+            to={link(node.id)}
+            title={
+              title
+                ? `${node.id} — ${title}`
+                : unknown
+                  ? `${node.id} — no work log or bug with this id in this project`
+                  : undefined
+            }
+          >
             {node.id}
           </Link>
-        ) : (
-          node.id
         );
+      }
       case "strong":
         return <strong key={key}>{renderInline(node.children, key, opts)}</strong>;
       case "em":
@@ -107,7 +134,8 @@ function useRefLinker(): RefLinker {
  */
 export function InlineMarkdown({ source }: { source: string }) {
   const link = useRefLinker();
-  return <>{renderInline(parseInline(source ?? ""), "il", { link })}</>;
+  const titles = useContext(RecordTitles);
+  return <>{renderInline(parseInline(source ?? ""), "il", { link, titles })}</>;
 }
 
 export function Markdown({
@@ -123,7 +151,8 @@ export function Markdown({
   // Record ids link inside the project the reader is already looking at; on screens with
   // no project in the route (there is one: the projects list) they stay plain text.
   const link = useRefLinker();
-  const opts: Opts = { link, figures };
+  const titles = useContext(RecordTitles);
+  const opts: Opts = { link, titles, figures };
   const blocks = parseBlocks(source ?? "");
   return (
     <div className={className ? `prose ${className}` : "prose"}>

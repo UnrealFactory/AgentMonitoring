@@ -559,9 +559,26 @@
   color: var(--text-tertiary);
 }
 
-/* An agent is a name: the same tint agent chips wear everywhere else. */
+/* An agent is a name too, so a tint alone would leave the reader deciding whether "relay"
+   or "nova" is the project. It wears the initials avatar it wears in every byline, row and
+   chip in the app — at 14px, the size that fits a 24px palette row. */
 .palette-meta-part.is-agent {
   color: var(--accent-text);
+}
+
+.palette-meta-avatar {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: var(--radius-full);
+  background: linear-gradient(150deg, #3a3f57, #23252e);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  font-size: 8px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
 }
 
 .palette-meta-part.is-severity {
@@ -1785,11 +1802,18 @@ a.button {
   color: var(--text-primary);
 }
 
+/* The label and the clause bound to it are one run of text inside the flex row, so a long
+   clause wraps mid-sentence the way prose does instead of dropping onto its own line with
+   the author's comma at the head of it. */
+.res-part-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* The clause the author bound to the label (", in `dispatcher.rs` and `queue.rs`:")
    stays on the heading line, in the author's own words and punctuation — and its opening
-   comma hugs the label, so the flex gap is taken back off it. */
+   comma hugs the label, which is why nothing separates them. */
 .res-part-trailer {
-  margin-left: calc(-1 * var(--space-2));
   font-size: var(--text-base);
   font-weight: var(--weight-normal);
   text-transform: none;
@@ -2141,13 +2165,21 @@ a.button {
   border-top: 1px solid var(--border-subtle);
 }
 
+/* Top-aligned, not centred: a title that wraps to four lines used to leave its id, its
+   status and its timestamp floating in the middle of the row, attached to nothing. They
+   belong on the row's first line, where the title starts. */
 .rel-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
   min-height: 36px;
   padding: var(--space-2) var(--space-4);
   transition: background var(--duration-fast) var(--ease);
+}
+
+.rel-row > * {
+  /* Sit on the title's first line: the pills and the id are 20px tall against a 24px line. */
+  margin-top: 1px;
 }
 
 a.rel-row:hover {
@@ -2170,13 +2202,22 @@ a.rel-row:hover .rel-id {
   /* No floor: a floor does not save the title, it moves the damage — with `24ch` here the
      row grew past the card and the card (overflow: hidden) cut the *timestamp* instead,
      which has no ellipsis to warn anyone. The title is the one thing on this row that can
-     truncate legibly, so it is the one thing that gives up width. */
+     give up width, so it is the one thing that wraps.
+
+     It wraps rather than ellipsising because of what these rows carry: an append-only
+     correction is filed as a record that points back at the wrong one, and its title *is*
+     the correction ("WORK-0011 says relay is three weeks of ten agents; relay has four").
+     On one nowrap line in a 359px box that read "…three weeks of ten agents; rela…" — the
+     page printing the wrong number twice and cutting the right one off (P6 round 2
+     comprehension critic). No line clamp either: a three-line clamp was enough at 1440px
+     and cut the vault's two longest titles at 1152px, where this box is 209px wide. A row
+     four lines tall is a title somebody wrote long; a title cut short is the app editing
+     it. */
   min-width: 0;
   font-size: var(--text-base);
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
 }
 
 .rel-side {
@@ -4857,6 +4898,25 @@ a.ref-inline:hover {
 
 strong .ref-inline {
   font-weight: var(--weight-medium);
+}
+
+/* An id in the prose that no record in this project answers to. Drawn as a link that leads
+   somewhere questionable rather than a link that leads somewhere: the chip keeps its shape
+   (the author wrote a reference and it is still one) and gives up its accent, so a typo'd
+   or deleted id is visible in the sentence instead of only at the 404 it lands on. Its
+   title says so in words for anyone who hovers or reads it aloud. */
+.prose a.ref-inline.is-unknown,
+a.ref-inline.is-unknown {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  text-decoration: underline dotted currentColor;
+  text-underline-offset: 2px;
+}
+
+.prose a.ref-inline.is-unknown:hover,
+a.ref-inline.is-unknown:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
 }
 
 /* Inside a block, code is the exception to the wrapping above: a line break there would be

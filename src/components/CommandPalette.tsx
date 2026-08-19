@@ -89,12 +89,34 @@ function score(text: string, query: string): number {
 /** `in_progress` → `in progress`: the app's word for the state, in the row's small type. */
 const state = (status: string): string => status.replace(/_/g, " ");
 
+/** What each kind of meta value is, for the tooltip and the screen reader. */
+const META_KIND: Record<MetaPart["kind"], string> = {
+  project: "project",
+  agent: "agent",
+  severity: "severity",
+  state: "status",
+  count: "",
+};
+
+/** `nova` → `NV`, the same two letters the agent's avatar wears everywhere else. */
+const initials = (name: string) =>
+  name
+    .split(/[-_\s]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("") || "?";
+
 /**
  * The meta column: one span per fact, each saying what kind of fact it is.
  *
- * The project wears the folder glyph the nav gives a project and the app's dimmest text;
- * an agent is a name; a state is the word the lists use. A reader who does not know the
- * vault can tell which is which without knowing any of the names in it.
+ * Two of these are names of things a reader may never have heard of — "relay" and "nova"
+ * are the same shape of word — and they used to share one slot, told apart only by a folder
+ * glyph on one and a tint on the other (P5 design critic). So each value now carries the
+ * mark its kind wears everywhere else in the app: a project has the nav's folder, an agent
+ * has the initials avatar off every byline and row, a severity is a severity word and a
+ * state is the word the lists use. The kind is also in the part's tooltip and, for a reader
+ * on a screen reader, in the text — "nova (agent)" — because a glyph is not a label.
  */
 function Meta({ parts }: { parts: MetaPart[] }) {
   return (
@@ -106,7 +128,10 @@ function Meta({ parts }: { parts: MetaPart[] }) {
               ·
             </span>
           )}
-          <span className={`palette-meta-part is-${part.kind}`}>
+          <span
+            className={`palette-meta-part is-${part.kind}`}
+            title={META_KIND[part.kind] ? `${META_KIND[part.kind]}: ${part.text}` : undefined}
+          >
             {part.kind === "project" && (
               <svg className="palette-meta-icon" viewBox="0 0 16 16" aria-hidden="true">
                 <path
@@ -118,7 +143,13 @@ function Meta({ parts }: { parts: MetaPart[] }) {
                 />
               </svg>
             )}
+            {part.kind === "agent" && (
+              <span className="palette-meta-avatar" aria-hidden="true">
+                {initials(part.text)}
+              </span>
+            )}
             {part.text}
+            {META_KIND[part.kind] && <span className="sr-only"> ({META_KIND[part.kind]})</span>}
           </span>
         </Fragment>
       ))}

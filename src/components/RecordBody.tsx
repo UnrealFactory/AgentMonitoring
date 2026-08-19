@@ -109,12 +109,18 @@ function Part({ part }: { part: LabelledSection }) {
             <CheckMark />
           </span>
         )}
-        <span className="res-part-label">{part.label}</span>
-        {part.trailer && (
-          <span className="res-part-trailer">
-            <InlineMarkdown source={part.trailer} />
-          </span>
-        )}
+        {/* Label and clause are one text run, not two boxes side by side: as flex items a
+            long clause became its own line, and the heading read "Fix" over a line starting
+            with the author's comma — the very defect the splitter was fixed for, rebuilt in
+            CSS. Inside this span they wrap like the sentence they are. */}
+        <span className="res-part-text">
+          <span className="res-part-label">{part.label}</span>
+          {part.trailer && (
+            <span className="res-part-trailer">
+              <InlineMarkdown source={part.trailer} />
+            </span>
+          )}
+        </span>
         {part.evidence && part.items > 0 && (
           <span className="res-part-count tabular">{pluralize(part.items, "check")}</span>
         )}

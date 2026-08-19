@@ -17,7 +17,7 @@ import { useCurrentProject, useProjectSlug, useVaultNonce } from "../AppContext"
 import { api, failureTitle } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useActiveSection } from "../lib/useActiveSection";
-import { Markdown } from "../lib/markdown";
+import { Markdown, RecordTitles } from "../lib/markdown";
 import type { SplitResult } from "../lib/sections";
 import {
   ContentsRail,
@@ -45,6 +45,7 @@ import {
   formatRelative,
   pluralize,
 } from "../lib/format";
+import { TIME_TO_RESOLVE, UNASSIGNED, UNASSIGNED_LABEL } from "../lib/words";
 import type { BugComment, BugDetail } from "../lib/types";
 
 /** A timestamp shown as a real date, with the relative time next to it. */
@@ -141,204 +142,206 @@ export function BugDetailPage() {
   );
 
   return (
-    <div className="page page-detail">
-      {/* The record moved out from under the reader — deleted, or the vault stopped
-          answering. The page keeps what it had and says so. */}
-      {refreshError && (
-        <StaleRecordBar
-          id={bug.id}
-          message={refreshError}
-          status={status}
-          onRetry={reload}
-          action={
-            status === 404 ? (
-              <Link className="button button-sm" to={`/p/${slug}/bugs`}>
-                Bug board
-              </Link>
-            ) : undefined
-          }
-        />
-      )}
-      <nav className="breadcrumb">
-        <Link to={`/p/${slug}`}>{project?.name ?? slug}</Link>
-        <span aria-hidden="true">/</span>
-        <Link to={`/p/${slug}/bugs`}>Bugs</Link>
-        <span aria-hidden="true">/</span>
-        <span className="mono">{bug.id}</span>
-      </nav>
-
-      <header className="record-head">
-        <RecordTitle title={bug.title} id={bug.id} />
-
-        <div className="rec-byline">
-          <BugStatusPill status={bug.status} />
-          <SeverityBadge severity={bug.severity} />
-          <AgentChip name={bug.reporter} size="md" />
-          <span className="rec-byline-text">
-            filed this bug on <Stamp iso={bug.created} />
-            {bug.resolved ? (
-              <>
-                {" "}
-                · fixed in <span className="rec-byline-strong">{openFor}</span>
-              </>
-            ) : (
-              <>
-                {" "}
-                · open for <span className="rec-byline-strong">{formatDuration(bug.created, null)}</span>
-              </>
-            )}
-          </span>
-        </div>
-
-        {/* The three dates live here and nowhere else on this page: one fact, one place. */}
-        <StatusStrip bug={bug} />
-
-        {bug.labels.length > 0 && (
-          <div className="rec-chips">
-            {bug.labels.map((l) => (
-              <Tag key={l}>{l}</Tag>
-            ))}
-          </div>
+    <RecordTitles.Provider value={related.titles}>
+      <div className="page page-detail">
+        {/* The record moved out from under the reader — deleted, or the vault stopped
+            answering. The page keeps what it had and says so. */}
+        {refreshError && (
+          <StaleRecordBar
+            id={bug.id}
+            message={refreshError}
+            status={status}
+            onRetry={reload}
+            action={
+              status === 404 ? (
+                <Link className="button button-sm" to={`/p/${slug}/bugs`}>
+                  Bug board
+                </Link>
+              ) : undefined
+            }
+          />
         )}
-      </header>
+        <nav className="breadcrumb">
+          <Link to={`/p/${slug}`}>{project?.name ?? slug}</Link>
+          <span aria-hidden="true">/</span>
+          <Link to={`/p/${slug}/bugs`}>Bugs</Link>
+          <span aria-hidden="true">/</span>
+          <span className="mono">{bug.id}</span>
+        </nav>
 
-      <div className="detail-layout">
-        <article className="detail-main">
-          <section className="record-section" id="report">
-            <h2 className="section-title">
-              Report
-              <span className="section-byline">
-                by {bug.reporter}, {formatRelative(bug.created)}
-              </span>
-            </h2>
-            {bug.report.trim() ? (
-              <Markdown source={bug.report} />
-            ) : (
-              <p className="muted">
-                This bug has no <code>## Report</code> section.
-              </p>
-            )}
-          </section>
+        <header className="record-head">
+          <RecordTitle title={bug.title} id={bug.id} />
 
-          <ThreadSection bug={bug} claimDelay={claimDelay} />
-
-          {bug.resolution && (
-            <ResolutionCard bug={bug} openFor={openFor} resolution={resolution} />
-          )}
-
-          {bug.status === "closed" && !bug.resolution && (
-            <section className="record-section">
-              <div className="notice">
-                <span className="notice-mark" aria-hidden="true" />
-                <div>
-                  <p className="notice-title">Closed without a resolution</p>
-                  <p className="notice-text">
-                    This bug was closed but no fix was written into it, so the record does not say
-                    what happened. That is a gap in the record, not in the reader.
-                  </p>
-                </div>
-              </div>
-            </section>
-          )}
-
-          <RelatedSection slug={slug} id={bug.id} kind="bug" related={related} />
-
-          {bug.extraSections.map((s) => (
-            <section className="record-section" key={s.title}>
-              <h2 className="section-title">{s.title}</h2>
-              <Markdown source={s.body} />
-            </section>
-          ))}
-        </article>
-
-        <aside className="detail-side">
-          <ContentsRail entries={sections} active={active} />
-
-          <div className="side-card">
-            <div className="side-card-title">Bug</div>
-            <dl className="side-facts">
-              <div>
-                <dt>Severity</dt>
-                <dd>
-                  <SeverityBadge severity={bug.severity} />
-                </dd>
-              </div>
-              <div>
-                <dt>Status</dt>
-                <dd>
-                  <BugStatusPill status={bug.status} />
-                </dd>
-              </div>
-              <div>
-                <dt>Reporter</dt>
-                <dd>
-                  <AgentChip name={bug.reporter} />
-                </dd>
-              </div>
-              <div>
-                <dt>Assignee</dt>
-                <dd>
-                  {bug.assignee ? (
-                    <AgentChip name={bug.assignee} />
-                  ) : (
-                    <span className="muted">unassigned</span>
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt>Participants</dt>
-                <dd>
-                  <span className="side-people" title={participants.join(", ")}>
-                    {participants.map((name) => (
-                      <AgentChip key={name} name={name} hideName />
-                    ))}
-                    <span className="side-people-count tabular">{participants.length}</span>
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt>Last word</dt>
-                <dd>
-                  {lastComment ? (
-                    <span className="side-lastword">
-                      <span className="side-lastword-who" title={lastComment.agent}>
-                        {lastComment.agent}
-                      </span>
-                      <span className="side-rel" title={formatDateTimeUtc(lastComment.ts)}>
-                        {formatRelative(lastComment.ts)}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="muted">no replies yet</span>
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt>Filed</dt>
-                <dd className="tabular" title={formatDateTimeUtc(bug.created)}>
-                  {formatDateTime(bug.created)}
-                  <span className="side-rel">{formatRelative(bug.created)}</span>
-                </dd>
-              </div>
-              <div>
-                <dt>{bug.resolved ? "Time to fix" : "Age"}</dt>
-                <dd className="tabular">
-                  {openFor}
-                  {!bug.resolved && <span className="side-rel">and counting</span>}
-                </dd>
-              </div>
-              <div>
-                <dt>Last activity</dt>
-                <dd className="tabular" title={formatDateTimeUtc(bug.lastActivity)}>
-                  {formatRelative(bug.lastActivity)}
-                </dd>
-              </div>
-            </dl>
+          <div className="rec-byline">
+            <BugStatusPill status={bug.status} />
+            <SeverityBadge severity={bug.severity} />
+            <AgentChip name={bug.reporter} size="md" />
+            <span className="rec-byline-text">
+              filed this bug on <Stamp iso={bug.created} />
+              {bug.resolved ? (
+                <>
+                  {" "}
+                  · resolved in <span className="rec-byline-strong">{openFor}</span>
+                </>
+              ) : (
+                <>
+                  {" "}
+                  · open for <span className="rec-byline-strong">{formatDuration(bug.created, null)}</span>
+                </>
+              )}
+            </span>
           </div>
 
-        </aside>
+          {/* The three dates live here and nowhere else on this page: one fact, one place. */}
+          <StatusStrip bug={bug} />
+
+          {bug.labels.length > 0 && (
+            <div className="rec-chips">
+              {bug.labels.map((l) => (
+                <Tag key={l}>{l}</Tag>
+              ))}
+            </div>
+          )}
+        </header>
+
+        <div className="detail-layout">
+          <article className="detail-main">
+            <section className="record-section" id="report">
+              <h2 className="section-title">
+                Report
+                <span className="section-byline">
+                  by {bug.reporter}, {formatRelative(bug.created)}
+                </span>
+              </h2>
+              {bug.report.trim() ? (
+                <Markdown source={bug.report} />
+              ) : (
+                <p className="muted">
+                  This bug has no <code>## Report</code> section.
+                </p>
+              )}
+            </section>
+
+            <ThreadSection bug={bug} claimDelay={claimDelay} />
+
+            {bug.resolution && (
+              <ResolutionCard bug={bug} openFor={openFor} resolution={resolution} />
+            )}
+
+            {bug.status === "closed" && !bug.resolution && (
+              <section className="record-section">
+                <div className="notice">
+                  <span className="notice-mark" aria-hidden="true" />
+                  <div>
+                    <p className="notice-title">Closed without a resolution</p>
+                    <p className="notice-text">
+                      This bug was closed but no fix was written into it, so the record does not say
+                      what happened. That is a gap in the record, not in the reader.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            <RelatedSection slug={slug} id={bug.id} kind="bug" related={related} />
+
+            {bug.extraSections.map((s) => (
+              <section className="record-section" key={s.title}>
+                <h2 className="section-title">{s.title}</h2>
+                <Markdown source={s.body} />
+              </section>
+            ))}
+          </article>
+
+          <aside className="detail-side">
+            <ContentsRail entries={sections} active={active} />
+
+            <div className="side-card">
+              <div className="side-card-title">Bug</div>
+              <dl className="side-facts">
+                <div>
+                  <dt>Severity</dt>
+                  <dd>
+                    <SeverityBadge severity={bug.severity} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>
+                    <BugStatusPill status={bug.status} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Reporter</dt>
+                  <dd>
+                    <AgentChip name={bug.reporter} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Assignee</dt>
+                  <dd>
+                    {bug.assignee ? (
+                      <AgentChip name={bug.assignee} />
+                    ) : (
+                      <span className="muted">{UNASSIGNED}</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Participants</dt>
+                  <dd>
+                    <span className="side-people" title={participants.join(", ")}>
+                      {participants.map((name) => (
+                        <AgentChip key={name} name={name} hideName />
+                      ))}
+                      <span className="side-people-count tabular">{participants.length}</span>
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Last word</dt>
+                  <dd>
+                    {lastComment ? (
+                      <span className="side-lastword">
+                        <span className="side-lastword-who" title={lastComment.agent}>
+                          {lastComment.agent}
+                        </span>
+                        <span className="side-rel" title={formatDateTimeUtc(lastComment.ts)}>
+                          {formatRelative(lastComment.ts)}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="muted">no replies yet</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Filed</dt>
+                  <dd className="tabular" title={formatDateTimeUtc(bug.created)}>
+                    {formatDateTime(bug.created)}
+                    <span className="side-rel">{formatRelative(bug.created)}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{bug.resolved ? TIME_TO_RESOLVE : "Age"}</dt>
+                  <dd className="tabular">
+                    {openFor}
+                    {!bug.resolved && <span className="side-rel">and counting</span>}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Last activity</dt>
+                  <dd className="tabular" title={formatDateTimeUtc(bug.lastActivity)}>
+                    {formatRelative(bug.lastActivity)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+          </aside>
+        </div>
       </div>
-    </div>
+    </RecordTitles.Provider>
   );
 }
 
@@ -361,7 +364,7 @@ function StatusStrip({ bug }: { bug: BugDetail }) {
     },
     {
       key: "claimed",
-      label: bug.claimed ? "Claimed" : "Unclaimed",
+      label: bug.claimed ? "Claimed" : UNASSIGNED_LABEL,
       done: !!bug.claimed,
       who: bug.claimed ? (bug.assignee ?? "an agent") : null,
       ts: bug.claimed,
@@ -595,7 +598,7 @@ function ResolutionCard({
           <span className="outcome-when">
             {bug.resolved ? (
               <>
-                fixed <Stamp iso={bug.resolved} /> · {openFor} after it was filed
+                resolved <Stamp iso={bug.resolved} /> · {openFor} after it was filed
               </>
             ) : (
               "recorded"

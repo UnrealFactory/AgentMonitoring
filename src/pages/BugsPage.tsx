@@ -42,6 +42,8 @@ import {
   BUG_STATUS_LABEL,
   bugCount,
   SEVERITY_LABEL,
+  UNASSIGNED,
+  UNASSIGNED_LABEL,
   UNRESOLVED,
   UNRESOLVED_LABEL,
   UNRESOLVED_MEANS,
@@ -321,7 +323,7 @@ export function BugsPage() {
       </header>
 
       <div className="toolbar">
-        <div className="segmented" role="tablist" aria-label="Filter by state">
+        <div className="segmented" role="tablist" aria-label="Filter by status">
           {/* Each tab says which statuses it holds, so the one word on it never has to
               stand in for two. */}
           <button
@@ -394,7 +396,7 @@ export function BugsPage() {
               { value: "all", label: "All assignees" },
               {
                 value: "none",
-                label: "Unassigned",
+                label: UNASSIGNED_LABEL,
                 hint: facet("assignee", (b) => !b.assignee),
               },
               ...assignees.map((a) => ({
@@ -481,7 +483,7 @@ export function BugsPage() {
           )}
           {assignee !== "all" && (
             <button className="filter-chip" onClick={() => set("assignee", "all")}>
-              Assignee: {assignee === "none" ? "unassigned" : assignee}{" "}
+              Assignee: {assignee === "none" ? UNASSIGNED : assignee}{" "}
               <span aria-hidden="true">×</span>
             </button>
           )}

@@ -54,6 +54,8 @@ import {
   bugLower,
   IN_PROGRESS,
   SEVERITY_LABEL,
+  UNASSIGNED,
+  unassignedFor,
   UNRESOLVED,
   UNRESOLVED_MEANS,
   workLogs,
@@ -732,19 +734,26 @@ function UnresolvedBugs({
                     {b.assignee ? (
                       <AgentChip name={b.assignee} />
                     ) : (
-                      /* "Unclaimed" and "unclaimed since yesterday" are different states.
-                         The flag carries the age, and turns amber once a bug this severe
-                         has gone unowned for longer than half a working day — a rule the
-                         tooltip states, so the colour is not the claim (round 2 critic). */
+                      /* One word for one empty field: `unassigned`, the same word the board
+                         row, the filter menu, the status strip and the side panel use
+                         (lib/words.ts). It used to read "unclaimed" here and "needs an
+                         owner" when the wait got long — three names for the fact that
+                         nobody is holding this bug (P6 round 2 critic). The wait is a
+                         number, not a third name, so the flag carries the duration and
+                         turns amber once a bug this severe has waited longer than half a
+                         working day — a rule the tooltip states, so the colour is not the
+                         claim (P4 round 2 critic). */
                       <span
                         className={`now-flag${needsOwner(b, now) ? " is-urgent" : ""}`}
                         title={
                           needsOwner(b, now)
-                            ? `Nobody has claimed this ${SEVERITY_LABEL[b.severity].toLowerCase()}-severity bug in ${formatDuration(b.created, iso)}. This screen flags critical and high bugs left unowned for more than four hours.`
-                            : "No agent has claimed this bug"
+                            ? `No agent has taken this ${SEVERITY_LABEL[b.severity].toLowerCase()}-severity bug in ${formatDuration(b.created, iso)}. This screen flags critical and high bugs left unassigned for more than four hours.`
+                            : "No agent is assigned to this bug"
                         }
                       >
-                        {needsOwner(b, now) ? "needs an owner" : "unclaimed"}
+                        {needsOwner(b, now)
+                          ? unassignedFor(formatDuration(b.created, iso))
+                          : UNASSIGNED}
                       </span>
                     )}
                   </span>
@@ -785,7 +794,7 @@ function UnresolvedBugs({
 
       <p className="now-note">
         {unresolved.length > 0 ? (
-          <>Worst first; inside a severity, the ones nobody has claimed come first.</>
+          <>Worst first; inside a severity, the {UNASSIGNED} ones come first.</>
         ) : total === 0 ? (
           <>No bugs have been filed in this project.</>
         ) : (
