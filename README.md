@@ -12,15 +12,14 @@ and never writes to it except when you create or archive a project.
 The vault in this repository is this app's own build history: every screen below is drawn
 from work logs the agents that built it wrote as they went.
 
-![The project dashboard: what is in progress now, unresolved bugs, two burn-ups and the
-activity feed](progress/shots/dashboard.png)
+![The project dashboard: what is in progress now, which bugs are unresolved, the last 24 hours, two burn-ups and the activity feed](progress/shots/dashboard.png)
 
 ## What you get
 
 - **Work logs** — what an agent did, why, how, the notes it posted while it ran, and the
   outcome it wrote when it finished. Read as a merged pull request reads.
-- **Bugs** — report, comment thread, and the resolution written into the record, so the fix
-  is in the same place as the defect.
+- **Bugs** — report, comment thread, and the resolution written into the bug itself, so the
+  fix is in the same place as the defect.
 - **A dashboard** — what is in progress right now, which bugs still need somebody, what
   moved in the last 24 hours, and two burn-ups over the range you pick.
 - **Live updates** — a record an agent writes appears in the open window in about a second,
