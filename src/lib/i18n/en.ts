@@ -669,6 +669,16 @@ export const en = {
   "word.sev.medium": "Medium",
   "word.sev.low": "Low",
 
+  /* The short form the bug board falls back to when a row runs out of width — a dictionary
+     entry per language, never the first character of the word above.
+     C/H/M/L is a real initialism: four letters an English reader expands without being
+     told, in a column that must never be colour alone. A language with no such form leaves
+     these empty and keeps its word; ko.ts does, and says why. */
+  "word.sevAbbr.critical": "C",
+  "word.sevAbbr.high": "H",
+  "word.sevAbbr.medium": "M",
+  "word.sevAbbr.low": "L",
+
   "word.inProgress": "in progress",
   "word.done": "done",
   "word.abandoned": "abandoned",

@@ -78,6 +78,30 @@ export const severityLabel = (severity: Severity): string =>
         ? t("word.sev.medium")
         : t("word.sev.low");
 
+/**
+ * The short form of a severity for a row too narrow for the word — or `null` where the
+ * language has none, which is the answer the caller must be able to hear.
+ *
+ * **A short form is a dictionary entry, never `label.charAt(0)`.** Taking the first
+ * character of the translated word is a rule that reads as typography and is really a fact
+ * about English: C/H/M/L is an initialism a reader expands, and the first syllable of a
+ * Korean word is not. It shipped, and for a round every desktop window between 960px and
+ * 1058px — the bottom 99px of the range tauri.conf.json allows — printed 높 / 보 / 낮 in
+ * the severity column: two bound stems, one fragment, and 낮, which is the Korean word for
+ * *daytime*, standing where the board meant to say lowest severity, with the legend 100px
+ * above it still reading 낮음 (P9 round 3 critic). Korean returns null here and keeps its
+ * word, which measures narrower than the English one it replaces anyway; the reasoning and
+ * the measurements are in the header of lib/i18n/ko.ts.
+ */
+export const severityAbbr = (severity: Severity): string | null =>
+  (severity === "critical"
+    ? t("word.sevAbbr.critical")
+    : severity === "high"
+      ? t("word.sevAbbr.high")
+      : severity === "medium"
+        ? t("word.sevAbbr.medium")
+        : t("word.sevAbbr.low")) || null;
+
 /** Lower-case, for the middle of a sentence: "2 of 12 in progress". */
 export const inProgress = (): string => t("word.inProgress");
 export const done = (): string => t("word.done");

@@ -1262,9 +1262,10 @@
   justify-content: flex-start;
 }
 
-/* The initial that stands in for the word when a row runs out of width. Hidden by
+/* The short form that stands in for the word when a row runs out of width. Hidden by
    default; the container query at the bottom of this file swaps the two, so severity is
-   never left as four colours with nothing to read. */
+   never left as four colours with nothing to read. Only a pill that *has* a short form
+   renders this at all — see .has-abbr there. */
 .pill-abbr {
   display: none;
 }
@@ -3193,24 +3194,38 @@ kbd {
   }
 }
 
-/* The severity *word* goes, its initial stays. Dropping to the dot alone would make
-   severity colour-only — four hues a red-green reader cannot separate and a printer
-   cannot reproduce — on the one column of this board that must never be ambiguous. */
+/* The severity word gives way to its short form — where the language has one. Dropping to
+   the dot alone would make severity colour-only, four hues a red-green reader cannot
+   separate and a printer cannot reproduce, on the one column of this board that must never
+   be ambiguous.
+
+   Every rule below is keyed on `.has-abbr`, which the pill wears only when the dictionary
+   gave it a short form (components/ui.tsx). English has C/H/M/L and narrows to 38px;
+   Korean has none, so nothing here matches and the column keeps 치명적 / 높음 / 보통 / 낮음
+   at every width. That is not a concession: 치명적 measures 33.72px at the pill's 11px and
+   Medium measures 49.52px, so the Korean board is *still* narrower here than the English
+   one is at 1104px, where it prints the word in full and nobody has ever called it tight.
+   A width alone must never decide this, because it cannot know whether what survives the
+   cut is a word (P9 round 3 critic). */
 @container (max-width: 760px) {
-  .bug-row .pill-sev .pill-text {
+  .bug-row .pill-sev.has-abbr .pill-text {
     display: none;
   }
 
-  .bug-row .pill-sev .pill-abbr {
+  .bug-row .pill-sev.has-abbr .pill-abbr {
     display: inline;
   }
 
-  .bug-row .pill-sev {
-    min-width: 0;
+  /* The column stops naming a width and takes its pill's, so the language decides how much
+     it costs; the pill keeps a min-width so all four severities are one width and the dots
+     still line up down the board. English lands on 38px, Korean on the 62px of the base
+     rule above — 8px narrower than the 70px it spends everywhere else. */
+  .bug-row-sev {
+    width: auto;
   }
 
-  .bug-row-sev {
-    width: 36px;
+  .bug-row .pill-sev.has-abbr {
+    min-width: 38px;
   }
 
   .bug-row-comments {

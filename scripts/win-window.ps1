@@ -16,11 +16,22 @@
 # `scroll` turns the real wheel over the point given, which is how a row below the fold —
 # the vault-wide feed at the foot of /projects, say — is reached without a keyboard shortcut
 # the app may not have.
+#
+#   powershell -File scripts/win-window.ps1 -Action resize -Width 960 -Height 700
+#
+# `resize` sets the *client* area, so -Width 960 is the 960 a container query sees. This is
+# the narrowest the app is allowed to be (tauri.conf.json minWidth), and it is where a whole
+# layout lives that no gate and no screenshot ever reached: for a round the severity column
+# there read 낮 — Korean for "daytime" — where the board meant lowest severity, and it was
+# found by a reader dragging the window, because nothing in this repo could make it narrow
+# (P9 round 3 critic).
 param(
-  [ValidateSet("shot", "click", "key", "menukey", "scroll")] [string]$Action = "shot",
+  [ValidateSet("shot", "click", "key", "menukey", "scroll", "resize")] [string]$Action = "shot",
   [string]$Out = "",
   [int]$X = 0,
   [int]$Y = 0,
+  [int]$Width = 0,
+  [int]$Height = 0,
   # Wheel notches * 120; negative scrolls down.
   [int]$Delta = -360,
   [ValidateSet("left", "right")] [string]$Button = "left",
@@ -41,6 +52,7 @@ public class Win {
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, int e);
   [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint f, int extra);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int t, bool repaint);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
 }
@@ -59,6 +71,27 @@ $origin = New-Object Win+POINT
 [void][Win]::ClientToScreen($h, [ref]$origin)
 $client = New-Object Win+RECT
 [void][Win]::GetClientRect($h, [ref]$client)
+
+if ($Action -eq "resize") {
+  if ($Width -le 0 -and $Height -le 0) { Write-Error "resize needs -Width and/or -Height"; exit 1 }
+  # MoveWindow takes the *outer* size, and a container query reads the client area, so the
+  # frame (border + title bar) is measured on this window and added back. Asking for 960
+  # any other way lands a few pixels short and quietly misses the threshold under test.
+  $frameW = ($rect.Right - $rect.Left) - ($client.Right - $client.Left)
+  $frameH = ($rect.Bottom - $rect.Top) - ($client.Bottom - $client.Top)
+  $wantW = if ($Width -gt 0) { $Width + $frameW } else { $rect.Right - $rect.Left }
+  $wantH = if ($Height -gt 0) { $Height + $frameH } else { $rect.Bottom - $rect.Top }
+  [void][Win]::MoveWindow($h, $rect.Left, $rect.Top, $wantW, $wantH, $true)
+  Start-Sleep -Milliseconds 500
+  [void][Win]::GetClientRect($h, [ref]$client)
+  $gotW = $client.Right - $client.Left
+  $gotH = $client.Bottom - $client.Top
+  Write-Output "client is now $gotW x $gotH (frame $frameW x $frameH)"
+  # The window manager may refuse to go below tauri.conf.json's minWidth/minHeight — say so
+  # rather than photographing a width nobody asked for.
+  if ($Width -gt 0 -and $gotW -ne $Width) { Write-Output "NOTE: asked for $Width, the window stopped at $gotW" }
+  exit 0
+}
 
 if ($Action -eq "click") {
   [void][Win]::SetCursorPos($origin.X + $X, $origin.Y + $Y)

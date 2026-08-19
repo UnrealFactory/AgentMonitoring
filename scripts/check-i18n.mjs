@@ -31,6 +31,15 @@
  * pointed at a folder with no vault.json. Those are the app's error surface, they are five
  * of the six screens, and for a whole round nothing looked at them.
  *
+ * **At two widths**, because a screen at 1600px is not the app: the boards reflow, and
+ * everything a container query does at 960px — the floor tauri.conf.json sets — was
+ * invisible here for a round.
+ *
+ * **And it asks a second question.** The walk above asks which *language* a string is in.
+ * {@link VOCABULARIES} asks whether it is a **word**: for the three vocabularies the app
+ * itself authors, the pill on screen must equal a dictionary value exactly. That is the
+ * check that would have caught a severity column reading 낮 instead of 낮음.
+ *
  * Everything else must be Korean — and `--locale en` is the same walk with the alphabets
  * swapped, because a Korean string typed into a component is just as invisible to `tsc` as
  * an English one, and the app ships in two languages. Runs against the live vault read-only.
@@ -59,6 +68,8 @@ Options:
                      (default ko)
   --port <n>         dev-server port to boot on / check against (default 5173)
   --url <origin>     check an already-running server instead of booting one
+  --narrow <n>       the second viewport the reflowing screens are read at, where the
+                     container queries fire (default 960, the desktop window's minimum)
   --verbose          list every screen walked, not only the findings`);
   process.exit(0);
 }
@@ -67,6 +78,9 @@ const PORT = Number(value("--port", process.env.SHOT_PORT || 5173));
 const ORIGIN = value("--url", `http://localhost:${PORT}`).replace(/\/$/, "");
 const LOCALE = value("--locale", "ko");
 const VERBOSE = flag("--verbose");
+/** The two widths every reflowing screen is read at: roomy, and the narrowest the app may be. */
+const WIDE = 1600;
+const NARROW = Number(value("--narrow", 960)); // src-tauri/tauri.conf.json minWidth
 const log = (...m) => console.log("[check-i18n]", ...m);
 
 const api = async (path) => {
@@ -160,6 +174,78 @@ const TOKENS = [
 
 /** Two or more Latin letters in a row, once the allowed tokens are taken out. */
 const LATIN = /[A-Za-z]{2,}/g;
+
+/**
+ * The app's closed vocabularies, and every string each one is allowed to print.
+ *
+ * The alphabet checks above ask *which language* a string is in. They cannot ask whether it
+ * is a **word**, and a whole class of defect lives in that gap: the bug board used to
+ * abbreviate severity with `label.charAt(0)`, so a narrow row printed 높 / 보 / 낮 — two
+ * bound stems, a fragment of 보통, and 낮, which is Korean for *daytime*, in the column
+ * meaning lowest severity. Hangul on a Korean screen; nothing to report. The legend 100px
+ * above it said 낮음 (P9 round 3 critic).
+ *
+ * So for the three vocabularies where the app is the author and the set of legal answers is
+ * known — work state, bug state, severity — the rendered pill must equal a dictionary value
+ * exactly. Anything else is the app inventing a word, whatever alphabet it is in: a
+ * truncation, a stray synonym, an untranslated literal.
+ */
+const VOCABULARIES = [
+  { name: "work status", selector: ".pill[class*='pill-work-']", keys: ["word.work.in_progress", "word.work.done", "word.work.abandoned"] },
+  { name: "bug status", selector: ".pill[class*='pill-bug-']", keys: ["word.bug.open", "word.bug.in_progress", "word.bug.resolved", "word.bug.closed"] },
+  {
+    name: "severity",
+    selector: ".pill-sev",
+    keys: ["word.sev.critical", "word.sev.high", "word.sev.medium", "word.sev.low"],
+    /* …plus whatever short forms this language declares. Empty in Korean, which is the
+       fact under test: a language with no short form must print the word at every width. */
+    abbrKeys: ["word.sevAbbr.critical", "word.sevAbbr.high", "word.sevAbbr.medium", "word.sevAbbr.low"],
+  },
+];
+
+/**
+ * A short form written in Hangul is forbidden, in any language, whatever a dictionary says.
+ *
+ * The DOM check below compares what is on screen against the dictionary, which catches a
+ * component inventing a string — `label.charAt(0)` — and cannot catch the same truncation
+ * typed *into* the dictionary, because then the gate and the defect agree. This is the half
+ * that does not read the dictionary for its opinion.
+ *
+ * The rule is not a preference. A Latin initial is not a word in any reading of it, so C/H/M/L
+ * is a form English readers expand. A Hangul syllable block *is* a possible word: cut 낮음 to
+ * 낮 and you have not abbreviated anything, you have written the word for **daytime** in the
+ * severity column. There is no length at which that is safe, so a Hangul short form is
+ * refused rather than reviewed — the language keeps its whole word, which measures narrower
+ * than the English one anyway (src/lib/i18n/ko.ts).
+ */
+const ABBR_KEYS = VOCABULARIES.flatMap((vocab) => vocab.abbrKeys ?? []);
+
+/** Runs in the page: what each closed-vocabulary pill actually shows the reader. */
+const VOCAB_PROBE = (vocabularies) => {
+  const shown = (el) => {
+    /* The text a reader sees, not textContent: a pill carries its word and its short form
+       and hides one of them, and which one survives is the whole question. */
+    let out = "";
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) out += node.textContent;
+      else if (node.nodeType === 1) {
+        const style = getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden") continue;
+        if (node.getAttribute("aria-hidden") === "true" && !node.textContent.trim()) continue;
+        out += node.textContent;
+      }
+    }
+    return out.replace(/\s+/g, " ").trim();
+  };
+  const found = [];
+  for (const vocab of vocabularies) {
+    for (const el of document.querySelectorAll(vocab.selector)) {
+      if (getComputedStyle(el).display === "none") continue;
+      found.push({ vocab: vocab.name, text: shown(el) });
+    }
+  }
+  return found;
+};
 
 /**
  * …and the mirror of it: Hangul on an English screen.
@@ -443,15 +529,40 @@ try {
   );
 
   browser = await chromium.launch();
-  const VIEW = {
-    viewport: { width: 1600, height: 1000 },
+  const view = (width) => ({
+    viewport: { width, height: 1000 },
     colorScheme: "dark",
     reducedMotion: "reduce",
-  };
+  });
+  const VIEW = view(WIDE);
+
+  /* The legal answers for each closed vocabulary, in this language. */
+  const allowed = VOCABULARIES.map((vocab) => ({
+    ...vocab,
+    words: new Set(
+      [...vocab.keys, ...(vocab.abbrKeys ?? [])].map((key) => t(LOCALE, key)).filter(Boolean),
+    ),
+  }));
+
   log(`${screens.length + unreadable.length} screens · language ${LOCALE}`);
 
   const findings = [];
-  const walk = async (page, list) => {
+
+  /* Before a page is opened: no short form may be written in Hangul (see ABBR_KEYS). */
+  for (const key of ABBR_KEYS) {
+    const short = t(LOCALE, key);
+    if (short && HANGUL.test(short)) {
+      findings.push({
+        screen: "dictionary",
+        kind: "short form",
+        text: `${key} = "${short}"`,
+        at: `src/lib/i18n/${LOCALE}.ts`,
+        words: ["a Hangul syllable is a word, not an initial — leave it empty and keep the word"],
+      });
+    }
+    HANGUL.lastIndex = 0; // the regex is /g; it is also used by foreignIn
+  }
+  const walk = async (page, list, width) => {
     for (const screen of list) {
       await page.goto(`${ORIGIN}${screen.path}`, { waitUntil: "domcontentloaded" });
       if (screen.prepare) await screen.prepare(page);
@@ -467,25 +578,64 @@ try {
         const words = foreignIn(item.text.replace(vaultToken, " "));
         if (!words) continue;
         bad += 1;
-        findings.push({ screen: screen.name, ...item, words });
+        findings.push({ screen: `${screen.name} @${width}`, ...item, words });
       }
-      if (VERBOSE || bad) log(`${screen.name}: ${printed.length} strings, ${bad} ${OTHER}`);
+
+      /* …and the same screen asked a different question: is every word a word? */
+      const pills = await page.evaluate(VOCAB_PROBE, allowed.map(({ name, selector }) => ({ name, selector })));
+      for (const pill of pills) {
+        const vocab = allowed.find((v) => v.name === pill.vocab);
+        if (!vocab || vocab.words.has(pill.text)) continue;
+        bad += 1;
+        findings.push({
+          screen: `${screen.name} @${width}`,
+          kind: `${pill.vocab} vocabulary`,
+          text: pill.text,
+          at: vocab.selector,
+          words: [`not one of: ${[...vocab.words].join(" / ")}`],
+        });
+      }
+      if (VERBOSE || bad) log(`${screen.name} @${width}: ${printed.length} strings, ${bad} bad`);
     }
   };
 
   const page = await browser.newPage(VIEW);
   await useLocale(page, LOCALE);
-  await walk(page, screens);
+  await walk(page, screens, WIDE);
 
   // Its own session, because `?vault=` sticks to the one it is opened in.
   const broken = await browser.newContext(VIEW);
   await useLocale(broken, LOCALE);
-  await walk(await broken.newPage(), unreadable);
+  await walk(await broken.newPage(), unreadable, WIDE);
   await broken.close();
+
+  /* ---- and again in a window the app is allowed to be -----------------------
+   *
+   * Everything above ran at one wide viewport, where no container query fires — so for a
+   * round this gate could not see the bug board's narrow layout at all, and the severity
+   * column printed 낮 ("daytime") in place of 낮음 through every desktop window between
+   * 960px and 1058px (P9 round 3 critic). 960 is the floor tauri.conf.json sets, so it is
+   * the narrowest the app can ever be and the width where the most chrome has collapsed.
+   * The boards are the screens that reflow; the rest are the same DOM at another size. */
+  const narrow = await browser.newContext(view(NARROW));
+  await useLocale(narrow, LOCALE);
+  await walk(
+    await narrow.newPage(),
+    screens.filter((s) => /^(bugs|work|dashboard) /.test(s.name)),
+    NARROW,
+  );
+  await narrow.close();
 
   if (findings.length) {
     failures = findings.length;
-    console.error(`\n  ${findings.length} ${OTHER} string(s) printed by the app in ${LOCALE}:\n`);
+    /* Two kinds of finding now: a string in the wrong language, and a string that is in the
+       right language and is not a word. Counted apart, because "3 English strings" over a
+       list of Korean fragments is the gate misreporting its own result. */
+    const foreign = findings.filter((f) => !/vocabulary|short form/.test(f.kind)).length;
+    const parts = [];
+    if (foreign) parts.push(`${foreign} ${OTHER} string(s)`);
+    if (findings.length - foreign) parts.push(`${findings.length - foreign} not in the vocabulary`);
+    console.error(`\n  ${parts.join(", ")}, printed by the app in ${LOCALE}:\n`);
     for (const f of findings.slice(0, 40)) {
       console.error(`  FAIL  [${f.screen}] ${f.kind} at ${f.at}`);
       console.error(`        “${f.text.slice(0, 140)}”  → ${f.words.join(", ")}`);
@@ -502,8 +652,8 @@ try {
 
 log(
   failures === 0
-    ? `clean: ${checked} screens, every word the app printed is ${LOCALE}`
-    : `${failures} ${OTHER} string(s) on ${checked} screens`,
+    ? `clean: ${checked} screens at ${WIDE}px and ${NARROW}px — every word the app printed is ${LOCALE}, and is a word`
+    : `${failures} finding(s) on ${checked} screens`,
 );
 await new Promise((r) => setTimeout(r, 60));
 process.exit(failures === 0 ? 0 : 1);

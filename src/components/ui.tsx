@@ -6,7 +6,7 @@ import { useState, type ReactNode } from "react";
 import { nothingToRetry, vaultErrorMessage } from "../lib/api";
 import { t } from "../lib/i18n";
 import type { BugStatus, Severity, WorkStatus } from "../lib/types";
-import { bugStatusLabel, severityLabel, unassigned, workStatusLabel } from "../lib/words";
+import { bugStatusLabel, severityAbbr, severityLabel, unassigned, workStatusLabel } from "../lib/words";
 
 export function WorkStatusPill({ status }: { status: WorkStatus }) {
   return (
@@ -30,20 +30,31 @@ export function BugStatusPill({ status }: { status: BugStatus }) {
  * Severity, as the same coloured pill everywhere it appears — board row, record header,
  * sidebar, related block.
  *
- * In a narrow row the word gives way to its initial, never to the dot alone. Four hues
- * with nothing beside them is severity encoded in colour only: a reader with red-green
- * colour blindness cannot separate Critical from High there, and neither can anyone
- * printing the page. "C" costs seven pixels and keeps the meaning in the glyph.
+ * In a narrow row the word may give way to a short form, never to the dot alone: four hues
+ * with nothing beside them is severity encoded in colour only, which a reader with
+ * red-green colour blindness cannot separate and a printer cannot reproduce.
+ *
+ * **Whether there is a short form is the dictionary's answer, not this component's.**
+ * {@link severityAbbr} returns C/H/M/L in English and null in Korean, where no one syllable
+ * of 치명적 / 높음 / 보통 / 낮음 is a word (lib/words.ts). A pill with no short form renders
+ * none, wears no `has-abbr`, and the board's container query — which is keyed on that class,
+ * not on the width alone — leaves its word alone at every width.
  */
 export function SeverityBadge({ severity }: { severity: Severity }) {
   const label = severityLabel(severity);
+  const abbr = severityAbbr(severity);
   return (
-    <span className={`pill pill-sev pill-sev-${severity}`} title={t("ui.severityOf", label)}>
+    <span
+      className={`pill pill-sev pill-sev-${severity}${abbr ? " has-abbr" : ""}`}
+      title={t("ui.severityOf", label)}
+    >
       <span className="dot" aria-hidden="true" />
       <span className="pill-text">{label}</span>
-      <span className="pill-abbr" aria-hidden="true">
-        {label.charAt(0)}
-      </span>
+      {abbr ? (
+        <span className="pill-abbr" aria-hidden="true">
+          {abbr}
+        </span>
+      ) : null}
     </span>
   );
 }

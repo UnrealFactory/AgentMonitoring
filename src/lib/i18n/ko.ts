@@ -32,6 +32,20 @@
  *               takes the act, the person (등록자) and the section (등록 내용, beside
  *               해결 내용).
  *
+ * **Why Korean abbreviates nothing.** English shortens severity to C/H/M/L in a narrow bug
+ * row. Korean cannot, because a Hangul syllable is not an initial: the first syllable of
+ * 높음 and 낮음 is 높 and 낮, bound stems of 높다/낮다 that never stand alone, 보 is half of
+ * 보통, and 낮 *is* a word — it means **daytime** — printed in the column that is supposed
+ * to say lowest severity. The board did exactly this for a round, so between 960px and
+ * 1058px the row's chip read 낮 while the severity legend 100px above it read 낮음: one
+ * value, two spellings, one screen (P9 round 3 critic). Nor was anything bought. Measured
+ * in this app at the pill's own 11px: 치명적 33.72px, 높음/보통/낮음 22.48px each, against
+ * Critical 43.08, High 28.48, Medium 49.52, Low 25.56. Every Korean word is narrower than
+ * the English word it replaces — 낮음 is narrower than Low, and the widest Korean word is
+ * 16px narrower than Medium, which the app prints in full one pixel above the threshold.
+ * The 760px rule was cut to fit "Medium"; Korean was being abbreviated for a constraint
+ * only English has. So `word.sevAbbr.*` is empty here, and the column keeps the word.
+ *
  * **Why `open` is 열림 and not 미해결.** The brief suggested 미해결 for a bug's `open`
  * state. That spends the name of the *set* on one of the two members inside it — exactly
  * the defect the P6 critic caught in English ("an Open 5 tab above an Open 3 group, and a
@@ -691,6 +705,13 @@ export const ko: Dict = {
   "word.sev.high": "높음",
   "word.sev.medium": "보통",
   "word.sev.low": "낮음",
+
+  /* **Korean has no short form for severity, so it keeps the word.** Empty on purpose; see
+     the header of this file. The board reads these four and, finding nothing, never swaps. */
+  "word.sevAbbr.critical": "",
+  "word.sevAbbr.high": "",
+  "word.sevAbbr.medium": "",
+  "word.sevAbbr.low": "",
 
   "word.inProgress": "진행 중",
   "word.done": "완료",
