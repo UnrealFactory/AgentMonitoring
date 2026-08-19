@@ -30,7 +30,7 @@ import {
 } from "../components/ui";
 import { formatDateTimeUtc, formatRelative } from "../lib/format";
 import { t } from "../lib/i18n";
-import { inProgress, workLogs, workStatusLabel } from "../lib/words";
+import { inProgressCount, workLogs, workStatusLabel } from "../lib/words";
 import type { WorklogSummary, WorkStatus } from "../lib/types";
 
 /** The dimensions a filter slices on — and therefore the ones a count can be exempt from. */
@@ -202,7 +202,7 @@ export function WorkListPage() {
         <div className="page-head-meta tabular">
           {loading
             ? t("app.loadingShort")
-            : `${workLogs(works.length)}${runningCount ? ` · ${runningCount} ${inProgress()}` : ""}`}
+            : `${workLogs(works.length)}${runningCount ? ` · ${inProgressCount(runningCount)}` : ""}`}
         </div>
       </header>
 

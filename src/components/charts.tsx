@@ -27,7 +27,7 @@ import {
   type RefObject,
 } from "react";
 import { axisLabel, axisTicks, bucketLabel, type CumulativeSeries } from "../lib/dashboard";
-import { t } from "../lib/i18n";
+import { getLocale, t } from "../lib/i18n";
 
 /* --------------------------------------------------------------------------
    Measuring
@@ -537,6 +537,13 @@ export function SplitBar({
  * each series' current value — so the number is a direct label, not something only a
  * hover will admit to. A line-key for a line, a taller block for a filled band, matching
  * the mark it stands for.
+ *
+ * **The number goes where the language puts it.** English counts first — "24 done"; Korean
+ * names the thing first and counts after — "완료 24", which is how the severity chips one
+ * card away read, how the project cards read, and how this chart's own spoken summary reads
+ * (`chart.summary`: "작업 로그: 시작 24, 완료 24"). Hard-coded value-then-label, the legend
+ * was the one place on the dashboard printing English word order in Korean, and it
+ * disagreed with its own aria-label on the same element (P9 round 1 critic).
  */
 export function Legend({
   items,
@@ -551,27 +558,40 @@ export function Legend({
     deltaTitle?: string;
   }[];
 }) {
+  const labelFirst = getLocale() === "ko";
   return (
     <ul className="chart-legend">
-      {items.map((it) => (
-        <li key={it.label}>
-          <span
-            className={`key-line${it.band ? " is-band" : ""}`}
-            style={{ background: it.color }}
-            aria-hidden="true"
-          />
-          {it.value !== undefined && <span className="legend-value tabular">{it.value}</span>}
-          <span className="legend-label">{it.label}</span>
-          {it.delta !== undefined && it.delta !== null && (
-            <span
-              className={`legend-delta tabular${it.delta === 0 ? " is-flat" : ""}`}
-              title={it.deltaTitle}
-            >
-              {signed(it.delta)}
+      {items.map((it) => {
+        const value =
+          it.value === undefined ? null : (
+            <span key="value" className="legend-value tabular">
+              {it.value}
             </span>
-          )}
-        </li>
-      ))}
+          );
+        const label = (
+          <span key="label" className="legend-label">
+            {it.label}
+          </span>
+        );
+        return (
+          <li key={it.label}>
+            <span
+              className={`key-line${it.band ? " is-band" : ""}`}
+              style={{ background: it.color }}
+              aria-hidden="true"
+            />
+            {labelFirst ? [label, value] : [value, label]}
+            {it.delta !== undefined && it.delta !== null && (
+              <span
+                className={`legend-delta tabular${it.delta === 0 ? " is-flat" : ""}`}
+                title={it.deltaTitle}
+              >
+                {signed(it.delta)}
+              </span>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

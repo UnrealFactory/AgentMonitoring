@@ -210,6 +210,10 @@ export const en = {
   "rec.referencesHint": (noun: string) => `written into this ${noun}’s refs`,
   "rec.referencedByHint": (id: string) => `work logs and bugs that point back at ${id}`,
   "rec.missingRef": "no work log or bug with this id in this project",
+  /* The same fact on the chip inside a sentence, where the id has to be named because the
+     tooltip is all the reader can see. Assembled here, not at the call site: the id leads in
+     English and can lead in Korean too, but only the dictionary gets to decide that. */
+  "rec.missingRefTip": (id: string) => `${id} — no work log or bug with this id in this project`,
   "rec.corrections": (n: number, where: string) =>
     `**${n === 1 ? "1 correction" : `${n} corrections`}** to this record — see ${where}`,
   "ui.severityOf": (label: string) => `${label} severity`,
@@ -410,6 +414,49 @@ export const en = {
   "vault.source.cwdVault": "./vault in the working directory",
   "vault.source.cwd": "the working directory",
   "vault.source.exeVault": "the vault folder beside the app",
+
+  /* -- what a failure says ------------------------------------------------------
+     The headline of a failed read is one of the four `vault.*` lines above; these are
+     the sentence under it — the backend's own diagnosis, which is written in whichever
+     language the backend was written in and has to arrive in the reader's.
+     src/lib/api.ts matches the message it was handed and calls one of these, keeping the
+     paths, ids and command lines exactly as the backend wrote them. An unrecognised
+     message is passed through: a true sentence in the wrong language beats a guess. */
+
+  "err.noVaultForQuery": (dir: string, cmd: string) =>
+    `The folder given as \`?vault=\` has no \`vault.json\` — \`${dir}\`. Point it at a vault folder, or make one there with \`${cmd}\``,
+  "err.noVaultForEnv": (dir: string, fallback: string, cmd: string) =>
+    `The folder \`AGENTMON_VAULT\` names has no \`vault.json\` — \`${dir}\`. A configured vault is the only vault this server serves, so it is not falling back to \`${fallback}\`. Restore that folder, fix the variable, or make a vault there with \`${cmd}\``,
+  "err.noVaultAnywhere": (dirs: string, cmd: string) =>
+    `No \`vault.json\` in ${dirs}. Set \`AGENTMON_VAULT\`, open the window with \`?vault=<dir>\`, or make a vault with \`${cmd}\``,
+  /** How a list of candidate folders is joined inside the sentence above. */
+  "err.orJoin": " or ",
+  "err.noVaultAt": (path: string, hint: string) => `No vault here — \`${path}\`. ${hint}`,
+  "err.noVaultJsonHint": (cmd: string) =>
+    `That folder has no \`vault.json\`. Make one with \`${cmd}\``,
+  "err.notAVault": (dir: string, cmd: string) =>
+    `Not a vault folder — \`${dir}\` has no \`vault.json\`. Pick the folder that holds \`vault.json\` and \`projects/\`, or make one there with \`${cmd}\``,
+  "err.folderUnreadable": (detail: string) => `That folder cannot be read: \`${detail}\``,
+  "err.projectNotFound": (slug: string, vault: string) =>
+    `This vault has no project \`${slug}\` — vault: \`${vault}\``,
+  "err.projectListHint": (cmd: string) => ` The projects it does have: \`${cmd}\``,
+  "err.recordNotFound": (id: string, slug: string) =>
+    `Project \`${slug}\` has no \`${id}\``,
+  "err.expectedFile": (path: string) => ` Expected the file \`${path}\``,
+  "err.badSlug": (slug: string) =>
+    `Not a usable project slug — \`${slug}\`. Lower-case letters, digits, \`-\` and \`_\` only.`,
+  "err.badId": (id: string, expected: string, example: string) =>
+    `Not a usable id — \`${id}\`. Expected \`${expected}\` (for example \`${example}\`).`,
+  "err.noRoute": (path: string) => `The vault API has no route for \`${path}\``,
+  "err.unreachable": (path: string, detail: string) =>
+    `Could not reach the vault API at \`${path}\`. Is the dev server running? (\`${detail}\`)`,
+  "err.httpStatus": (status: number) => `The vault API answered \`${status}\``,
+  "err.stoppedAnswering": "The vault stopped answering",
+  "err.desktopOnlySwitch":
+    "Switching vaults is a desktop-app feature. In browser mode, open the window with `?vault=<dir>` or set `AGENTMON_VAULT` before `npm run dev`.",
+  "err.desktopOnlyPicker": "The folder picker is a desktop-app feature.",
+  "err.desktopOnlyCreate":
+    'Making a vault from the window is a desktop-app feature. In browser mode, run: `agentmon init --vault <dir> --name "<vault name>"`',
 
   "onboard.titleEmpty": "This vault has no projects yet",
   "onboard.titleNone": "There is no vault here yet",
@@ -635,6 +682,8 @@ export const en = {
     `${n} of ${total === 1 ? "1 work log" : `${total} work logs`} in progress`,
   "word.unresolvedOf": (n: number, total: number) => `${n} of ${total} unresolved`,
   "word.unresolvedCount": (n: number) => `${n} unresolved`,
+  /** The work twin of it: "2 in progress", for a header whose total is beside it. */
+  "word.inProgressCount": (n: number) => `${n} in progress`,
   "word.workTip": (total: number, inProgress: number, where: string | null) =>
     `${total === 1 ? "1 work log" : `${total} work logs`} ${where ? `in ${where}` : "in this project"}, ${inProgress} in progress`,
   "word.workTipHere": (total: number, inProgress: number) =>

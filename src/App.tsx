@@ -4,7 +4,8 @@ import { AppProvider, useApp } from "./AppContext";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { Sidebar } from "./components/Sidebar";
-import { Skeleton } from "./components/ui";
+import { InlineCode, plainMarks, Skeleton } from "./components/ui";
+import { vaultErrorMessage } from "./lib/api";
 import { formatDateTimeUtc } from "./lib/format";
 import { t } from "./lib/i18n";
 import { useWindowTitle } from "./lib/useWindowTitle";
@@ -83,8 +84,10 @@ function VaultTroubleBar() {
   if (!trouble || error) return null;
   /* The backend's message is written for somebody who can act on it and can run to four
      lines. One line here, the rest in the tooltip: a banner that shouts a paragraph over
-     the screen is a banner people learn to close. */
-  const [headline] = trouble.message.split(" — ");
+     the screen is a banner people learn to close. Translated first, and cut afterwards:
+     the clause before the dash is the diagnosis in either language. */
+  const message = vaultErrorMessage(trouble.message);
+  const [headline] = message.split(" — ");
   return (
     <div className="vault-alert-wrap">
       <div className="vault-alert" role="status">
@@ -96,8 +99,8 @@ function VaultTroubleBar() {
             vault?.path ?? null,
             formatDateTimeUtc(new Date(trouble.since).toISOString())
           )}{" "}
-          <span className="vault-alert-detail" title={trouble.message}>
-            {headline}
+          <span className="vault-alert-detail" title={plainMarks(message)}>
+            <InlineCode text={headline} />
           </span>
         </span>
         <button className="button button-sm" onClick={reload}>

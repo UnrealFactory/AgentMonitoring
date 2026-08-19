@@ -20,6 +20,15 @@
  *   담당자 없음  a bug nobody holds (`unassigned`) — a condition, not a state
  *   심각도: 치명적 · 높음 · 보통 · 낮음
  *
+ *   등록 / 등록자   filing a bug, and whoever filed it. **Never 신고 / 신고자.** English
+ *               spends two words on this act (file / report) and Korean was spending two
+ *               with them: the same bug was 등록 in its time row, its chart legend and the
+ *               agents table, and 신고 in the people row and the side panel of the record
+ *               it belonged to — 등록 and 신고 naming one event on one screen (P9 round 1
+ *               critic). 등록 is the word Korean trackers use for creating an issue, so it
+ *               takes the act, the person (등록자) and the section (등록 내용, beside
+ *               해결 내용).
+ *
  * **Why `open` is 열림 and not 미해결.** The brief suggested 미해결 for a bug's `open`
  * state. That spends the name of the *set* on one of the two members inside it — exactly
  * the defect the P6 critic caught in English ("an Open 5 tab above an Open 3 group, and a
@@ -62,8 +71,10 @@ export const ko: Dict = {
   "app.notFound.sub": "이 주소에 해당하는 화면이 앱에 없습니다.",
 
   "shell.trouble.headline": "지금 볼트를 읽지 못하고 있습니다.",
+  /* 경로 뒤에 조사를 붙이지 않는다 — 이 파일의 규칙이고, "…\vault 에서"처럼 한 칸 띄운 조사는
+     그 규칙을 어긴 흔적이다. 경로는 문장 끝에 이름표를 달아 따로 붙인다. */
   "shell.trouble.body": (path, when) =>
-    `아래 내용은 ${path ? `${path} 에서 ` : ""}마지막으로 정상 조회한 데이터이며, 기준 시각은 ${when}입니다.`,
+    `아래 내용은 마지막으로 정상 조회한 데이터입니다. 기준 시각 ${when}${path ? ` · 볼트 경로 ${path}` : ""}`,
 
   /* -- language ------------------------------------------------------------- */
 
@@ -159,13 +170,13 @@ export const ko: Dict = {
   "filter.bySeverity": "심각도로 거르기",
   "filter.byLabel": "레이블로 거르기",
   "filter.byAssignee": "담당자로 거르기",
-  "filter.byReporter": "신고자로 거르기",
+  "filter.byReporter": "등록자로 거르기",
   "filter.allAgents": "전체 에이전트",
   "filter.allTags": "전체 태그",
   "filter.allSeverities": "전체 심각도",
   "filter.allLabels": "전체 레이블",
   "filter.allAssignees": "전체 담당자",
-  "filter.allReporters": "전체 신고자",
+  "filter.allReporters": "전체 등록자",
   "filter.all": "전체",
   "filter.clearAll": "모두 지우기",
   "filter.clear": "필터 지우기",
@@ -176,7 +187,7 @@ export const ko: Dict = {
   "filter.chipSeverity": (value) => `심각도: ${value}`,
   "filter.chipLabel": (value) => `레이블: ${value}`,
   "filter.chipAssignee": (value) => `담당자: ${value}`,
-  "filter.chipReporter": (value) => `신고자: ${value}`,
+  "filter.chipReporter": (value) => `등록자: ${value}`,
   "filter.chipQuery": (value) => `“${value}”`,
 
   /* -- work list ------------------------------------------------------------ */
@@ -240,10 +251,13 @@ export const ko: Dict = {
      nothing in this file can tell which without pronouncing the number. */
   "rec.referencedByHint": (id) => `이 기록(${id})을 가리키는 작업 로그와 버그`,
   "rec.missingRef": "이 프로젝트에 해당 ID의 작업 로그나 버그가 없습니다",
+  /* 문장 속 칩의 툴팁. ID 뒤에 조사를 붙이지 않고 —로 잇는다: BUG-0004는 를, BUG-0011은 을을
+     받으므로 어느 쪽도 이 파일이 고를 수 없다. */
+  "rec.missingRefTip": (id) => `${id} — 이 프로젝트에 해당 ID의 작업 로그나 버그가 없습니다`,
   "rec.corrections": (n, where) => `이 기록에 **정정 ${n}건** — ${where} 참고`,
   "ui.severityOf": (label) => `심각도 ${label}`,
-  "ui.handoff": (from, to) => `신고 ${from} · 담당 ${to}`,
-  "ui.handoffNone": (from, unassigned) => `신고 ${from} · ${unassigned}`,
+  "ui.handoff": (from, to) => `등록 ${from} · 담당 ${to}`,
+  "ui.handoffNone": (from, unassigned) => `등록 ${from} · ${unassigned}`,
   "rec.correction": "정정",
   "rec.inUpdates": "진행 노트",
   "rec.inThread": "스레드",
@@ -291,13 +305,13 @@ export const ko: Dict = {
 
   /* -- bug detail ------------------------------------------------------------- */
 
-  "bd.report": "신고 내용",
+  "bd.report": "등록 내용",
   "bd.thread": "스레드",
   "bd.resolution": "해결 내용",
   "bd.bug": "버그",
   "bd.severity": "심각도",
   "bd.status": "상태",
-  "bd.reporter": "신고자",
+  "bd.reporter": "등록자",
   "bd.assignee": "담당자",
   "bd.participants": "참여자",
   "bd.lastWord": "마지막 발언",
@@ -334,7 +348,7 @@ export const ko: Dict = {
   "bd.endWaiting": "담당자를 기다리는 중",
   "bd.fixBelow": "해결 내용은 아래에 있습니다",
   "bd.openFor": (duration) => `열린 지 ${duration}`,
-  "bd.addedToReport": "신고 내용 보강",
+  "bd.addedToReport": "등록 내용 보강",
   "bd.repliedAsAssignee": "담당자 답변",
   "bd.commented": "댓글",
   "bd.comments": (n) => `댓글 ${n}개`,
@@ -419,7 +433,9 @@ export const ko: Dict = {
   "vault.archivedAside": (n) => ` · 보관 ${n}개`,
   "vault.schema": "스키마",
   "vault.created": "생성",
-  "vault.readBy": "읽는 주체",
+  /* "읽는 주체"는 번역서의 말투다. 이 칸이 실제로 구분하는 것은 데스크톱 앱이냐 개발 서버냐,
+     곧 실행 환경이다. */
+  "vault.readBy": "실행 환경",
   "vault.openedFrom": (source) => `열린 위치: ${source}`,
   "vault.openFolder": "볼트 폴더 열기…",
   "vault.opening": "여는 중…",
@@ -439,6 +455,48 @@ export const ko: Dict = {
   "vault.source.cwdVault": "작업 디렉터리의 ./vault",
   "vault.source.cwd": "작업 디렉터리",
   "vault.source.exeVault": "앱 옆의 vault 폴더",
+
+  /* -- 실패했을 때의 문장 ----------------------------------------------------------
+     실패 화면의 제목은 위 vault.* 네 줄 중 하나이고, 아래는 그 밑에 붙는 설명 — 백엔드가
+     내놓은 진단이다. 백엔드는 영어로 쓰여 있으므로, src/lib/api.ts가 그 문장을 알아보고
+     여기의 한국어로 바꿔 준다. 경로와 ID, 명령줄은 백엔드가 쓴 그대로 둔다.
+
+     조사 규칙은 이 파일의 머리말과 같다: 경로·슬러그·ID 뒤에는 조사를 붙이지 않고 —나 :로
+     잇는다. 그 값이 무엇으로 끝날지 이 파일은 알 수 없다. 에/에서처럼 형태가 하나뿐인
+     조사만 예외다. */
+
+  "err.noVaultForQuery": (dir, cmd) =>
+    `\`?vault=\`로 지정한 폴더에 \`vault.json\`이 없습니다 — \`${dir}\`. 볼트 폴더를 지정하거나, 다음 명령으로 새 볼트를 만드세요: \`${cmd}\``,
+  "err.noVaultForEnv": (dir, fallback, cmd) =>
+    `\`AGENTMON_VAULT\`가 가리키는 폴더에 \`vault.json\`이 없습니다 — \`${dir}\`. 볼트를 지정해 두면 이 서버는 그 볼트만 제공하므로, 다른 경로로 물러나지 않습니다: \`${fallback}\`. 해당 폴더를 되살리거나 환경 변수를 고치거나, 다음 명령으로 볼트를 만드세요: \`${cmd}\``,
+  "err.noVaultAnywhere": (dirs, cmd) =>
+    `다음 경로에 \`vault.json\`이 없습니다 — ${dirs}. \`AGENTMON_VAULT\` 환경 변수를 설정하거나, 주소에 \`?vault=<dir>\` 형식으로 볼트를 지정하거나, 다음 명령으로 새 볼트를 만드세요: \`${cmd}\``,
+  "err.orJoin": " 또는 ",
+  "err.noVaultAt": (path, hint) => `이 경로에 볼트가 없습니다 — \`${path}\`. ${hint}`,
+  "err.noVaultJsonHint": (cmd) =>
+    `해당 폴더에 \`vault.json\`이 없습니다. 다음 명령으로 만드세요: \`${cmd}\``,
+  "err.notAVault": (dir, cmd) =>
+    `볼트 폴더가 아닙니다 — \`${dir}\`에 \`vault.json\`이 없습니다. \`vault.json\`과 \`projects/\`가 들어 있는 폴더를 고르거나, 다음 명령으로 새 볼트를 만드세요: \`${cmd}\``,
+  "err.folderUnreadable": (detail) => `이 폴더를 읽지 못했습니다: \`${detail}\``,
+  "err.projectNotFound": (slug, vault) =>
+    `이 볼트에 \`${slug}\` 프로젝트가 없습니다 — 볼트 경로: \`${vault}\``,
+  "err.projectListHint": (cmd) => ` 등록된 프로젝트는 다음 명령으로 볼 수 있습니다: \`${cmd}\``,
+  "err.recordNotFound": (id, slug) => `\`${slug}\` 프로젝트에 \`${id}\` 기록이 없습니다`,
+  "err.expectedFile": (path) => ` 찾은 파일 경로: \`${path}\``,
+  "err.badSlug": (slug) =>
+    `쓸 수 없는 프로젝트 슬러그입니다 — \`${slug}\`. 소문자와 숫자, \`-\`, \`_\` 만 쓸 수 있습니다.`,
+  "err.badId": (id, expected, example) =>
+    `쓸 수 없는 ID입니다 — \`${id}\`. \`${expected}\` 형식이어야 합니다 (예: \`${example}\`).`,
+  "err.noRoute": (path) => `이 주소를 처리하는 볼트 API 경로가 없습니다 — \`${path}\``,
+  "err.unreachable": (path, detail) =>
+    `볼트 API에 연결하지 못했습니다 — \`${path}\`. 개발 서버가 실행 중인지 확인하세요. (\`${detail}\`)`,
+  "err.httpStatus": (status) => `볼트 API가 \`${status}\`로 응답했습니다`,
+  "err.stoppedAnswering": "볼트가 응답하지 않습니다",
+  "err.desktopOnlySwitch":
+    "볼트 전환은 데스크톱 앱에서만 됩니다. 브라우저 모드에서는 주소에 `?vault=<dir>` 형식으로 지정하거나, `npm run dev` 전에 `AGENTMON_VAULT` 환경 변수를 설정하세요.",
+  "err.desktopOnlyPicker": "폴더 선택 창은 데스크톱 앱에서만 열 수 있습니다.",
+  "err.desktopOnlyCreate":
+    '창에서 볼트를 만드는 기능은 데스크톱 앱에서만 됩니다. 브라우저 모드에서는 다음 명령을 실행하세요: `agentmon init --vault <dir> --name "<vault name>"`',
 
   "onboard.titleEmpty": "이 볼트에는 아직 프로젝트가 없습니다",
   "onboard.titleNone": "여기에는 아직 볼트가 없습니다",
@@ -477,8 +535,11 @@ export const ko: Dict = {
   "dash.lastActivity": (when) => `마지막 활동 ${when}`,
   /* "…는 ${range} 기준입니다" rather than "…는 ${range}을 다룹니다": 기준입니다 needs no
      particle, so the sentence stays right whether the range ends in 일, 건 or a digit. */
+  /* "위 현황 띠는 항상 현재이며"는 "The strip above is always now"를 그대로 옮긴 말이었다 —
+     띠는 현재일 수 없고, 화면에 '현황 띠'라는 이름도 없다. 맨 위 카드들이 실제로 달고 있는
+     이름(현재 상태)으로 부른다. */
   "dash.scope": (range) =>
-    `아래 차트와 에이전트, 활동 기록은 ${range} 기준입니다. 위 현황 띠는 항상 현재이며, 이 페이지의 모든 날짜와 시각은 UTC입니다.`,
+    `아래 차트와 에이전트, 활동 기록은 ${range} 기준입니다. 맨 위 현재 상태는 기간과 상관없이 항상 지금이며, 이 페이지의 모든 날짜와 시각은 UTC입니다.`,
   "dash.rangeDays": (days) => `최근 ${days}일`,
   "dash.rangeOneEvent": (date) => `${date}에 기록된 이벤트 1건`,
   "dash.rangeAllEvents": (n, date) => `${date}까지 거슬러 올라가는 전체 이벤트 ${n}건`,
@@ -501,7 +562,9 @@ export const ko: Dict = {
   "dash.rowStateTip": (state, since) => `${state} · ${since}`,
   "dash.latestNote": "최신 노트",
   "dash.latestNoteTip": (when) => `${when}에 올라온 노트의 문단별 첫 문장`,
-  "dash.waitingOn": (agent) => `${agent} 대기 중`,
+  /* "${agent} 대기 중" 은 "그 에이전트가 기다리는 중"으로 읽힌다 — 뜻이 정반대다. 이 칩은
+     노트가 그 에이전트의 답을 기다린다는 뜻이므로, 이름이 응답을 수식하게 둔다. */
+  "dash.waitingOn": (agent) => `${agent} 응답 대기`,
   "dash.waitingOnTip": (agent, sentence) => `${agent}의 최신 노트: “${sentence}”`,
 
   "dash.unresolvedBugs": "미해결 버그",
@@ -636,6 +699,9 @@ export const ko: Dict = {
   "word.workLogsInProgressOf": (n, total) => `작업 로그 ${total}개 중 ${n}개 진행 중`,
   "word.unresolvedOf": (n, total) => `${total}개 중 ${n}개 미해결`,
   "word.unresolvedCount": (n) => `미해결 ${n}개`,
+  /* 버그 보드의 "미해결 2개"와 같은 어순. "2 진행 중"처럼 숫자가 상태어 앞에 오는 영어 어순은
+     쓰지 않는다 — 총계가 바로 앞에 있으므로 분모는 생략한다. */
+  "word.inProgressCount": (n) => `진행 중 ${n}개`,
   "word.workTip": (total, inProgress, where) =>
     `${where ?? "이 프로젝트"}의 작업 로그 ${total}개 · ${inProgress}개 진행 중`,
   "word.workTipHere": (total, inProgress) => `작업 로그 ${total}개 · ${inProgress}개 진행 중`,

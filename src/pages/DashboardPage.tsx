@@ -74,6 +74,8 @@ import {
   eventSummary,
   eventVerb,
   freshness,
+  dayDate,
+  dayLabel,
   groupByDay,
   HOUR,
   initialOpenDays,
@@ -289,7 +291,7 @@ export function DashboardPage() {
     [events, axis.from]
   );
   const agents = useMemo(() => agentRows(scoped, works), [scoped, works]);
-  const dayGroups = useMemo(() => groupByDay(scoped, now), [scoped, now]);
+  const dayGroups = useMemo(() => groupByDay(scoped), [scoped]);
 
   if (error) {
     return (
@@ -897,7 +899,7 @@ function LastDay({
      them: a day of nine described as "1 started · 1 finished · 1 filed" left six events —
      the notes, claims and comments that were most of the traffic — unmentioned (round 2
      critic). Beyond four kinds the tail merges into "other" rather than being dropped. */
-  const parts = summarise(recent.breakdown).map((p) => t("dash.countPart", p.count, p.label));
+  const parts = summarise(recent.breakdown).map((p) => t("dash.countPart", p.count, t(p.key)));
   /* And silence is stated, not left as an absence of bars. */
   const quiet =
     events[0] && now - Date.parse(events[0].ts) >= 2 * HOUR
@@ -1212,7 +1214,7 @@ function ActivityCard({
                     className="day-head"
                     aria-expanded={open}
                     onClick={() => toggle(g.day)}
-                    title={`${g.date} UTC · ${mixLabel}`}
+                    title={`${dayDate(g.day)} UTC · ${mixLabel}`}
                   >
                     <svg className="day-caret" viewBox="0 0 12 12" aria-hidden="true">
                       <path
@@ -1224,8 +1226,8 @@ function ActivityCard({
                         strokeLinejoin="round"
                       />
                     </svg>
-                    <span className="day-label">{g.label}</span>
-                    <span className="day-date tabular">{g.date}</span>
+                    <span className="day-label">{dayLabel(g.day, now)}</span>
+                    <span className="day-date tabular">{dayDate(g.day)}</span>
                     <span className="day-mix-track">
                       <span
                         className="day-mix"
@@ -1270,7 +1272,7 @@ function ActivityCard({
                             className="feed-more"
                             onClick={() => setExpanded((x) => ({ ...x, [g.day]: true }))}
                           >
-                            {t("dash.showOther", g.events.length - DAY_PREVIEW, g.label)}
+                            {t("dash.showOther", g.events.length - DAY_PREVIEW, dayLabel(g.day, now))}
                           </button>
                         </li>
                       )}

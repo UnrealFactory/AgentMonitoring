@@ -44,8 +44,7 @@ import {
   formatDuration,
   formatRelative,
 } from "../lib/format";
-import { t } from "../lib/i18n";
-import { inProgress } from "../lib/words";
+import { t, useLocale } from "../lib/i18n";
 import type { WorklogDetail } from "../lib/types";
 
 /** A stable empty array, so the related-index memo is not invalidated every render. */
@@ -85,6 +84,11 @@ export function WorkDetailPage() {
   const corrections = countCorrections(work?.updates ?? []);
   /** The outcome's own parts (Shipped / Verified / Known gaps), as its author labelled them. */
   const outcome = useLabelledParts(work?.outcome);
+  /* The contents rail is words, so the language is one of its inputs. Left out of this
+     list, a rail built in English stayed English under a Korean record when the reader
+     changed the language, because nothing else it depends on had changed (P9 round 1
+     critic, who caught the same omission on the dashboard). */
+  const locale = useLocale();
   const sections = useMemo(() => {
     if (!work) return [] as TocEntry[];
     const out: TocEntry[] = [
@@ -101,7 +105,7 @@ export function WorkDetailPage() {
     }
     if (related.count) out.push({ id: "related", label: t("rec.related"), count: related.count });
     return out;
-  }, [work, related.count, outcome]);
+  }, [work, related.count, outcome, locale]);
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {
@@ -210,7 +214,12 @@ export function WorkDetailPage() {
                 {work.finished ? (
                   <Stamp iso={work.finished} relative={false} />
                 ) : (
-                  <span className="muted">{inProgress()}</span>
+                  /* Not the bare state word: under the label 완료 it read as a
+                     contradiction — the app's word for the end of a work log as the label,
+                     and its word for the middle of one as the value, on one line (P9 round 1
+                     critic). "아직 진행 중" answers the label instead of arguing with it, and
+                     is the same phrase the timeline below already uses. */
+                  <span className="muted">{t("wd.endRunning")}</span>
                 )}
               </li>
               <li>
@@ -290,7 +299,11 @@ export function WorkDetailPage() {
 
             {work.extraSections.map((s) => (
               <section className="record-section" key={s.title}>
-                <h2 className="section-title">{s.title}</h2>
+                {/* The heading is the author’s own `## …` line, not one of the app’s: it is
+                    printed as written, in whatever language they wrote it (P6). Marked so
+                    the Korean gate can tell it from the headings beside it, which are the
+                    app’s and must be translated. */}
+                <h2 className="section-title is-author">{s.title}</h2>
                 <Markdown source={s.body} />
               </section>
             ))}
@@ -332,7 +345,7 @@ export function WorkDetailPage() {
                         <span className="side-rel">{formatRelative(work.finished)}</span>
                       </>
                     ) : (
-                      <span className="muted">{inProgress()}</span>
+                      <span className="muted">{t("wd.endRunning")}</span>
                     )}
                   </dd>
                 </div>

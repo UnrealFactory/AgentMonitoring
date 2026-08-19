@@ -50,7 +50,7 @@ import {
   formatDuration,
   formatRelative,
 } from "../lib/format";
-import { t } from "../lib/i18n";
+import { t, useLocale } from "../lib/i18n";
 import { timeToResolve, unassigned, unassignedLabel } from "../lib/words";
 import type { BugComment, BugDetail } from "../lib/types";
 
@@ -91,6 +91,8 @@ export function BugDetailPage() {
    */
   const resolution = useLabelledParts(bug?.resolution);
 
+  /* Words, so the language is an input — see the twin of this memo in WorkDetailPage. */
+  const locale = useLocale();
   const sections = useMemo(() => {
     if (!bug) return [] as TocEntry[];
     const out: TocEntry[] = [
@@ -102,7 +104,7 @@ export function BugDetailPage() {
     }
     if (related.count) out.push({ id: "related", label: t("rec.related"), count: related.count });
     return out;
-  }, [bug, related.count, resolution]);
+  }, [bug, related.count, resolution, locale]);
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {
@@ -276,7 +278,11 @@ export function BugDetailPage() {
 
             {bug.extraSections.map((s) => (
               <section className="record-section" key={s.title}>
-                <h2 className="section-title">{s.title}</h2>
+                {/* The heading is the author’s own `## …` line, not one of the app’s: it is
+                    printed as written, in whatever language they wrote it (P6). Marked so
+                    the Korean gate can tell it from the headings beside it, which are the
+                    app’s and must be translated. */}
+                <h2 className="section-title is-author">{s.title}</h2>
                 <Markdown source={s.body} />
               </section>
             ))}

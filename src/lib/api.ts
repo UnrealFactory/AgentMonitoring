@@ -8,6 +8,7 @@
  * file knows or cares which one is live. Browser mode exists so the UI can be driven by
  * Playwright without building the desktop app; the desktop app is the product.
  */
+import { t } from "./i18n";
 import type {
   BugDetail,
   BugSummary,
@@ -92,9 +93,9 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
     });
   } catch (err) {
-    throw new ApiError(
-      `could not reach the vault API at ${path} — is the dev server running? (${String(err)})`
-    );
+    /* Not the backend's sentence — there was no backend. Said here, in the reader's
+       language, with the runtime's own words kept verbatim inside it. */
+    throw new ApiError(t("err.unreachable", path, String(err)));
   }
   const text = await res.text();
   if (!res.ok) {
@@ -104,7 +105,7 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* keep the raw body */
     }
-    throw new ApiError(message || `${res.status} ${res.statusText}`, res.status);
+    throw new ApiError(message || t("err.httpStatus", res.status), res.status);
   }
   return JSON.parse(text) as T;
 }
@@ -168,11 +169,7 @@ export const api = {
    * by `?vault=<dir>`.
    */
   setVaultPath: async (path: string): Promise<VaultInfo> => {
-    if (!isTauri()) {
-      throw new ApiError(
-        "switching vaults is only available in the desktop app; in browser mode pass ?vault=<dir> or set AGENTMON_VAULT before `npm run dev`"
-      );
-    }
+    if (!isTauri()) throw new ApiError(t("err.desktopOnlySwitch"));
     return invokeCommand<VaultInfo>("set_vault_path", { path });
   },
 
@@ -181,7 +178,7 @@ export const api = {
    * Resolves to the new vault, or to null when the dialog was dismissed.
    */
   chooseVaultFolder: async (): Promise<VaultInfo | null> => {
-    if (!isTauri()) throw new ApiError("the folder picker is only available in the desktop app");
+    if (!isTauri()) throw new ApiError(t("err.desktopOnlyPicker"));
     return invokeCommand<VaultInfo | null>("choose_vault_folder", {});
   },
 
@@ -190,10 +187,7 @@ export const api = {
    * who installed the app and has no terminal. Null means the dialog was dismissed.
    */
   createVaultFolder: async (): Promise<VaultInfo | null> => {
-    if (!isTauri())
-      throw new ApiError(
-        "creating a vault from the window is only available in the desktop app; in browser mode run `agentmon init --vault <dir> --name \"<vault name>\"`"
-      );
+    if (!isTauri()) throw new ApiError(t("err.desktopOnlyCreate"));
     return invokeCommand<VaultInfo | null>("create_vault_folder", {});
   },
 
@@ -297,14 +291,108 @@ export const DEFAULT_ACTOR = "app";
  * or the slug — and that case is not "could not read the vault", it is "that is not here".
  * A reader who follows a link to `BUG-9999` and is told the vault is unreadable goes and
  * checks their disk; the truth is that the link is stale.
+ *
+ * *In the reader's words* means in the reader's language too. This function used to return
+ * four English literals while their Korean twins sat unused in the dictionary, so five of
+ * the six screens answered a bad link with "This project has no WORK-9999" under a Korean
+ * sidebar, and /projects — which called `t("vault.readFailed")` itself — answered the same
+ * failure in Korean. One condition, two languages, one app.
  */
 export function failureTitle(error: string, status: number | undefined, id?: string): string {
-  if (status !== 404) return "Could not read the vault";
+  if (status !== 404) return t("vault.readFailed");
   const project = /^project '([^']+)' not found/.exec(error);
-  if (project) return `This vault has no project called “${project[1]}”`;
-  if (id) return `This project has no ${id}`;
-  return "Not in this vault";
+  if (project) return t("vault.noProject", project[1]);
+  if (id) return t("vault.noRecord", id);
+  return t("vault.notInThisVault");
 }
+
+/* --------------------------------------------------------------------------
+   The sentence under the headline
+   ----------------------------------------------------------------------- */
+
+/** A path, an id or a command, marked as the technical token it is. */
+const code = (value: string): string => value.trim().replace(/^`|`$/g, "");
+
+/**
+ * The backend's diagnosis, matched and re-said in the reader's language.
+ *
+ * The headline above ({@link failureTitle}) is the app's own sentence; this is the line
+ * under it, and it arrives from a place that does not know what language the window is in:
+ * `agentmon-core` in Rust (desktop) or `scripts/vault-fs.mjs` (browser dev server), both
+ * written in English. Translating it *there* would mean two more copies of the dictionary,
+ * in two more languages of implementation, kept in step by nothing.
+ *
+ * So the shapes are matched here — there are a dozen of them, all authored in this
+ * repository — and the parts that are data (paths, slugs, ids, command lines) are carried
+ * across untouched. Anything unrecognised is returned exactly as it came: a true sentence
+ * in the wrong language is worth more than a confident guess in the right one, and an
+ * English string that reaches a Korean screen this way is a message this list has not
+ * learned yet, which `npm run check:i18n` says out loud.
+ */
+export function vaultErrorMessage(message: string): string {
+  const text = message.trim();
+  for (const [pattern, say] of MESSAGES) {
+    const m = pattern.exec(text);
+    if (m) return say(m);
+  }
+  return message;
+}
+
+const MESSAGES: [RegExp, (m: RegExpExecArray) => string][] = [
+  /* browser: resolveVault() in scripts/vault-fs.mjs — the three ways to have no vault */
+  [
+    /^no vault\.json in (.+?) \(\?vault=\) — .*?create one with (.+)$/s,
+    (m) => t("err.noVaultForQuery", code(m[1]), code(m[2])),
+  ],
+  [
+    /^AGENTMON_VAULT names (.+?), which has no vault\.json — .*?falling back to (.+?)\..*?create a vault there with (.+)$/s,
+    (m) => t("err.noVaultForEnv", code(m[1]), code(m[2]), code(m[3])),
+  ],
+  [
+    /^no vault\.json found in (.+?) — set AGENTMON_VAULT.*?create one with (.+)$/s,
+    (m) =>
+      t(
+        "err.noVaultAnywhere",
+        m[1]
+          .split(" or ")
+          .map((dir) => `\`${code(dir)}\``)
+          .join(t("err.orJoin")),
+        code(m[2])
+      ),
+  ],
+  /* desktop: VaultError::NotFound and the folder picker in src-tauri/src/lib.rs */
+  [
+    /^no vault found at (.+?): no vault\.json in that directory\. Run (.+?) to create one\.?$/s,
+    (m) => t("err.noVaultAt", code(m[1]), t("err.noVaultJsonHint", code(m[2]))),
+  ],
+  [/^no vault found at (.+?): (.+)$/s, (m) => t("err.noVaultAt", code(m[1]), m[2])],
+  [
+    /^(.+?) is not a vault: it has no vault\.json\..*?create one there with (.+?)\.?$/s,
+    (m) => t("err.notAVault", code(m[1]), code(m[2])),
+  ],
+  [/^that folder cannot be read: (.+)$/s, (m) => t("err.folderUnreadable", code(m[1]))],
+  /* both transports: the record that is not there, with the hint each one adds */
+  [
+    /^project '([^']+)' not found in vault (.+?)(?: \(run (.+?) to see projects\))?\.?$/s,
+    (m) =>
+      t("err.projectNotFound", m[1], code(m[2])) +
+      (m[3] ? t("err.projectListHint", code(m[3])) : ""),
+  ],
+  [
+    /^record '([^']+)' not found in project '([^']+)'(?: \(expected file (.+?)\))?\.?$/s,
+    (m) => t("err.recordNotFound", m[1], m[2]) + (m[3] ? t("err.expectedFile", code(m[3])) : ""),
+  ],
+  /* both transports: an address that cannot be a record at all */
+  [
+    /^invalid project slug '([^']*)': expected lowercase letters.*$/s,
+    (m) => t("err.badSlug", m[1]),
+  ],
+  [
+    /^invalid id '([^']*)': expected (\S+) \(e\.g\. (\S+?)\)$/s,
+    (m) => t("err.badId", m[1], m[2], m[3]),
+  ],
+  [/^no vault-api (?:write )?route for (.+)$/s, (m) => t("err.noRoute", code(m[1]))],
+];
 
 /**
  * How often browser mode asks the dev server whether the vault moved. The endpoint is a
@@ -371,7 +459,7 @@ export function subscribeVaultChanges(
             onHealth?.(
               event.payload.ok
                 ? { ok: true }
-                : { ok: false, error: event.payload.error ?? "the vault stopped answering" }
+                : { ok: false, error: event.payload.error ?? t("err.stoppedAnswering") }
             );
           })
         );

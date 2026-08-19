@@ -44,8 +44,10 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 import { modalDepth, onModalChange, useModalLock } from "../lib/modal";
+import { vaultErrorMessage } from "../lib/api";
 import { writeClipboard } from "../lib/clipboard";
 import { t } from "../lib/i18n";
+import { plainMarks } from "./ui";
 
 /** One line of a menu. Deliberately data, not JSX: the same item is built in three places. */
 export interface MenuItem {
@@ -626,7 +628,9 @@ export function useCopy() {
         try {
           value = typeof text === "string" ? text : await text();
         } catch (err) {
-          toast(err instanceof Error ? err.message : String(err), WARN);
+          /* An ApiError from the vault: the same sentence the error card would show,
+             in the reader's language, with the marks dropped for a plain toast. */
+          toast(plainMarks(vaultErrorMessage(err instanceof Error ? err.message : String(err))), WARN);
           return;
         }
         const ok = await writeClipboard(value);

@@ -1393,11 +1393,21 @@
   font-weight: var(--weight-semibold);
 }
 
+/* The sentence under the headline, in the app's own face.
+ *
+ * It was set in the mono stack, from when it was the backend's raw diagnostic — one line of
+ * machine English with a path in it. It is now a sentence in the reader's language with the
+ * machine parts marked as `code`, and --font-mono has no Hangul: every Korean word in it
+ * fell through to whatever the OS picked, at a different weight and width from the headline
+ * two lines above. The paths and commands are still mono, because they are still code. */
 .error-message {
   font-size: var(--text-base);
   color: var(--text-secondary);
-  font-family: var(--font-mono);
   line-height: var(--leading-normal);
+}
+
+/* A path or a command line has no spaces to break at, and must still fit the card. */
+.error-message code {
   overflow-wrap: anywhere;
 }
 

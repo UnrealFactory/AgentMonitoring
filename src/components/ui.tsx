@@ -3,6 +3,7 @@
  * a small coloured dot plus a label, never a shouting block of colour.
  */
 import { useState, type ReactNode } from "react";
+import { vaultErrorMessage } from "../lib/api";
 import { t } from "../lib/i18n";
 import type { BugStatus, Severity, WorkStatus } from "../lib/types";
 import { bugStatusLabel, severityLabel, unassigned, workStatusLabel } from "../lib/words";
@@ -396,6 +397,15 @@ export function InlineCode({ text }: { text: string }) {
 }
 
 /**
+ * The same sentence for a place that cannot hold marks — a `title` attribute.
+ *
+ * `InlineCode` and `RichText` turn the dictionary's backticks and asterisks into elements;
+ * a tooltip is a string, and printing the marks raw there leaks the notation onto the
+ * screen. Same text, marks dropped rather than rendered.
+ */
+export const plainMarks = (text: string): string => text.replace(/\*\*/g, "").replace(/`/g, "");
+
+/**
  * A failure, said in the reader's terms first and the backend's second.
  *
  * The headline used to be "Could not read the vault" for every failure, which is a
@@ -419,8 +429,10 @@ export function ErrorState({
   return (
     <div className="error-state" role="alert">
       <p className="error-title">{title ?? t("vault.readFailed")}</p>
+      {/* The headline is the app's sentence; this is the backend's, said in the reader's
+          language when it is one of the dozen sentences this repository writes. */}
       <p className="error-message">
-        <InlineCode text={message} />
+        <InlineCode text={vaultErrorMessage(message)} />
       </p>
       {(onRetry || action) && (
         <div className="error-actions">

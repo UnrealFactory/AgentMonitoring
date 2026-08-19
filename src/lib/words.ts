@@ -149,6 +149,17 @@ export const unresolvedOf = (n: number, total: number): string =>
 export const unresolvedCount = (n: number): string => t("word.unresolvedCount", n);
 
 /**
+ * "2 in progress" / "진행 중 2개" — the work twin, for a header that already prints the total.
+ *
+ * The work list used to build this line in JSX — `${workLogs(n)} · ${running} ${inProgress()}`
+ * — which is English word order with the Korean words dropped into it: "작업 로그 24개 ·
+ * 2 진행 중", a bare numeral in front of a state word, against this file's own rule and
+ * against the bug board's "버그 8개 · 미해결 2개" one tab away (P9 round 1 critic). A count
+ * and its word are one phrase, so one dictionary entry owns both.
+ */
+export const inProgressCount = (n: number): string => t("word.inProgressCount", n);
+
+/**
  * Tooltip for any work count: "12 work logs in this project, 2 in progress".
  *
  * `where` is a **place**, not a phrase — a project's name, or null for the project the

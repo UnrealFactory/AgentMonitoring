@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Read every screen in Korean and fail on any English the app itself wrote.
+ * Read every screen in one language and fail on any word the app itself wrote in the other.
  *
- *   npm run check:i18n
- *   node scripts/check-i18n.mjs [--port 5173] [--url ORIGIN] [--locale ko]
+ *   npm run check:i18n                          both languages, in turn
+ *   node scripts/check-i18n.mjs [--port 5173] [--url ORIGIN] [--locale ko|en]
  *
  * A translation is not done when the dictionary is full; it is done when nothing on screen
  * is still in the other language. Those two are different by exactly the strings somebody
@@ -23,8 +23,19 @@
  *      file names, and UTC. They are data, not language — a Korean screen prints
  *      `agentmon work start` exactly as an English one does.
  *
- * Everything else must be Korean. Runs against the live vault read-only.
+ * Neither exemption is allowed to swallow the app's own words: {@link CHROME} names the
+ * places where the app speaks *inside* an author container, and they are checked.
+ *
+ * **What it walks.** Every record in the vault, not a sample — and the screens a reader
+ * reaches by being wrong: a stale record link, a project slug nobody owns, and a window
+ * pointed at a folder with no vault.json. Those are the app's error surface, they are five
+ * of the six screens, and for a whole round nothing looked at them.
+ *
+ * Everything else must be Korean — and `--locale en` is the same walk with the alphabets
+ * swapped, because a Korean string typed into a component is just as invisible to `tsc` as
+ * an English one, and the app ships in two languages. Runs against the live vault read-only.
  */
+import { join } from "node:path";
 import { chromium } from "playwright";
 import { ensureServer, stopServer } from "./dev-server.mjs";
 import { t, useLocale } from "./i18n.mjs";
@@ -37,13 +48,15 @@ const value = (name, fallback) => {
 };
 
 if (flag("--help") || flag("-h")) {
-  console.log(`Fail on English the app itself prints, on a Korean screen.
+  console.log(`Fail on a word the app prints in the language the screen is not in.
 
-  npm run check:i18n
-  node scripts/check-i18n.mjs --locale ko
+  npm run check:i18n                 ko then en
+  node scripts/check-i18n.mjs --locale en
 
 Options:
-  --locale <ko>      the language to read the screens in (default ko)
+  --locale <ko|en>   the language to read the screens in; the gate then looks for the
+                     other one — English on a Korean screen, Hangul on an English one
+                     (default ko)
   --port <n>         dev-server port to boot on / check against (default 5173)
   --url <origin>     check an already-running server instead of booting one
   --verbose          list every screen walked, not only the findings`);
@@ -81,6 +94,7 @@ const AUTHOR = [
   ".project-desc",
   ".dashboard .page-title", // the project's own name…
   ".dashboard .page-sub", // …and its description
+  ".section-title.is-author", // a `## …` heading the agent wrote, above their own section
   ".res-part-title", // the labels the author bolded inside a resolution
   ".res-jump-text",
   ".res-jump-link", // …including the full label, which rides on the chip's tooltip
@@ -100,6 +114,28 @@ const AUTHOR = [
   ".sr-only", // the chart's spoken summary is assembled from labels already checked
 ];
 
+/**
+ * The app's own words *inside* an author container — checked despite the list above.
+ *
+ * The exemptions are by container, and a container can hold both: a rendered record body is
+ * the author's, but an id in it that names nothing is drawn as a chip whose tooltip is the
+ * app talking ("no work log or bug with this id in this project"). The live vault has one —
+ * WORK-0011 cites BUG-9999 — and it sat in English through a whole round because `.prose`
+ * excused it (P8 critic). A chip whose record *is* there keeps the author's title in its
+ * tooltip and stays exempt.
+ */
+const CHROME = [".ref-inline.is-unknown"];
+
+/**
+ * Where a language names itself, whichever language the window is in.
+ *
+ * The picker's two segments are 한국어 and English, each written in its own language, which
+ * is the one rule every language picker keeps: a reader who landed in the wrong one has to
+ * be able to read their way out. So it is the one place Hangul is allowed on an English
+ * screen, and the tooltip on each segment carries the same name.
+ */
+const OTHER_TONGUE = [".locale-toggle"];
+
 /** Values that are data rather than language, and are the same in every locale. */
 const TOKENS = [
   /\b(WORK|BUG)-\d+\b/g,
@@ -116,6 +152,7 @@ const TOKENS = [
   /##\s*\w+/g,
   /\bEnglish\b/g, // the language toggle names the other language in its own language
   /\bID\b/g, // written in Latin in Korean product UIs, like URL and CLI
+  /\bCLI\b/g, // …and CLI itself, which is what the onboarding calls the thing agents run
   /\brefs\b/g, // the frontmatter key a record's cross-references live under (SPEC)
   /[A-Za-z]:[\\/][^\s"]*/g, // a Windows path, as the vault bar and its tooltip print it
   /(?:^|\s)[\\/][\w./\\-]+/g, // a route or a POSIX path
@@ -124,16 +161,28 @@ const TOKENS = [
 /** Two or more Latin letters in a row, once the allowed tokens are taken out. */
 const LATIN = /[A-Za-z]{2,}/g;
 
+/**
+ * …and the mirror of it: Hangul on an English screen.
+ *
+ * The app ships in two languages, and only one of them was ever gated. A Korean word typed
+ * straight into a component — the easy mistake to make in this repository now — is invisible
+ * to `tsc` and to the Korean run of this gate, which is looking for the opposite alphabet.
+ * `--locale en` looks for this instead; everything else about the walk is identical.
+ */
+const HANGUL = /[가-힣]+/g;
+
 let failures = 0;
 let checked = 0;
 
 /**
  * Runs in the page. Returns every English-looking string the app printed, with where it is.
  */
-const PROBE = (authorSelectors) => {
-  const inAuthor = (node) => {
+const PROBE = ({ exemptSelectors, chromeSelectors }) => {
+  const isExempt = (node) => {
     const el = node.nodeType === 1 ? node : node.parentElement;
-    return !!el && authorSelectors.some((sel) => el.closest(sel));
+    if (!el) return false;
+    if (chromeSelectors.some((sel) => el.closest(sel))) return false;
+    return exemptSelectors.some((sel) => el.closest(sel));
   };
   const where = (node) => {
     const el = node.nodeType === 1 ? node : node.parentElement;
@@ -153,11 +202,11 @@ const PROBE = (authorSelectors) => {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = (node.textContent || "").trim();
-    if (!text || inAuthor(node)) continue;
+    if (!text || isExempt(node)) continue;
     found.push({ kind: "text", text, at: where(node) });
   }
   for (const el of document.querySelectorAll("[title], [aria-label], [placeholder]")) {
-    if (inAuthor(el)) continue;
+    if (isExempt(el)) continue;
     for (const attr of ["title", "aria-label", "placeholder"]) {
       const text = (el.getAttribute(attr) || "").trim();
       if (text) found.push({ kind: attr, text, at: where(el) });
@@ -173,10 +222,14 @@ const residue = (text) => {
   return rest;
 };
 
-const englishIn = (text) => {
-  const words = residue(text).match(LATIN);
+/** The words in `text` that belong to the language this screen is *not* in. */
+const foreignIn = (text) => {
+  const words = LOCALE === "en" ? text.match(HANGUL) : residue(text).match(LATIN);
   return words ? [...new Set(words)] : null;
 };
+
+/** What the findings are called, in the run's own terms. */
+const OTHER = LOCALE === "en" ? "Korean" : "English";
 
 let browser = null;
 let server = null;
@@ -200,6 +253,9 @@ try {
     for (const tag of p.tags ?? []) vaultWords.add(tag);
   }
   const screens = [];
+  /** A record of each kind in the first project, for the screens that toggle in place. */
+  let firstWork = null;
+  let firstBug = null;
   for (const p of projects) {
     const works = await api(`/projects/${p.slug}/worklogs`);
     const bugs = await api(`/projects/${p.slug}/bugs`);
@@ -213,43 +269,36 @@ try {
       if (b.assignee) vaultWords.add(b.assignee);
       for (const l of b.labels ?? []) vaultWords.add(l);
     }
-    /* One of each screen per project, and the *last* record of each kind as well as the
-       first: an in-progress work log draws a different strip from a finished one. */
-    const work = works.find((w) => w.status === "done") ?? works[0];
-    const running = works.find((w) => w.status === "in_progress");
-    const bug = bugs.find((b) => b.status === "resolved") ?? bugs[0];
-    const open = bugs.find((b) => b.status === "open" || b.status === "in_progress");
+    if (p.slug === projects[0].slug) {
+      firstWork = works[0]?.id ?? null;
+      firstBug = bugs[0]?.id ?? null;
+    }
     screens.push(
       { name: `dashboard ${p.slug}`, path: `/p/${p.slug}`, wait: ".now-strip .now-hero-value" },
       { name: `dashboard ${p.slug} 7d`, path: `/p/${p.slug}?range=7d`, wait: ".chart-legend" },
       { name: `work ${p.slug}`, path: `/p/${p.slug}/work`, wait: ".work-rows .work-row" },
       { name: `bugs ${p.slug}`, path: `/p/${p.slug}/bugs?tab=all`, wait: ".work-rows .bug-row" },
     );
-    if (work) {
+    /* Every record, not a sample of four.
+     *
+     * It used to open one done and one in-progress work log per project, which is enough to
+     * see each *state* drawn and not enough to see what one record can carry that its
+     * neighbours do not: WORK-0011 is the only record in this vault that names an id nobody
+     * wrote (BUG-9999), so the chip the app draws for a stale reference — and the English
+     * that sat in its tooltip for a round — was never on a screen this gate looked at
+     * (P8 critic). Sixty-odd more page loads is a minute; a class of string this gate cannot
+     * see is a round. */
+    for (const w of works) {
       screens.push({
-        name: `work detail ${work.id}`,
-        path: `/p/${p.slug}/work/${work.id}`,
+        name: `work detail ${w.id}`,
+        path: `/p/${p.slug}/work/${w.id}`,
         wait: ".record-title",
       });
     }
-    if (running) {
+    for (const b of bugs) {
       screens.push({
-        name: `work detail ${running.id} (in progress)`,
-        path: `/p/${p.slug}/work/${running.id}`,
-        wait: ".record-title",
-      });
-    }
-    if (bug) {
-      screens.push({
-        name: `bug detail ${bug.id}`,
-        path: `/p/${p.slug}/bugs/${bug.id}`,
-        wait: ".record-title",
-      });
-    }
-    if (open) {
-      screens.push({
-        name: `bug detail ${open.id} (unresolved)`,
-        path: `/p/${p.slug}/bugs/${open.id}`,
+        name: `bug detail ${b.id}`,
+        path: `/p/${p.slug}/bugs/${b.id}`,
         wait: ".record-title",
       });
     }
@@ -298,6 +347,84 @@ try {
     },
   );
 
+  /* ---- and the same screens reached by pressing the toggle ------------------
+   *
+   * Landing in a language is not the same event as changing to it. A value that carries
+   * words and is cached on anything but the language survives the switch, and the reader
+   * who tried the control is the one who meets it: the dashboard repainted around a
+   * 24-hour line still reading "started 16 · done 16 · notes 30 · 에이전트 8명", and a
+   * record's contents rail stayed in the language it was built in (P9 round 1 critic).
+   * Nothing in a reload can show that, so these three arrive in the *other* language and
+   * click their way into this one. */
+  const other = LOCALE === "ko" ? "en" : "ko";
+  const switchTo = async (page, waitFor) => {
+    await page.waitForSelector(waitFor, { state: "visible", timeout: 15_000 });
+    await page.waitForFunction(() => !document.querySelector(".skeleton"));
+    await page.locator(`.locale-option[data-value="${LOCALE}"]`).click();
+    await page.waitForFunction(
+      (want) => document.documentElement.lang === want,
+      LOCALE,
+      { timeout: 5_000 },
+    );
+  };
+  for (const [name, path, wait] of [
+    ["dashboard", `/p/${projects[0].slug}`, ".now-strip .now-hero-value"],
+    ...(firstWork ? [["work detail", `/p/${projects[0].slug}/work/${firstWork}`, ".record-title"]] : []),
+    ...(firstBug ? [["bug detail", `/p/${projects[0].slug}/bugs/${firstBug}`, ".record-title"]] : []),
+  ]) {
+    screens.push({
+      name: `${name}, switched to ${LOCALE} in place`,
+      path: `${path}${path.includes("?") ? "&" : "?"}lang=${other}`,
+      wait,
+      prepare: (page) => switchTo(page, wait),
+    });
+  }
+
+  /* ---- the screens a reader reaches by being wrong -------------------------
+   *
+   * Everything above is the app working. The app failing is a screen too — five of them
+   * take their headline from failureTitle() in src/lib/api.ts, which returned English
+   * literals for a whole round while their Korean twins sat in the dictionary unused, and
+   * this gate could not see it because it never drove a 404 or an unreadable vault
+   * (P8 critic). It does now: a stale record link, a project slug nobody owns, and a
+   * window pointed at a folder that is not a vault.
+   *
+   * `?vault=` is read once and kept in sessionStorage (src/lib/api.ts), so the unreadable
+   * ones come last and get their own browser context — otherwise every screen after them
+   * would be looking at the same broken folder. */
+  const slug = projects[0].slug;
+  /* The slug this gate types into the address bar is data on the screen that answers it,
+     exactly as a real slug is — the app prints back what it was asked for. */
+  const NO_SUCH_PROJECT = "does-not-exist";
+  vaultWords.add(NO_SUCH_PROJECT);
+  screens.push(
+    { name: "work detail, no such record", path: `/p/${slug}/work/WORK-9999`, wait: ".error-title" },
+    { name: "bug detail, no such record", path: `/p/${slug}/bugs/BUG-9999`, wait: ".error-title" },
+    { name: "dashboard, no such project", path: `/p/${NO_SUCH_PROJECT}`, wait: ".error-title" },
+    { name: "work list, no such project", path: `/p/${NO_SUCH_PROJECT}/work`, wait: ".error-title" },
+    { name: "bug board, no such project", path: `/p/${NO_SUCH_PROJECT}/bugs`, wait: ".error-title" },
+  );
+
+  /* A real directory with no vault.json in it: this repo's own docs/. The message names it,
+     so it has to be a path that exists rather than a placeholder. */
+  const noVault = `?vault=${encodeURIComponent(join(process.cwd(), "docs"))}`;
+  const unreadable = [
+    { name: "dashboard, unreadable vault", path: `/p/${slug}${noVault}`, wait: ".error-title" },
+    { name: "work list, unreadable vault", path: `/p/${slug}/work${noVault}`, wait: ".error-title" },
+    { name: "bug board, unreadable vault", path: `/p/${slug}/bugs${noVault}`, wait: ".error-title" },
+    {
+      name: "work detail, unreadable vault",
+      path: `/p/${slug}/work/WORK-0001${noVault}`,
+      wait: ".error-title",
+    },
+    {
+      name: "bug detail, unreadable vault",
+      path: `/p/${slug}/bugs/BUG-0001${noVault}`,
+      wait: ".error-title",
+    },
+    { name: "projects, unreadable vault", path: `/projects${noVault}`, wait: ".error-title" },
+  ];
+
   /* An agent handle or a tag is a Latin word the app is right to print. They are matched as
      whole words so `nova` does not also excuse the word "innovation". */
   const vaultToken = new RegExp(
@@ -310,35 +437,49 @@ try {
   );
 
   browser = await chromium.launch();
-  const page = await browser.newPage({
+  const VIEW = {
     viewport: { width: 1600, height: 1000 },
     colorScheme: "dark",
     reducedMotion: "reduce",
-  });
-  await useLocale(page, LOCALE);
-  log(`${screens.length} screens · language ${LOCALE}`);
+  };
+  log(`${screens.length + unreadable.length} screens · language ${LOCALE}`);
 
   const findings = [];
-  for (const screen of screens) {
-    await page.goto(`${ORIGIN}${screen.path}`, { waitUntil: "domcontentloaded" });
-    if (screen.prepare) await screen.prepare(page);
-    await page.waitForSelector(screen.wait, { state: "visible", timeout: 15_000 });
-    await page.waitForFunction(() => !document.querySelector(".skeleton"));
-    const printed = await page.evaluate(PROBE, AUTHOR);
-    checked += 1;
-    let bad = 0;
-    for (const item of printed) {
-      const words = englishIn(item.text.replace(vaultToken, " "));
-      if (!words) continue;
-      bad += 1;
-      findings.push({ screen: screen.name, ...item, words });
+  const walk = async (page, list) => {
+    for (const screen of list) {
+      await page.goto(`${ORIGIN}${screen.path}`, { waitUntil: "domcontentloaded" });
+      if (screen.prepare) await screen.prepare(page);
+      await page.waitForSelector(screen.wait, { state: "visible", timeout: 15_000 });
+      await page.waitForFunction(() => !document.querySelector(".skeleton"));
+      const printed = await page.evaluate(PROBE, {
+        exemptSelectors: [...AUTHOR, ...OTHER_TONGUE],
+        chromeSelectors: CHROME,
+      });
+      checked += 1;
+      let bad = 0;
+      for (const item of printed) {
+        const words = foreignIn(item.text.replace(vaultToken, " "));
+        if (!words) continue;
+        bad += 1;
+        findings.push({ screen: screen.name, ...item, words });
+      }
+      if (VERBOSE || bad) log(`${screen.name}: ${printed.length} strings, ${bad} ${OTHER}`);
     }
-    if (VERBOSE || bad) log(`${screen.name}: ${printed.length} strings, ${bad} English`);
-  }
+  };
+
+  const page = await browser.newPage(VIEW);
+  await useLocale(page, LOCALE);
+  await walk(page, screens);
+
+  // Its own session, because `?vault=` sticks to the one it is opened in.
+  const broken = await browser.newContext(VIEW);
+  await useLocale(broken, LOCALE);
+  await walk(await broken.newPage(), unreadable);
+  await broken.close();
 
   if (findings.length) {
     failures = findings.length;
-    console.error(`\n  ${findings.length} English string(s) printed by the app in ${LOCALE}:\n`);
+    console.error(`\n  ${findings.length} ${OTHER} string(s) printed by the app in ${LOCALE}:\n`);
     for (const f of findings.slice(0, 40)) {
       console.error(`  FAIL  [${f.screen}] ${f.kind} at ${f.at}`);
       console.error(`        “${f.text.slice(0, 140)}”  → ${f.words.join(", ")}`);
@@ -356,7 +497,7 @@ try {
 log(
   failures === 0
     ? `clean: ${checked} screens, every word the app printed is ${LOCALE}`
-    : `${failures} English string(s) on ${checked} screens`,
+    : `${failures} ${OTHER} string(s) on ${checked} screens`,
 );
 await new Promise((r) => setTimeout(r, 60));
 process.exit(failures === 0 ? 0 : 1);

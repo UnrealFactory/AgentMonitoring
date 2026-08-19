@@ -18,6 +18,25 @@
  * so changing the language repaints the whole window, which is exactly the scope of the
  * change.
  *
+ * ## The one rule that costs you a round if you break it
+ *
+ * **A repaint is not a recompute.** Anything held across renders — a `useMemo`, a value
+ * cached in a module — keeps whatever words it was built with, and the whole window
+ * repainting around it does not touch it. So:
+ *
+ *   * a pure module (lib/dashboard.ts) returns **keys and numbers**, never `t(...)` output,
+ *     when the result is something a page will memoize; the page says the words as it draws
+ *     them, and cannot get this wrong;
+ *   * a `useMemo` in a component that *does* call `t` takes `useLocale()` in its dependency
+ *     list, beside the data.
+ *
+ * Neither is theoretical. Both halves of it shipped: a Korean dashboard kept an English
+ * "started 16 · done 16 · notes 30" in its 24-hour line and an English "Today" over its
+ * feed, and a record's contents rail stayed in the language it was first drawn in, because
+ * the memos that made them listed the events and the clock and not the language (P9 round 1
+ * critic). `npm run check:i18n` now reaches those screens *by pressing the toggle*, so the
+ * next one of these fails a gate instead of a reader.
+ *
  * ## Where the choice is kept
  *
  *   * `?lang=ko|en` in the address — wins for this window, and is written through to the

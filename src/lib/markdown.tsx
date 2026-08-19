@@ -11,6 +11,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useContextMenu } from "../components/ContextMenu";
+import { t } from "./i18n";
 import { recordKind, useRecordMenu } from "./menus";
 import { parseBlocks, parseInline, type Inline } from "./markdown-parse";
 
@@ -102,11 +103,16 @@ function renderInline(nodes: Inline[], keyPrefix: string, opts: Opts): ReactNode
             className={`ref-inline mono${unknown ? " is-unknown" : ""}`}
             to={link(node.id)}
             {...menu}
+            /* The known chip's tooltip is the author's title and is printed as written;
+               the unknown chip's is the app's own sentence about a stale link, and the
+               app's sentences are in the reader's language. The live vault reaches this:
+               WORK-0011 cites BUG-9999, so the English literal that used to sit here was
+               two clicks from the Korean dashboard. */
             title={
               title
                 ? `${node.id} — ${title}`
                 : unknown
-                  ? `${node.id} — no work log or bug with this id in this project`
+                  ? t("rec.missingRefTip", node.id)
                   : undefined
             }
           >

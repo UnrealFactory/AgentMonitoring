@@ -504,12 +504,8 @@ export function agentRows(events: VaultEvent[], works: WorklogSummary[]): AgentR
 export type EventTone = "work" | "done" | "bug" | "resolved" | "neutral";
 
 export interface DayGroup {
-  /** UTC midnight of the day, epoch ms — also the group's key. */
+  /** UTC midnight of the day, epoch ms — also the group's key, and all its words need. */
   day: number;
-  /** "Today" / "Yesterday" / "Tue 12 Aug". */
-  label: string;
-  /** "18 Aug 2026", for the reader who wants the date rather than the distance. */
-  date: string;
   events: VaultEvent[];
   /** How the day breaks down, for the collapsed summary. */
   mix: { tone: EventTone; count: number }[];
@@ -555,9 +551,14 @@ export const TONE_COLOR: Record<EventTone, string> = {
   neutral: "var(--grey)",
 };
 
-/** Newest day first, events newest first inside each day. */
-export function groupByDay(events: VaultEvent[], now: number): DayGroup[] {
-  const today = startOfUtcDay(now);
+/**
+ * Newest day first, events newest first inside each day.
+ *
+ * Takes no clock: it used to, only to decide whether a day was called "Today" — and that
+ * word is now said at render (see {@link dayLabel}), which is what keeps a language change
+ * from leaving yesterday's language in the feed.
+ */
+export function groupByDay(events: VaultEvent[]): DayGroup[] {
   const byDay = new Map<number, VaultEvent[]>();
   for (const e of events) {
     const t = ms(e.ts);
@@ -578,16 +579,8 @@ export function groupByDay(events: VaultEvent[], now: number): DayGroup[] {
         counts.set(tn, (counts.get(tn) ?? 0) + 1);
         if (e.actor && !actors.includes(e.actor)) actors.push(e.actor);
       }
-      const days = Math.round((today - day) / DAY);
       return {
         day,
-        label:
-          days === 0
-            ? t("dash.today")
-            : days === 1
-              ? t("dash.yesterday")
-              : DAY_FULL_FMT.format(day),
-        date: DATE_FMT.format(day),
         events: list.slice().sort((a, b) => b.ts.localeCompare(a.ts)),
         mix: TONE_ORDER.filter((tn) => counts.has(tn)).map((tn) => ({
           tone: tn,
@@ -597,6 +590,26 @@ export function groupByDay(events: VaultEvent[], now: number): DayGroup[] {
       };
     });
 }
+
+/**
+ * What a day is called: "Today" / "Yesterday" / "Tue 12 Aug" — 오늘 / 어제 / 8월 12일 (화).
+ *
+ * A function rather than a field on {@link DayGroup}, for the reason spelled out on
+ * {@link RecentWindow.breakdown}: the groups are memoized on the events and the clock, and
+ * a word memoized on anything but the language is a word that survives a language change.
+ * The day is the only input it needs, and the page has it at the moment it draws the row.
+ */
+export function dayLabel(day: number, now: number): string {
+  const days = Math.round((startOfUtcDay(now) - day) / DAY);
+  return days === 0
+    ? t("dash.today")
+    : days === 1
+      ? t("dash.yesterday")
+      : DAY_FULL_FMT.format(day);
+}
+
+/** "18 Aug 2026" / "2026년 8월 18일" — the date beside it, for a reader counting back. */
+export const dayDate = (day: number): string => DATE_FMT.format(day);
 
 /**
  * How much of one day a reader is shown before being asked whether they want the rest.
@@ -641,15 +654,19 @@ export interface RecentWindow {
   hours: { start: number; count: number }[];
   total: number;
   /**
-   * Every event in the window, grouped and named, biggest first — and it adds up to
+   * Every event in the window, grouped and counted, biggest first — and it adds up to
    * `total`. The old subtitle counted starts, finishes, filings and fixes only, so a day
    * of nine events was described as three: the six notes, claims and comments that were
    * most of the day's actual traffic went unmentioned (round 2 critic).
    *
-   * `label` is already the word for the reader's language: the grouping happens in this
-   * module, so the naming does too, and the page only joins them up.
+   * **The key, not the word.** This used to hold `label: t(key)`, and the page holds the
+   * result in a `useMemo` keyed on the events and the clock — so a reader who changed the
+   * language got a repainted dashboard with one line of the old one still in it:
+   * "started 16 · done 16 · notes 30 · 에이전트 8명" (P9 round 1 critic). A value that is
+   * cached across renders may not carry words, because words have an input the cache does
+   * not list. The page says them at the moment it draws them.
    */
-  breakdown: { label: string; count: number }[];
+  breakdown: { key: RecentKey; count: number }[];
   actors: string[];
 }
 
@@ -716,7 +733,7 @@ export function last24h(events: VaultEvent[], now: number): RecentWindow {
   }
 
   window.breakdown = RECENT_ORDER.filter((k) => counts.has(k)).map((key) => ({
-    label: t(key),
+    key,
     count: counts.get(key) as number,
   }));
   return window;
@@ -727,13 +744,13 @@ export function last24h(events: VaultEvent[], now: number): RecentWindow {
  * dropped — the sum of what is printed is always the day's total.
  */
 export function summarise(
-  breakdown: { label: string; count: number }[],
+  breakdown: { key: RecentKey; count: number }[],
   max = 6
-): { label: string; count: number }[] {
+): { key: RecentKey; count: number }[] {
   if (breakdown.length <= max) return breakdown;
   const head = breakdown.slice(0, max - 1);
   const rest = breakdown.slice(max - 1).reduce((n, p) => n + p.count, 0);
-  return [...head, { label: t("recent.other"), count: rest }];
+  return [...head, { key: "recent.other", count: rest }];
 }
 
 export const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"];

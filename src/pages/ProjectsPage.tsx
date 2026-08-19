@@ -21,12 +21,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp, useVaultNonce } from "../AppContext";
-import { CommandLine, ErrorState, RichText, Skeleton, Tag } from "../components/ui";
+import { CommandLine, ErrorState, InlineCode, RichText, Skeleton, Tag } from "../components/ui";
 import { useContextMenu } from "../components/ContextMenu";
 import { recordKind, useProjectMenu, useRecordMenu, type RecordRef } from "../lib/menus";
 import { EventIcon } from "../components/EventIcon";
 import { useNow } from "../components/charts";
-import { api } from "../lib/api";
+import { api, vaultErrorMessage } from "../lib/api";
 import { eventSummary, eventVerb, freshness, refHref, tone, verbAfterRef } from "../lib/dashboard";
 import { formatDate, formatDateTimeUtc, formatRelative } from "../lib/format";
 import { t } from "../lib/i18n";
@@ -102,7 +102,7 @@ export function ProjectsPage() {
         />
         {actionError && (
           <p className="form-error" role="alert">
-            {actionError}
+            <InlineCode text={vaultErrorMessage(actionError)} />
           </p>
         )}
         {/* The directory the failure was about, taken out of the message two inches above:
@@ -158,7 +158,7 @@ export function ProjectsPage() {
 
       {actionError && (
         <p className="form-error" role="alert">
-          {actionError}
+          <InlineCode text={vaultErrorMessage(actionError)} />
         </p>
       )}
 
@@ -835,7 +835,7 @@ function CreateProject({
 
       {error && (
         <p className="form-error" role="alert">
-          {error}
+          <InlineCode text={vaultErrorMessage(error)} />
         </p>
       )}
 
