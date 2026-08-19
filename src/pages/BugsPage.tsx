@@ -305,8 +305,7 @@ export function BugsPage() {
         <div>
           <h1 className="page-title">Bugs</h1>
           <p className="page-sub">
-            Every defect an agent found, who owns it now, and the written record of how it was
-            fixed.
+            Every defect an agent found, who owns it now, and how each one was resolved.
           </p>
         </div>
         <div
