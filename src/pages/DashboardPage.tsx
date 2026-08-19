@@ -25,7 +25,7 @@
  */
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useProjectSlug } from "../AppContext";
+import { useProjectSlug, useVaultNonce } from "../AppContext";
 import { api, failureTitle } from "../lib/api";
 import { agentColumnWidth } from "../lib/columns";
 import { useAsync } from "../lib/useAsync";
@@ -55,11 +55,13 @@ import {
   eventVerb,
   freshness,
   groupByDay,
+  HOUR,
   initialOpenDays,
   last24h,
   noteOutline,
   refHref,
   severityCounts,
+  summarise,
   timeAxis,
   tone,
   TONE_COLOR,
@@ -101,6 +103,10 @@ const RANGES: { value: string; label: string; days: number | null }[] = [
 
 export function DashboardPage() {
   const slug = useProjectSlug()!;
+  /* Every loader on this screen takes the vault nonce, so a record an agent writes lands
+     here without a navigation and without a skeleton — the flag says live, the clock ticks
+     every thirty seconds, and now the numbers under them are as new as the sidebar's. */
+  const nonce = useVaultNonce();
   const { data, error, status, loading, reload } = useAsync<Snapshot>(
     () =>
       Promise.all([
@@ -109,7 +115,8 @@ export function DashboardPage() {
         api.listBugs(slug),
         api.listEvents(slug),
       ]),
-    [slug]
+    [slug],
+    nonce
   );
 
   const now = useNow();
@@ -143,6 +150,20 @@ export function DashboardPage() {
   );
   const recent = useMemo(() => last24h(events, now), [events, now]);
 
+  /** Every name this project's own records carry — the only names a note may be read for. */
+  const knownAgents = useMemo(
+    () =>
+      [
+        ...new Set([
+          ...works.map((w) => w.agent),
+          ...bugs.map((b) => b.reporter),
+          ...bugs.map((b) => b.assignee ?? ""),
+          ...events.map((e) => e.actor),
+        ]),
+      ].filter(Boolean),
+    [works, bugs, events]
+  );
+
   /**
    * The newest note on each work log that is still open.
    *
@@ -171,7 +192,7 @@ export function DashboardPage() {
       })
     );
     return Object.fromEntries(pairs);
-  }, [slug, activeIds]);
+  }, [slug, activeIds], nonce);
 
   /* -- the range, and everything it scopes -------------------------------- */
 
@@ -272,6 +293,7 @@ export function DashboardPage() {
           active={activeWork}
           lastDone={lastDone}
           notes={notes ?? NO_NOTES}
+          agents={knownAgents}
           now={now}
         />
         <OpenBugs slug={slug} open={openBugs} total={bugs.length} now={now} />
@@ -345,7 +367,7 @@ export function DashboardPage() {
         </ChartCard>
       </div>
 
-      <AgentsCard slug={slug} rows={agents} now={now} />
+      <AgentsCard slug={slug} rows={agents} total={scoped.length} now={now} />
 
       <ActivityCard slug={slug} groups={dayGroups} total={scoped.length} now={now} />
     </div>
@@ -368,23 +390,27 @@ function InFlight({
   active,
   lastDone,
   notes,
+  agents,
   now,
 }: {
   slug: string;
   active: WorklogSummary[];
   lastDone: WorklogSummary | undefined;
   notes: Record<string, WorkUpdate | undefined>;
+  agents: string[];
   now: number;
 }) {
-  const agents = new Set(active.map((w) => w.agent));
+  const working = new Set(active.map((w) => w.agent));
   const iso = new Date(now).toISOString();
   return (
     <section className="now-panel now-panel-wide">
       <h2 className="now-label">Working right now</h2>
       <p className="now-hero">
-        <span className={`now-hero-value${agents.size === 0 ? " is-quiet" : ""}`}>{agents.size}</span>
+        <span className={`now-hero-value${working.size === 0 ? " is-quiet" : ""}`}>
+          {working.size}
+        </span>
         <span className="now-hero-unit">
-          {agents.size === 1 ? "agent has work open" : "agents have work open"}
+          {working.size === 1 ? "agent has work open" : "agents have work open"}
         </span>
       </p>
 
@@ -429,7 +455,15 @@ function InFlight({
       ) : (
         <ul className="now-list">
           {active.slice(0, IN_FLIGHT_ROWS).map((w) => (
-            <InFlightRow key={w.id} slug={slug} work={w} note={notes[w.id]} now={now} iso={iso} />
+            <InFlightRow
+              key={w.id}
+              slug={slug}
+              work={w}
+              note={notes[w.id]}
+              agents={agents}
+              now={now}
+              iso={iso}
+            />
           ))}
           {active.length > IN_FLIGHT_ROWS && (
             <li>
@@ -448,17 +482,20 @@ function InFlightRow({
   slug,
   work,
   note,
+  agents,
   now,
   iso,
 }: {
   slug: string;
   work: WorklogSummary;
   note: WorkUpdate | undefined;
+  /** Every agent name this project's records carry, for reading an ask in the note. */
+  agents: string[];
   now: number;
   iso: string;
 }) {
   const state = freshness(work.lastActivity, now);
-  const outline = noteOutline(note?.body, 3);
+  const outline = noteOutline(note?.body, 3, agents);
   /* Two facts, two different clocks, and the row says which is which: how long this has
      been open (the hero number, which used to sit there with no label at all), and how
      long since anybody touched it. A log with no updates yet says that instead of dressing
@@ -470,8 +507,11 @@ function InFlightRow({
         ? `updated ${formatRelative(work.lastActivity, new Date(now))}`
         : `no update in ${formatDuration(work.lastActivity, iso)}`;
 
+  /* The quote is a sibling of the row, not a child of it: it carries its own link (the
+     agent an ask names), and a link inside a link is neither valid nor clickable. The two
+     of them share one hover surface, so the pair still reads as a single row. */
   return (
-    <li>
+    <li className="now-item">
       <Link className="now-row" to={`/p/${slug}/work/${work.id}`}>
         <span
           className={`sdot ${FRESH_DOT[state]}`}
@@ -498,27 +538,46 @@ function InFlightRow({
             {since}
           </span>
         </span>
-        {outline.lines.length > 0 && note && (
-          <span className="now-quote">
-            {outline.lines.map((line, i) => (
-              /* Each line carries its own sentence in the tooltip, so a sentence too long
-                 for the column is still readable without leaving the page — and the record
-                 itself, one click away, still has the note in full. */
-              <span className="now-quote-line" key={i} title={line}>
-                {i === 0 && (
-                  <span
-                    className="now-quote-lead"
-                    title={`The opening sentence of each paragraph of the note posted ${formatDateTimeUtc(note.ts)}`}
-                  >
-                    Latest note
-                  </span>
-                )}
-                {i === outline.lines.length - 1 && outline.skipped > 0 ? `… ${line}` : line}
-              </span>
-            ))}
-          </span>
-        )}
       </Link>
+
+      {outline.lines.length > 0 && note && (
+        <div className="now-quote">
+          <p className="now-quote-head">
+            <span
+              className="now-quote-lead"
+              title={`The opening sentence of each paragraph of the note posted ${formatDateTimeUtc(note.ts)}`}
+            >
+              Latest note
+            </span>
+            {/* Only ever a name that appears in the quoted sentence, and the sentence is in
+                the tooltip: the chip is a pointer to what the agent wrote, not the app's
+                own conclusion about who is blocking whom. */}
+            {outline.waitingOn && outline.waitingOn !== work.agent && (
+              <Link
+                className="now-ask"
+                to={`/p/${slug}/work?agent=${encodeURIComponent(outline.waitingOn)}`}
+                title={`${work.agent}'s newest note says: “${
+                  outline.lines.find((l) => l.ask)?.text ?? ""
+                }”`}
+              >
+                waiting on {outline.waitingOn}
+              </Link>
+            )}
+          </p>
+          {outline.lines.map((line, i) => (
+            /* Each line carries its own sentence in the tooltip, so a sentence too long
+               for the column is still readable without leaving the page — and the record
+               itself, one click away, still has the note in full. */
+            <p
+              className={`now-quote-line${line.ask ? " is-ask" : ""}`}
+              key={i}
+              title={line.text}
+            >
+              {line.gap ? `… ${line.text}` : line.text}
+            </p>
+          ))}
+        </div>
+      )}
     </li>
   );
 }
@@ -582,7 +641,10 @@ function OpenBugs({
               <Link className="now-row" to={`/p/${slug}/bugs/${b.id}`}>
                 <BugStatusDot status={b.status} />
                 <span className="now-row-main">
-                  <span className="now-row-title" title={b.title}>
+                  {/* Two lines, not one line cut mid-word: the highest-priority item on the
+                      screen used to read "…rate-limited endp…" with a third of the card
+                      standing empty below it (round 2 critic). */}
+                  <span className="now-row-title is-wrap" title={b.title}>
                     {b.title}
                   </span>
                   <span className="now-row-sub">
@@ -591,8 +653,19 @@ function OpenBugs({
                     {b.assignee ? (
                       <AgentChip name={b.assignee} />
                     ) : (
-                      <span className="now-flag" title="No agent has claimed this bug">
-                        unclaimed
+                      /* "Unclaimed" and "unclaimed since yesterday" are different states.
+                         The flag carries the age, and turns amber once a bug this severe
+                         has gone unowned for longer than half a working day — a rule the
+                         tooltip states, so the colour is not the claim (round 2 critic). */
+                      <span
+                        className={`now-flag${needsOwner(b, now) ? " is-urgent" : ""}`}
+                        title={
+                          needsOwner(b, now)
+                            ? `Nobody has claimed this ${SEVERITY_LABEL[b.severity].toLowerCase()}-severity bug in ${formatDuration(b.created, iso)}. This screen flags critical and high bugs left unowned for more than four hours.`
+                            : "No agent has claimed this bug"
+                        }
+                      >
+                        {needsOwner(b, now) ? "needs an owner" : "unclaimed"}
                       </span>
                     )}
                   </span>
@@ -644,6 +717,17 @@ function OpenBugs({
   );
 }
 
+/**
+ * A bug nobody owns, at a severity that will not wait. The threshold is stated wherever it
+ * is used, so nothing here is a silent policy: half a working day, critical and high only.
+ */
+const NEEDS_OWNER_AFTER = 4 * HOUR;
+
+const needsOwner = (bug: BugSummary, now: number): boolean =>
+  !bug.assignee &&
+  (bug.severity === "critical" || bug.severity === "high") &&
+  now - Date.parse(bug.created) >= NEEDS_OWNER_AFTER;
+
 function LastDay({
   recent,
   events,
@@ -653,12 +737,16 @@ function LastDay({
   events: VaultEvent[];
   now: number;
 }) {
-  const parts = [
-    recent.workStarted && `${recent.workStarted} started`,
-    recent.workDone && `${recent.workDone} finished`,
-    recent.bugsFiled && `${recent.bugsFiled} filed`,
-    recent.bugsResolved && `${recent.bugsResolved} fixed`,
-  ].filter(Boolean) as string[];
+  /* Every event in the window is accounted for, and the parts add up to the figure above
+     them: a day of nine described as "1 started · 1 finished · 1 filed" left six events —
+     the notes, claims and comments that were most of the traffic — unmentioned (round 2
+     critic). Beyond four kinds the tail merges into "other" rather than being dropped. */
+  const parts = summarise(recent.breakdown).map((p) => `${p.count} ${p.label}`);
+  /* And silence is stated, not left as an absence of bars. */
+  const quiet =
+    events[0] && now - Date.parse(events[0].ts) >= 2 * HOUR
+      ? `quiet for ${formatDuration(events[0].ts, new Date(now).toISOString())}`
+      : null;
 
   return (
     <section className="now-panel now-panel-day">
@@ -692,6 +780,7 @@ function LastDay({
             <>
               {parts.length ? `${parts.join(" · ")} · ` : ""}
               {pluralize(recent.actors.length, "agent")}
+              {quiet ? ` · ${quiet}` : ""}
             </>
           )}
         </p>
@@ -743,10 +832,13 @@ function ChartCard({
 function AgentsCard({
   slug,
   rows,
+  total,
   now,
 }: {
   slug: string;
   rows: ReturnType<typeof agentRows>;
+  /** Events in the range — the number the Activity card below prints. */
+  total: number;
   now: number;
 }) {
   /* The name column is sized from this project's own agent names — `nova` and
@@ -761,6 +853,7 @@ function AgentsCard({
     { chrome: 40, min: 118, max: 210 }
   );
   const max = Math.max(1, ...rows.map((r) => r.total));
+  const anyProject = rows.some((r) => r.project > 0);
 
   return (
     <section className="card">
@@ -770,6 +863,7 @@ function AgentsCard({
           items={[
             { color: "var(--series-work)", label: "work" },
             { color: "var(--series-bug)", label: "bugs" },
+            ...(anyProject ? [{ color: "var(--grey)", label: "project" }] : []),
           ]}
         />
         <Link className="card-action" to={`/p/${slug}/work`}>
@@ -819,10 +913,19 @@ function AgentsCard({
                         {r.activeNow > 0 ? (
                           <span
                             className={`sdot ${FRESH_DOT[state]}`}
+                            role="img"
+                            aria-label={`${pluralize(r.activeNow, "work log")} open`}
                             title={`${pluralize(r.activeNow, "work log")} open · last seen ${formatRelative(r.lastActivity, new Date(now))}`}
                           />
                         ) : (
-                          <span className="sdot sdot-idle" aria-hidden="true" />
+                          /* "Who is free right now" was inferable only from a hollow circle
+                             with no title on it (round 2 critic). */
+                          <span
+                            className="sdot sdot-idle"
+                            role="img"
+                            aria-label="No work log open"
+                            title={`No work log open · last seen ${formatRelative(r.lastActivity, new Date(now))}`}
+                          />
                         )}
                         <AgentChip name={r.agent} />
                       </span>
@@ -830,10 +933,13 @@ function AgentsCard({
                         <SplitBar
                           max={max}
                           total={r.total}
-                          title={`${r.total} events — ${r.work} on work, ${r.bugs} on bugs`}
+                          title={`${pluralize(r.total, "event")} — ${r.work} on work, ${r.bugs} on bugs${
+                            r.project ? `, ${r.project} on the project` : ""
+                          }`}
                           parts={[
                             { value: r.work, color: "var(--series-work)", label: "work" },
                             { value: r.bugs, color: "var(--series-bug)", label: "bugs" },
+                            { value: r.project, color: "var(--grey)", label: "project" },
                           ]}
                         />
                         <span className="agent-total tabular">{r.total}</span>
@@ -852,6 +958,13 @@ function AgentsCard({
                 );
               })}
             </ul>
+            {/* The sum of this column is the number on the card below it, and saying so is
+                cheaper than leaving a reader to add four rows up and find 83 under an
+                "85 events" heading (round 2 critic). */}
+            <p className="table-note">
+              Every one of the {total} events in this range, counted against the agent who
+              recorded it — project changes included.
+            </p>
           </div>
         )}
       </div>
@@ -886,6 +999,15 @@ function ActivityCard({
     [initial]
   );
 
+  /* Reading the last week meant eight separate clicks, one drawer at a time (round 2
+     critic). One control opens the lot, and turns into the one that puts them back. */
+  const allOpen = groups.length > 0 && groups.every((g) => isOpen(g.day));
+  const setAll = useCallback(
+    (open: boolean) =>
+      setOverride(Object.fromEntries(groups.map((g) => [g.day, open])) as Record<number, boolean>),
+    [groups]
+  );
+
   /* The collapsed day rows draw a bar per day, which makes them a chart — so they get a
      legend, in the tones this project's own days actually contain, and the bar is as long
      as the day was busy rather than every day drawing the same stripe (round 1 critic). */
@@ -910,6 +1032,11 @@ function ActivityCard({
         <span className="card-note tabular">
           {pluralize(total, "event")} · {pluralize(groups.length, "day")} · UTC
         </span>
+        {groups.length > 1 && (
+          <button className="card-action" onClick={() => setAll(!allOpen)}>
+            {allOpen ? "Collapse all" : "Expand all"}
+          </button>
+        )}
       </header>
       <div className="card-body">
         {groups.length === 0 ? (

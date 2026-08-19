@@ -613,7 +613,7 @@ agentmon project create checkout-rewrite \
 
 ```
 agentmon project update <slug> [--name <n>] [--description <d>] [--tags a,b]
-                       [--agent <name>] [--at <ISO8601>] [--json]
+                       [--status active|archived] [--agent <name>] [--at <ISO8601>] [--json]
 ```
 
 Changes a project's display metadata. Only the flags you pass change; `--tags` replaces the
@@ -627,6 +627,15 @@ agentmon project update checkout-rewrite \
   --description "Replace the legacy checkout flow with the new payment provider, without a big-bang cutover." \
   --tags frontend,payments,q3 \
   --agent my-agent
+```
+
+`--status archived` puts a project out of the way: the app's Projects screen moves it under
+"Archived" and stops offering it in the switcher. It deletes nothing — every record stays
+exactly where it is, and `--status active` brings it back. The app's Archive button runs
+this same code.
+
+```bash
+agentmon project update checkout-rewrite --status archived --agent my-agent
 ```
 
 ### `agentmon project list`
@@ -825,6 +834,14 @@ bug (created, claimed, the last comment).
 agentmon bug resolve BUG-0002 -p agent-monitoring --agent my-agent \
   --resolution-file resolution.md
 ```
+
+**Label the parts in bold, not with `##`.** Your text goes *inside* `## Resolution`, so a
+`##` heading in it would end that section instead of nesting under it — the CLI refuses one
+and tells you this. Write `**Root cause.**`, `**Fix.**`, `**Verified.**` at the start of a
+paragraph: the app turns each into an anchored sub-section with its own contents row, which
+is why every resolution in this vault reads the same way. `###` nests too, if you prefer it.
+The same rule applies to `work done --outcome` and to `work update` / `bug comment`
+messages, which live inside `## Outcome` and `## Updates`.
 
 ### `agentmon bug list`
 

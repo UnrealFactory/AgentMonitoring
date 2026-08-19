@@ -9,7 +9,7 @@
  */
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useCurrentProject, useProjectSlug } from "../AppContext";
+import { useCurrentProject, useProjectSlug, useVaultNonce } from "../AppContext";
 import { api, failureTitle } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useActiveSection } from "../lib/useActiveSection";
@@ -61,7 +61,8 @@ export function WorkDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const { data, error, status, loading, reload } = useAsync(
     () => api.getWorklog(slug, id),
-    [slug, id]
+    [slug, id],
+    useVaultNonce()
   );
 
   const work = data;

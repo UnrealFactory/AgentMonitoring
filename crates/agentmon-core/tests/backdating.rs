@@ -9,8 +9,8 @@ use std::path::PathBuf;
 
 use agentmon_core::doctor;
 use agentmon_core::{
-    AbandonWork, FinishWork, NewBug, NewProject, Severity, StartWork, UpdateProject, Vault,
-    WorkStatus,
+    AbandonWork, FinishWork, NewBug, NewProject, ProjectStatus, Severity, StartWork, UpdateProject,
+    Vault, WorkStatus,
 };
 
 // ---------------------------------------------------------------------------
@@ -524,6 +524,7 @@ fn project_update_changes_metadata_and_logs_an_event() {
                 name: Some("Demo, renamed".into()),
                 description: Some("The project the agentmon-core tests write into.".into()),
                 tags: Some(vec!["test".into(), "core".into(), "test".into()]),
+                status: None,
                 actor: "cli-builder".into(),
                 at: None,
             },
@@ -587,4 +588,68 @@ fn project_update_changes_metadata_and_logs_an_event() {
     let report = doctor::check(&tv.vault).unwrap();
     assert_eq!(report.errors(), 0, "{:#?}", report.problems);
     assert_eq!(report.warnings(), 0, "project_updated is a known event type");
+}
+
+/// Archiving is the one piece of project state a human sets, from the app's Projects
+/// screen or from `agentmon project update --status archived`. It has to be reversible and
+/// it has to delete nothing — an archived project is out of the way, not gone.
+#[test]
+fn project_archive_hides_nothing_and_is_reversible() {
+    let tv = TempVault::new("project-archive");
+    tv.vault
+        .start_work(
+            "demo",
+            &StartWork {
+                agent: "nova".into(),
+                title: "Something worth keeping".into(),
+                body: BODY.into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+    let archived = tv
+        .vault
+        .update_project(
+            "demo",
+            &UpdateProject {
+                status: Some(ProjectStatus::Archived),
+                actor: "app".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(archived.event.event_type, "project_updated");
+    assert!(
+        archived.event.summary.contains("archived"),
+        "the event says what happened: {}",
+        archived.event.summary
+    );
+    assert_eq!(archived.record.status, ProjectStatus::Archived);
+
+    let p = tv.vault.project("demo").unwrap();
+    assert_eq!(p.status, ProjectStatus::Archived);
+    assert_eq!(p.counts.work_total, 1, "archiving deletes no records");
+    assert_eq!(p.name, "Demo", "and changes nothing else");
+    assert_eq!(tv.vault.worklogs("demo").unwrap().len(), 1);
+    assert!(
+        tv.vault.projects().unwrap().iter().any(|x| x.slug == "demo"),
+        "an archived project is still in the vault listing; the app decides what to show"
+    );
+
+    // …and back again.
+    tv.vault
+        .update_project(
+            "demo",
+            &UpdateProject {
+                status: Some(ProjectStatus::Active),
+                actor: "app".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(tv.vault.project("demo").unwrap().status, ProjectStatus::Active);
+
+    let report = doctor::check(&tv.vault).unwrap();
+    assert_eq!(report.errors(), 0, "{:#?}", report.problems);
 }

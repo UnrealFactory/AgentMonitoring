@@ -183,10 +183,60 @@
 
 /* nav */
 
+/* Search, where Linear puts it: under the switcher, above the nav, with its key on it. */
+.sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 6px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.sidebar-search:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-kbd {
+  margin-left: auto;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  padding: 0 5px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius-xs);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  color: var(--text-tertiary);
+}
+
 .nav {
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+/* Which project the three screens above belong to, and where the vault ones start. */
+.nav-section {
+  margin: var(--space-3) var(--space-2) var(--space-1);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav:first-child > .nav-section:first-child {
+  margin-top: 0;
 }
 
 .nav-item {
@@ -227,6 +277,14 @@
   margin-left: auto;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* "Work 12" counts every log ever written; "Bugs 2" counts what is open. Two different
+   measures wearing identical styling invited the comparison (round 2 critic), so the one
+   that is a subset says which subset. */
+.nav-count-open {
+  color: var(--amber);
 }
 
 .sidebar-foot {
@@ -240,6 +298,12 @@
   flex-direction: column;
   gap: 2px;
   padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.vault-path:hover {
+  background: var(--bg-hover);
 }
 
 .vault-path-label {
@@ -249,11 +313,184 @@
   color: var(--text-tertiary);
 }
 
+.vault-path-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .vault-path-value {
   font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-wrap: anywhere;
   line-height: 1.45;
+}
+
+/* ===========================================================================
+   COMMAND PALETTE (Ctrl/Cmd+K)
+
+   One surface over the app, near the top of the window where the eye already is —
+   not centred, which would put the results where the pointer has to travel.
+   ======================================================================== */
+
+.palette-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh var(--space-4) var(--space-4);
+  background: var(--bg-scrim);
+  backdrop-filter: blur(1.5px);
+}
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: 62vh;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.palette-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.palette-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-tertiary);
+  flex: none;
+}
+
+.palette-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  border: none;
+  background: none;
+  outline: none;
+  font-size: var(--text-md);
+  color: var(--text-primary);
+}
+
+.palette-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.palette-list {
+  list-style: none;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.palette-group {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 7px var(--space-2);
+  border-radius: var(--radius);
+  text-align: left;
+  min-width: 0;
+}
+
+.palette-item.is-active {
+  background: var(--bg-selected);
+}
+
+.palette-label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-hint {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.palette-meta {
+  flex: none;
+  max-width: 22ch;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-kind {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.palette-kind.is-bug {
+  color: var(--orange);
+  background: var(--orange-soft);
+}
+
+.palette-kind.is-work {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.palette-empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+}
+
+.palette-empty code {
+  color: var(--text-secondary);
+}
+
+.palette-foot {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.palette-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* --- page scaffold -------------------------------------------------------- */
@@ -2632,6 +2869,33 @@ kbd {
   margin: 0 calc(-1 * var(--space-2));
 }
 
+/* The row and the note under it are two elements (the note carries its own link), and one
+   hover surface — so they still read as one row. */
+.now-item {
+  border-radius: var(--radius);
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.now-item:hover {
+  background: var(--bg-hover);
+}
+
+.now-item:hover .now-row:hover {
+  background: transparent;
+}
+
+/* the note is indented to sit under the title, past the dot and its gap */
+.now-item > .now-quote {
+  margin: 0 var(--space-2) 6px calc(var(--space-2) + 8px + var(--space-3));
+}
+
+/* Open bugs: the panel's list takes the room, and its footnote sits on the floor of the
+   card rather than leaving 180px of air under a two-row list (round 2 critic). */
+.now-panel > .now-note:last-child {
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
 /* A row is a dot, a title block and a pair of times — and under them, the full width of
    the row, whatever the record's newest note says. The note gets the whole width rather
    than the title column's share, because sentences need it and the two times beside it
@@ -2687,6 +2951,19 @@ kbd {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A bug title is the thing being triaged, so it gets two lines before it gives up any
+   words — and it breaks at a word, never mid-word. */
+.now-row-title.is-wrap {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  line-height: 1.35;
 }
 
 /* Wraps rather than cuts: a severity pill, an id and "unclaimed" are three whole things,
@@ -2764,6 +3041,13 @@ kbd {
   white-space: nowrap;
 }
 
+/* …and the same flag once the bug is severe enough that nobody owning it is the problem */
+.now-flag.is-urgent {
+  color: var(--amber);
+  background: var(--amber-soft);
+  box-shadow: inset 0 0 0 1px rgba(242, 201, 76, 0.35);
+}
+
 /* --- the newest note, quoted ---------------------------------------------
    The opening sentence of each paragraph of the latest update, one line each. The
    event log only carries a truncated first clause, and "in flight" and "in flight,
@@ -2780,6 +3064,13 @@ kbd {
   border-left: 2px solid var(--border);
 }
 
+.now-quote-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .now-quote-line {
   font-size: var(--text-sm);
   line-height: 1.45;
@@ -2789,13 +3080,45 @@ kbd {
   text-overflow: ellipsis;
 }
 
+/* The sentence in which the agent asks for something or says what is in the way: the one
+   line on this panel a reader must not skim. Emphasis only — the words are the record's. */
+.now-quote-line.is-ask {
+  color: var(--text-primary);
+}
+
 .now-quote-lead {
-  margin-right: 7px;
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
   color: var(--text-tertiary);
+  flex: none;
+}
+
+/* Who the note names, as somewhere to go. Amber because it is a dependency, not a fault. */
+.now-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--amber);
+  background: var(--amber-soft);
+  white-space: nowrap;
+}
+
+.now-ask::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+.now-ask:hover {
+  background: rgba(242, 201, 76, 0.24);
 }
 
 .now-more {
@@ -2906,17 +3229,23 @@ kbd {
 
 /* --- range control -------------------------------------------------------- */
 
+/* The sentence sits under the control at every width, never beside it.
+   Wrapped in a flex line it moved: at "All time" it was long enough to drop below the
+   segmented control, at "7 days" it fitted beside it, so switching ranges jumped the whole
+   page about thirty pixels (round 2 critic). A row each costs one line of height and the
+   page stops moving. */
 .dash-toolbar {
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
 }
 
 .dash-scope {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   min-width: 0;
+  max-width: 92ch;
 }
 
 /* --- chart cards ---------------------------------------------------------- */
@@ -3242,6 +3571,13 @@ kbd {
   text-overflow: ellipsis;
 }
 
+/* What a table's numbers add up to, said once under them rather than left to the reader. */
+.table-note {
+  padding: var(--space-3) var(--space-2) var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
 .agent-cell-seen {
   text-align: right;
   font-size: var(--text-sm);
@@ -3512,45 +3848,189 @@ a.feed-row:hover .feed-ref {
   }
 }
 
-/* --- projects ------------------------------------------------------------- */
+/* ===========================================================================
+   PROJECTS + VAULT
 
-.vault-card {
+   The screen that has to make portability true: which vault is open, how to open
+   another, and how to start a project in this one.
+   ======================================================================== */
+
+.page-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.button-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.button-primary:hover {
+  background: var(--accent-hover);
+}
+
+.button:disabled,
+.button-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* A button that is a sentence's worth of action, not a control: archive, show, hide. */
+.link-button {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
+}
+
+.link-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.link-button:disabled {
+  color: var(--text-tertiary);
+  cursor: default;
+}
+
+.form-error {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--red-soft);
+  color: #f4a0a0;
+  font-size: var(--text-base);
+  border: 1px solid rgba(235, 87, 87, 0.3);
+}
+
+/* --- the vault bar -------------------------------------------------------- */
+
+.vault-bar {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: var(--space-5);
   padding: var(--space-4);
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
 }
 
-.vault-card-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.vault-bar-main {
   min-width: 0;
 }
 
-.vault-card-label {
+.vault-bar-label {
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
   color: var(--text-tertiary);
 }
 
-.vault-card-value {
+.vault-bar-name {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  margin-top: 2px;
+}
+
+/* The path is the fact that makes the vault portable, so it is never cut: it wraps. */
+.vault-bar-path {
+  margin-top: 3px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.vault-bar-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.vault-bar-facts div {
+  min-width: 0;
+}
+
+.vault-bar-facts dt {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
+}
+
+.vault-bar-facts dd {
+  margin: 2px 0 0;
   font-size: var(--text-base);
   color: var(--text-primary);
   overflow-wrap: anywhere;
 }
 
+.vault-bar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.vault-bar-hint {
+  max-width: 34ch;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.vault-bar-hint code {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1180px) {
+  .vault-bar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .vault-bar-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* --- project cards -------------------------------------------------------- */
+
+.project-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.project-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.project-section-head .section-title {
+  margin-bottom: 0;
+  flex: 1;
+}
+
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
   gap: var(--space-4);
 }
 
+/* The card is not itself a link — it holds one, plus the buttons that act on the project.
+   The title's ::after covers the card, so the whole thing is still clickable and the
+   actions sit above it. */
 .project-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -3566,48 +4046,81 @@ a.feed-row:hover .feed-ref {
   border-color: var(--border);
 }
 
+.project-card.is-archived {
+  background: transparent;
+}
+
+.project-card.is-archived .project-name {
+  color: var(--text-secondary);
+}
+
 .project-card-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
+  min-width: 0;
+}
+
+.project-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.project-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+}
+
+.project-link:focus-visible {
+  outline: none;
+}
+
+.project-link:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .project-name {
   font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tight);
-}
-
-.project-status {
-  font-size: var(--text-xs);
-  padding: 1px 7px;
-  border-radius: var(--radius-full);
-  color: var(--text-secondary);
-  background: var(--grey-soft);
-}
-
-.project-status-active {
-  color: var(--green);
-  background: var(--green-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-slug {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
+  white-space: nowrap;
+  flex: none;
 }
 
 .project-desc {
   font-size: var(--text-base);
   color: var(--text-secondary);
   line-height: var(--leading-snug);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.project-desc-none {
+  color: var(--text-tertiary);
 }
 
 .project-counts {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  margin-top: auto;
   padding-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
 }
@@ -3634,6 +4147,236 @@ a.feed-row:hover .feed-ref {
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
   color: var(--text-primary);
+}
+
+.project-counts dd.is-zero {
+  color: var(--text-tertiary);
+}
+
+.project-count-of {
+  color: var(--text-tertiary);
+  font-weight: var(--weight-normal);
+}
+
+.project-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  min-width: 0;
+}
+
+.project-when {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-since {
+  color: var(--text-tertiary);
+}
+
+/* above the card's stretched link, or it would not be clickable */
+.project-actions {
+  position: relative;
+  z-index: 1;
+  flex: none;
+}
+
+/* --- create a project ----------------------------------------------------- */
+
+.create-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.create-head .section-title {
+  margin-bottom: var(--space-1);
+}
+
+.create-sub {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.create-sub code {
+  color: var(--text-secondary);
+}
+
+.create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
+}
+
+.field-hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* the filter search box sets a fixed width on .input; a form field takes its column */
+.create-panel .input {
+  width: 100%;
+}
+
+.create-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (max-width: 900px) {
+  .create-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- an empty vault ------------------------------------------------------- */
+
+.onboarding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.onboarding-title {
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-tight);
+}
+
+.onboarding-sub,
+.onboarding-foot {
+  max-width: 78ch;
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+}
+
+.onboarding-foot {
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.onboarding-sub code,
+.onboarding-foot code,
+.onboarding-note code {
+  color: var(--text-secondary);
+}
+
+.onboarding-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  list-style: none;
+  counter-reset: step;
+}
+
+.onboarding-steps > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-left: var(--space-8);
+  position: relative;
+  counter-increment: step;
+}
+
+.onboarding-steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.onboarding-step {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  padding-top: 2px;
+}
+
+.onboarding-note {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: var(--leading-snug);
+}
+
+/* --- a command a reader can copy ------------------------------------------ */
+
+.command-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+
+.command-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.command-copy {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+.command-copy:hover {
+  color: var(--text-primary);
+  background: var(--bg-active);
 }
 
 /* --- prose (rendered markdown) -------------------------------------------- */

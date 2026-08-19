@@ -193,6 +193,10 @@ enum ProjectCmd {
         /// Replacement tag list, comma-separated.
         #[arg(long, value_delimiter = ',')]
         tags: Option<Vec<String>>,
+        /// active | archived. Archiving hides the project from the app's default view and
+        /// deletes nothing; the records stay exactly where they are.
+        #[arg(long, value_name = "STATE")]
+        status: Option<String>,
         /// Agent recorded as the actor of the project_updated event.
         #[arg(long, env = "AGENTMON_AGENT", default_value = "agentmon")]
         agent: String,
@@ -687,16 +691,22 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
             name,
             description,
             tags,
+            status,
             agent,
             at,
         } => {
             let vault = open(cli)?;
+            let status = status
+                .as_deref()
+                .map(agentmon_core::parse_project_status)
+                .transpose()?;
             let written = vault.update_project(
                 slug,
                 &UpdateProject {
                     name: name.clone(),
                     description: description.clone(),
                     tags: tags.clone(),
+                    status,
                     actor: agent.clone(),
                     at: at.clone(),
                 },
@@ -706,6 +716,9 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
             }
             let p = &written.record;
             println!("Updated project {} ({})", p.name, p.slug);
+            if p.status == agentmon_core::ProjectStatus::Archived {
+                println!("  archived — its records are still in the vault");
+            }
             if !p.description.is_empty() {
                 println!("  {}", clip(&p.description, 100));
             }

@@ -70,9 +70,15 @@
   --status-abandoned: var(--grey);
   --status-abandoned-soft: var(--grey-soft);
 
-  /* bug status */
-  --status-open: var(--green);
-  --status-open-soft: var(--green-soft);
+  /* bug status
+     Open is orange, not green. Green means "this is fine" everywhere else in this app —
+     it is the colour of a finished work log and of a resolved thread — and an unclaimed
+     high-severity bug wearing it read backwards to the P4 critic: the most urgent thing on
+     the dashboard looked like the safest. Orange is the tone the whole app already uses for
+     a bug (the feed icon, the burn-up's filed line, the severity ramp), so an open bug is
+     now the same colour wherever it appears, and purple stays the colour of a fix. */
+  --status-open: var(--orange);
+  --status-open-soft: var(--orange-soft);
   --status-resolved: var(--purple);
   --status-resolved-soft: var(--purple-soft);
   --status-closed: var(--grey);

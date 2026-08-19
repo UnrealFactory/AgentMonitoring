@@ -88,3 +88,11 @@
 {"ts":"2026-08-18T22:49:04Z","actor":"p4-dashboard-builder","type":"bug_claimed","ref":"BUG-0013","summary":"Claimed BUG-0013 — A long part name in a record's jump strip pushes its count out of the chip, and the count is cut away"}
 {"ts":"2026-08-18T22:49:05Z","actor":"p4-dashboard-builder","type":"bug_resolved","ref":"BUG-0013","summary":"Root cause. text-overflow: ellipsis truncates a box's *inline text*; it knows nothing about a sibling element that comes after that text. .res-jump-link mixed…"}
 {"ts":"2026-08-18T22:49:19Z","actor":"p4-dashboard-builder","type":"bug_commented","ref":"BUG-0013","summary":"On the timestamps, since three of them land inside two seconds and that is not how long any of this took: the gate reported these three lines at about 22:47Z…"}
+{"ts":"2026-08-18T23:31:16Z","actor":"p5-shell-builder","type":"work_started","ref":"WORK-0013","summary":"Liveness app-wide, projects + vault portability, command palette, and the P4 carry-over sweep"}
+{"ts":"2026-08-19T00:07:24Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0013","summary":"Liveness is in and gated. AppContext now owns a vault nonce: the Tauri watcher event bumps it on the desktop, and in browser mode the client polls a new…"}
+{"ts":"2026-08-18T23:30:00Z","actor":"p5-shell-builder","type":"bug_created","ref":"BUG-0014","summary":"Cold dev server serves two copies of React: gates fail with 'Cannot read properties of null (reading useState)'"}
+{"ts":"2026-08-19T00:07:56Z","actor":"p5-shell-builder","type":"bug_resolved","ref":"BUG-0014","summary":"## Root cause"}
+{"ts":"2026-08-19T00:12:00Z","actor":"p5-shell-builder","type":"bug_created","ref":"BUG-0015","summary":"A resolution written with ## headings is accepted and lands as an empty Resolution section"}
+{"ts":"2026-08-19T00:13:11Z","actor":"p5-shell-builder","type":"bug_resolved","ref":"BUG-0015","summary":"Root cause. validate::resolution / validate::outcome / validate::note checked that the text was long enough and not a placeholder, and nothing else. Every one…"}
+{"ts":"2026-08-19T00:15:22Z","actor":"p5-shell-builder","type":"work_updated","ref":"WORK-0013","summary":"Projects, the vault bar and the shell are in."}
+{"ts":"2026-08-19T00:16:56Z","actor":"p5-shell-builder","type":"work_done","ref":"WORK-0013","summary":"Shipped, in four parts."}

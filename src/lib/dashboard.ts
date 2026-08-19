@@ -359,6 +359,13 @@ export interface AgentRow {
   work: number;
   /** Bug events (filed / claimed / commented / resolved / closed) recorded by this agent. */
   bugs: number;
+  /**
+   * Project events (created / updated). Counted like the rest, because the table used to
+   * drop them: relay's four agents added up to 83 under an Activity card that said 85, and
+   * quill's "Last seen" was an hour behind the feed two cards below it — both because the
+   * two events that moved the project metadata belonged to nobody (round 2 critic).
+   */
+  project: number;
   total: number;
   /**
    * The counts the row also prints as text, so the bar is never the only place a number
@@ -390,6 +397,7 @@ export function agentRows(events: VaultEvent[], works: WorklogSummary[]): AgentR
         agent,
         work: 0,
         bugs: 0,
+        project: 0,
         total: 0,
         done: 0,
         filed: 0,
@@ -404,9 +412,10 @@ export function agentRows(events: VaultEvent[], works: WorklogSummary[]): AgentR
   };
 
   for (const e of events) {
-    if (!e.actor || e.type.startsWith("project_")) continue;
+    if (!e.actor) continue;
     const r = row(e.actor);
-    if (e.type.startsWith("bug_")) r.bugs += 1;
+    if (e.type.startsWith("project_")) r.project += 1;
+    else if (e.type.startsWith("bug_")) r.bugs += 1;
     else r.work += 1;
     r.total += 1;
     if (e.type === "work_done") r.done += 1;
@@ -576,38 +585,83 @@ export interface RecentWindow {
   /** One count per hour over the last 24, oldest first — the strip's sparkline. */
   hours: { start: number; count: number }[];
   total: number;
-  workStarted: number;
-  workDone: number;
-  bugsFiled: number;
-  bugsResolved: number;
+  /**
+   * Every event in the window, grouped and named, biggest first — and it adds up to
+   * `total`. The old subtitle counted starts, finishes, filings and fixes only, so a day
+   * of nine events was described as three: the six notes, claims and comments that were
+   * most of the day's actual traffic went unmentioned (round 2 critic).
+   */
+  breakdown: { label: string; count: number }[];
   actors: string[];
 }
+
+/** What each event type is called when the day is summarised in a sentence. */
+const RECENT_LABEL: Record<string, string> = {
+  work_started: "started",
+  work_updated: "notes",
+  // A comment on a bug and an update on a work log are the same act — somebody wrote
+  // something down — and counting them apart only lengthens the sentence.
+  bug_commented: "notes",
+  work_done: "finished",
+  work_abandoned: "abandoned",
+  bug_created: "filed",
+  bug_claimed: "claimed",
+  bug_resolved: "fixed",
+  bug_closed: "closed",
+  project_created: "project",
+  project_updated: "project",
+};
+
+/** The order the parts are printed in: what a reader looks for first. */
+const RECENT_ORDER = [
+  "started",
+  "finished",
+  "notes",
+  "filed",
+  "fixed",
+  "claimed",
+  "abandoned",
+  "closed",
+  "project",
+  "other",
+];
 
 export function last24h(events: VaultEvent[], now: number): RecentWindow {
   const from = floorTo(now, HOUR) - 23 * HOUR;
   const hours = Array.from({ length: 24 }, (_, i) => ({ start: from + i * HOUR, count: 0 }));
-  const window: RecentWindow = {
-    hours,
-    total: 0,
-    workStarted: 0,
-    workDone: 0,
-    bugsFiled: 0,
-    bugsResolved: 0,
-    actors: [],
-  };
+  const counts = new Map<string, number>();
+  const window: RecentWindow = { hours, total: 0, breakdown: [], actors: [] };
+
   for (const e of events) {
     const t = ms(e.ts);
     if (t === null || t < from || t > now + HOUR) continue;
     const i = Math.min(23, Math.max(0, Math.floor((t - from) / HOUR)));
     hours[i].count += 1;
     window.total += 1;
-    if (e.type === "work_started") window.workStarted += 1;
-    if (e.type === "work_done") window.workDone += 1;
-    if (e.type === "bug_created") window.bugsFiled += 1;
-    if (e.type === "bug_resolved") window.bugsResolved += 1;
+    const label = RECENT_LABEL[e.type] ?? "other";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
     if (e.actor && !window.actors.includes(e.actor)) window.actors.push(e.actor);
   }
+
+  window.breakdown = RECENT_ORDER.filter((l) => counts.has(l)).map((label) => ({
+    label,
+    count: counts.get(label) as number,
+  }));
   return window;
+}
+
+/**
+ * The breakdown as a sentence of at most `max` parts, with the tail merged rather than
+ * dropped — the sum of what is printed is always the day's total.
+ */
+export function summarise(
+  breakdown: { label: string; count: number }[],
+  max = 6
+): { label: string; count: number }[] {
+  if (breakdown.length <= max) return breakdown;
+  const head = breakdown.slice(0, max - 1);
+  const rest = breakdown.slice(max - 1).reduce((n, p) => n + p.count, 0);
+  return [...head, { label: "other", count: rest }];
 }
 
 export const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"];
@@ -660,6 +714,38 @@ const firstSentence = (text: string): string => {
 };
 
 /**
+ * Sentences that carry a decision or a dependency rather than progress.
+ *
+ * Used for two different jobs, and for nothing else: choosing which lines survive when a
+ * note is longer than the room for it, and marking the ones a reader must not skim past.
+ * Neither job invents a fact — the sentence is printed verbatim either way; the pattern
+ * only decides *which* verbatim sentence gets the space and the emphasis.
+ */
+const ASK_CUE =
+  /\b(asked|asking|waiting on|waiting for|blocked|blocker|cannot|can not|can't|unblock|depends on|still outstanding|needs? (a |an |the )?(answer|decision|call|input|reply|review))\b/i;
+const DECISION_CUE =
+  /\b(deliberately|on purpose|decided|decision|instead of|not doing|will not|won't|chose|holding off|parked|risk|data.loss)\b/i;
+
+export interface NoteLine {
+  text: string;
+  /** This sentence asks somebody for something, or says something is in the way. */
+  ask: boolean;
+  /** Sentences were skipped immediately before this one. */
+  gap: boolean;
+}
+
+export interface NoteOutline {
+  lines: NoteLine[];
+  skipped: number;
+  /**
+   * An agent named *in an ask sentence* and known to this project. The chip the dashboard
+   * draws from it says only what the quote already says, and carries the quote in its
+   * tooltip — the reader can check it against the sentence in one glance.
+   */
+  waitingOn: string | null;
+}
+
+/**
  * The opening sentence of each paragraph of a note — its outline.
  *
  * The event log's `summary` is a first clause and stops mid-thought, so the feed could not
@@ -668,15 +754,19 @@ const firstSentence = (text: string): string => {
  * The record itself has the whole note, and an agent's note is written the way this rule
  * reads it — each paragraph opens with what it is about.
  *
- * When a note has more paragraphs than there is room for, the **last** one is kept in place
- * of the middle: a note opens with what happened and closes with what is still outstanding,
- * and the outstanding half is the one a dashboard exists to surface. The caller marks that
- * skip in the rendering, so nothing pretends to be contiguous.
+ * When a note has more paragraphs than there is room for, first-two-plus-last was the wrong
+ * rule: it dropped nova's "Deliberately not doing the production swap this week", so a
+ * paced migration read as a possibly-stalled one (round 2 critic). The opener and the
+ * closer still hold their places — a note opens with what happened and closes with what is
+ * outstanding — and the space between them goes to the sentences that carry a decision or a
+ * blocker, in the order they were written. Skips are marked, so nothing pretends to be
+ * contiguous.
  */
 export function noteOutline(
   body: string | null | undefined,
-  maxLines = 3
-): { lines: string[]; skipped: number } {
+  maxLines = 3,
+  agents: string[] = []
+): NoteOutline {
   const paragraphs = (body ?? "").replace(FENCED, "\n\n").split(/\n{2,}/);
   const sentences: string[] = [];
   for (const para of paragraphs) {
@@ -694,12 +784,49 @@ export function noteOutline(
     if (sentence) sentences.push(sentence);
   }
 
-  if (sentences.length <= maxLines) return { lines: sentences, skipped: 0 };
-  return {
-    lines: [...sentences.slice(0, maxLines - 1), sentences[sentences.length - 1]],
-    skipped: sentences.length - maxLines,
-  };
+  let keep: number[];
+  if (sentences.length <= maxLines) {
+    keep = sentences.map((_, i) => i);
+  } else {
+    const chosen = new Set<number>([0, sentences.length - 1]);
+    const middle = sentences.map((_, i) => i).slice(1, -1);
+    for (const i of middle) {
+      if (chosen.size >= maxLines) break;
+      if (ASK_CUE.test(sentences[i]) || DECISION_CUE.test(sentences[i])) chosen.add(i);
+    }
+    for (const i of middle) {
+      if (chosen.size >= maxLines) break;
+      chosen.add(i);
+    }
+    keep = [...chosen].sort((a, b) => a - b);
+  }
+
+  const lines: NoteLine[] = keep.map((idx, n) => ({
+    text: sentences[idx],
+    ask: ASK_CUE.test(sentences[idx]),
+    gap: n > 0 && idx > keep[n - 1] + 1,
+  }));
+
+  /* Who is named in an ask. Longest name first so "nova-2" is not read as "nova", and only
+     names this project's own records carry — a chip that named a word from the prose would
+     be the app inventing a dependency. */
+  let waitingOn: string | null = null;
+  const known = [...new Set(agents)].filter(Boolean).sort((a, b) => b.length - a.length);
+  for (const line of lines) {
+    if (!line.ask) continue;
+    const found = known.find((agent) =>
+      new RegExp(`(^|[^\\w-])${escapeRe(agent)}([^\\w-]|$)`, "i").test(line.text)
+    );
+    if (found) {
+      waitingOn = found;
+      break;
+    }
+  }
+
+  return { lines, skipped: sentences.length - keep.length, waitingOn };
 }
+
+const escapeRe = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Which record a feed entry points at, if any. */
 export function refHref(slug: string, ref: string | null): string | null {

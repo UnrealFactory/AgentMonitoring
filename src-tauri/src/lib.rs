@@ -10,11 +10,12 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use agentmon_core::{
-    Bug, BugDetail, Event, Project, ProjectStatusSnapshot, Vault, VaultInfo, WorklogDetail,
-    WorklogSummary,
+    Bug, BugDetail, Event, NewProject, Project, ProjectStatusSnapshot, UpdateProject, Vault,
+    VaultInfo, WorklogDetail, WorklogSummary,
 };
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 /// Where the vault lives for this session. Mutable so a human can point the app at a
 /// vault they copied to another machine (SPEC: portability).
@@ -58,6 +59,76 @@ fn get_vault_info(state: State<'_, VaultState>) -> CmdResult<VaultInfo> {
     open(&state)?.info().map_err(|e| e.to_string())
 }
 
+/// Where the human's vault choice is remembered between runs.
+///
+/// A vault the human went and found in a folder picker has to still be there tomorrow, or
+/// "open a vault you copied from another machine" is a party trick rather than the
+/// portability SPEC.md asks for. One file, one key, next to the app's own config.
+fn settings_file(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("settings.json"))
+}
+
+fn saved_vault(app: &AppHandle) -> Option<PathBuf> {
+    let raw = std::fs::read_to_string(settings_file(app)?).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let path = json.get("vaultPath")?.as_str()?;
+    let path = PathBuf::from(path);
+    // A remembered path that no longer holds a vault (an unplugged drive, a moved folder)
+    // is not an error to shout about: fall back to the normal resolution order.
+    Vault::open(&path).ok().map(|_| path)
+}
+
+fn remember_vault(app: &AppHandle, path: &Path) {
+    let Some(file) = settings_file(app) else { return };
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let json = serde_json::json!({ "vaultPath": path.display().to_string() });
+    if let Err(e) = std::fs::write(&file, format!("{}\n", serde_json::to_string_pretty(&json).unwrap()))
+    {
+        eprintln!(
+            "agentmonitoring: could not remember the vault choice in {} ({e}); the app will \
+             use it for this session only",
+            file.display()
+        );
+    }
+}
+
+/// Everything switching vaults has to do, in one place: read it, remember it, watch it,
+/// retitle the window and tell the UI. Both entry points below go through here so a vault
+/// opened from the picker behaves exactly like one set from the frontend.
+fn switch_vault(
+    app: &AppHandle,
+    state: &State<'_, VaultState>,
+    watcher: &State<'_, WatcherState>,
+    path: &Path,
+) -> CmdResult<VaultInfo> {
+    let vault = Vault::open(path).map_err(|e| e.to_string())?;
+    let info = vault.info().map_err(|e| e.to_string())?;
+    *state.0.lock().map_err(|_| "vault state poisoned")? = Some(path.to_path_buf());
+    remember_vault(app, path);
+    set_window_title(app, &info);
+    // Re-arm the watcher on the new directory. A failure here is not fatal — the app
+    // still reads the new vault, it just will not live-refresh — so it is logged, not
+    // returned.
+    rearm_watcher(app, watcher, vault.root());
+    // Every screen reloads off this event, so the switch lands everywhere at once.
+    let _ = app.emit(
+        "vault-changed",
+        VaultChanged {
+            vault: vault.root().display().to_string(),
+            projects: Vec::new(),
+        },
+    );
+    Ok(info)
+}
+
+fn set_window_title(app: &AppHandle, info: &VaultInfo) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_title(&format!("AgentMonitoring — {}", info.name));
+    }
+}
+
 /// Point the app at a different vault directory (returns the new vault's info so the UI
 /// can show the switch immediately, and leaves the old path in place on failure).
 #[tauri::command]
@@ -67,14 +138,43 @@ fn set_vault_path(
     state: State<'_, VaultState>,
     watcher: State<'_, WatcherState>,
 ) -> CmdResult<VaultInfo> {
-    let vault = Vault::open(&path).map_err(|e| e.to_string())?;
-    let info = vault.info().map_err(|e| e.to_string())?;
-    *state.0.lock().map_err(|_| "vault state poisoned")? = Some(PathBuf::from(&path));
-    // Re-arm the watcher on the new directory. A failure here is not fatal — the app
-    // still reads the new vault, it just will not live-refresh — so it is logged, not
-    // returned.
-    rearm_watcher(&app, &watcher, vault.root());
-    Ok(info)
+    switch_vault(&app, &state, &watcher, Path::new(&path))
+}
+
+/// Open the native folder picker and switch to the vault the human chose.
+///
+/// `Ok(None)` means they closed the dialog — not an error, and the app carries on with the
+/// vault it had. Choosing a directory with no `vault.json` in it *is* an error, and the
+/// message says how to make one there.
+///
+/// `async` on purpose: the blocking picker must not run on the main thread (it is the
+/// thread the dialog itself needs), and an async command is handed to the runtime instead.
+#[tauri::command]
+async fn choose_vault_folder(app: AppHandle) -> CmdResult<Option<VaultInfo>> {
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("Open a vault folder")
+        .blocking_pick_folder();
+    let Some(picked) = picked else { return Ok(None) };
+    let dir = picked
+        .simplified()
+        .into_path()
+        .map_err(|e| format!("that folder cannot be read: {e}"))?;
+
+    if !dir.join("vault.json").is_file() {
+        return Err(format!(
+            "{} is not a vault: it has no vault.json. Pick the folder that contains \
+             vault.json and projects/, or create one there with \
+             `agentmon init --vault \"{}\" --name \"<vault name>\"`.",
+            dir.display(),
+            dir.display()
+        ));
+    }
+
+    let state: State<'_, VaultState> = app.state();
+    let watcher: State<'_, WatcherState> = app.state();
+    switch_vault(&app, &state, &watcher, &dir).map(Some)
 }
 
 // ---------------------------------------------------------------------------
@@ -237,6 +337,54 @@ fn get_project(project: String, state: State<'_, VaultState>) -> CmdResult<Proje
     open(&state)?.project(&project).map_err(|e| e.to_string())
 }
 
+/// Create a project from the app, through the same `agentmon-core` write path the CLI uses
+/// — including the `project_created` event, which is what the activity feed is built from.
+/// Hand-writing a project.json here would produce a project with no history.
+#[tauri::command]
+fn create_project(
+    slug: String,
+    name: String,
+    description: String,
+    tags: Vec<String>,
+    agent: String,
+    state: State<'_, VaultState>,
+) -> CmdResult<Project> {
+    let written = open(&state)?
+        .create_project(&NewProject {
+            slug,
+            name,
+            description,
+            tags,
+            actor: agent,
+            at: None,
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(written.record)
+}
+
+/// Archive or restore a project. Deletes nothing: the records stay in the vault and the
+/// change is logged like any other mutation.
+#[tauri::command]
+fn set_project_status(
+    project: String,
+    status: String,
+    agent: String,
+    state: State<'_, VaultState>,
+) -> CmdResult<Project> {
+    let status = agentmon_core::parse_project_status(&status).map_err(|e| e.to_string())?;
+    let written = open(&state)?
+        .update_project(
+            &project,
+            &UpdateProject {
+                status: Some(status),
+                actor: agent,
+                ..Default::default()
+            },
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(written.record)
+}
+
 #[tauri::command]
 fn list_worklogs(project: String, state: State<'_, VaultState>) -> CmdResult<Vec<WorklogSummary>> {
     open(&state)?.worklogs(&project).map_err(|e| e.to_string())
@@ -297,13 +445,21 @@ pub fn run() {
         .manage(WatcherState(Mutex::new(None)))
         .setup(|app| {
             let state: State<'_, VaultState> = app.state();
+            // Resolution order, most explicit first: AGENTMON_VAULT (how a launcher pins a
+            // vault, and the same variable the CLI reads), then the folder the human last
+            // opened in this app, then ./vault beside the binary.
+            if state.0.lock().map(|s| s.is_none()).unwrap_or(false) {
+                if let Some(path) = saved_vault(app.handle()) {
+                    if let Ok(mut slot) = state.0.lock() {
+                        *slot = Some(path);
+                    }
+                }
+            }
             if let Ok(vault) = open(&state) {
                 // Surface the resolved vault in the window title so a human always knows
                 // which data they are looking at.
                 if let Ok(info) = vault.info() {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.set_title(&format!("AgentMonitoring — {}", info.name));
-                    }
+                    set_window_title(app.handle(), &info);
                 }
                 // Watch it, so a record an agent writes shows up without a navigation.
                 let watcher: State<'_, WatcherState> = app.state();
@@ -314,8 +470,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_vault_info,
             set_vault_path,
+            choose_vault_folder,
             list_projects,
             get_project,
+            create_project,
+            set_project_status,
             list_worklogs,
             get_worklog,
             list_bugs,

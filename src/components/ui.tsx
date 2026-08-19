@@ -2,7 +2,7 @@
  * Shared visual primitives. Status is always carried the same way everywhere in the app:
  * a small coloured dot plus a label, never a shouting block of colour.
  */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { BugStatus, Severity, WorkStatus } from "../lib/types";
 import { BUG_STATUS_LABEL, SEVERITY_LABEL, WORK_STATUS_LABEL } from "../lib/format";
 
@@ -156,6 +156,38 @@ export function Handoff({ from, to }: { from: string; to: string | null }) {
 
 export function Tag({ children }: { children: ReactNode }) {
   return <span className="tag">{children}</span>;
+}
+
+/**
+ * A command a reader is meant to run, with a button that puts it on the clipboard.
+ *
+ * Onboarding that prints a command nobody can copy is onboarding that gets mistyped. The
+ * text is selectable either way, and the button falls back quietly on a webview that
+ * refuses clipboard access rather than pretending it worked.
+ */
+export function CommandLine({ text }: { text: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  return (
+    <span className="command-line">
+      <code className="command-text">{text}</code>
+      <button
+        className="command-copy"
+        type="button"
+        title="Copy to clipboard"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            setState("copied");
+          } catch {
+            setState("failed");
+          }
+          setTimeout(() => setState("idle"), 1600);
+        }}
+      >
+        {state === "copied" ? "Copied" : state === "failed" ? "Select it" : "Copy"}
+      </button>
+    </span>
+  );
 }
 
 /**

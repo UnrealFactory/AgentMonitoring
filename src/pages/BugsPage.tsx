@@ -17,7 +17,7 @@
  */
 import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { useProjectSlug } from "../AppContext";
+import { useProjectSlug, useVaultNonce } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
 import { api, failureTitle } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
@@ -103,7 +103,7 @@ export function BugsPage() {
     status: httpStatus,
     loading,
     reload,
-  } = useAsync(() => api.listBugs(slug), [slug]);
+  } = useAsync(() => api.listBugs(slug), [slug], useVaultNonce());
 
   const searchRef = useRef<HTMLInputElement>(null);
   const bugs = useMemo(() => data ?? [], [data]);

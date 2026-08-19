@@ -10,7 +10,7 @@
  */
 import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { useProjectSlug } from "../AppContext";
+import { useProjectSlug, useVaultNonce } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
 import { api, failureTitle } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
@@ -49,7 +49,7 @@ export function WorkListPage() {
     status: httpStatus,
     loading,
     reload,
-  } = useAsync(() => api.listWorklogs(slug), [slug]);
+  } = useAsync(() => api.listWorklogs(slug), [slug], useVaultNonce());
 
   const searchRef = useRef<HTMLInputElement>(null);
 

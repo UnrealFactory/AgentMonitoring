@@ -11,6 +11,7 @@
 //   * bugs sorted open-first, then severity, then lastActivity desc;
 //   * events newest first (ties break on append order, reversed), malformed lines skipped;
 //   * ids/slugs validated before touching the filesystem.
+import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -23,7 +24,25 @@ export class VaultError extends Error {
 
 // --- vault resolution -------------------------------------------------------
 
-export function resolveVaultDir(repoRoot) {
+/**
+ * Which vault this request is about.
+ *
+ * `override` is the browser-mode twin of the desktop app's "Open vault folder…": a
+ * `?vault=<dir>` the client carries on every call for the session (src/lib/api.ts). It is
+ * checked the same way the CLI checks `--vault` — the directory has to actually hold a
+ * vault.json — and the error says what to do, because a mistyped path is the likeliest way
+ * anybody gets here.
+ */
+export function resolveVaultDir(repoRoot, override = null) {
+  if (override) {
+    const dir = resolve(override);
+    if (existsSync(join(dir, "vault.json"))) return dir;
+    throw new VaultError(
+      400,
+      `no vault.json in ${dir} (?vault=) — point it at a vault directory, or create one with ` +
+        `\`agentmon init --vault ${dir} --name "<vault name>"\``
+    );
+  }
   const candidates = [
     process.env.AGENTMON_VAULT ? resolve(process.env.AGENTMON_VAULT) : null,
     join(repoRoot, "vault"),
@@ -356,6 +375,65 @@ export function createVaultReader(vaultDir) {
   const api = {
     vaultDir,
 
+    /**
+     * One string that changes when the vault does — browser mode's twin of the desktop
+     * app's filesystem watcher (src/lib/api.ts polls this).
+     *
+     * It is a stat walk, not a read: name, size and mtime of every record file, plus the
+     * files' count, which covers the three things a write does (append to events.jsonl,
+     * rename a record over itself, add a new one). A few dozen `stat` calls every couple of
+     * seconds costs nothing, and unlike a filesystem watcher it cannot miss an event
+     * because the page was loaded a moment after the write.
+     */
+    cursor() {
+      let files = 0;
+      let newest = 0;
+      const parts = [];
+      const note = (path) => {
+        let st;
+        try {
+          st = statSync(path);
+        } catch {
+          return;
+        }
+        files += 1;
+        if (st.mtimeMs > newest) newest = st.mtimeMs;
+        parts.push(`${st.size}:${Math.round(st.mtimeMs)}`);
+      };
+
+      note(join(vaultDir, "vault.json"));
+      const projects = join(vaultDir, "projects");
+      if (existsSync(projects)) {
+        for (const slug of readdirSync(projects).sort()) {
+          const dir = join(projects, slug);
+          if (!existsSync(join(dir, "project.json"))) continue;
+          parts.push(slug);
+          note(join(dir, "project.json"));
+          note(join(dir, "events.jsonl"));
+          for (const [sub, prefix] of [
+            ["worklogs", "WORK-"],
+            ["bugs", "BUG-"],
+          ]) {
+            for (const file of recordFiles(join(dir, sub), prefix)) note(file);
+          }
+        }
+      }
+
+      // Hashed rather than returned whole: the client only ever compares it to the last
+      // one, and a 4KB string on a 2s poll is a waste of everybody's time.
+      let hash = 2166136261;
+      const text = parts.join("|");
+      for (let i = 0; i < text.length; i += 1) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      return {
+        cursor: `${files}-${(hash >>> 0).toString(36)}`,
+        files,
+        changedAt: newest ? new Date(newest).toISOString() : null,
+      };
+    },
+
     info() {
       const raw = readJson(join(vaultDir, "vault.json"), "vault.json");
       return {
@@ -539,6 +617,7 @@ export function handleVaultApi(reader, pathname, searchParams) {
   // parts[0] === "vault-api"
   const [, a, b, c, d] = parts;
   if (a === "vault" && !b) return reader.info();
+  if (a === "cursor" && !b) return reader.cursor();
   if (a === "projects" && !b) return reader.listProjects();
   if (a === "projects" && b && !c) return reader.getProject(b);
   if (a === "projects" && b && c === "worklogs" && !d) return reader.listWorklogs(b);
@@ -551,4 +630,99 @@ export function handleVaultApi(reader, pathname, searchParams) {
   }
   if (a === "projects" && b && c === "status") return reader.getStatus(b);
   throw new VaultError(404, `no vault-api route for ${pathname}`);
+}
+
+// --- writes (browser mode) --------------------------------------------------
+//
+// The rest of this file is a *reader*: a JS twin of agentmon-core, kept in parity by hand.
+// A second implementation of the write path would be a far worse bargain — writes allocate
+// ids under a lock, validate bodies, append events and backdate, and a twin that drifted
+// there would corrupt a vault rather than mis-render one. So browser mode writes by running
+// the `agentmon` binary itself: the same core code the desktop app calls in-process, and
+// the same code an agent at a terminal runs.
+
+const BIN = process.env.AGENTMON_BIN;
+
+function agentmonBinary(repoRoot) {
+  const exe = process.platform === "win32" ? "agentmon.exe" : "agentmon";
+  const candidates = [
+    BIN ? resolve(BIN) : null,
+    join(repoRoot, "target", "release", exe),
+    join(repoRoot, "target", "debug", exe),
+  ].filter(Boolean);
+  const found = candidates.find((p) => existsSync(p));
+  if (!found) {
+    throw new VaultError(
+      501,
+      `the agentmon binary is not built, so browser mode cannot write to the vault — run ` +
+        `\`cargo build --release -p agentmon-cli\` (looked in ${candidates.join(", ")}). ` +
+        `The desktop app writes in-process and needs none of this.`
+    );
+  }
+  return found;
+}
+
+/** Run one `agentmon` command against `vaultDir` and return its `--json` payload. */
+function runAgentmon(repoRoot, vaultDir, args) {
+  const bin = agentmonBinary(repoRoot);
+  try {
+    const out = execFileSync(bin, ["--vault", vaultDir, "--json", ...args], {
+      encoding: "utf8",
+      timeout: 20_000,
+    });
+    return JSON.parse(out);
+  } catch (err) {
+    // The CLI prints `{"ok":false,"error":{"message":...,"hint":...}}` on stdout and exits
+    // non-zero. That message is written for a human to act on, so it is what the app shows.
+    const raw = String(err.stdout ?? "") || String(err.stderr ?? "") || err.message;
+    let message = raw.trim();
+    try {
+      const parsed = JSON.parse(raw);
+      const e = parsed.error ?? {};
+      message = [e.message, e.hint].filter(Boolean).join(" — ") || message;
+    } catch {
+      /* not JSON: the raw output is the best thing we have */
+    }
+    throw new VaultError(400, message);
+  }
+}
+
+const REQUIRED = (body, key) => {
+  const value = typeof body?.[key] === "string" ? body[key].trim() : "";
+  if (!value) throw new VaultError(400, `'${key}' is required`);
+  return value;
+};
+
+/**
+ * Handle a write to `/vault-api/...`. Returns the project the write produced, so the caller
+ * can render it without a second round trip.
+ */
+export function handleVaultWrite(reader, repoRoot, pathname, body) {
+  const parts = pathname.replace(/^\/+|\/+$/g, "").split("/");
+  const [, a, b, c] = parts;
+  const run = (args) => runAgentmon(repoRoot, reader.vaultDir, args);
+  const actor = (typeof body?.agent === "string" && body.agent.trim()) || "app";
+
+  if (a === "projects" && !b) {
+    const slug = REQUIRED(body, "slug");
+    const name = REQUIRED(body, "name");
+    const args = ["project", "create", slug, "--name", name, "--agent", actor];
+    const description = typeof body.description === "string" ? body.description.trim() : "";
+    if (description) args.push("--description", description);
+    const tags = Array.isArray(body.tags) ? body.tags.filter(Boolean) : [];
+    if (tags.length) args.push("--tags", tags.join(","));
+    run(args);
+    return reader.getProject(slug);
+  }
+
+  if (a === "projects" && b && c === "status") {
+    const status = REQUIRED(body, "status");
+    if (status !== "active" && status !== "archived") {
+      throw new VaultError(400, `unknown project status '${status}': expected active or archived`);
+    }
+    run(["project", "update", checkSlug(b), "--status", status, "--agent", actor]);
+    return reader.getProject(b);
+  }
+
+  throw new VaultError(404, `no vault-api write route for ${pathname}`);
 }

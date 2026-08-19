@@ -232,6 +232,7 @@ pub fn work_body(raw: &str) -> Result<WorkBody> {
 /// unwrapped, so passing the same file to `--outcome-file` twice behaves the same way.
 pub fn outcome(raw: &str) -> Result<String> {
     let text = unwrap_section(raw, "Outcome");
+    reject_section_headings(&text, "outcome", OUTCOME_TEMPLATE, OUTCOME_EXAMPLE)?;
     check_prose(
         &text,
         "outcome",
@@ -313,6 +314,7 @@ pub fn bug_body(raw: &str) -> Result<Vec<Section>> {
 /// Validate `--resolution`.
 pub fn resolution(raw: &str) -> Result<String> {
     let text = unwrap_section(raw, "Resolution");
+    reject_section_headings(&text, "resolution", RESOLUTION_TEMPLATE, RESOLUTION_EXAMPLE)?;
     check_prose(
         &text,
         "resolution",
@@ -342,6 +344,14 @@ pub fn note(raw: &str, subject: &str, example: &str) -> Result<String> {
             example,
         ));
     }
+    // A note lands under `### <timestamp>` inside `## Updates` / `## Comments`; a `##` in it
+    // would end that section and orphan every note written after it.
+    reject_section_headings(
+        text,
+        subject,
+        "A sentence or two: what changed since the last note, what you learned,\nwhat you are doing next.",
+        example,
+    )?;
     Ok(text.to_string())
 }
 
@@ -370,6 +380,52 @@ fn check_prose(
     } else {
         Err(reject(subject, problems, template, example))
     }
+}
+
+/// Refuse text that would break out of the section it is being written into.
+///
+/// An outcome, a resolution, an update note and a bug comment are all *inside* a section of
+/// the record: `## Outcome`, `## Resolution`, `## Updates`. A `##` heading in that text does
+/// not become a sub-heading — it ends the section and starts a sibling one, so the record
+/// lands with an empty `## Resolution` followed by loose `## Root cause` / `## Fix`
+/// sections. The write succeeds, the app renders the resolution as blank, and
+/// `agentmon doctor` reports the record as broken (vault BUG-0015 did exactly this).
+///
+/// The house style for these labels is a bold lead-in, which every screen in the app turns
+/// into a landmark with its own anchor and contents row; `###` also works. Both are in the
+/// message, because the fix has to be obvious from the error alone.
+fn reject_section_headings(
+    text: &str,
+    subject: &str,
+    template: &str,
+    example: &str,
+) -> Result<()> {
+    let titles: Vec<String> = body::sections(text)
+        .into_iter()
+        .filter(|s| !s.title.is_empty())
+        .map(|s| s.title)
+        .collect();
+    if titles.is_empty() {
+        return Ok(());
+    }
+    let first = &titles[0];
+    Err(reject(
+        subject,
+        vec![format!(
+            "the {subject} contains the level-2 heading{} {} — a `##` heading ends the \
+             section this text is written into, which would leave the record with an empty \
+             one. Write the label as `**{first}.**` (the style every record in this vault \
+             uses, and what the app turns into a navigable landmark) or demote it to `###`",
+            if titles.len() == 1 { "" } else { "s" },
+            titles
+                .iter()
+                .map(|t| format!("`## {t}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )],
+        template,
+        example,
+    ))
 }
 
 /// If the text is exactly one `## <name>` section, return its body; otherwise return the
@@ -431,6 +487,54 @@ mod tests {
         assert!(o.starts_with("Shipped"), "{o}");
         assert!(outcome("done").is_err());
         assert!(outcome("").is_err());
+    }
+
+    /// vault BUG-0015: a resolution written with `## Root cause` / `## Fix` headings was
+    /// accepted, and left the record with an empty `## Resolution` and loose sections after
+    /// it — a write that succeeded and produced a broken record.
+    #[test]
+    fn rejects_a_resolution_that_would_break_out_of_its_section() {
+        let text = resolution(
+            "## Root cause\n\nThe watcher fired on directory events.\n\n\
+             ## Fix\n\nFilter them out and debounce the rest.\n",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(text.contains("`## Root cause`"), "{text}");
+        assert!(text.contains("`## Fix`"), "{text}");
+        assert!(text.contains("**Root cause.**"), "says what to write instead: {text}");
+
+        // The house style, and a demoted heading, both pass.
+        assert!(resolution(
+            "**Root cause.** The watcher fired on directory events, three times per save.\n\n\
+             **Verified.** cargo test -p agentmonitoring is green, and one save now reloads once."
+        )
+        .is_ok());
+        assert!(resolution(
+            "### Root cause\n\nThe watcher fired on directory events, three times per save, \
+             which the debounce window never saw."
+        )
+        .is_ok());
+        // …and so does a body that is exactly the `## Resolution` section, which is unwrapped.
+        assert!(resolution(
+            "## Resolution\n\nFiltered directory events out of the watcher; one save now \
+             produces exactly one refresh."
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_an_outcome_or_note_that_would_break_out_of_its_section() {
+        assert!(outcome(
+            "## Shipped\n\nThe write path, the doctor and the manual, with tests for each."
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("`## Shipped`"));
+        assert!(note("## Progress\n\nHalf of it is done.", "note", "agentmon work update …")
+            .unwrap_err()
+            .to_string()
+            .contains("`## Progress`"));
     }
 
     #[test]

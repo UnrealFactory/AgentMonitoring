@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp, useCurrentProject } from "../AppContext";
+import { openPalette } from "./CommandPalette";
 import { pluralize } from "../lib/format";
 
 const AppMark = () => (
@@ -17,7 +18,7 @@ const AppMark = () => (
 );
 
 export function Sidebar() {
-  const { vault, projects } = useApp();
+  const { vault, projects, error } = useApp();
   const current = useCurrentProject();
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,6 +42,7 @@ export function Sidebar() {
   }, [menuOpen]);
 
   const base = current ? `/p/${current.slug}` : undefined;
+  const active = projects.filter((p) => p.status !== "archived");
 
   return (
     <aside className="sidebar">
@@ -69,7 +71,7 @@ export function Sidebar() {
                     current.counts.bugsOpen,
                     "open bug"
                   )}`
-                : pluralize(projects.length, "project")}
+                : pluralize(active.length, "project")}
             </span>
           </span>
           <svg className="switcher-caret" viewBox="0 0 12 12" aria-hidden="true">
@@ -86,7 +88,7 @@ export function Sidebar() {
 
         {menuOpen && (
           <div className="switcher-menu" role="menu">
-            {projects.map((p) => (
+            {active.map((p) => (
               <button
                 key={p.slug}
                 role="menuitem"
@@ -94,7 +96,12 @@ export function Sidebar() {
                 onClick={() => navigate(`/p/${p.slug}`)}
               >
                 <span className="switcher-item-name">{p.name}</span>
-                <span className="switcher-item-meta tabular">{p.counts.workTotal} logs</span>
+                {/* Both numbers, both named: a bare "12" beside a bare "2" invites the
+                    reader to compare two things that are not the same measure. */}
+                <span className="switcher-item-meta tabular">
+                  {p.counts.workTotal} logs
+                  {p.counts.bugsOpen > 0 && ` · ${p.counts.bugsOpen} open`}
+                </span>
               </button>
             ))}
             <div className="switcher-sep" />
@@ -109,36 +116,82 @@ export function Sidebar() {
         )}
       </div>
 
+      <button className="sidebar-search" onClick={openPalette} title="Search (Ctrl+K)">
+        <svg className="nav-icon" viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            d="M7 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z M10.4 10.4 L13.5 13.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+        Search
+        <kbd className="sidebar-kbd">Ctrl K</kbd>
+      </button>
+
       <nav className="nav" aria-label="Main">
-        <NavLink to={base ?? "/"} end className="nav-item">
-          <NavIcon name="dashboard" />
-          Dashboard
-        </NavLink>
-        <NavLink to={base ? `${base}/work` : "/"} className="nav-item">
-          <NavIcon name="work" />
-          Work
-          {current && current.counts.workTotal > 0 && (
-            <span className="nav-count tabular">{current.counts.workTotal}</span>
-          )}
-        </NavLink>
-        <NavLink to={base ? `${base}/bugs` : "/"} className="nav-item">
-          <NavIcon name="bug" />
-          Bugs
-          {current && current.counts.bugsOpen > 0 && (
-            <span className="nav-count tabular">{current.counts.bugsOpen}</span>
-          )}
-        </NavLink>
+        {/* The three project screens only exist inside a project: pointing them at "/" when
+            there is no current one gives a reader three links that all go somewhere else. */}
+        {current && base && (
+          <>
+            <p className="nav-section" title={current.name}>
+              {current.name}
+            </p>
+            <NavLink to={base} end className="nav-item">
+              <NavIcon name="dashboard" />
+              Dashboard
+            </NavLink>
+            <NavLink to={`${base}/work`} className="nav-item">
+              <NavIcon name="work" />
+              Work
+              {/* "Work 12" and "Bugs 2" used to sit here identically styled while counting
+                  different things — every log ever written against only the open bugs. Each
+                  count now says which it is. */}
+              {current.counts.workTotal > 0 && (
+                <span
+                  className="nav-count tabular"
+                  title={`${current.counts.workTotal} work logs in this project, ${current.counts.workInProgress} still open`}
+                >
+                  {current.counts.workTotal}
+                </span>
+              )}
+            </NavLink>
+            <NavLink to={`${base}/bugs`} className="nav-item">
+              <NavIcon name="bug" />
+              Bugs
+              {current.counts.bugsOpen > 0 && (
+                <span
+                  className="nav-count nav-count-open tabular"
+                  title={`${current.counts.bugsOpen} open of ${current.counts.bugsTotal} bugs ever filed here`}
+                >
+                  {current.counts.bugsOpen} open
+                </span>
+              )}
+            </NavLink>
+          </>
+        )}
+
+        <p className="nav-section">Vault</p>
         <NavLink to="/projects" className="nav-item">
           <NavIcon name="projects" />
           Projects
+          <span className="nav-count tabular" title={`${active.length} active projects`}>
+            {active.length}
+          </span>
         </NavLink>
       </nav>
 
       <div className="sidebar-foot">
-        <div className="vault-path" title={vault?.path ?? ""}>
+        <NavLink className="vault-path" to="/projects" title={vault?.path ?? ""}>
           <span className="vault-path-label">Vault</span>
-          <span className="vault-path-value mono">{vault?.path ?? "resolving…"}</span>
-        </div>
+          <span className="vault-path-name">{vault?.name ?? (error ? "none open" : "—")}</span>
+          {/* Never "resolving…" forever: a vault that failed to open says so, and the link
+              goes to the screen that can open another one. */}
+          <span className="vault-path-value mono">
+            {vault?.path ?? (error ? "no vault could be read — open one" : "resolving…")}
+          </span>
+        </NavLink>
       </div>
     </aside>
   );

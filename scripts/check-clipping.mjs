@@ -153,9 +153,25 @@ const PROBE = (slack) => {
    * horizontal overflow — hidden and clip, but scrollports too: a `pre` scrolling a long
    * line paints nothing outside itself, so that line cannot be lying on top of the sidebar.
    * An honest ellipsis therefore reports the width the reader sees, not the width the
-   * string wanted. Vertical clipping is deliberately not applied: content below the fold of
-   * the scrolling `.main` is off screen, not broken, and must still be measured.
+   * string wanted.
+   *
+   * Vertically the rule is the same but it stops at the first scrollport. A two-line clamp
+   * (`-webkit-line-clamp`, which is `overflow-y: hidden` plus a height) paints two lines and
+   * nothing else — the third line exists in the layout but never reaches a pixel, so it
+   * cannot be lying on top of the row beneath it. The walk stops at the first `auto`/`scroll`
+   * ancestor because content below the fold of the scrolling `.main` is off screen, not
+   * broken, and must still be measured — without that stop, `.app { overflow: hidden }`
+   * would excuse every overlap below 1000px.
+   *
+   * (A clamp hides words, so anything clamped must carry the whole string in a `title`; that
+   * is a rule for the screens, not something this geometric probe can check.)
    */
+  const cutsVertically = (el) => {
+    const o = style(el).overflowY;
+    return o === "hidden" || o === "clip";
+  };
+  const scrollsVertically = (el) => /auto|scroll/.test(style(el).overflowY);
+
   const inkRects = (node) => {
     const range = document.createRange();
     range.selectNodeContents(node);
@@ -171,6 +187,14 @@ const PROBE = (slack) => {
       rects = rects
         .map((r) => ({ ...r, left: Math.max(r.left, p.left), right: Math.min(r.right, p.right) }))
         .filter((r) => r.right - r.left > 0.5);
+    }
+    for (let el = node.parentElement; el && rects.length; el = el.parentElement) {
+      if (scrollsVertically(el)) break;
+      if (!cutsVertically(el)) continue;
+      const p = padBox(el);
+      rects = rects
+        .map((r) => ({ ...r, top: Math.max(r.top, p.top), bottom: Math.min(r.bottom, p.bottom) }))
+        .filter((r) => r.bottom - r.top > 0.5);
     }
     return rects;
   };

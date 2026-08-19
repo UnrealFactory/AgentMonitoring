@@ -12,6 +12,7 @@ import type {
   BugDetail,
   BugSummary,
   Project,
+  ProjectStatus,
   ProjectStatusSnapshot,
   VaultEvent,
   VaultInfo,
@@ -52,10 +53,44 @@ async function invokeCommand<T>(cmd: string, args: Record<string, unknown>): Pro
   }
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
+/**
+ * Browser mode can be pointed at another vault for the session with `?vault=<dir>` — the
+ * dev-server twin of the desktop app's "Open vault folder…". It is read once, at boot, and
+ * carried in sessionStorage from there: react-router drops the query string on the first
+ * navigation, and a reader who opened a second vault expects to still be in it after
+ * clicking a link.
+ */
+const VAULT_KEY = "agentmon.vault";
+
+function vaultOverride(): string | null {
+  if (typeof window === "undefined" || isTauri()) return null;
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("vault");
+    if (fromUrl !== null) {
+      if (fromUrl) sessionStorage.setItem(VAULT_KEY, fromUrl);
+      else sessionStorage.removeItem(VAULT_KEY);
+      return fromUrl || null;
+    }
+    return sessionStorage.getItem(VAULT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Add the session's vault override, if any, to a `/vault-api/...` path. */
+function withVault(path: string): string {
+  const dir = vaultOverride();
+  if (!dir) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}vault=${encodeURIComponent(dir)}`;
+}
+
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(path, { headers: { accept: "application/json" } });
+    res = await fetch(withVault(path), {
+      headers: { accept: "application/json", ...(init?.body ? { "content-type": "application/json" } : {}) },
+      ...init,
+    });
   } catch (err) {
     throw new ApiError(
       `could not reach the vault API at ${path} — is the dev server running? (${String(err)})`
@@ -129,17 +164,73 @@ export const api = {
 
   /**
    * Point the app at a vault somewhere else on disk (portability). Desktop only —
-   * the browser dev server serves whatever vault it was started with.
+   * the browser dev server serves whatever vault it was started with, or the one named
+   * by `?vault=<dir>`.
    */
   setVaultPath: async (path: string): Promise<VaultInfo> => {
     if (!isTauri()) {
       throw new ApiError(
-        "switching vaults is only available in the desktop app; in browser mode set AGENTMON_VAULT before `npm run dev`"
+        "switching vaults is only available in the desktop app; in browser mode pass ?vault=<dir> or set AGENTMON_VAULT before `npm run dev`"
       );
     }
     return invokeCommand<VaultInfo>("set_vault_path", { path });
   },
+
+  /**
+   * Open the native folder picker and switch to the vault the human chose (desktop only).
+   * Resolves to the new vault, or to null when the dialog was dismissed.
+   */
+  chooseVaultFolder: async (): Promise<VaultInfo | null> => {
+    if (!isTauri()) throw new ApiError("the folder picker is only available in the desktop app");
+    return invokeCommand<VaultInfo | null>("choose_vault_folder", {});
+  },
+
+  /**
+   * Create a project. Both transports end in the same `agentmon-core` code: the desktop app
+   * calls it in-process, and the dev middleware runs the `agentmon` binary, so there is one
+   * implementation of a write and browser mode cannot drift from it.
+   */
+  createProject: (input: {
+    slug: string;
+    name: string;
+    description?: string;
+    tags?: string[];
+    agent?: string;
+  }): Promise<Project> =>
+    isTauri()
+      ? invokeCommand<Project>("create_project", {
+          slug: input.slug,
+          name: input.name,
+          description: input.description ?? "",
+          tags: input.tags ?? [],
+          agent: input.agent ?? DEFAULT_ACTOR,
+        })
+      : fetchJson<Project>("/vault-api/projects", {
+          method: "POST",
+          body: JSON.stringify({ ...input, agent: input.agent ?? DEFAULT_ACTOR }),
+        }),
+
+  /** Archive or unarchive a project (a `project_updated` event, like every other write). */
+  setProjectStatus: (
+    project: string,
+    status: ProjectStatus,
+    agent = DEFAULT_ACTOR
+  ): Promise<Project> =>
+    isTauri()
+      ? invokeCommand<Project>("set_project_status", { project, status, agent })
+      : fetchJson<Project>(`/vault-api/projects/${enc(project)}/status`, {
+          method: "POST",
+          body: JSON.stringify({ status, agent }),
+        }),
 };
+
+/**
+ * Who the app records as the actor when a human — not an agent — writes something.
+ *
+ * Every event carries an actor, and pretending a person clicking "Create project" is one
+ * of the agents would put a name in the feed that never touched the vault.
+ */
+export const DEFAULT_ACTOR = "app";
 
 /**
  * What a failed read actually was, in the reader's words rather than the transport's.
@@ -158,16 +249,76 @@ export function failureTitle(error: string, status: number | undefined, id?: str
 }
 
 /**
- * Subscribe to vault changes. In the desktop app this will be backed by the Tauri
- * filesystem watcher; in browser mode there is nothing to listen to, so it is a no-op.
- * Returns an unsubscribe function.
+ * How often browser mode asks the dev server whether the vault moved. The endpoint is a
+ * stat walk over a few dozen files, so this is cheap; it is also skipped entirely while
+ * the tab is hidden, and asked once immediately when it comes back.
  */
-export async function subscribeVaultChanges(onChange: () => void): Promise<() => void> {
-  if (!isTauri()) return () => {};
-  try {
-    const { listen } = await import("@tauri-apps/api/event");
-    return await listen("vault-changed", () => onChange());
-  } catch {
-    return () => {};
+export const POLL_MS = 2_000;
+
+/**
+ * Subscribe to vault changes. Returns an unsubscribe function.
+ *
+ * Desktop: the `vault-changed` event the Rust filesystem watcher emits (src-tauri/src/lib.rs).
+ * Browser: a poll of `/vault-api/cursor`, which returns one string summarising every record
+ * file's size and mtime. Both end in the same callback, so nothing above this file knows
+ * which one it is on — and every screen in the app hangs off that one signal, rather than
+ * the sidebar refreshing while the dashboard beside it goes on printing yesterday.
+ */
+export function subscribeVaultChanges(onChange: () => void): () => void {
+  if (isTauri()) {
+    let cancelled = false;
+    let dispose = () => {};
+    import("@tauri-apps/api/event")
+      .then(({ listen }) => listen("vault-changed", () => onChange()))
+      .then((un) => {
+        // Unmounted while the listener was still being registered: drop it immediately
+        // rather than leaving an orphan behind.
+        if (cancelled) un();
+        else dispose = un;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      dispose();
+    };
   }
+
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cursor: string | null = null;
+
+  const poll = async () => {
+    if (stopped) return;
+    if (typeof document === "undefined" || !document.hidden) {
+      try {
+        const next = (await fetchJson<{ cursor: string }>("/vault-api/cursor")).cursor;
+        // The first answer only establishes the baseline: the screen was drawn from that
+        // same vault a moment ago, and reloading it would be a refresh nobody asked for.
+        if (cursor !== null && next !== cursor) onChange();
+        cursor = next;
+      } catch {
+        /* the dev server is restarting, or this build has no cursor route: try again */
+      }
+    }
+    if (!stopped) timer = setTimeout(poll, POLL_MS);
+  };
+
+  const onVisible = () => {
+    if (!document.hidden) {
+      clearTimeout(timer);
+      void poll();
+    }
+  };
+
+  void poll();
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisible);
+  }
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVisible);
+    }
+  };
 }

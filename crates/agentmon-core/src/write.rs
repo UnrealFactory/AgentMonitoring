@@ -72,6 +72,9 @@ pub struct UpdateProject {
     pub description: Option<String>,
     /// Replaces the tag list (it is a set, not a log).
     pub tags: Option<Vec<String>>,
+    /// Archive or bring back: the one piece of project state a human, not an agent, sets.
+    /// Archiving hides a project from the app's default view; it deletes nothing.
+    pub status: Option<ProjectStatus>,
     pub actor: String,
     pub at: Option<String>,
 }
@@ -261,11 +264,15 @@ impl Vault {
         let dir = self.project_dir(slug)?;
         let slug = validate_slug(slug)?.to_string();
         let actor = require_agent(&req.actor)?;
-        if req.name.is_none() && req.description.is_none() && req.tags.is_none() {
+        if req.name.is_none()
+            && req.description.is_none()
+            && req.tags.is_none()
+            && req.status.is_none()
+        {
             return Err(CoreError::conflict(
                 "nothing to update",
                 "pass at least one of --name \"<display name>\", --description \"<one or two \
-                 sentences>\" or --tags a,b",
+                 sentences>\", --tags a,b or --status active|archived",
             ));
         }
 
@@ -313,6 +320,23 @@ impl Vault {
             json["tags"] = serde_json::Value::Array(
                 tags.into_iter().map(serde_json::Value::String).collect(),
             );
+        }
+        if let Some(status) = req.status {
+            let text = match status {
+                ProjectStatus::Active => "active",
+                ProjectStatus::Archived => "archived",
+            };
+            if json.get("status").and_then(|v| v.as_str()).unwrap_or("active") != text {
+                changed.push(format!(
+                    "{} the project",
+                    if status == ProjectStatus::Archived {
+                        "archived"
+                    } else {
+                        "restored"
+                    }
+                ));
+            }
+            json["status"] = serde_json::Value::String(text.to_string());
         }
         let text = format!("{}\n", serde_json::to_string_pretty(&json).unwrap());
         fsx::write_atomic(&path, &text)?;
@@ -1087,6 +1111,15 @@ pub fn parse_severity(value: &str) -> Result<Severity> {
             value,
             "one of: critical, high, medium, low",
         )),
+    }
+}
+
+/// Parse a project status (`agentmon project update --status`, and the app's archive button).
+pub fn parse_project_status(value: &str) -> Result<ProjectStatus> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "active" | "unarchived" => Ok(ProjectStatus::Active),
+        "archived" | "archive" => Ok(ProjectStatus::Archived),
+        _ => Err(bad_value("--status", value, "one of: active, archived")),
     }
 }
 

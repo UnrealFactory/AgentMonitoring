@@ -14,6 +14,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { useVaultNonce } from "../AppContext";
 import { useAsync } from "../lib/useAsync";
 import { recordPath } from "../lib/markdown";
 import { BugStatusPill, RecordStatusDot, SeverityBadge, WorkStatusPill } from "./ui";
@@ -44,8 +45,9 @@ export type RelatedIndex = ReturnType<typeof useRelated>;
  * lists twice.
  */
 export function useRelated(slug: string, id: string, refs: string[]) {
-  const works = useAsync(() => api.listWorklogs(slug), [slug]);
-  const bugs = useAsync(() => api.listBugs(slug), [slug]);
+  const nonce = useVaultNonce();
+  const works = useAsync(() => api.listWorklogs(slug), [slug], nonce);
+  const bugs = useAsync(() => api.listBugs(slug), [slug], nonce);
 
   return useMemo(() => {
     const loading = works.loading || bugs.loading;

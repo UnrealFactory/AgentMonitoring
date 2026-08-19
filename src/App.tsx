@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
 import { AppProvider, useApp } from "./AppContext";
+import { CommandPalette } from "./components/CommandPalette";
 import { Sidebar } from "./components/Sidebar";
 import { ErrorState, Skeleton } from "./components/ui";
-import { subscribeVaultChanges } from "./lib/api";
+import { useWindowTitle } from "./lib/useWindowTitle";
 import { DashboardPage } from "./pages/DashboardPage";
 import { WorkListPage } from "./pages/WorkListPage";
 import { WorkDetailPage } from "./pages/WorkDetailPage";
@@ -33,24 +34,11 @@ function Home() {
 }
 
 function Shell() {
-  const { reload } = useApp();
   const navigate = useNavigate();
 
-  // The desktop app watches the vault and pushes a change event; browser mode is inert.
-  useEffect(() => {
-    let cancelled = false;
-    let dispose = () => {};
-    subscribeVaultChanges(() => reload()).then((fn) => {
-      // Unmounted while the listener was still being registered: drop it immediately
-      // rather than leaving an orphan behind.
-      if (cancelled) fn();
-      else dispose = fn;
-    });
-    return () => {
-      cancelled = true;
-      dispose();
-    };
-  }, [reload]);
+  // The vault subscription lives in AppProvider: every screen reads the nonce it feeds,
+  // so the whole app refreshes together (AppContext.tsx).
+  useWindowTitle();
 
   // Backspace-free navigation: Alt+Left goes back, matching the desktop shell.
   useEffect(() => {
@@ -64,9 +52,10 @@ function Shell() {
   return (
     <div className="app">
       <Sidebar />
-      <main className="main">
+      <main className="main" id="main">
         <Outlet />
       </main>
+      <CommandPalette />
     </div>
   );
 }

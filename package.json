@@ -17,7 +17,8 @@
     "capture-refs": "node scripts/capture-refs.mjs",
     "progress": "node scripts/build-progress.mjs",
     "check:urlstate": "node scripts/check-urlstate.mjs",
-    "check:counts": "node scripts/check-counts.mjs"
+    "check:counts": "node scripts/check-counts.mjs",
+    "check:live": "node scripts/check-live.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

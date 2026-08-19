@@ -40,7 +40,12 @@ const value = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 
-const VIEWPORT = { width: 1600, height: 1000 };
+const widthArg = Number(
+  (process.argv.includes("--width") ? process.argv[process.argv.indexOf("--width") + 1] : null) ||
+    process.env.SHOT_WIDTH ||
+    1600,
+);
+const VIEWPORT = { width: Number.isFinite(widthArg) && widthArg >= 320 ? widthArg : 1600, height: 1000 };
 const SCALE = 1.5;
 const VIEWPORT_TEXT = `${VIEWPORT.width}x${VIEWPORT.height}`;
 
@@ -55,7 +60,9 @@ if (flag("--help") || flag("-h")) {
 
 Options (flag, or environment variable):
   --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
-  --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail, projects
+  --width <n>      $SHOT_WIDTH    viewport width (default 1600; the shell is judged at 1152 too)
+  --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail,
+                                  projects, palette
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
   --project <slug> $SHOT_PROJECT  project to shoot (default: the one with the most records)
   --record <ids>   $SHOT_RECORD   record ids for the detail screens, e.g. WORK-0009 or
@@ -253,6 +260,18 @@ try {
     },
     { name: "bug-detail", path: `/p/${slug}/bugs/${bug.id}`, waitFor: ".record-title", full: true },
     { name: "projects", path: "/projects", waitFor: ".project-card" },
+    {
+      // The command palette is a screen like any other — it is what Ctrl+K opens — so it
+      // gets photographed rather than described.
+      name: "palette",
+      path: `/p/${slug}`,
+      waitFor: ".palette-item",
+      prepare: async (page) => {
+        await page.waitForSelector(".page-title", { state: "visible" });
+        await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        await page.keyboard.press("Control+K");
+      },
+    },
   ];
 
   const unknown = ONLY.filter((k) => !all.some((s) => s.name === k));
