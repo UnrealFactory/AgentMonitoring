@@ -368,9 +368,14 @@ try {
       `${after.dash.scroll - before.dash.scroll}px, and the view moved ` +
       `${moved(before.dash, after.dash)}px`,
   );
+  /* The direction scrollTop moves is the browser's business — anchoring nudges it up when
+     content above the fold grows and back down when it shrinks, both to keep the view
+     still, which the landmark check above already measures. What must never happen is the
+     reader being put back at the top, which is what a reload does. */
+  const stillScrolled = (a, b) => a.scroll === 0 || b.scroll > 0;
   check(
     "neither screen scrolled back to the top",
-    after.dash.scroll >= before.dash.scroll && after.detail.scroll >= before.detail.scroll,
+    stillScrolled(before.dash, after.dash) && stillScrolled(before.detail, after.detail),
     `dashboard ${before.dash.scroll}→${after.dash.scroll}, record ${before.detail.scroll}→${after.detail.scroll}`,
   );
   check(
