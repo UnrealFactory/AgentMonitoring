@@ -53,11 +53,11 @@ import {
 import {
   bugLower,
   IN_PROGRESS,
-  inProgressOf,
   SEVERITY_LABEL,
   UNRESOLVED,
   UNRESOLVED_MEANS,
   workLogs,
+  workLogsInProgressOf,
   workLower,
 } from "../lib/words";
 import {
@@ -452,7 +452,7 @@ function InProgress({
           not the same number in a project where one agent holds two. */}
       <p
         className="now-hero"
-        title={total === 0 ? undefined : `${inProgressOf(active.length, total)} work logs`}
+        title={total === 0 ? undefined : workLogsInProgressOf(active.length, total)}
       >
         <span className={`now-hero-value${active.length === 0 ? " is-quiet" : ""}`}>
           {active.length}
@@ -464,7 +464,10 @@ function InProgress({
             "work logs in this project"
           ) : (
             <>
-              of {total} {active.length === 1 ? "work log" : "work logs"} {IN_PROGRESS}
+              {/* The noun belongs to the number it follows — the denominator. Keyed off the
+                  numerator it printed "1 of 17 work log in progress" the moment one work log
+                  was in progress out of seventeen. */}
+              of {workLogs(total)} {IN_PROGRESS}
               {working.size > 0 && (
                 <span className="now-hero-aside"> · {pluralize(working.size, "agent")}</span>
               )}

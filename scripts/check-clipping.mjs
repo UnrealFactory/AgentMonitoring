@@ -6,8 +6,8 @@
  *   node scripts/check-clipping.mjs [--port 5173] [--widths 1600,1280,1104,960]
  *                                  [--project relay] [--url ORIGIN]
  *
- * Two defects, one gate, because they are the same failure seen from two sides — a box that
- * is smaller than what it holds:
+ * Three defects, one gate, because they are the same failure seen from three sides — a box
+ * that is smaller than what it holds:
  *
  *   CLIPPED  a fixed-width box with `overflow: hidden` guillotines whatever sticks out, and
  *            `text-overflow: ellipsis` on an inner element does not fire — that element
@@ -17,8 +17,13 @@
  *            escaping text over its neighbour. At 960px the bug strip printed
  *            "18 Aug 2026p0+f0undation-builder" — two facts in one set of pixels, and a
  *            clipping test sees nothing wrong because nothing was clipped (BUG-0007).
+ *   TRUNCATED a *heading* that ellipsises itself. An honest ellipsis is the right answer for
+ *            a name out of the vault; it is the wrong answer for the app's own vocabulary,
+ *            which the reader needs whole to know what the numbers under it mean. The
+ *            Agents table's RESOLVED column shipped as "RESOL…" through two rounds of this
+ *            gate, because an ellipsis was present and no ancestor was doing the cutting.
  *
- * Both are correctness bugs on screens whose whole job is to show a record faithfully, so
+ * All three are correctness bugs on screens whose whole job is to show a record faithfully, so
  * this walks EVERY record of EVERY project (not just the first one: the row that breaks is
  * always the one with the longest agent name) at every width, and exits non-zero if any
  * screen cuts text or stacks it.
@@ -241,7 +246,48 @@ const PROBE = (slack) => {
     }
   }
 
-  return { clipped, overlaps };
+  // -- 3. truncated: a heading that shortens its own word ---------------------------------
+  /**
+   * The two checks above are about a box cutting something *else*. This one is about a box
+   * that is honestly too small for its own text and says so with an ellipsis — which is the
+   * right answer for a project name or an agent name (the reader can hover, and the whole
+   * string is in a `title`), and the wrong answer for a heading.
+   *
+   * A column heading, a card title or a `dt` is the app's own vocabulary: fixed strings the
+   * reader has to be able to read to know what the numbers under them mean. "RESOL…" over a
+   * column of bug counts shipped twice — 46px, then a 62px guess — and passed this gate both
+   * times, because an ellipsis was present and the ancestor was not the one doing the
+   * cutting. So headings are held to a stricter rule than the rest of the screen: they must
+   * fit.
+   */
+  const HEADINGS = [
+    ".agent-head > *",
+    "th",
+    "dt",
+    ".card-title",
+    ".section-title",
+    ".side-card-title",
+    ".rec-fact-label",
+    ".field-label",
+    ".now-label",
+    ".vault-bar-label",
+  ].join(", ");
+
+  const truncated = [];
+  for (const el of document.querySelectorAll(HEADINGS)) {
+    const text = (el.textContent || "").trim();
+    if (!text) continue;
+    const s = style(el);
+    if (s.display === "none" || s.visibility === "hidden") continue;
+    // Only a single-line box can truncate horizontally; a wrapping heading is fine.
+    if (!cutsHorizontally(el)) continue;
+    const over = el.scrollWidth - el.clientWidth;
+    if (over > slack) {
+      truncated.push({ el: label(el), text: text.slice(0, 40), px: Math.round(over * 10) / 10 });
+    }
+  }
+
+  return { clipped, overlaps, truncated };
 };
 
 let browser = null;
@@ -307,11 +353,15 @@ try {
           [...document.querySelectorAll(".chart-plot")].every((p) => p.querySelector("svg")),
         );
         await page.evaluate(() => document.fonts.ready);
-        const { clipped, overlaps } = await page.evaluate(PROBE, SLACK);
+        const { clipped, overlaps, truncated } = await page.evaluate(PROBE, SLACK);
         const where = `${String(width).padEnd(5)} ${screen.path.padEnd(38)}`;
         for (const f of clipped) {
           failures += 1;
           lines.push(`CLIPPED ${where} ${f.clipper} cuts ${f.cut} by ${f.px}px — "${f.text}"`);
+        }
+        for (const t of truncated) {
+          failures += 1;
+          lines.push(`TRUNCATED ${where} ${t.el} shortens its own heading by ${t.px}px — "${t.text}"`);
         }
         for (const o of overlaps) {
           failures += 1;
@@ -340,7 +390,7 @@ try {
 log(`${checked} screen loads`);
 log(
   failures === 0
-    ? "clean: nothing is cut without an ellipsis, nothing is painted over anything"
+    ? "clean: nothing is cut without an ellipsis, no heading truncates itself, nothing is painted over anything"
     : `${failures} finding(s)`,
 );
 await new Promise((r) => setTimeout(r, 60));

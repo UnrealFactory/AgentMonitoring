@@ -261,7 +261,9 @@ export function WorkDetailPage() {
           <ContentsRail entries={sections} active={active} />
 
           <div className="side-card">
-            <div className="side-card-title">Record</div>
+            {/* The object's own noun, the way the bug page's twin card says Bug. "Record"
+                is the word lib/words.ts exists to keep off the screens. */}
+            <div className="side-card-title">Work log</div>
             <dl className="side-facts">
               <div>
                 <dt>Status</dt>

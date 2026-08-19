@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "node scripts/bundle-cli.mjs && tauri build --config src-tauri/tauri.release.conf.json",
     "screenshot": "node scripts/screenshot.mjs",
     "smoke": "node scripts/markdown-smoke.mjs",
     "check:clipping": "node scripts/check-clipping.mjs",

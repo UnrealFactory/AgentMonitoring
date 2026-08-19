@@ -63,12 +63,16 @@ export function freshness(iso: string | null | undefined, now: number): Freshnes
 /* --------------------------------------------------------------------------
    Time buckets
 
-   The two projects in this vault are different shapes — relay is three weeks of
-   five agents, this app's own history is one working day of six — so the axis
-   picks its own bucket instead of hard-coding a daily grid that would draw a
-   day-old project as a single bar. Smallest step that keeps the chart under
-   MAX columns wins; if that still leaves too few, the window is extended
-   backwards so a chart is never three marks wide.
+   The two projects in this vault are different shapes — relay spans three weeks,
+   this app's own history about a day — so the axis picks its own bucket instead
+   of hard-coding a daily grid that would draw a day-old project as a single bar.
+   Smallest step that keeps the chart under MAX columns wins; if that still leaves
+   too few, the window is extended backwards so a chart is never three marks wide.
+
+   (This comment used to add "of five agents" and "of six", and the work log that
+   shipped it said ten and six: three numbers, none of them counted, and relay's
+   roster has been four — nova, patch, quill, sable — since it was generated. The
+   roster never entered this calculation; only the span does. See BUG-0017.)
    ----------------------------------------------------------------------- */
 
 const STEPS = [HOUR, 2 * HOUR, 3 * HOUR, 6 * HOUR, 12 * HOUR, DAY, 2 * DAY, 7 * DAY];

@@ -43,13 +43,19 @@ npm run tauri:dev          # opens the app on ./vault
 
 It reads `./vault` beside the repository unless you point it elsewhere: set
 `AGENTMON_VAULT=<dir>`, or use **Open vault folder…** on the Projects screen. Your choice is
-remembered between runs.
+remembered between runs. With no vault anywhere — a fresh machine, an unplugged drive — the
+app opens on the Projects screen with **Create a vault…**, which writes `vault.json` and
+`projects/` into a folder you pick, exactly as `agentmon init` would.
 
 **The CLI**
 
 ```bash
 cargo build --release -p agentmon-cli    # -> target/release/agentmon
 ```
+
+`npm run tauri:build` builds it too and ships it inside the installer, so an installed copy
+has `agentmon` sitting next to `agentmonitoring.exe`; the app's onboarding screen prints
+command lines that name it.
 
 Three commands, start to finish:
 
@@ -118,7 +124,7 @@ from one created at a terminal.
 ```bash
 npm run dev              # browser mode against ./vault (?vault=<dir> to point elsewhere)
 npm run build            # tsc --noEmit + vite build
-npm run tauri:build      # the packaged desktop app
+npm run tauri:build      # the packaged desktop app (MSI + NSIS, CLI bundled beside it)
 cargo test --workspace   # Rust tests
 npm run screenshot       # capture every screen to progress/shots/
 ```
@@ -127,7 +133,7 @@ Gates, all of which drive the real app with Playwright against real vault data:
 
 ```bash
 npm run smoke            # markdown rendering across every record in the vault
-npm run check:clipping   # every screen at seven widths: nothing cut without an ellipsis
+npm run check:clipping   # every screen at seven widths: nothing cut, no heading truncated
 npm run check:counts     # every filter control: the number it prints is the rows you get
 npm run check:urlstate   # view state survives reload, Back and a pasted link
 npm run check:keys       # keyboard: lists, palette, focus, one current page

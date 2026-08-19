@@ -1,12 +1,12 @@
 /**
- * The cross-reference block, shared by the work record and the bug record.
+ * The cross-reference block, shared by the work log page and the bug page.
  *
  * A `refs:` list in a record's frontmatter is a relationship, and a relationship has two
  * ends. Showing only the end the author happened to type is how a reader misses that the
  * follow-ups from a piece of work became three separate bugs. So this block shows both:
  *
- *   References     — what this record points at
- *   Referenced by  — every record in the project that points back here
+ *   References     — what this one points at
+ *   Referenced by  — every work log and bug in the project that points back here
  *
  * Each row carries the id, the *title*, and the other record's own status (dot + pill),
  * because "BUG-0008" alone tells a reader nothing they can act on.
@@ -18,7 +18,8 @@ import { useVaultNonce } from "../AppContext";
 import { useAsync } from "../lib/useAsync";
 import { recordPath } from "../lib/markdown";
 import { BugStatusPill, RecordStatusDot, SeverityBadge, WorkStatusPill } from "./ui";
-import { formatRelative } from "../lib/format";
+import { BUG_NOUN, WORK_NOUN } from "../lib/words";
+import { formatDateTimeUtc, formatRelative } from "../lib/format";
 import type { BugSummary, WorklogSummary } from "../lib/types";
 
 type RecordKind = "work" | "bug";
@@ -87,7 +88,7 @@ function RelatedRow({ slug, item }: { slug: string; item: RelatedItem }) {
           <time
             className="rel-time tabular"
             dateTime={item.lastActivity}
-            title={`Last activity ${item.lastActivity}`}
+            title={`Last activity ${formatDateTimeUtc(item.lastActivity)}`}
           >
             {formatRelative(item.lastActivity)}
           </time>
@@ -104,7 +105,7 @@ function MissingRow({ id }: { id: string }) {
       <span className="rel-row is-missing">
         <span className="sdot sdot-missing" aria-hidden="true" />
         <span className="rel-id mono">{id}</span>
-        <span className="rel-title muted">not a record in this project</span>
+        <span className="rel-title muted">no work log or bug with this id in this project</span>
       </span>
     </li>
   );
@@ -122,7 +123,8 @@ export function RelatedSection({
   related: RelatedIndex;
 }) {
   const { outgoing, incoming, count } = related;
-  const noun = kind === "bug" ? "bug" : "work record";
+  /* The object's own noun, from lib/words.ts: a work log is a work log on every screen. */
+  const noun = kind === "bug" ? BUG_NOUN : WORK_NOUN;
 
   if (count === 0) return null;
 
@@ -162,7 +164,9 @@ export function RelatedSection({
                 ←
               </span>
               <span className="rel-group-label">Referenced by</span>
-              <span className="rel-group-hint">records that point back at {id}</span>
+              <span className="rel-group-hint">
+                work logs and bugs that point back at {id}
+              </span>
             </div>
             <ul className="rel-rows">
               {incoming.map((item) => (

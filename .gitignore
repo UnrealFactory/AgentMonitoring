@@ -4,6 +4,9 @@ dist/
 target/
 .vite/
 src-tauri/gen/
+# The `agentmon` binary staged for bundle.externalBin — a build artifact with a machine's
+# target triple in its name, produced by scripts/bundle-cli.mjs.
+src-tauri/binaries/
 
 # Logs, OS litter, secrets
 *.log

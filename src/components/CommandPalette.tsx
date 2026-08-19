@@ -479,7 +479,7 @@ export function CommandPalette() {
             aria-autocomplete="list"
             aria-activedescendant={items.length ? optionId(active) : undefined}
             aria-label="Search work logs, bugs, projects and screens"
-            placeholder="Record id or title, project, screen…"
+            placeholder="Work log or bug id, a title, a project, a screen…"
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>

@@ -3699,12 +3699,19 @@ kbd {
 .agent-head,
 .agent-row {
   display: grid;
-  /* The number columns are as wide as the word above them: "Resolved" is the app's one
-     word for a fixed bug (lib/words.ts), and a 46px column turned it into "RES…". */
+  /* The number columns are as wide as the *word above them*, not as the digits in them:
+     "Resolved" is this app's one word for a fixed bug (lib/words.ts), and it is drawn
+     uppercase with wide tracking, so it needs 71px where the number under it needs 20.
+     46px shipped "RES…"; 62px, measured by eye, shipped "RESOL…". These are the rendered
+     max-content widths of the three headings — 39, 38 and 71 — plus a few pixels of air.
+     They cannot be `max-content`: the header and each row are separate grids (below), and
+     a track that sizes itself per grid puts the heading over a column of its own. The gate
+     that would have caught both wrong guesses is in scripts/check-clipping.mjs, which now
+     fails on any heading that truncates, ellipsis or not. */
   grid-template-columns:
     minmax(0, var(--agent-col, 160px))
     minmax(56px, 1fr)
-    46px 46px 62px
+    46px 46px 74px
     78px;
   gap: var(--space-3);
   align-items: center;

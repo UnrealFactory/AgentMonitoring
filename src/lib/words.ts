@@ -87,6 +87,17 @@ export const UNRESOLVED_MEANS = "open or in progress";
 export const inProgressOf = (n: number, total: number): string =>
   `${n} of ${total} ${IN_PROGRESS}`;
 
+/**
+ * The same count with its noun in it: "2 of 12 work logs in progress".
+ *
+ * For the places that carry the whole sentence — the dashboard's hero figure, whose tooltip
+ * has to read as the text beside it reads. Appending the noun to {@link inProgressOf}
+ * produced "2 of 12 in progress work logs", which is the state word doing duty as an
+ * adjective: the vocabulary was right and the grammar was not.
+ */
+export const workLogsInProgressOf = (n: number, total: number): string =>
+  `${n} of ${workLogs(total)} ${IN_PROGRESS}`;
+
 /** "2 of 24 unresolved" */
 export const unresolvedOf = (n: number, total: number): string =>
   `${n} of ${total} ${UNRESOLVED}`;

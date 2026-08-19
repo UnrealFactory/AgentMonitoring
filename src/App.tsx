@@ -3,7 +3,7 @@ import { Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
 import { AppProvider, useApp } from "./AppContext";
 import { CommandPalette } from "./components/CommandPalette";
 import { Sidebar } from "./components/Sidebar";
-import { ErrorState, Skeleton } from "./components/ui";
+import { Skeleton } from "./components/ui";
 import { formatDateTimeUtc } from "./lib/format";
 import { useWindowTitle } from "./lib/useWindowTitle";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -15,7 +15,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 
 /** Boot screen: send the human to the project that moved most recently. */
 function Home() {
-  const { projects, loading, error, reload } = useApp();
+  const { projects, loading, error } = useApp();
   if (loading) {
     return (
       <div className="page">
@@ -23,14 +23,19 @@ function Home() {
       </div>
     );
   }
-  if (error) {
-    return (
-      <div className="page">
-        <ErrorState message={error} onRetry={reload} />
-      </div>
-    );
-  }
-  if (!projects.length) return <Navigate to="/projects" replace />;
+  /*
+   * No vault, or a vault that will not open, is not an error card with one button on it.
+   *
+   * This screen used to answer it with <ErrorState onRetry> — and Try again re-runs the
+   * identical resolution, so on a machine that has no vault (the installed app, a moved
+   * copy, a renamed folder) it fails identically every time, forever. The only remedies in
+   * the message are a CLI flag, an environment variable and a command, none of which a
+   * human can act on from inside the window. /projects is the screen that recovers: it
+   * shows the same error, plus Open vault folder…, Create a vault…, and the three commands
+   * with the real directory in them. So the boot screen goes there, exactly as it does for
+   * a vault that opened and holds nothing yet.
+   */
+  if (error || !projects.length) return <Navigate to="/projects" replace />;
   return <Navigate to={`/p/${projects[0].slug}`} replace />;
 }
 

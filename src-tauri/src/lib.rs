@@ -185,6 +185,70 @@ async fn choose_vault_folder(app: AppHandle) -> CmdResult<Option<VaultInfo>> {
     switch_vault(&app, &state, &watcher, &dir).map(Some)
 }
 
+/// The name a vault gets when it is created from the app: the folder the human picked.
+///
+/// `agentmon init` makes the name an argument because a terminal has one; a folder picker
+/// does not, and inventing "My vault" would put a word on the window title that means
+/// nothing to whoever chose `D:\work\acme-vault`. The folder they named is the best name
+/// they have already given it.
+fn vault_name_for(dir: &Path) -> String {
+    dir.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| "Vault".to_string())
+}
+
+/// Make a vault in a folder the human picks, and open it — the GUI's `agentmon init`.
+///
+/// Without this, a human who installs the app and has no vault has nothing to press: the
+/// three remedies the resolution error offers are a CLI flag, an environment variable and a
+/// command, and the recovery screen's other button (Open vault folder…) presumes a vault
+/// that already exists. This is the one path that ends with the app showing something.
+///
+/// Picking a folder that is *already* a vault opens it rather than failing, because that is
+/// plainly what was meant; `Vault::init` refuses to overwrite one either way.
+#[tauri::command]
+async fn create_vault_folder(app: AppHandle) -> CmdResult<Option<VaultInfo>> {
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("Choose a folder for the new vault")
+        .blocking_pick_folder();
+    let Some(picked) = picked else { return Ok(None) };
+    let dir = picked
+        .simplified()
+        .into_path()
+        .map_err(|e| format!("that folder cannot be used: {e}"))?;
+
+    if !dir.join("vault.json").is_file() {
+        Vault::init(&dir, &vault_name_for(&dir)).map_err(|e| e.to_string())?;
+    }
+
+    let state: State<'_, VaultState> = app.state();
+    let watcher: State<'_, WatcherState> = app.state();
+    switch_vault(&app, &state, &watcher, &dir).map(Some)
+}
+
+/// The `agentmon` CLI shipped beside the app, if this build has one.
+///
+/// The installer puts the binary next to `agentmonitoring.exe` (bundle.externalBin in
+/// tauri.conf.json). The onboarding screen prints command lines; on an installed machine
+/// `agentmon` is not on PATH, so those lines are unrunnable unless they name the binary the
+/// human actually has. Returning `None` (a dev build, a portable copy without it) is not an
+/// error — the screen falls back to the bare `agentmon`.
+#[tauri::command]
+fn cli_path() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    for name in ["agentmon.exe", "agentmon"] {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate.display().to_string());
+        }
+    }
+    None
+}
+
 // ---------------------------------------------------------------------------
 // live updates (BUG-0002)
 // ---------------------------------------------------------------------------
@@ -606,6 +670,8 @@ pub fn run() {
             get_vault_info,
             set_vault_path,
             choose_vault_folder,
+            create_vault_folder,
+            cli_path,
             list_projects,
             get_project,
             create_project,
@@ -800,6 +866,37 @@ mod tests {
         // Back, but nothing is watching it any more — so the next tick re-arms.
         assert_eq!(beat(read(), None), Beat::Rearm(root.clone()));
         fs::remove_dir_all(&root).ok();
+    }
+
+    /**
+     * The GUI's `agentmon init`, without the picker: an empty folder becomes a vault the
+     * app can open, named after the folder the human chose.
+     *
+     * This is the only exit from the first-run dead end for somebody who installed the app
+     * and has no vault and no CLI, so the part that can go wrong — init on a directory that
+     * exists but is empty, then open it again — is tested rather than assumed.
+     */
+    #[test]
+    fn creating_a_vault_in_a_picked_folder_makes_one_the_app_can_open() {
+        let dir = std::env::temp_dir().join(format!(
+            "agentmonitoring-newvault-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        assert_eq!(vault_name_for(&dir), dir.file_name().unwrap().to_string_lossy());
+
+        Vault::init(&dir, &vault_name_for(&dir)).expect("an empty folder becomes a vault");
+        let info = Vault::open(&dir).expect("and opens").info().expect("with its info");
+        assert_eq!(info.name, vault_name_for(&dir));
+        assert!(dir.join("projects").is_dir(), "and is ready for its first project");
+
+        // Picking the same folder again must not reset it: the command opens it instead.
+        assert!(Vault::init(&dir, "second").is_err(), "init never overwrites a live vault");
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

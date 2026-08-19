@@ -186,6 +186,30 @@ export const api = {
   },
 
   /**
+   * Make a vault in a folder the human picks, and open it — `agentmon init` for somebody
+   * who installed the app and has no terminal. Null means the dialog was dismissed.
+   */
+  createVaultFolder: async (): Promise<VaultInfo | null> => {
+    if (!isTauri())
+      throw new ApiError(
+        "creating a vault from the window is only available in the desktop app; in browser mode run `agentmon init --vault <dir> --name \"<vault name>\"`"
+      );
+    return invokeCommand<VaultInfo | null>("create_vault_folder", {});
+  },
+
+  /**
+   * Where the `agentmon` binary is on this machine, when the app ships with one.
+   *
+   * The installed app puts the CLI beside itself but not on PATH, so a command line that
+   * begins `agentmon` is not runnable for the human reading it. Null in browser mode and in
+   * dev builds, where the bare name is right.
+   */
+  cliPath: async (): Promise<string | null> => {
+    if (!isTauri()) return null;
+    return invokeCommand<string | null>("cli_path", {});
+  },
+
+  /**
    * Create a project. Both transports end in the same `agentmon-core` code: the desktop app
    * calls it in-process, and the dev middleware runs the `agentmon` binary, so there is one
    * implementation of a write and browser mode cannot drift from it.

@@ -9,61 +9,61 @@
       "name": "vscode-pr-1",
       "url": "https://github.com/microsoft/vscode/pull/329633",
       "note": "Merged PR \"agentHost: make the orchestrator own session enumeration and chat lifecycle\" — an 11k-character description: summary, what each layer now owns, and how it was validated.",
-      "capturedAt": "2026-08-18T11:09:30.048Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     },
     {
       "name": "vscode-pr-2",
       "url": "https://github.com/microsoft/vscode/pull/320785",
       "note": "Merged PR \"Integrate Copilot Voice conversation engine\" — module-by-module walkthrough with rationale and follow-up notes.",
-      "capturedAt": "2026-08-18T11:09:30.048Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     },
     {
       "name": "vscode-issues",
       "url": "https://github.com/microsoft/vscode/issues",
       "note": "Issue list — the bar for the bug board: dense rows, labels, assignees and state at a glance.",
-      "capturedAt": "2026-08-18T11:09:30.048Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     },
     {
       "name": "grafana-play",
       "url": "https://play.grafana.org/d/lAoEVhD7z/home-kubernetes-integration?orgId=1",
       "note": "Grafana Play dashboard — the bar for the status dashboard: stat tiles, time series, dense panel grid.",
-      "capturedAt": "2026-08-18T11:09:30.048Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     },
     {
       "name": "grafana-play-2",
       "url": "https://play.grafana.org/d/T512JVH7z/loki-nginx-service-mesh-json-version?orgId=1",
       "note": "Grafana Play dashboard — stat tiles over live data, a geomap, a log table and time series below the fold: the density the status dashboard is measured against.",
-      "capturedAt": "2026-08-18T11:09:30.048Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     },
     {
       "name": "grafana-play-3",
       "url": "https://play.grafana.org/d/000000016/time-series-graphs?orgId=1",
       "note": "Grafana Play \"Time series graphs\" — how Grafana draws a chart: axes, grid, legend and multi-series colour on live data. The reference for the dashboard's charts (work completed over time, bugs opened vs resolved).",
-      "capturedAt": "2026-08-18T11:19:44.347Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     },
     {
       "name": "linear-home",
       "url": "https://linear.app/",
       "note": "linear.app homepage — the visual bar for every screen.",
-      "capturedAt": "2026-08-18T11:09:30.048Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     },
     {
       "name": "linear-product",
       "url": "https://linear.app/",
       "note": "linear.app homepage, scrolled to the product UI shots.",
-      "capturedAt": "2026-08-18T11:09:30.048Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     },
     {
       "name": "linear-issues",
       "url": "https://linear.app/plan",
       "note": "linear.app product page — list density, status pills, sidebar treatment.",
-      "capturedAt": "2026-08-18T11:09:30.048Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     },
     {
       "name": "linear-features",
       "url": "https://linear.app/features",
       "note": "linear.app features page — more product UI at full width.",
-      "capturedAt": "2026-08-18T11:09:30.048Z"
+      "capturedAt": "2026-08-19T04:17:34.912Z"
     }
   ]
 }

@@ -66,7 +66,11 @@ export function ProjectsPage() {
   const archived = useMemo(() => projects.filter((p) => p.status === "archived"), [projects]);
 
   /* A vault that cannot be read is not an empty vault: the screen says which one it is,
-     and how to make one, because "no vault.json" is the state a fresh machine starts in. */
+     and how to make one, because "no vault.json" is the state a fresh machine starts in.
+     This is also where the boot screen sends a failed vault resolution (App.tsx), so every
+     control that can end the failure has to be here — Try again for a vault that went away
+     and came back, Open vault folder… for one that is somewhere else, and Create a vault…
+     for a machine that has never had one. */
   if (error) {
     return (
       <div className="page">
@@ -84,10 +88,22 @@ export function ProjectsPage() {
           onRetry={reload}
           action={
             transport === "tauri" ? (
-              <OpenVaultButton onDone={refresh} onError={setActionError} label="Open vault folder…" />
+              <>
+                <OpenVaultButton
+                  onDone={refresh}
+                  onError={setActionError}
+                  label="Open vault folder…"
+                />
+                <CreateVaultButton onDone={refresh} onError={setActionError} />
+              </>
             ) : undefined
           }
         />
+        {actionError && (
+          <p className="form-error" role="alert">
+            {actionError}
+          </p>
+        )}
         {/* The directory the failure was about, taken out of the message two inches above:
             this screen used to print "<vault dir>" as a placeholder in the init command
             while the error beside it named the real path. And no "press New project" here —
@@ -361,6 +377,44 @@ function OpenVaultButton({
       }}
     >
       {busy ? "Opening…" : label}
+    </button>
+  );
+}
+
+/**
+ * `agentmon init`, for a window.
+ *
+ * The app is installed, there is no vault on the machine, and the error the resolver wrote
+ * offers a flag, an environment variable and a command — three things a human looking at a
+ * window cannot do. This makes the vault where they say, opens it, and leaves them on the
+ * empty-vault screen with a New project button.
+ */
+function CreateVaultButton({
+  onDone,
+  onError,
+}: {
+  onDone: () => void;
+  onError: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      className="button button-primary"
+      disabled={busy}
+      title="Pick a folder; the app writes vault.json and projects/ into it, exactly as `agentmon init` would."
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const info = await api.createVaultFolder();
+          if (info) onDone();
+        } catch (err) {
+          onError(err instanceof Error ? err.message : String(err));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? "Creating…" : "Create a vault…"}
     </button>
   );
 }
@@ -731,8 +785,17 @@ function CreateProject({
  * real directory instead of a `<vault dir>` placeholder under an error that names it.
  */
 function vaultDirFromError(message: string): string | null {
-  return /--vault "([^"]+)"/.exec(message)?.[1] ?? null;
+  const quoted = /--vault "([^"]+)"/.exec(message)?.[1];
+  if (quoted) return quoted;
+  /* The other shape, and the one an installed app hits first: nothing was passed at all, so
+     the resolver reports where it looked — "no vault found at C:\…\vault: looked for
+     vault.json in C:\…\vault and C:\…". The first path is the directory it would have used,
+     which is the one to offer to create. */
+  return /no vault found at (.+?): looked for/.exec(message)?.[1] ?? null;
 }
+
+/** A path with a space in it is one argument only if it is quoted. */
+const shellArg = (path: string): string => (/\s/.test(path) ? `"${path}"` : path);
 
 /**
  * The first screen of a vault nobody has written to yet.
@@ -757,6 +820,11 @@ function Onboarding({
   transport: "tauri" | "browser";
 }) {
   const dir = known ?? "<vault dir>";
+  /* The installed app ships the CLI beside itself but not on PATH, so a line beginning
+     `agentmon` is not a line the reader can run. When the app knows where its binary is,
+     the commands name it; in browser mode and in dev builds the bare name is right. */
+  const cli = useAsync(() => api.cliPath(), []);
+  const agentmon = cli.data ? shellArg(cli.data) : "agentmon";
   return (
     <section className="onboarding">
       <h2 className="onboarding-title">
@@ -771,13 +839,19 @@ function Onboarding({
         {!opened && (
           <li>
             <p className="onboarding-step">Make the vault</p>
-            <CommandLine text={`agentmon init --vault "${dir}" --name "My vault"`} />
+            <CommandLine text={`${agentmon} init --vault "${dir}" --name "My vault"`} />
+            {transport === "tauri" && (
+              <p className="onboarding-note">
+                Or press <strong>Create a vault…</strong> above and pick a folder — it writes
+                the same two things, and opens it here.
+              </p>
+            )}
           </li>
         )}
         <li>
           <p className="onboarding-step">Create a project</p>
           <CommandLine
-            text={`agentmon project create checkout-rewrite --name "Checkout rewrite" --description "Replace the legacy checkout flow."`}
+            text={`${agentmon} project create checkout-rewrite --name "Checkout rewrite" --description "Replace the legacy checkout flow."`}
           />
           {canCreate && (
             <p className="onboarding-note">
@@ -788,7 +862,7 @@ function Onboarding({
         <li>
           <p className="onboarding-step">Record the first piece of work</p>
           <CommandLine
-            text={`agentmon work start -p checkout-rewrite --agent your-agent --title "Port the cart summary" --body-file note.md`}
+            text={`${agentmon} work start -p checkout-rewrite --agent your-agent --title "Port the cart summary" --body-file note.md`}
           />
           <p className="onboarding-note">
             The body needs <code>## What</code>, <code>## Why</code> and <code>## How</code>; the
@@ -796,6 +870,12 @@ function Onboarding({
           </p>
         </li>
       </ol>
+      {cli.data && (
+        <p className="onboarding-foot">
+          The <code>agentmon</code> binary ships with this app, at{" "}
+          <code className="mono">{cli.data}</code> — the commands above already point at it.
+        </p>
+      )}
       <p className="onboarding-foot">
         {transport === "tauri" ? (
           <>
