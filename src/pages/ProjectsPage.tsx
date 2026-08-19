@@ -22,6 +22,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp, useVaultNonce } from "../AppContext";
 import { CommandLine, ErrorState, Skeleton, Tag } from "../components/ui";
+import { useContextMenu } from "../components/ContextMenu";
+import { useProjectMenu } from "../lib/menus";
 import { EventIcon } from "../components/EventIcon";
 import { useNow } from "../components/charts";
 import { api } from "../lib/api";
@@ -451,9 +453,26 @@ function ProjectRow({
   const archived = p.status === "archived";
   const state = archived ? "stale" : freshness(p.counts.lastActivity, now);
   const c = p.counts;
+
+  /* The row's own menu. Archive is handed back to the page rather than done by the menu,
+     because this screen already answers an archive with the undo bar above the list — the
+     way back has to appear where the reader is looking, and here that is the layout, not a
+     toast. Off this screen the shared menu shows the same undo as a toast that does not
+     fade. */
+  const contextMenu = useContextMenu();
+  const projectMenu = useProjectMenu({
+    archive:
+      onArchive || onRestore
+        ? (_project, status) => (status === "archived" ? onArchive?.() : onRestore?.())
+        : undefined,
+  });
+
   return (
     <li>
-      <article className={`project-row${archived ? " is-archived" : ""}`}>
+      <article
+        className={`project-row${archived ? " is-archived" : ""}`}
+        {...contextMenu(() => projectMenu(p))}
+      >
         <div className="project-row-main">
           <div className="project-row-head">
             <Link className="project-link" to={`/p/${p.slug}`}>

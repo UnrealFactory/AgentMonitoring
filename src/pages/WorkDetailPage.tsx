@@ -23,6 +23,8 @@ import {
   type TocEntry,
 } from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
+import { useContextMenu } from "../components/ContextMenu";
+import { useRecordMenu } from "../lib/menus";
 import {
   AgentChip,
   CorrectionMark,
@@ -70,6 +72,11 @@ export function WorkDetailPage() {
   );
 
   const work = data;
+  /* The record's own head takes the same menu its row on the list does, minus Open — the
+     reader is already on it. Copying an id or a link out of a record is how one record
+     comes to reference another. */
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
   const related = useRelated(slug, id, work?.refs ?? EMPTY);
   /** Notes their authors opened with "Correction:" — see src/lib/updates.ts. */
   const corrections = countCorrections(work?.updates ?? []);
@@ -147,7 +154,12 @@ export function WorkDetailPage() {
           <span className="mono">{work.id}</span>
         </nav>
 
-        <header className="record-head">
+        <header
+          className="record-head"
+          {...contextMenu(() =>
+            recordMenu({ kind: "work", id: work.id, title: work.title, slug, here: true })
+          )}
+        >
           <RecordTitle title={work.title} id={work.id} />
 
           {/* Above What/Why/How, because a correction the reader meets after the sentence it

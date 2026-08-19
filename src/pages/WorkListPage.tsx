@@ -18,6 +18,8 @@ import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
 import { useUrlFilters } from "../lib/useUrlFilters";
 import { Select } from "../components/Select";
+import { useContextMenu } from "../components/ContextMenu";
+import { useRecordMenu } from "../lib/menus";
 import {
   AgentChip,
   EmptyState,
@@ -54,6 +56,9 @@ export function WorkListPage() {
   } = useAsync(() => api.listWorklogs(slug), [slug], useVaultNonce());
 
   const searchRef = useRef<HTMLInputElement>(null);
+  /** Right-click (or Shift+F10) on a row: open it, or take its id, title or link. */
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
 
   const works = useMemo(() => data ?? [], [data]);
 
@@ -368,6 +373,9 @@ export function WorkListPage() {
                           to={`/p/${slug}/work/${w.id}`}
                           onMouseEnter={() => setCursor(i)}
                           onFocus={() => setCursor(i)}
+                          {...contextMenu(() =>
+                            recordMenu({ kind: "work", id: w.id, title: w.title, slug })
+                          )}
                         >
                           <WorkStatusDot status={w.status} />
                           <span className="work-row-id mono">{w.id}</span>

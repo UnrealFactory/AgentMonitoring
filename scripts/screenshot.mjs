@@ -62,7 +62,7 @@ Options (flag, or environment variable):
   --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
   --width <n>      $SHOT_WIDTH    viewport width (default 1600; the shell is judged at 1152 too)
   --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail,
-                                  projects, palette, palette-vault
+                                  projects, palette, palette-vault, menu-project, menu-record
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
   --project <slug> $SHOT_PROJECT  project to shoot (default: the one with the most records)
   --suffix <s>     $SHOT_SUFFIX   append to every file name, so a second project's screens
@@ -300,6 +300,29 @@ try {
           null,
           { timeout: 15_000 },
         );
+      },
+    },
+    {
+      /* The right button, on the row it was reported broken on: before P8 this was Edge's
+         menu — "새 창에서 링크 열기 / 링크 복사 / 검사" — over a project in the sidebar. */
+      name: "menu-project",
+      path: "/projects",
+      waitFor: ".ctx-menu",
+      prepare: async (page) => {
+        await page.waitForSelector(".nav-sub", { state: "visible" });
+        await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        await page.locator(".nav-sub").first().click({ button: "right" });
+      },
+    },
+    {
+      // …and on a work log, where it is the row's own menu rather than the browser's.
+      name: "menu-record",
+      path: `/p/${slug}/work`,
+      waitFor: ".ctx-menu",
+      prepare: async (page) => {
+        await page.waitForSelector(".work-row", { state: "visible" });
+        await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        await page.locator(".work-row").nth(2).click({ button: "right" });
       },
     },
   ];

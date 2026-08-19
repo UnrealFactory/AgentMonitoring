@@ -15,6 +15,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp, useCurrentProject } from "../AppContext";
 import { openPalette } from "./CommandPalette";
+import { useContextMenu } from "./ContextMenu";
+import { useProjectMenu } from "../lib/menus";
 import {
   bugTip,
   inProgressOf,
@@ -47,6 +49,11 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  /* Right-click (and Shift+F10) on any project row in this column: the same menu the
+     Projects screen's rows open — the reader should not have to remember which list they
+     are looking at. */
+  const contextMenu = useContextMenu();
+  const projectMenu = useProjectMenu();
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   /** The menu's items in screen order, for the arrow keys. */
@@ -182,6 +189,7 @@ export function Sidebar() {
                 }}
                 className={`switcher-item${p.slug === current?.slug ? " is-current" : ""}`}
                 onClick={() => navigate(`/p/${p.slug}`)}
+                {...contextMenu(() => projectMenu(p))}
               >
                 <span className="switcher-item-name">
                   {p.name}
@@ -302,6 +310,7 @@ export function Sidebar() {
               p.counts.workInProgress,
               "here"
             )} · ${bugTip(p.counts.bugsOpen, p.counts.bugsTotal)}`}
+            {...contextMenu(() => projectMenu(p))}
           >
             <span
               className={`nav-bullet${p.status === "archived" ? " is-archived" : ""}`}

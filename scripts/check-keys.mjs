@@ -24,7 +24,22 @@
  *      aria-current="page", on every screen, including a vault with more projects than the
  *      sidebar lists (the "<N> more…" row used to be a NavLink to /projects).
  *
- * A scratch 12-project vault is built in a temp directory for (5); ./vault is never written.
+ * Since P8 it also gates the **right button**, which was reported leaking WebView2's own
+ * menu ("새 창에서 링크 열기 / 링크 복사 / 검사") over a project row in the shipped desktop
+ * app. Browser and webview run the same suppression, so it is measurable here:
+ *
+ *   6. On a row and on empty page background the contextmenu event comes back
+ *      `defaultPrevented` — no browser menu — and inside the search box it does NOT, because
+ *      copy/paste/spellcheck there belong to the browser and cannot be rebuilt honestly.
+ *   7. The app's own menu takes the keyboard: the first item is focused on open, ↑ ↓ Home End
+ *      move it, ↵ runs it, esc and a click away close it, and the focus goes back to the row
+ *      it came from. Shift+F10 opens it without a mouse at all.
+ *   8. Nothing in it deletes (the vault is append-only), Archive says so before the click,
+ *      and archiving really does leave a way back — from the Projects screen's undo bar, and
+ *      from the toast when it is invoked anywhere else.
+ *
+ * Two scratch vaults are built in temp directories — a 12-project one for (5) and the same
+ * copy for the writes in (8). ./vault is read, never written.
  */
 import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -85,6 +100,36 @@ async function openPalette(page) {
   await page.waitForSelector(".palette-item.is-active", { state: "visible" });
   await page.waitForSelector(".palette-item .palette-kind", { state: "visible" });
 }
+
+/* -- the right button ------------------------------------------------------- */
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+const menuOpen = (page) => page.locator(".ctx-menu").count().then((n) => n > 0);
+/** The menu's items by id, in screen order. */
+const menuItems = (page) =>
+  page.locator(".ctx-item").evaluateAll((els) => els.map((el) => el.dataset.item));
+/** Which item has the keyboard. */
+const menuFocus = (page) => page.evaluate(() => document.activeElement?.dataset?.item ?? null);
+
+/**
+ * Watch every contextmenu event that reaches the document — *after* the app has had it.
+ *
+ * This is the measurement the P8 defect is really about: `defaultPrevented` is the whole
+ * difference between the app's menu and WebView2's. The listener is added last, so it sees
+ * the final state of each event; it has to be re-armed after every navigation.
+ */
+const watchContextMenu = (page) =>
+  page.evaluate(() => {
+    window.__ctx = [];
+    document.addEventListener("contextmenu", (e) =>
+      window.__ctx.push({ prevented: e.defaultPrevented, tag: e.target?.tagName ?? "?" }),
+    );
+  });
+const ctxSeen = (page) => page.evaluate(() => window.__ctx ?? []);
+const armContextMenu = async (page) => {
+  await page.evaluate(() => (window.__ctx = []));
+};
 
 let browser = null;
 let server = null;
@@ -281,6 +326,197 @@ try {
     );
   }
 
+  /* 6-7. The right button, on a screen full of rows.
+
+     The reported defect is a *browser* menu appearing over a project row in the desktop
+     app. Browser mode runs the same suppression, so what is measured here is exactly what
+     the webview does: whether the contextmenu event comes back prevented. */
+  log("--- the context menu");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: ORIGIN });
+  await page.goto(`${ORIGIN}/p/${slug}/work`, { waitUntil: "domcontentloaded" });
+  await ready(page);
+  await watchContextMenu(page);
+
+  const firstRow = page.locator(".work-row").first();
+  const firstId = (await firstRow.locator(".work-row-id").textContent())?.trim();
+  await firstRow.click({ button: "right" });
+  await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  check("a work row opens the app's own menu", await menuOpen(page));
+  check(
+    "…and the browser's menu is suppressed on it",
+    (await ctxSeen(page)).length === 1 && (await ctxSeen(page)).every((e) => e.prevented),
+    JSON.stringify(await ctxSeen(page)),
+  );
+  check(
+    "…named for the record it is about",
+    (await page.getAttribute(".ctx-menu", "aria-label")) === firstId,
+    `aria-label ${await page.getAttribute(".ctx-menu", "aria-label")}, row ${firstId}`,
+  );
+  const rowItems = await menuItems(page);
+  check(
+    "…offering Open and the three copies",
+    same(rowItems, ["open", "copy-id", "copy-title", "copy-link"]),
+    JSON.stringify(rowItems),
+  );
+  check(
+    "…and nothing that deletes (the vault is append-only)",
+    !/delete|remove|discard/i.test((await page.locator(".ctx-menu").textContent()) ?? ""),
+  );
+  check(
+    "an open menu declares the modal lock, so the list keyboard stands down",
+    (await page.getAttribute("html", "data-modal")) === "open",
+  );
+
+  // The keyboard contract, from the item the menu put the focus on.
+  check("the first item takes the keyboard", (await menuFocus(page)) === "open");
+  await page.keyboard.press("ArrowDown");
+  check("↓ moves to the next item", (await menuFocus(page)) === "copy-id");
+  await page.keyboard.press("ArrowUp");
+  check("↑ moves back", (await menuFocus(page)) === "open");
+  await page.keyboard.press("ArrowUp");
+  check("↑ from the first item wraps to the last", (await menuFocus(page)) === "copy-link");
+  await page.keyboard.press("Home");
+  check("Home returns to the first", (await menuFocus(page)) === "open");
+  await page.keyboard.press("End");
+  check("End jumps to the last", (await menuFocus(page)) === "copy-link");
+  const urlWithMenu = page.url();
+  check("…and the page behind it did not navigate", page.url() === urlWithMenu);
+  await page.keyboard.press("Escape");
+  check("esc closes it", !(await menuOpen(page)));
+  check(
+    "…and the row it came from has the keyboard back",
+    await page.evaluate(() => !!document.activeElement?.closest?.(".work-row")),
+    `focus is ${await focused(page)}`,
+  );
+  check("…and the modal lock is released", (await page.getAttribute("html", "data-modal")) === null);
+
+  // Shift+F10: the same menu, no mouse anywhere in it.
+  const secondRow = page.locator(".work-row").nth(1);
+  const secondId = (await secondRow.locator(".work-row-id").textContent())?.trim();
+  await secondRow.focus();
+  const rowBox = await secondRow.boundingBox();
+  await page.keyboard.press("Shift+F10");
+  await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  check(
+    "Shift+F10 on a focused row opens the menu for that row",
+    (await page.getAttribute(".ctx-menu", "aria-label")) === secondId,
+  );
+  // Measured against the row, not against `:focus` — by now the focus is in the menu, which
+  // is the other half of the promise.
+  const menuBox = await page.locator(".ctx-menu").boundingBox();
+  const anchored = { dx: menuBox.x - rowBox.x, dy: menuBox.y - (rowBox.y + rowBox.height) };
+  check(
+    "…anchored to the row rather than to the corner of the window",
+    anchored.dx > 0 && anchored.dx < 80 && Math.abs(anchored.dy) < 40,
+    JSON.stringify(anchored),
+  );
+  check(
+    "…and the keyboard is inside it, not still on the row",
+    (await menuFocus(page)) === "open",
+  );
+  // ↵ on a copy item: the id lands on the clipboard and the app says so.
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".toast", { state: "visible", timeout: 5_000 });
+  check("↵ runs the item it highlights", !(await menuOpen(page)));
+  check(
+    "…Copy id really writes the clipboard",
+    (await page.evaluate(() => navigator.clipboard.readText())) === secondId,
+  );
+  check(
+    "…and one line says so",
+    ((await page.locator(".toast-text").textContent()) ?? "").includes(secondId),
+    await page.locator(".toast-text").textContent(),
+  );
+
+  // Open, from the menu, on the row it was opened over.
+  await firstRow.click({ button: "right" });
+  await page.waitForSelector(".ctx-menu", { state: "visible" });
+  await page.keyboard.press("Enter");
+  await ready(page);
+  check("Open goes to the record the menu was about", page.url().endsWith(`/work/${firstId}`), page.url());
+
+  // A click anywhere else closes it, the way every menu in this app already does.
+  await page.goto(`${ORIGIN}/p/${slug}/work`, { waitUntil: "domcontentloaded" });
+  await ready(page);
+  await watchContextMenu(page);
+  await firstRow.click({ button: "right" });
+  await page.waitForSelector(".ctx-menu", { state: "visible" });
+  await page.mouse.click(12, 12);
+  check("a click away closes it", !(await menuOpen(page)));
+
+  /* Empty background: nothing at all — not the app's menu, and not the browser's. This is
+     the half of the fix that has no visible result, which is why it is measured. */
+  await armContextMenu(page);
+  const empty = await page.evaluate(() => {
+    const head = document.querySelector(".page-head")?.getBoundingClientRect();
+    return head ? { x: Math.round(head.right - 8), y: Math.round(head.top + 6) } : null;
+  });
+  await page.mouse.click(empty.x, empty.y, { button: "right" });
+  check("the page background opens no menu", !(await menuOpen(page)));
+  check(
+    "…and the browser's is suppressed there too",
+    (await ctxSeen(page)).length === 1 && (await ctxSeen(page))[0].prevented,
+    JSON.stringify(await ctxSeen(page)),
+  );
+
+  /* …except in a text field, where the native menu carries paste, undo and the spell
+     checker, and the app has nothing better to offer. */
+  await armContextMenu(page);
+  await page.locator(".search-input").click({ button: "right" });
+  check("a search box keeps the browser's own menu", !(await ctxSeen(page))[0]?.prevented, JSON.stringify(await ctxSeen(page)));
+  check("…and the app does not put one over it", !(await menuOpen(page)));
+
+  // A record's head carries the same menu as its row, minus the Open it does not need.
+  await page.goto(`${ORIGIN}/p/${slug}/work/${someWork.id}`, { waitUntil: "domcontentloaded" });
+  await ready(page);
+  await page.locator(".record-head").click({ button: "right", position: { x: 12, y: 10 } });
+  await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  const headItems = await menuItems(page);
+  check(
+    "the record head offers the copies and no Open — the reader is already on it",
+    same(headItems, ["copy-id", "copy-title", "copy-link"]),
+    JSON.stringify(headItems),
+  );
+  await page.keyboard.press("Escape");
+
+  /* Edge flipping. A menu that clips at the window edge is a menu with items nobody can
+     reach, and the narrow window is where it happens. */
+  await page.setViewportSize({ width: 960, height: 700 });
+  await page.goto(`${ORIGIN}/p/${slug}/work`, { waitUntil: "domcontentloaded" });
+  await ready(page);
+  const nearRight = await page.evaluate(() => {
+    const b = document.querySelector(".work-row").getBoundingClientRect();
+    return { x: Math.round(b.right - 6), y: Math.round(b.top + 6) };
+  });
+  await page.mouse.click(nearRight.x, nearRight.y, { button: "right" });
+  await page.waitForSelector(".ctx-menu", { state: "visible" });
+  const rightBox = await page.locator(".ctx-menu").boundingBox();
+  check(
+    "a menu opened at the right edge flips and stays inside the window",
+    rightBox.x >= 0 && rightBox.x + rightBox.width <= 960,
+    `x ${rightBox.x} + w ${rightBox.width} in 960`,
+  );
+  await page.keyboard.press("Escape");
+  const nearBottom = await page.evaluate(() => {
+    const y = innerHeight - 6;
+    for (const row of document.querySelectorAll(".work-row")) {
+      const b = row.getBoundingClientRect();
+      if (b.top < y && b.bottom > y) return { x: Math.round(b.left + 40), y };
+    }
+    return null;
+  });
+  await page.mouse.click(nearBottom.x, nearBottom.y, { button: "right" });
+  await page.waitForSelector(".ctx-menu", { state: "visible" });
+  const bottomBox = await page.locator(".ctx-menu").boundingBox();
+  check(
+    "…and one opened at the bottom edge grows upward instead of off the screen",
+    bottomBox.y >= 0 && bottomBox.y + bottomBox.height <= 700,
+    `y ${bottomBox.y} + h ${bottomBox.height} in 700`,
+  );
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
   // The same claim in the vault shape that broke it: more projects than the sidebar lists.
   log("--- a 12-project vault");
   const many = mkdtempSync(join(tmpdir(), "agentmon-many-"));
@@ -321,6 +557,87 @@ try {
     "…and the overflow row is not styled as active either",
     (await wide.locator(".nav-more.active").count()) === 0,
   );
+
+  /* 8. Archive, from the menu — the one item in this app that writes. It is run against the
+     scratch copy, never ./vault, and what is checked is the promise the item makes in its
+     own hint: the records are kept, and there is a way back from wherever it was invoked. */
+  log("--- archive, and the way back");
+  const manyProjects = async () => (await (await fetch(`${manyOrigin}/vault-api/projects`)).json());
+  const statusOf = async (s) => (await manyProjects()).find((p) => p.slug === s)?.status;
+  const settles = async (s, want, ms = 10_000) => {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      if ((await statusOf(s)) === want) return true;
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    return false;
+  };
+  const workCount = async (s) =>
+    (await (await fetch(`${manyOrigin}/vault-api/projects/${s}/worklogs`)).json()).length;
+
+  const projectName = projects.find((p) => p.slug === slug)?.name;
+  const recordsBefore = await workCount(slug);
+  const projectRow = wide
+    .locator(".project-row")
+    .filter({ has: wide.locator(`.project-name:text-is(${JSON.stringify(projectName)})`) })
+    .first();
+  await projectRow.click({ button: "right", position: { x: 24, y: 18 } });
+  await wide.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  check(
+    "the project menu says what Archive costs before the click",
+    ((await wide.locator('.ctx-item[data-item="archive"] .ctx-hint').textContent()) ?? "").trim() ===
+      "records are kept",
+  );
+  check(
+    "…and there is deliberately no Delete in it",
+    !/delete|remove|discard/i.test((await wide.locator(".ctx-menu").textContent()) ?? ""),
+  );
+  /* This row is below the fold in a 12-project vault, so reaching it scrolls the page —
+     and a scroll still settling as the menu opens used to dismiss it on the spot. */
+  await wide.waitForTimeout(300);
+  check(
+    "…and a menu opened on a row that had to be scrolled to is still there a moment later",
+    await wide.locator(".ctx-menu").isVisible(),
+  );
+  await wide.locator('.ctx-item[data-item="archive"]').click();
+  await wide.waitForSelector(".undo-bar", { state: "visible", timeout: 10_000 });
+  check("archiving from a row menu on /projects raises that screen's own undo bar", true);
+  check(`…and ${slug} really is archived in the vault`, await settles(slug, "archived"));
+  check(
+    "…with every record it had still in it",
+    (await workCount(slug)) === recordsBefore,
+    `${await workCount(slug)} vs ${recordsBefore}`,
+  );
+  await wide.locator(".undo-bar .button").click();
+  check("…and Undo puts it back", await settles(slug, "active"));
+
+  /* The same action from the sidebar, where there is no undo bar to raise: the way back
+     arrives as a toast, and — like the bar — it waits rather than fading. */
+  await wide.goto(`${manyOrigin}/p/${slug}`, { waitUntil: "domcontentloaded" });
+  await ready(wide);
+  const pick = await wide.evaluate(() => {
+    const rows = [...document.querySelectorAll(".nav-sub")].filter(
+      (r) => !r.classList.contains("nav-more"),
+    );
+    const i = rows.findIndex((r) => !r.classList.contains("is-current"));
+    return i < 0 ? null : { i, name: rows[i].querySelector(".nav-sub-name").textContent.trim() };
+  });
+  const pickedSlug = (await manyProjects()).find((p) => p.name === pick?.name)?.slug;
+  await wide.locator(".nav-sub").nth(pick.i).click({ button: "right" });
+  await wide.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  await wide.locator('.ctx-item[data-item="archive"]').click();
+  await wide.waitForSelector(".toast", { state: "visible", timeout: 10_000 });
+  check(`archiving ${pickedSlug} from the sidebar archives it`, await settles(pickedSlug, "archived"));
+  check(
+    "…and answers with a toast offering the way back",
+    ((await wide.locator(".toast .button").textContent()) ?? "").trim() === "Undo",
+  );
+  // An undo that fades is an undo for people who were already looking (the P5 rule).
+  await wide.waitForTimeout(3_000);
+  check("…which does not fade out from under the reader", await wide.locator(".toast").isVisible());
+  await wide.locator(".toast .button").click();
+  check("…and it works", await settles(pickedSlug, "active"));
+
   await wide.close();
 } catch (err) {
   failures += 1;

@@ -636,6 +636,153 @@
   gap: 4px;
 }
 
+/* ===========================================================================
+   CONTEXT MENU (right-click, Shift+F10)
+
+   The same bar as the filter menu and the project switcher — raised surface, hairline
+   border, 13px, 4px radii — because it is the same product. It appears at the cursor and
+   flips at the window edge rather than clipping (components/ContextMenu.tsx).
+   ======================================================================== */
+
+/* Catches the click that dismisses it, and stops the wheel from scrolling the page out
+   from under a menu anchored to a row on it. Invisible: this is a menu, not a modal. */
+.ctx-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+
+.ctx-menu {
+  position: fixed;
+  min-width: 176px;
+  /* Wide enough that a record's route — the longest value any item copies — is printed
+     whole. This app has already been pulled up once for cutting a path in half (BUG-0009),
+     and half a route is worse than none: the half it cuts is the id at the end. */
+  max-width: 380px;
+  padding: var(--space-1);
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* One highlight, never two: the pointer moves the focus (onMouseEnter), so the row under
+   the mouse and the row the keyboard is on are always the same row. No focus ring on top
+   of it — the highlight *is* the ring, the way it is in the palette. */
+.ctx-item:hover,
+.ctx-item:focus,
+.ctx-item:focus-visible {
+  outline: none;
+  background: var(--bg-selected);
+  color: var(--text-primary);
+}
+
+.ctx-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* What the item will actually do or copy — "relay", "records are kept", the route. Never
+   `direction: rtl` to truncate from the left: the bidi algorithm reorders the slashes in a
+   path and the reader is shown an address that does not exist. */
+.ctx-hint {
+  flex: none;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--border-subtle);
+}
+
+/* ===========================================================================
+   TOAST — one line, when something happened that leaves no trace on screen
+   ======================================================================== */
+
+.toast-layer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--space-6);
+  z-index: 80;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* Same recipe as the Projects screen's undo bar, which is the app's other "here is what
+   just happened" surface: surface layer, hairline border, one shadow. */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: min(560px, calc(100vw - var(--space-8)));
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  pointer-events: auto;
+  animation: toast-in var(--duration) var(--ease);
+}
+
+.toast.is-warn {
+  border-color: rgba(242, 153, 74, 0.35);
+}
+
+.toast-mark {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: var(--radius-full);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.toast.is-warn .toast-mark {
+  background: var(--orange-soft);
+  color: var(--orange);
+}
+
+.toast-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
 /* --- page scaffold -------------------------------------------------------- */
 
 .page {

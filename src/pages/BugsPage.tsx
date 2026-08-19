@@ -27,6 +27,8 @@ import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
 import { useUrlFilters } from "../lib/useUrlFilters";
 import { Select } from "../components/Select";
+import { useContextMenu } from "../components/ContextMenu";
+import { useRecordMenu } from "../lib/menus";
 import {
   BugStatusDot,
   CommentCount,
@@ -111,6 +113,9 @@ export function BugsPage() {
   } = useAsync(() => api.listBugs(slug), [slug], useVaultNonce());
 
   const searchRef = useRef<HTMLInputElement>(null);
+  /** Right-click (or Shift+F10) on a row: open it, or take its id, title or link. */
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
   const bugs = useMemo(() => data ?? [], [data]);
   /** The project's own numbers, ignoring the filters — for the page header. */
   const totalUnresolved = bugs.filter(isUnresolved).length;
@@ -547,6 +552,9 @@ export function BugsPage() {
                           to={`/p/${slug}/bugs/${b.id}`}
                           onMouseEnter={() => setCursor(i)}
                           onFocus={() => setCursor(i)}
+                          {...contextMenu(() =>
+                            recordMenu({ kind: "bug", id: b.id, title: b.title, slug })
+                          )}
                         >
                           <span className="bug-row-sev">
                             <SeverityBadge severity={b.severity} />

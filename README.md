@@ -153,11 +153,12 @@ npm run smoke            # markdown rendering across every record in the vault
 npm run check:clipping   # every screen at seven widths: nothing cut, no heading truncated
 npm run check:counts     # every filter control: the number it prints is the rows you get
 npm run check:urlstate   # view state survives reload, Back and a pasted link
-npm run check:keys       # keyboard: lists, palette, focus, one current page
+npm run check:keys       # keyboard: lists, palette, context menus, focus, one current page
 npm run check:live       # a CLI write reaches an open window without a reload
 npm run check:vault      # the vault opens from anywhere, and moving it changes nothing
 npm run check:mcp        # the MCP server over stdio: lifecycle, errors, context budgets
 ```
 
-`check:live` and `check:vault` write records, and only ever to a copy in the temp
+`check:live`, `check:vault` and `check:keys` write records — `check:keys` builds a
+12-project vault and archives projects in it — and only ever to a copy in the temp
 directory; the vault in this repository is real history and is never written to by a test.

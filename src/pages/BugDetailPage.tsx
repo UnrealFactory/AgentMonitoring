@@ -28,6 +28,8 @@ import {
   type TocEntry,
 } from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
+import { useContextMenu } from "../components/ContextMenu";
+import { useRecordMenu } from "../lib/menus";
 import {
   AgentChip,
   BugStatusPill,
@@ -74,6 +76,9 @@ export function BugDetailPage() {
   );
 
   const bug = data;
+  /* The same menu the board row opens, minus Open — the reader is already on it. */
+  const contextMenu = useContextMenu();
+  const recordMenu = useRecordMenu();
   const related = useRelated(slug, id, bug?.refs ?? EMPTY);
 
   /**
@@ -172,7 +177,12 @@ export function BugDetailPage() {
           <span className="mono">{bug.id}</span>
         </nav>
 
-        <header className="record-head">
+        <header
+          className="record-head"
+          {...contextMenu(() =>
+            recordMenu({ kind: "bug", id: bug.id, title: bug.title, slug, here: true })
+          )}
+        >
           <RecordTitle title={bug.title} id={bug.id} />
 
           {/* Same rule as a work log: a reader meets the correction before the report it
