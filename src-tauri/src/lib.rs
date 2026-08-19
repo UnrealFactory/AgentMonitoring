@@ -54,7 +54,7 @@ fn discover() -> Option<Vault> {
     let mut dir: Option<&Path> = exe.parent();
     for _ in 0..5 {
         let d = dir?;
-        if let Ok(v) = Vault::open(d.join("vault")) {
+        if let Ok(v) = Vault::open_beside_exe(d.join("vault")) {
             return Some(v);
         }
         dir = d.parent();
@@ -245,6 +245,29 @@ fn cli_path() -> Option<String> {
         if candidate.is_file() {
             return Some(candidate.display().to_string());
         }
+    }
+    None
+}
+
+/// `docs/AGENT_MANUAL.md`, if this machine has it.
+///
+/// An installed copy is two executables: the manual is a file in the source tree, not part
+/// of the bundle. The onboarding screen used to send every reader to it by name, so on an
+/// installed machine the one pointer it gave was to a path that is not there. Looked up the
+/// same way the vault is (beside the executable, then a few levels up, which covers
+/// `target/debug/agentmonitoring.exe` in development) and `None` is the normal answer —
+/// the screen then names `agentmon --help`, which ships.
+#[tauri::command]
+fn manual_path() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    let mut dir: Option<&Path> = exe.parent();
+    for _ in 0..5 {
+        let d = dir?;
+        let candidate = d.join("docs").join("AGENT_MANUAL.md");
+        if candidate.is_file() {
+            return Some(candidate.display().to_string());
+        }
+        dir = d.parent();
     }
     None
 }
@@ -672,6 +695,7 @@ pub fn run() {
             choose_vault_folder,
             create_vault_folder,
             cli_path,
+            manual_path,
             list_projects,
             get_project,
             create_project,

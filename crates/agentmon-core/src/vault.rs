@@ -49,6 +49,18 @@ impl Vault {
         Vault::open_with_source(root.as_ref(), "flag")
     }
 
+    /// Open a vault the app found for itself, next to its own executable.
+    ///
+    /// The packaged desktop app launches from wherever the user clicked, so `./vault` is not
+    /// where its vault is; it looks beside the binary instead. That is a fifth way of
+    /// choosing a vault and it needs its own name: opened through [`Vault::open`] it reported
+    /// `flag`, and the first screen then said "Opened from the folder opened in this app"
+    /// about a folder nobody opened. The vault bar is the one place a human can check which
+    /// vault they are on, so it must not guess.
+    pub fn open_beside_exe(root: impl AsRef<Path>) -> Result<Vault> {
+        Vault::open_with_source(root.as_ref(), "exe/vault")
+    }
+
     fn open_with_source(root: &Path, source: &str) -> Result<Vault> {
         let root = normalize(root);
         if !root.join("vault.json").is_file() {

@@ -405,6 +405,7 @@ agentmon bug create -p agent-monitoring \
   --title "Work list drops the tag filter when you navigate back" \
   --severity medium \
   --labels frontend,filters \
+  --refs WORK-0004 \
   --body "$(cat <<'EOF'
 ## Report
 
@@ -425,6 +426,14 @@ remount. Putting it in a query parameter would fix this and make filtered lists 
 EOF
 )"
 ```
+
+**Found it while doing something else? Say so with `--refs`, not only in the prose.**
+`--refs WORK-0004` is what makes the link work in both directions: the bug lists that work
+log under **References**, and — the half prose cannot do — the work log lists this bug under
+**Referenced by**, so the next reader of the work meets the bug it produced. Writing
+"noticed while working on WORK-0004" in the body is still worth it (ids in prose render as
+links to the record they name), but that link only points one way. Same flag, same reason,
+on `bug create`, `work start` and `work done`.
 
 Severity, so you pick the same one a human would:
 
@@ -690,12 +699,19 @@ agentmon work update <WORK-ID> -p <project> --agent <name>
 ```
 
 Appends a timestamped note under `## Updates`. Append-only: notes are never edited or
-reordered. Fails with exit `5` on a work log that is already `done` or `abandoned` —
-closed records are history.
+reordered, and nothing above `## Updates` is touched.
+
+**A finished record still takes notes**, and that is how a shipped record gets corrected:
+append a note opening with `Correction:` and the record page marks it and says
+"1 correction — see Updates" under the title, above the sentence that is wrong. The status,
+the timestamps and the outcome do not move, and the event is still `work_updated`. (What is
+refused is *changing* a closed record: `work done` and `work abandon` still fail with exit
+`5` on one.)
 
 `--message-file` and `--body-file` are the same flag under two names. `--at` stamps the
-note with the time it describes, which must be at or after `started` and at or after the
-previous note ([Backdating](#backdating)).
+note with the time it describes, which must be at or after `started`, at or after the
+previous note, and — on a record that has closed — at or after `finished`
+([Backdating](#backdating)).
 
 ```bash
 agentmon work update WORK-0004 -p agent-monitoring --agent my-agent \
@@ -703,6 +719,10 @@ agentmon work update WORK-0004 -p agent-monitoring --agent my-agent \
 
 agentmon work update WORK-0004 -p agent-monitoring --agent my-agent \
   --at 2026-08-18T10:05:00Z --message-file note.md
+
+# a correction to work that finished days ago, written by somebody else
+agentmon work update WORK-0004 -p agent-monitoring --agent reviewer \
+  --message "Correction: the note above says the debounce window is 500ms; it is 250ms (src-tauri/src/lib.rs)."
 ```
 
 ### `agentmon work done`
@@ -1052,8 +1072,11 @@ produced with `echo "$(cat <<'EOF' ... EOF )"` before blaming the CLI.
 at the start of a line, or they use `#`/`###` instead of `##`. Exactly two hashes, then a
 space.
 
-**`WORK-0004 is already done`** — a finished work log is immutable. Start a new one:
-`agentmon work start`. The same applies to `abandoned` records.
+**`WORK-0004 is already done`** — a finished work log cannot be finished again, re-started
+or rewritten; start a new one with `agentmon work start`. The same applies to `abandoned`
+records. It can still be *added to*: `agentmon work update` appends a note to a closed
+record, which is how a shipped record is corrected without editing history (see
+[`agentmon work update`](#agentmon-work-update)).
 
 **A work log of mine is stuck `in_progress` and I am not working on it** — close it
 honestly: `agentmon work abandon <ID> -p <project> --agent <you> --reason "..."`. Do not

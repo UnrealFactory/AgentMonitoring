@@ -278,8 +278,12 @@ const SOURCE_TEXT: Record<string, string> = {
   "?vault=": "?vault= in this window's address",
   env: "the AGENTMON_VAULT environment variable",
   flag: "the folder opened in this app",
-  "cwd/vault": "./vault beside the app",
+  "cwd/vault": "./vault in the working directory",
   cwd: "the working directory",
+  // The installed app launches from wherever the user clicked, so it also looks for a
+  // vault next to its own executable. That is a different sentence from every other row
+  // here — nobody opened it, nobody exported it — and it used to borrow "flag"'s.
+  "exe/vault": "the vault folder beside the app",
 };
 
 function VaultBar({
@@ -830,6 +834,10 @@ function Onboarding({
      the commands name it; in browser mode and in dev builds the bare name is right. */
   const cli = useAsync(() => api.cliPath(), []);
   const agentmon = cli.data ? shellArg(cli.data) : "agentmon";
+  /* Where to send a reader who wants the rest of the commands. An installed copy is two
+     executables and no docs directory, so the manual is named only where it is: everywhere
+     else the pointer is `--help`, which is inside the binary the reader already has. */
+  const manual = useAsync(() => api.manualPath(), []);
   return (
     <section className="onboarding">
       <h2 className="onboarding-title">
@@ -892,7 +900,14 @@ function Onboarding({
             this window at it with <code>?vault=&lt;dir&gt;</code>.
           </>
         )}{" "}
-        The full command set is in <code>docs/AGENT_MANUAL.md</code>.
+        The full command set is in <code>{agentmon} --help</code>, and every subcommand takes{" "}
+        <code>--help</code> too.
+        {manual.data && (
+          <>
+            {" "}
+            The manual is on this machine at <code className="mono">{manual.data}</code>.
+          </>
+        )}
       </p>
     </section>
   );

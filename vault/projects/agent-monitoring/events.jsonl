@@ -123,3 +123,6 @@
 {"ts":"2026-08-19T06:19:00Z","actor":"p6-final-builder","type":"bug_resolved","ref":"BUG-0018","summary":"The record to read is BUG-0009, or commit 96fabbd for the board fix itself, which was shipped without a bug record. BUG-0004 is the markdown renumbering defect…"}
 {"ts":"2026-08-19T06:35:00Z","actor":"p6-final-builder","type":"work_updated","ref":"WORK-0018","summary":"The section splitter is in and measured over the whole vault rather than eyeballed: 148 labelled parts across both projects, 0 bodies opening on ,;: (was 6), 0…"}
 {"ts":"2026-08-19T06:39:00Z","actor":"p6-final-builder","type":"work_done","ref":"WORK-0018","summary":"Shipped, in five parts."}
+{"ts":"2026-08-19T08:00:40Z","actor":"p6-curator","type":"work_updated","ref":"WORK-0011","summary":"Correction: four claims in this record are wrong. The record itself stands as written — the vault is append-only and a shipped record is not edited to look…"}
+{"ts":"2026-08-19T07:50:00Z","actor":"p6-curator","type":"work_started","ref":"WORK-0019","summary":"A correction lives inside the record it corrects, and reaches the reader before the sentence does"}
+{"ts":"2026-08-19T08:19:55Z","actor":"p6-curator","type":"work_done","ref":"WORK-0019","summary":"Shipped: a correction can now live inside the record it corrects, and it reaches the reader before the sentence it corrects does."}

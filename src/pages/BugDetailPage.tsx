@@ -31,6 +31,8 @@ import { RelatedSection, useRelated } from "../components/Related";
 import {
   AgentChip,
   BugStatusPill,
+  CorrectionMark,
+  CorrectionNotice,
   ErrorState,
   RecordTitle,
   SeverityBadge,
@@ -38,6 +40,7 @@ import {
   StaleRecordBar,
   Tag,
 } from "../components/ui";
+import { countCorrections, isCorrection } from "../lib/updates";
 import {
   formatDateTime,
   formatDateTimeUtc,
@@ -171,6 +174,14 @@ export function BugDetailPage() {
 
         <header className="record-head">
           <RecordTitle title={bug.title} id={bug.id} />
+
+          {/* Same rule as a work log: a reader meets the correction before the report it
+              corrects, not thousands of pixels below it. */}
+          <CorrectionNotice
+            count={countCorrections(bug.comments)}
+            href="#thread"
+            where="the thread"
+          />
 
           <div className="rec-byline">
             <BugStatusPill status={bug.status} />
@@ -534,17 +545,27 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
             </li>
           ) : (
             <li className="trail-node" key={`${e.ts}-${i}`}>
-              <span className="trail-dot" aria-hidden="true" />
-              <article className="update-card">
+              <span
+                className={`trail-dot${isCorrection(e.body) ? " trail-dot-correction" : ""}`}
+                aria-hidden="true"
+              />
+              <article className={`update-card${isCorrection(e.body) ? " is-correction" : ""}`}>
                 <header className="update-head">
                   <AgentChip name={e.agent} />
-                  <span className="update-verb">
-                    {e.agent === bug.reporter
-                      ? "added to the report"
-                      : e.agent === bug.assignee
-                        ? "replied as assignee"
-                        : "commented"}
-                  </span>
+                  {isCorrection(e.body) ? (
+                    <span className="update-flag">
+                      <CorrectionMark />
+                      Correction
+                    </span>
+                  ) : (
+                    <span className="update-verb">
+                      {e.agent === bug.reporter
+                        ? "added to the report"
+                        : e.agent === bug.assignee
+                          ? "replied as assignee"
+                          : "commented"}
+                    </span>
+                  )}
                   <time className="update-ts tabular" dateTime={e.ts} title={formatDateTimeUtc(e.ts)}>
                     {formatDateTime(e.ts)} · {formatRelative(e.ts)}
                   </time>

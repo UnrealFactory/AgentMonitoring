@@ -295,13 +295,18 @@ enum WorkCmd {
         #[arg(long, value_name = "ISO8601", hide = true)]
         finished_at: Option<String>,
     },
-    /// Append a timestamped progress note to a work log.
+    /// Append a timestamped note to a work log — a progress note, or a later correction.
     #[command(after_help = "EXAMPLE\n  agentmon work update WORK-0003 -p agent-monitoring \\\n    \
         --agent cli-builder \\\n    --message \"Debounce is in: one save produced four notify \
         events, now one reload.\"\n\n  Notes are append-only and timestamped; they are the \
         story of the work, so write what changed and what you learned, not \"progress\".\n\n\
         Writing it up afterwards? --at 2026-08-18T10:05:00Z stamps the note with the time it \
-        actually happened.")]
+        actually happened.\n\n  A FINISHED record still takes notes. Nothing already written \
+        changes — the note lands at the end of the timeline, dated at or after the close — so \
+        this is how a record that turns out to state something false gets corrected inside \
+        itself. Open the note with \"Correction:\" and the record page marks it and says so at \
+        the top:\n\n  agentmon work update WORK-0011 -p agent-monitoring --agent p6-curator \\\n    \
+        --message \"Correction: relay has four agents, not ten (BUG-0017).\"")]
     Update {
         /// WORK-NNNN.
         id: String,
@@ -871,6 +876,14 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                 w.record.updates.last().map(|u| u.ts.as_str()).unwrap_or("—")
             );
             println!("  {}", w.path);
+            // Say plainly what was and was not touched, because appending to a closed
+            // record looks like editing history and is not.
+            if w.record.meta.status != WorkStatus::InProgress {
+                println!(
+                    "  Appended to a {} record: status, timestamps and everything above ## Updates are unchanged.",
+                    w.record.meta.status.as_str()
+                );
+            }
             Ok(())
         }
         WorkCmd::Abandon {

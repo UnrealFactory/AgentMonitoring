@@ -217,8 +217,10 @@ impl IdPath for agentmon_core::Worklog {
     }
 }
 
+/// A finished record cannot be re-finished, re-started or rewritten — but it can still be
+/// corrected, because that is the only honest repair an append-only vault has.
 #[test]
-fn a_finished_work_log_is_immutable() {
+fn a_finished_work_log_takes_corrections_but_never_changes_state() {
     let tv = TempVault::with_project("immutable");
     let id = start(&tv, "Wire the vault watcher into the desktop app");
     tv.vault
@@ -230,19 +232,48 @@ fn a_finished_work_log_is_immutable() {
                 outcome: OUTCOME.into(),
                 files: vec![],
                 refs: vec![],
-                finished_at: None,
-                started_at: None,
+                finished_at: Some("2026-01-05T12:00:00Z".into()),
+                started_at: Some("2026-01-05T09:00:00Z".into()),
             },
         )
         .unwrap();
+    let done = tv.vault.worklog("demo", &id).unwrap();
 
+    // A correction cannot be backdated into the run it corrects: 10:00 is after the start
+    // (09:00) and after every note already there, and still refused, because the record
+    // closed at 12:00 and a note before that would draw itself inside a finished run.
     let err = tv
         .vault
-        .update_work("demo", &id, "cli-builder", "One more thought.", None)
+        .update_work("demo", &id, "reviewer", "Backdated afterthought.", Some("2026-01-05T10:00:00Z"))
         .unwrap_err();
-    assert_eq!(err.kind(), "conflict");
-    assert!(err.to_string().contains("already done"), "{err}");
-    assert!(err.to_string().contains("agentmon work start"), "says how to fix: {err}");
+    assert_eq!(err.kind(), "invalid_argument");
+    assert!(err.to_string().contains("closed"), "says what it is behind: {err}");
+
+    let w = tv
+        .vault
+        .update_work(
+            "demo",
+            &id,
+            "reviewer",
+            "Correction: the note above says four workers; the config says two.",
+            None,
+        )
+        .expect("a correction may be appended to a finished record");
+    assert_eq!(w.event.event_type, "work_updated", "still a work_updated event");
+    let after = tv.vault.worklog("demo", &id).unwrap();
+    assert_eq!(after.meta.status, WorkStatus::Done, "the status does not move");
+    assert_eq!(after.meta.finished, done.meta.finished, "nor does the finish time");
+    assert_eq!(after.outcome, done.outcome, "nor the outcome");
+    assert_eq!(after.what, done.what, "and nothing above Updates is rewritten");
+    assert_eq!(after.updates.len(), done.updates.len() + 1, "the note is appended");
+    let last = after.updates.last().unwrap();
+    assert!(last.body.contains("Correction: the note above"), "{last:?}");
+    assert!(last.body.contains("_Update by reviewer._"), "who wrote it survives: {last:?}");
+    assert!(last.ts >= *done.meta.finished.as_ref().unwrap(), "dated at or after the close");
+    assert_eq!(
+        after.last_activity, last.ts,
+        "the record's last activity is the correction, not the close"
+    );
 
     let err = tv
         .vault

@@ -445,12 +445,17 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
         "the dashboard stops showing it as active"
     );
 
-    // an abandoned record is closed: no more notes, no second abandon, no completion
+    // an abandoned record is closed: no second abandon, no completion. A later note is
+    // still allowed — it is how the record gets corrected — but it cannot predate the stop.
+    tv.vault
+        .update_work("demo", &id, "cli-builder", "Correction: WORK-0009 is WORK-0010.", None)
+        .expect("a closed record still takes a correction");
+    assert_eq!(tv.vault.worklog("demo", &id).unwrap().meta.status, WorkStatus::Abandoned);
     let err = tv
         .vault
-        .update_work("demo", &id, "cli-builder", "One more thought.", None)
+        .update_work("demo", &id, "cli-builder", "Backwards in time.", Some(T1))
         .unwrap_err();
-    assert_eq!(err.kind(), "conflict");
+    assert_eq!(err.kind(), "invalid_argument");
     let err = tv
         .vault
         .abandon_work(

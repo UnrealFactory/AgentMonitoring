@@ -406,6 +406,20 @@ impl Vault {
         Ok(Written::new(id, &path, event, record))
     }
 
+    /// Append a timestamped note to a work log — while it runs, and after it closes.
+    ///
+    /// A closed record still accepts notes on purpose. Append-only means *nothing already
+    /// written is changed*; it does not mean a record can never be corrected. When a
+    /// finished work log turns out to state something false (WORK-0011 said relay had ten
+    /// agents; it has four — BUG-0017, BUG-0018), the honest repair is a note dated when the
+    /// error was found, sitting inside the record that carries the error, where its reader
+    /// is. Refusing that pushed corrections into other records entirely, and a reader who
+    /// stopped at the prose never met them.
+    ///
+    /// What stays fixed: the body above `## Updates` is never rewritten, the note lands at
+    /// the end of the timeline, its timestamp must be at or after everything already in the
+    /// record (including `finished`, so a note cannot pretend to predate the close), the
+    /// status does not change, and the event is still `work_updated`.
     pub fn update_work(
         &self,
         slug: &str,
@@ -429,25 +443,6 @@ impl Vault {
         let path = dir.join("worklogs").join(format!("{id}.md"));
         let (fm, meta, md) = read_work(&path, &id, slug)?;
 
-        match meta.status {
-            WorkStatus::InProgress => {}
-            WorkStatus::Done => {
-                return Err(CoreError::conflict(
-                    format!(
-                        "{id} is already done (finished {})",
-                        meta.finished.as_deref().unwrap_or("unknown")
-                    ),
-                    "a finished work log is a historical record. Start a new one with \
-                     `agentmon work start`, or add a note to the bug it relates to",
-                ))
-            }
-            WorkStatus::Abandoned => {
-                return Err(CoreError::conflict(
-                    format!("{id} was abandoned"),
-                    "start a new work log with `agentmon work start`",
-                ))
-            }
-        }
         require_note_time(&ts, &meta, &md)?;
 
         let entry = if agent == meta.agent {
@@ -955,9 +950,19 @@ fn last_comment(md: &str) -> String {
 
 /// A note appended to a work log has to sit after the start and after every note already
 /// there, or the rendered timeline reads backwards.
+///
+/// On a record that has closed, it also has to sit at or after `finished`: a correction is
+/// something learned later, and a note stamped before the close would draw itself inside a
+/// run that had already ended.
 fn require_note_time(ts: &str, meta: &Worklog, md: &str) -> Result<()> {
     time::require_at_or_after(ts, "--at", &meta.started, "the work log's started time")?;
-    time::require_at_or_after(ts, "--at", &update_stamps(md).1, "the previous note")
+    time::require_at_or_after(ts, "--at", &update_stamps(md).1, "the previous note")?;
+    match &meta.finished {
+        Some(f) if meta.status != WorkStatus::InProgress => {
+            time::require_at_or_after(ts, "--at", f, "the time this work log closed")
+        }
+        _ => Ok(()),
+    }
 }
 
 fn read_work(path: &Path, id: &str, slug: &str) -> Result<(String, Worklog, String)> {

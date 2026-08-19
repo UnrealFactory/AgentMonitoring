@@ -1629,6 +1629,76 @@ a.button {
   min-width: 0;
 }
 
+/* --- a correction ---------------------------------------------------------
+
+   The vault is append-only, so a record that says something false keeps saying it and the
+   repair arrives later, as a note. Left undressed that note reads like the next progress
+   update — the same card, the same dot — and a reader scanning the page has no reason to
+   stop at it. Amber is the app's "attention, not alarm" hue (medium severity, a claimed
+   bug): a correction is not an error state, it is the record's own author saying "read this
+   part again". Drawn only where the author wrote `Correction:`; see src/lib/updates.ts. */
+
+.update-card.is-correction {
+  border-color: rgba(242, 201, 76, 0.34);
+}
+
+.update-card.is-correction .update-head {
+  background: var(--amber-soft);
+  border-bottom-color: rgba(242, 201, 76, 0.28);
+}
+
+.trail-dot-correction {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+
+.update-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  color: var(--amber);
+}
+
+.correction-mark {
+  flex: none;
+}
+
+/* The one line that reaches the reader in time: it sits under the record's title, above
+   What/Why/How, and links down to the note itself. A full-width bar would read as an error
+   banner and pull rank over the title; this is a chip that wraps with the head. */
+.correction-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 6px var(--space-3);
+  border: 1px solid rgba(242, 201, 76, 0.34);
+  border-radius: var(--radius);
+  background: var(--amber-soft);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.correction-notice:hover {
+  background: rgba(242, 201, 76, 0.22);
+  color: var(--text-primary);
+}
+
+.correction-notice strong {
+  color: var(--amber);
+  font-weight: var(--weight-medium);
+}
+
+.correction-notice-mark {
+  display: inline-flex;
+  color: var(--amber);
+}
+
 /* --- outcome: the "merged" moment of the page ----------------------------- */
 
 .outcome-card {
@@ -4878,12 +4948,19 @@ a.pill-archived:hover {
   color: var(--text-tertiary);
 }
 
-/* A record id written in prose is a link to that record. */
+/* A record id written in prose is a link to that record.
+
+   The chip is the width of its own text: its breathing room is painted by a box-shadow
+   spread, which is ink and takes no space in the line. With `padding: 0 4px` the chip
+   advanced 8px wider than the id, so the author's "BUG-0016's" rendered as "BUG-0016 's"
+   and a chip that ends a sentence stood off its own full stop. Punctuation belongs to the
+   sentence, not to the chip, and it has to sit where it was typed. */
 .prose a.ref-inline,
 a.ref-inline {
-  padding: 0 4px;
+  padding: 0;
   border-radius: var(--radius-xs);
   background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
   color: var(--accent-text);
   font-size: 0.9em;
   text-decoration: none;
@@ -4893,6 +4970,7 @@ a.ref-inline {
 .prose a.ref-inline:hover,
 a.ref-inline:hover {
   background: rgba(94, 106, 210, 0.28);
+  box-shadow: 0 0 0 3px rgba(94, 106, 210, 0.28);
   color: #c3c9ff;
 }
 
@@ -4908,6 +4986,7 @@ strong .ref-inline {
 .prose a.ref-inline.is-unknown,
 a.ref-inline.is-unknown {
   background: var(--bg-hover);
+  box-shadow: 0 0 0 3px var(--bg-hover);
   color: var(--text-secondary);
   text-decoration: underline dotted currentColor;
   text-underline-offset: 2px;
@@ -4916,6 +4995,7 @@ a.ref-inline.is-unknown {
 .prose a.ref-inline.is-unknown:hover,
 a.ref-inline.is-unknown:hover {
   background: var(--bg-active);
+  box-shadow: 0 0 0 3px var(--bg-active);
   color: var(--text-primary);
 }
 

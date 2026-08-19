@@ -3,6 +3,7 @@
  * a small coloured dot plus a label, never a shouting block of colour.
  */
 import { useState, type ReactNode } from "react";
+import { pluralize } from "../lib/format";
 import type { BugStatus, Severity, WorkStatus } from "../lib/types";
 import { BUG_STATUS_LABEL, SEVERITY_LABEL, UNASSIGNED, WORK_STATUS_LABEL } from "../lib/words";
 
@@ -71,6 +72,48 @@ export function RecordTitle({ title, id }: { title: string; id: string }) {
         <span className="record-id mono">{id}</span>
       </span>
     </h1>
+  );
+}
+
+/** The mark a correction carries, wherever one is drawn: a struck-through line. */
+export function CorrectionMark() {
+  return (
+    <svg className="correction-mark" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+      <path
+        d="M3 5.5 h10 M3 10.5 h10 M12.5 3 L3.5 13"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * "1 correction to this record — see Updates", at the top of a record that has one.
+ *
+ * The record body is never rewritten (the vault is append-only), so a sentence that turned
+ * out to be false stays on the page and the repair arrives later, in a note far below it.
+ * This is the one line that reaches the reader before the sentence does: it does not say
+ * what was corrected — only the author's note does that, and it is a link away — it says
+ * that this record has been corrected, at the altitude where the reader still has time to
+ * read the rest of it with that in mind.
+ *
+ * Counted, never inferred: a note is a correction because its author opened it with
+ * `Correction:` (src/lib/updates.ts).
+ */
+export function CorrectionNotice({ count, href, where }: { count: number; href: string; where: string }) {
+  if (count < 1) return null;
+  return (
+    <a className="correction-notice" href={href}>
+      <span className="correction-notice-mark" aria-hidden="true">
+        <CorrectionMark />
+      </span>
+      <span>
+        <strong>{pluralize(count, "correction")}</strong> to this record — see {where}
+      </span>
+    </a>
   );
 }
 

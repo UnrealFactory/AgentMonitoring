@@ -7,16 +7,16 @@ time of every file; re-shoot one with `node scripts/capture-refs.mjs --only <nam
 
 | File | Bar | Source | Captured |
 |---|---|---|---|
-| `vscode-pr-1.png` | Merged PR "agentHost: make the orchestrator own session enumeration and chat lifecycle" — an 11k-character description: summary, what each layer now owns, and how it was validated. | <https://github.com/microsoft/vscode/pull/329633> | 2026-08-19T04:17Z |
-| `vscode-pr-2.png` | Merged PR "Integrate Copilot Voice conversation engine" — module-by-module walkthrough with rationale and follow-up notes. | <https://github.com/microsoft/vscode/pull/320785> | 2026-08-19T04:17Z |
-| `vscode-issues.png` | Issue list — the bar for the bug board: dense rows, labels, assignees and state at a glance. | <https://github.com/microsoft/vscode/issues> | 2026-08-19T04:17Z |
-| `grafana-play.png` | Grafana Play dashboard — the bar for the status dashboard: stat tiles, time series, dense panel grid. | <https://play.grafana.org/d/lAoEVhD7z/home-kubernetes-integration?orgId=1> | 2026-08-19T04:17Z |
-| `grafana-play-2.png` | Grafana Play dashboard — stat tiles over live data, a geomap, a log table and time series below the fold: the density the status dashboard is measured against. | <https://play.grafana.org/d/T512JVH7z/loki-nginx-service-mesh-json-version?orgId=1> | 2026-08-19T04:17Z |
-| `grafana-play-3.png` | Grafana Play "Time series graphs" — how Grafana draws a chart: axes, grid, legend and multi-series colour on live data. The reference for the dashboard's charts (work completed over time, bugs opened vs resolved). | <https://play.grafana.org/d/000000016/time-series-graphs?orgId=1> | 2026-08-19T04:17Z |
-| `linear-home.png` | linear.app homepage — the visual bar for every screen. | <https://linear.app/> | 2026-08-19T04:17Z |
-| `linear-product.png` | linear.app homepage, scrolled to the product UI shots. | <https://linear.app/> | 2026-08-19T04:17Z |
-| `linear-issues.png` | linear.app product page — list density, status pills, sidebar treatment. | <https://linear.app/plan> | 2026-08-19T04:17Z |
-| `linear-features.png` | linear.app features page — more product UI at full width. | <https://linear.app/features> | 2026-08-19T04:17Z |
+| `vscode-pr-1.png` | Merged PR "agentHost: make the orchestrator own session enumeration and chat lifecycle" — an 11k-character description: summary, what each layer now owns, and how it was validated. | <https://github.com/microsoft/vscode/pull/329633> | 2026-08-19T07:32Z |
+| `vscode-pr-2.png` | Merged PR "Integrate Copilot Voice conversation engine" — module-by-module walkthrough with rationale and follow-up notes. | <https://github.com/microsoft/vscode/pull/320785> | 2026-08-19T07:32Z |
+| `vscode-issues.png` | Issue list — the bar for the bug board: dense rows, labels, assignees and state at a glance. | <https://github.com/microsoft/vscode/issues> | 2026-08-19T07:32Z |
+| `grafana-play.png` | Grafana Play dashboard — the bar for the status dashboard: stat tiles, time series, dense panel grid. | <https://play.grafana.org/d/lAoEVhD7z/home-kubernetes-integration?orgId=1> | 2026-08-19T07:32Z |
+| `grafana-play-2.png` | Grafana Play dashboard — stat tiles over live data, a geomap, a log table and time series below the fold: the density the status dashboard is measured against. | <https://play.grafana.org/d/T512JVH7z/loki-nginx-service-mesh-json-version?orgId=1> | 2026-08-19T07:32Z |
+| `grafana-play-3.png` | Grafana Play "Time series graphs" — how Grafana draws a chart: axes, grid, legend and multi-series colour on live data. The reference for the dashboard's charts (work completed over time, bugs opened vs resolved). | <https://play.grafana.org/d/000000016/time-series-graphs?orgId=1> | 2026-08-19T07:32Z |
+| `linear-home.png` | linear.app homepage — the visual bar for every screen. | <https://linear.app/> | 2026-08-19T07:32Z |
+| `linear-product.png` | linear.app homepage, scrolled to the product UI shots. | <https://linear.app/> | 2026-08-19T07:32Z |
+| `linear-issues.png` | linear.app product page — list density, status pills, sidebar treatment. | <https://linear.app/plan> | 2026-08-19T07:32Z |
+| `linear-features.png` | linear.app features page — more product UI at full width. | <https://linear.app/features> | 2026-08-19T07:32Z |
 
 ## Which screen is judged against which reference
 

@@ -210,6 +210,21 @@ export const api = {
   },
 
   /**
+   * Where `docs/AGENT_MANUAL.md` is on this machine, or null when it is not there.
+   *
+   * An installed copy ships two executables and no docs directory, so the first screen used
+   * to send its reader to a file that does not exist on their disk. It is asked for rather
+   * than assumed: the desktop app looks beside its own binary. Browser mode answers without
+   * asking, because it can only exist inside this repository — the screens are served by the
+   * vault-api middleware in `scripts/vite-vault-api.mjs`, running from the repo root, and
+   * the manual is checked in next to it.
+   */
+  manualPath: async (): Promise<string | null> => {
+    if (!isTauri()) return "docs/AGENT_MANUAL.md";
+    return invokeCommand<string | null>("manual_path", {});
+  },
+
+  /**
    * Create a project. Both transports end in the same `agentmon-core` code: the desktop app
    * calls it in-process, and the dev middleware runs the `agentmon` binary, so there is one
    * implementation of a write and browser mode cannot drift from it.

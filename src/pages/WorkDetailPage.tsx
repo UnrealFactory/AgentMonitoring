@@ -25,6 +25,8 @@ import {
 import { RelatedSection, useRelated } from "../components/Related";
 import {
   AgentChip,
+  CorrectionMark,
+  CorrectionNotice,
   ErrorState,
   RecordTitle,
   Skeleton,
@@ -32,6 +34,7 @@ import {
   Tag,
   WorkStatusPill,
 } from "../components/ui";
+import { authorText, countCorrections, isCorrection, updateAuthor } from "../lib/updates";
 import {
   formatDateTime,
   formatDateTimeUtc,
@@ -68,6 +71,8 @@ export function WorkDetailPage() {
 
   const work = data;
   const related = useRelated(slug, id, work?.refs ?? EMPTY);
+  /** Notes their authors opened with "Correction:" — see src/lib/updates.ts. */
+  const corrections = countCorrections(work?.updates ?? []);
   /** The outcome's own parts (Shipped / Verified / Known gaps), as its author labelled them. */
   const outcome = useLabelledParts(work?.outcome);
   const sections = useMemo(() => {
@@ -144,6 +149,10 @@ export function WorkDetailPage() {
 
         <header className="record-head">
           <RecordTitle title={work.title} id={work.id} />
+
+          {/* Above What/Why/How, because a correction the reader meets after the sentence it
+              corrects is a correction they have already believed the wrong version of. */}
+          <CorrectionNotice count={corrections} href="#updates" where="Updates" />
 
           <div className="rec-byline">
             <WorkStatusPill status={work.status} />
@@ -422,23 +431,37 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
           </li>
         )}
 
-        {work.updates.map((u, i) => (
-          <li className="trail-node" key={`${u.ts}-${i}`}>
-            <span className="trail-dot" aria-hidden="true" />
-            <article className="update-card">
-              <header className="update-head">
-                <AgentChip name={work.agent} />
-                <span className="update-verb">posted update {i + 1}</span>
-                <time className="update-ts tabular" dateTime={u.ts} title={formatDateTimeUtc(u.ts)}>
-                  {formatDateTime(u.ts)} · {formatRelative(u.ts)}
-                </time>
-              </header>
-              <div className="update-body">
-                <Markdown source={u.body} />
-              </div>
-            </article>
-          </li>
-        ))}
+        {work.updates.map((u, i) => {
+          /* A note whose author opened it with "Correction:" is drawn as one. The word is
+             theirs; the page only stops it reading like the next progress note. */
+          const fix = isCorrection(u.body);
+          /* Notes are the record agent's unless the CLI wrote a byline into this one. */
+          const author = updateAuthor(u.body);
+          return (
+            <li className="trail-node" key={`${u.ts}-${i}`}>
+              <span className={`trail-dot${fix ? " trail-dot-correction" : ""}`} aria-hidden="true" />
+              <article className={`update-card${fix ? " is-correction" : ""}`}>
+                <header className="update-head">
+                  <AgentChip name={author ?? work.agent} />
+                  {fix ? (
+                    <span className="update-flag">
+                      <CorrectionMark />
+                      Correction
+                    </span>
+                  ) : (
+                    <span className="update-verb">posted update {i + 1}</span>
+                  )}
+                  <time className="update-ts tabular" dateTime={u.ts} title={formatDateTimeUtc(u.ts)}>
+                    {formatDateTime(u.ts)} · {formatRelative(u.ts)}
+                  </time>
+                </header>
+                <div className="update-body">
+                  <Markdown source={authorText(u.body)} />
+                </div>
+              </article>
+            </li>
+          );
+        })}
 
         <li className="trail-node trail-edge">
           <span className={`trail-dot trail-dot-${endTone}`} aria-hidden="true" />
