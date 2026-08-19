@@ -7,7 +7,7 @@ import { Sidebar } from "./components/Sidebar";
 import { InlineCode, plainMarks, Skeleton } from "./components/ui";
 import { vaultErrorMessage } from "./lib/api";
 import { formatDateTimeUtc } from "./lib/format";
-import { t } from "./lib/i18n";
+import { t, useLocale } from "./lib/i18n";
 import { useWindowTitle } from "./lib/useWindowTitle";
 import { DashboardPage } from "./pages/DashboardPage";
 import { WorkListPage } from "./pages/WorkListPage";
@@ -111,7 +111,22 @@ function VaultTroubleBar() {
   );
 }
 
+/**
+ * The screen for an address that is not one — and the only screen that has to say so itself.
+ *
+ * It subscribes to the language, which every other screen gets for free. A repaint reaches a
+ * component two ways: its parent re-renders it, or it reads something that changed. Neither
+ * happened here. `<Route path="*" element={<NotFound />} />` below is built once, when App()
+ * runs, so the element object never changes; and changing the language re-renders AppProvider
+ * around the *same* children, which React skips — except for the components that consume the
+ * context (`useApp`) or the locale store (`useLocale`). Every other route element does one of
+ * those for its data. This one has no data: it called `t()` twice and read nothing, so
+ * pressing English on /nope left two Korean sentences in an English window — and the mirror —
+ * until the reader navigated away. One `useLocale()` is the subscription, and the gate now
+ * presses the toggle on this screen instead of only loading it (scripts/check-i18n.mjs).
+ */
 function NotFound() {
+  useLocale();
   return (
     <div className="page">
       <div className="page-head">

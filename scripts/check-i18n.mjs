@@ -40,6 +40,15 @@
  * itself authors, the pill on screen must equal a dictionary value exactly. That is the
  * check that would have caught a severity column reading 낮 instead of 낮음.
  *
+ * **And a third: is the word still whole where the line ends?** {@link COUNTERS} — the
+ * word-integrity sweep at the bottom of this file — reads the Korean screens at nine widths
+ * and fails when a line break falls between a number and the 의존명사 counting it. Two
+ * viewports cannot see that: every width where the vault bar printed “2026년 8월 18” with a
+ * lone “일” under it lay strictly between the 1600 and 960 this gate used to read, and the
+ * clipping gate walked 1440 and passed, because a syllable that wrapped onto its own line is
+ * not clipped and nothing here asked whether it was still attached to its number (P9 round 4
+ * critic). A break is not overflow, so it needs its own question and its own widths.
+ *
  * Everything else must be Korean — and `--locale en` is the same walk with the alphabets
  * swapped, because a Korean string typed into a component is just as invisible to `tsc` as
  * an English one, and the app ships in two languages. Runs against the live vault read-only.
@@ -56,6 +65,17 @@ const value = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 
+/**
+ * The widths the word-integrity sweep reads, and why each one is in the list.
+ *
+ * 960 is the floor tauri.conf.json sets and 1600 the roomy end this gate already read; the
+ * seven between them are there because the defect that named this sweep lived *only* between
+ * them. 1190 and 1200 are where the vault bar broke “2026년 8” ⏎ “월 18일”, 1360 and 1440 the
+ * ends of the band where it broke “…18” ⏎ “일”, 1280 the client area of the real desktop
+ * window the round-4 critic photographed, and 1060 and 1520 are ordinary widths between.
+ */
+const SWEEP_DEFAULT = "960,1060,1190,1200,1280,1360,1440,1520,1600";
+
 if (flag("--help") || flag("-h")) {
   console.log(`Fail on a word the app prints in the language the screen is not in.
 
@@ -70,6 +90,10 @@ Options:
   --url <origin>     check an already-running server instead of booting one
   --narrow <n>       the second viewport the reflowing screens are read at, where the
                      container queries fire (default 960, the desktop window's minimum)
+  --widths a,b,c     the widths the Korean word-integrity sweep runs at
+                     (default ${SWEEP_DEFAULT})
+  --sweep-only       run only that sweep — reproducing one wrapping finding takes seconds
+                     rather than the whole screen walk
   --verbose          list every screen walked, not only the findings`);
   process.exit(0);
 }
@@ -81,6 +105,12 @@ const VERBOSE = flag("--verbose");
 /** The two widths every reflowing screen is read at: roomy, and the narrowest the app may be. */
 const WIDE = 1600;
 const NARROW = Number(value("--narrow", 960)); // src-tauri/tauri.conf.json minWidth
+/** The widths the Korean word-integrity sweep reads (see SWEEP_DEFAULT). */
+const SWEEP_WIDTHS = value("--widths", SWEEP_DEFAULT)
+  .split(",")
+  .map((w) => Number(w.trim()))
+  .filter(Boolean);
+const SWEEP_ONLY = flag("--sweep-only");
 const log = (...m) => console.log("[check-i18n]", ...m);
 
 const api = async (path) => {
@@ -257,8 +287,130 @@ const VOCAB_PROBE = (vocabularies) => {
  */
 const HANGUL = /[가-힣]+/g;
 
+/**
+ * The bound nouns a number may not be parted from, and the sweep that enforces it.
+ *
+ * Korean counts with 의존명사: 18일, 8월, 27개, 22건, 8명 are each **one word**, and the
+ * counter is a syllable that cannot stand on its own line — “2026년 8월 18” over a bare “일”
+ * is the same class of damage as cutting 낮음 to 낮, arriving by the line breaker instead of
+ * by a component. English has a space where Korean has the counter, so this is a defect only
+ * the Korean build can have, and no gate here could see it: the alphabet walk asks what
+ * language a string is in, the vocabulary walk reads pills, and check-clipping measures
+ * overflow — a syllable that wrapped cleanly onto the next line overflows nothing.
+ *
+ * The list is the counters this app actually prints (see src/lib/i18n/ko.ts): the calendar's
+ * 년/월/일, the durations 시간/분/초/개월/주, and the counters 개/건/명/번. Time units are in
+ * it because “17시간 39분” is on the dashboard beside the dates.
+ */
+const COUNTERS = ["년", "개월", "월", "일", "시간", "분", "초", "주", "개", "건", "명", "번"];
+
+/**
+ * The screens whose Korean is swept, and what makes each one wrap-sensitive.
+ *
+ * Not all 149: this asks a question about *layout*, and the answer only changes where a box
+ * is narrow enough to break a line and holds numbers the app itself wrote. That is the vault
+ * bar and the project cards on /projects, and the dashboard's facts — the strip, the hero
+ * unit, the 24-hour line, the record rows' durations — plus the two boards, which reflow
+ * hardest. Every text node on them is read, minus the author containers: how an agent's own
+ * English sentence wraps is not the app's business.
+ */
+const SWEEP_SCREENS = (slug) => [
+  { name: "projects", path: "/projects", wait: ".project-row" },
+  { name: `dashboard ${slug}`, path: `/p/${slug}`, wait: ".now-strip .now-hero-value" },
+  { name: `work ${slug}`, path: `/p/${slug}/work`, wait: ".work-rows .work-row" },
+  { name: `bugs ${slug}`, path: `/p/${slug}/bugs?tab=all`, wait: ".work-rows .bug-row" },
+];
+
+/**
+ * Runs in the page. Returns every number+counter pair the line breaker split in two.
+ *
+ * Measured, not guessed: a Range is laid over the pair as it was rendered and asked for its
+ * client rects. Two rects on two different lines is a break inside the word — whatever CSS
+ * property allowed it, whatever the DOM looks like. The pairs are found in a *flat* string
+ * per block container rather than per text node, so `{n}<span>개</span>` is read as the one
+ * word it looks like on screen; whitespace nodes stay in that string, which is why a pair is
+ * only a pair when nothing at all sits between the digits and the counter.
+ */
+const BREAK_PROBE = ({ counters, exempt }) => {
+  const re = new RegExp(`\\d+(?:[.,]\\d+)?(?:${counters.join("|")})`, "g");
+  /* The block container whose line boxes a text node lives in: an inline element shares its
+     parent's lines, anything else starts its own. */
+  const blockOf = (node) => {
+    for (let cur = node.parentElement; cur; cur = cur.parentElement) {
+      const display = getComputedStyle(cur).display;
+      if (display !== "inline" && display !== "contents") return cur;
+    }
+    return document.body;
+  };
+  const label = (el) => {
+    const parts = [];
+    for (let cur = el; cur && parts.length < 3; cur = cur.parentElement) {
+      const cls =
+        typeof cur.className === "string" && cur.className.trim()
+          ? `.${cur.className.trim().split(/\s+/)[0]}`
+          : "";
+      parts.unshift(`${cur.tagName.toLowerCase()}${cls}`);
+    }
+    return parts.join(" > ");
+  };
+
+  const groups = new Map();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const el = node.parentElement;
+    if (!el || !node.textContent) continue;
+    if (exempt.some((sel) => el.closest(sel))) continue;
+    const block = blockOf(node);
+    if (!groups.has(block)) groups.set(block, []);
+    groups.get(block).push(node);
+  }
+
+  const found = [];
+  for (const nodes of groups.values()) {
+    let flat = "";
+    const map = [];
+    for (const node of nodes) {
+      map.push({ node, start: flat.length, length: node.textContent.length });
+      flat += node.textContent;
+    }
+    const locate = (offset) => {
+      for (const entry of map) {
+        if (offset >= entry.start && offset <= entry.start + entry.length) {
+          return { node: entry.node, offset: offset - entry.start };
+        }
+      }
+      return null;
+    };
+    re.lastIndex = 0;
+    for (let m = re.exec(flat); m; m = re.exec(flat)) {
+      const from = locate(m.index);
+      const to = locate(m.index + m[0].length);
+      if (!from || !to) continue;
+      const range = document.createRange();
+      range.setStart(from.node, from.offset);
+      range.setEnd(to.node, to.offset);
+      /* Zero-width rects appear at a range's boundaries and can sit on the line before it;
+         only painted ink counts as a second line. */
+      const lines = new Set(
+        [...range.getClientRects()]
+          .filter((r) => r.width > 0.5 && r.height > 0.5)
+          .map((r) => Math.round(r.top)),
+      );
+      if (lines.size > 1) {
+        found.push({
+          pair: m[0],
+          at: label(from.node.parentElement),
+          context: flat.replace(/\s+/g, " ").trim().slice(0, 120),
+        });
+      }
+    }
+  }
+  return found;
+};
+
 let failures = 0;
 let checked = 0;
+let swept = 0;
 
 /**
  * Runs in the page. Returns every English-looking string the app printed, with where it is.
@@ -457,6 +609,13 @@ try {
     ["dashboard", `/p/${projects[0].slug}`, ".now-strip .now-hero-value"],
     ...(firstWork ? [["work detail", `/p/${projects[0].slug}/work/${firstWork}`, ".record-title"]] : []),
     ...(firstBug ? [["bug detail", `/p/${projects[0].slug}/bugs/${firstBug}`, ".record-title"]] : []),
+    /* The 404, which this gate only ever loaded cold (the `not found` screen above). Loading
+       it is not the test: NotFound() calls t() and, until round 5, read nothing that changes,
+       while its route element is built once in App() — so the window repainted around it and
+       left “화면이 없습니다” under an English sidebar for as long as the reader stayed
+       (P9 round 4 critic). The reader who presses the toggle on a bad address is exactly the
+       reader who meets it, so the toggle is pressed here. */
+    ["not found", "/nope/nope", ".page-title"],
   ]) {
     screens.push({
       name: `${name}, switched to ${LOCALE} in place`,
@@ -544,7 +703,12 @@ try {
     ),
   }));
 
-  log(`${screens.length + unreadable.length} screens · language ${LOCALE}`);
+  log(
+    SWEEP_ONLY
+      ? `word-integrity sweep only · ${SWEEP_WIDTHS.join("/")}px · language ${LOCALE}`
+      : `${screens.length + unreadable.length} screens · language ${LOCALE}` +
+          (LOCALE === "ko" ? ` · sweep at ${SWEEP_WIDTHS.length} widths` : ""),
+  );
 
   const findings = [];
 
@@ -599,15 +763,17 @@ try {
     }
   };
 
-  const page = await browser.newPage(VIEW);
-  await useLocale(page, LOCALE);
-  await walk(page, screens, WIDE);
+  if (!SWEEP_ONLY) {
+    const page = await browser.newPage(VIEW);
+    await useLocale(page, LOCALE);
+    await walk(page, screens, WIDE);
 
-  // Its own session, because `?vault=` sticks to the one it is opened in.
-  const broken = await browser.newContext(VIEW);
-  await useLocale(broken, LOCALE);
-  await walk(await broken.newPage(), unreadable, WIDE);
-  await broken.close();
+    // Its own session, because `?vault=` sticks to the one it is opened in.
+    const broken = await browser.newContext(VIEW);
+    await useLocale(broken, LOCALE);
+    await walk(await broken.newPage(), unreadable, WIDE);
+    await broken.close();
+  }
 
   /* ---- and again in a window the app is allowed to be -----------------------
    *
@@ -617,24 +783,74 @@ try {
    * 960px and 1058px (P9 round 3 critic). 960 is the floor tauri.conf.json sets, so it is
    * the narrowest the app can ever be and the width where the most chrome has collapsed.
    * The boards are the screens that reflow; the rest are the same DOM at another size. */
-  const narrow = await browser.newContext(view(NARROW));
-  await useLocale(narrow, LOCALE);
-  await walk(
-    await narrow.newPage(),
-    screens.filter((s) => /^(bugs|work|dashboard) /.test(s.name)),
-    NARROW,
-  );
-  await narrow.close();
+  if (!SWEEP_ONLY) {
+    const narrow = await browser.newContext(view(NARROW));
+    await useLocale(narrow, LOCALE);
+    await walk(
+      await narrow.newPage(),
+      screens.filter((s) => /^(bugs|work|dashboard) /.test(s.name)),
+      NARROW,
+    );
+    await narrow.close();
+  }
+
+  /* ---- and the widths in between, asking whether the words are whole ---------
+   *
+   * Two viewports is two data points, and a line break is a step function: the width where
+   * the vault bar's 생성 date orphaned its 일 was every one of the eleven between 1190 and
+   * 1440, and this gate read 1600 and 960. So the Korean screens that reflow are read again
+   * across the range a desktop window actually spends its life in, and every number+counter
+   * pair on them must come out of the line breaker in one piece (see COUNTERS).
+   *
+   * Korean only, and not because English is exempt from the rule: English writes “18 Aug
+   * 2026”, where the break the reader gets is at a space that was always there. There is no
+   * pair to split, and a sweep with nothing to find is a minute of gate time saying nothing. */
+  if (LOCALE === "ko") {
+    for (const width of SWEEP_WIDTHS) {
+      const ctx = await browser.newContext(view(width));
+      await useLocale(ctx, LOCALE);
+      const sweepPage = await ctx.newPage();
+      for (const screen of SWEEP_SCREENS(slug)) {
+        await sweepPage.goto(`${ORIGIN}${screen.path}`, { waitUntil: "domcontentloaded" });
+        await sweepPage.waitForSelector(screen.wait, { state: "visible", timeout: 15_000 });
+        await sweepPage.waitForFunction(() => !document.querySelector(".skeleton"));
+        const broken = await sweepPage.evaluate(BREAK_PROBE, {
+          counters: COUNTERS,
+          exempt: AUTHOR,
+        });
+        swept += 1;
+        for (const item of broken) {
+          findings.push({
+            screen: `${screen.name} @${width}`,
+            kind: "word split",
+            text: item.context,
+            at: item.at,
+            words: [`“${item.pair}” is broken across two lines — a counter left its number`],
+          });
+        }
+        if (VERBOSE || broken.length) {
+          log(`${screen.name} @${width}: ${broken.length} split word(s)`);
+        }
+      }
+      await ctx.close();
+    }
+  }
 
   if (findings.length) {
     failures = findings.length;
     /* Two kinds of finding now: a string in the wrong language, and a string that is in the
        right language and is not a word. Counted apart, because "3 English strings" over a
        list of Korean fragments is the gate misreporting its own result. */
-    const foreign = findings.filter((f) => !/vocabulary|short form/.test(f.kind)).length;
+    const split = findings.filter((f) => f.kind === "word split").length;
+    const foreign = findings.filter(
+      (f) => !/vocabulary|short form|word split/.test(f.kind),
+    ).length;
     const parts = [];
     if (foreign) parts.push(`${foreign} ${OTHER} string(s)`);
-    if (findings.length - foreign) parts.push(`${findings.length - foreign} not in the vocabulary`);
+    if (findings.length - foreign - split) {
+      parts.push(`${findings.length - foreign - split} not in the vocabulary`);
+    }
+    if (split) parts.push(`${split} word(s) split across a line break`);
     console.error(`\n  ${parts.join(", ")}, printed by the app in ${LOCALE}:\n`);
     for (const f of findings.slice(0, 40)) {
       console.error(`  FAIL  [${f.screen}] ${f.kind} at ${f.at}`);
@@ -650,10 +866,17 @@ try {
   if (server) await stopServer(server);
 }
 
+const span = `${SWEEP_WIDTHS[0]}–${SWEEP_WIDTHS[SWEEP_WIDTHS.length - 1]}px`;
+const sweepNote =
+  LOCALE === "ko"
+    ? `, and whole across ${swept} readings at ${SWEEP_WIDTHS.length} widths ${span}`
+    : " (the word-integrity sweep is Korean's; English breaks at spaces)";
 log(
-  failures === 0
-    ? `clean: ${checked} screens at ${WIDE}px and ${NARROW}px — every word the app printed is ${LOCALE}, and is a word`
-    : `${failures} finding(s) on ${checked} screens`,
+  failures !== 0
+    ? `${failures} finding(s) on ${checked} screens and ${swept} sweep readings`
+    : SWEEP_ONLY
+      ? `clean: ${swept} readings at ${SWEEP_WIDTHS.length} widths ${span} — no number was parted from its counter`
+      : `clean: ${checked} screens at ${WIDE}px and ${NARROW}px — every word the app printed is ${LOCALE}, and is a word${sweepNote}`,
 );
 await new Promise((r) => setTimeout(r, 60));
 process.exit(failures === 0 ? 0 : 1);

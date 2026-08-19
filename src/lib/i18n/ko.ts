@@ -224,7 +224,9 @@ export const ko: Dict = {
   /* -- bug board ------------------------------------------------------------ */
 
   "bugs.title": "버그",
-  "bugs.sub": "에이전트가 찾아낸 모든 결함, 지금 맡고 있는 담당자, 그리고 각각의 해결 내용.",
+  /* 한국어 나열에는 영어의 serial "and"에 해당하는 접속사가 없다 — 마지막 항목 앞의 "그리고"는
+     번역의 흔적이다. 쉼표로 잇고 명사로 끝낸다. */
+  "bugs.sub": "에이전트가 찾아낸 모든 결함, 지금 맡고 있는 담당자, 각각의 해결 내용.",
   "bugs.searchPlaceholder": "버그 검색",
   "bugs.searchLabel": "버그 검색",
   "bugs.unresolvedMeansTip": (label, means) => `${label} = ${means}`,
@@ -410,8 +412,10 @@ export const ko: Dict = {
   "proj.noneYet": "아직 없음",
   "proj.noneFiled": "등록 없음",
   "proj.ofFiled": (total) => `등록 ${total}개 중`,
+  /* 수는 단위 명사를 달고 다닌다(이 파일 머리말). 옆 칸이 "등록 22개 중"이고 사이드바가
+     "진행 중 2개"인데 여기만 "완료 27 · 진행 중 0"이면, 한 화면에서 세는 방식이 두 가지가 된다. */
   "proj.workNote": (done, inProgress, doneWord, inProgressWord) =>
-    `${doneWord} ${done} · ${inProgressWord} ${inProgress}`,
+    `${doneWord} ${done}개 · ${inProgressWord} ${inProgress}개`,
   "proj.lastActivity": "마지막 활동 ",
   "proj.startedOn": (date) => `시작 ${date}`,
   "proj.noActivity": "아직 활동 없음",
@@ -432,7 +436,11 @@ export const ko: Dict = {
   "proj.form.slug": "슬러그",
   "proj.form.slugPlaceholder": "checkout-rewrite",
   "proj.form.slugTaken": "이 슬러그를 쓰는 프로젝트가 볼트에 이미 있습니다.",
-  "proj.form.slugBad": "소문자, 숫자, - 또는 _ 만 쓸 수 있습니다.",
+  /* 슬러그 규칙을 말하는 문장은 이 파일에 둘 있다 — 여기(만들기 폼의 힌트)와 err.badSlug(주소가
+     틀렸을 때의 실패 화면). 같은 제약이므로 문장도 같다. 조사 `만`은 앞말에 붙여 쓴다(한글 맞춤법
+     제41항): `_ 만`이 아니라 `_만`이다. 이 칸은 마크를 해석하지 않는 .field-hint이므로 백틱 없이
+     쓰고, err.badSlug 쪽은 코드 조각으로 감싼다. */
+  "proj.form.slugBad": "소문자와 숫자, -, _만 쓸 수 있습니다.",
   "proj.form.slugHint": "projects/ 아래의 디렉터리 이름입니다. 만든 뒤에는 바꿀 수 없습니다.",
   "proj.form.description": "설명",
   "proj.form.descriptionPlaceholder":
@@ -508,8 +516,9 @@ export const ko: Dict = {
   /* 찾은 ≠ 찾으려던. 앞 문장이 "없습니다"인데 "찾은 파일 경로"라고 하면 *찾아낸* 경로가
      되어 뜻이 뒤집힌다 — 앱이 그 경로를 확인했지만 파일은 없었다는 뜻이어야 한다. */
   "err.expectedFile": (path) => ` 찾으려던 파일 경로: \`${path}\``,
+  /* 뒷문장은 proj.form.slugBad와 같은 문장이다(같은 제약, 같은 말). 조사 `만`은 앞말에 붙는다. */
   "err.badSlug": (slug) =>
-    `쓸 수 없는 프로젝트 슬러그입니다 — \`${slug}\`. 소문자와 숫자, \`-\`, \`_\` 만 쓸 수 있습니다.`,
+    `쓸 수 없는 프로젝트 슬러그입니다 — \`${slug}\`. 소문자와 숫자, \`-\`, \`_\`만 쓸 수 있습니다.`,
   "err.badId": (id, expected, example) =>
     `쓸 수 없는 ID입니다 — \`${id}\`. \`${expected}\` 형식이어야 합니다 (예: \`${example}\`).`,
   "err.noRoute": (path) => `이 주소를 처리하는 볼트 API 경로가 없습니다 — \`${path}\``,
@@ -629,7 +638,10 @@ export const ko: Dict = {
   "dash.chartWorkEmptyHint": (slug) =>
     `에이전트가 \`agentmon work start -p ${slug}\`를 실행하는 순간 이 차트가 그려집니다.`,
   "dash.chartBugsEmpty": "아직 등록된 버그가 없습니다",
-  "dash.chartBugsEmptyHint": "그릴 것이 없습니다. 이 차트에서는 그것이 좋은 상태입니다.",
+  /* 영어의 "Nothing to plot, which on this chart is the good state."를 절 단위로 옮기면
+     "그릴 것이 없습니다. 이 차트에서는 그것이 좋은 상태입니다."가 되는데, 앞 문장을 대명사로
+     받는 이 말투는 한국어 UI의 말이 아니다. 뜻만 남기고 한국어 문장으로 다시 쓴다. */
+  "dash.chartBugsEmptyHint": "이 차트는 비어 있는 편이 좋습니다.",
   "dash.seriesStarted": "시작",
   "dash.seriesFiled": "등록",
   "dash.nounWorkLogs": "작업 로그",
@@ -637,8 +649,11 @@ export const ko: Dict = {
 
   "dash.agentsCard": "에이전트",
   "dash.agentsEmpty": "이 기간에 기록을 남긴 에이전트가 없습니다",
+  /* `events.jsonl에` — 파일 이름은 고정 문자열이고 `에`는 형태가 하나뿐인 조사이므로 이 파일의
+     예외 규칙(위 err.* 머리말)에 해당한다. 예외라도 조사는 붙여 쓴다: `events.jsonl 에`처럼 띄우면
+     `_ 만`과 같은 흔적이 된다. 같은 문장이 dash.activityEmptyHint에도 있다. */
   "dash.agentsEmptyHint":
-    "위에서 기간을 넓히거나 볼트를 확인하세요. CLI로 무언가 바꿀 때마다 events.jsonl 에 한 줄이 추가됩니다.",
+    "위에서 기간을 넓히거나 볼트를 확인하세요. CLI로 무언가 바꿀 때마다 events.jsonl에 한 줄이 추가됩니다.",
   "dash.colAgent": "에이전트",
   "dash.colActivity": "활동",
   "dash.colDone": "완료",
@@ -664,7 +679,7 @@ export const ko: Dict = {
   "dash.collapseAll": "모두 접기",
   "dash.activityEmpty": "이 기간에 기록된 것이 없습니다",
   "dash.activityEmptyHint":
-    "CLI로 무언가 바꿀 때마다 events.jsonl 에 한 줄이 추가됩니다. 위에서 기간을 넓히면 이전 기록도 볼 수 있습니다.",
+    "CLI로 무언가 바꿀 때마다 events.jsonl에 한 줄이 추가됩니다. 위에서 기간을 넓히면 이전 기록도 볼 수 있습니다.",
   "dash.dayMix": (events, parts) => `이벤트 ${events}건 — ${parts}`,
   "dash.showOther": (n, day) => `${day} 나머지 ${n}건 보기`,
   "dash.today": "오늘",

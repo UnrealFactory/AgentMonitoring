@@ -4577,11 +4577,22 @@ a.feed-row:hover .feed-ref {
   color: var(--text-tertiary);
 }
 
+/* These four cells hold app words, not the path — the path is `.vault-bar-path` above, which
+   keeps its own `anywhere`. They were given the path's rule anyway, and in Korean that
+   licenses a break at *any* character: the 생성 cell printed “2026년 8월 18” with a lone “일”
+   on the line below at eleven widths between 1190 and 1440, and one glyph further left at
+   1190/1200 (“2026년 8” ⏎ “월 18일”). 일 and 월 are 의존명사 — bound nouns that cannot be
+   orphaned from the number they count — so `keep-all` is the rule Korean needs here, the same
+   one the headings in tokens.css already carry. English is unaffected: “18 Aug 2026” breaks at
+   its spaces, which `keep-all` leaves alone. Nothing in these cells is an unbreakable Latin
+   token, so nothing needs the escape hatch (gated: the word-integrity sweep in
+   scripts/check-i18n.mjs walks nine widths from 960 to 1600). */
 .vault-bar-facts dd {
   margin: 2px 0 0;
   font-size: var(--text-base);
   color: var(--text-primary);
-  overflow-wrap: anywhere;
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .vault-bar-actions {

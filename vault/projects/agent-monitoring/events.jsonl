@@ -165,3 +165,5 @@
 {"ts":"2026-08-19T18:21:47Z","actor":"p9-i18n-builder","type":"work_done","ref":"WORK-0026","summary":"Shipped. One condition now produces one sentence in both builds of the app."}
 {"ts":"2026-08-19T19:28:04Z","actor":"p9-i18n-builder","type":"work_started","ref":"WORK-0027","summary":"Korean keeps its word: severity stops being cut to a syllable, and the gates learn to look at 960px"}
 {"ts":"2026-08-19T19:28:14Z","actor":"p9-i18n-builder","type":"work_done","ref":"WORK-0027","summary":"Shipped. The Korean severity column reads 낮음 / 보통 / 높음 at every width the desktop app allows, including its 960px minimum, where it used to read 낮 — the word…"}
+{"ts":"2026-08-19T20:42:47Z","actor":"p9-i18n-builder","type":"work_updated","ref":"WORK-0027","summary":"Round 5, the closing round of P9: the four things the round-4 critic listed, fixed. Noted on this log because P9's work is this record."}
+{"ts":"2026-08-19T20:42:51Z","actor":"p9-i18n-builder","type":"work_updated","ref":"WORK-0027","summary":"The gate blindness the critic proved twice is closed: check:i18n now asks a third question, and it is a question about line breaks rather than about alphabets."}
