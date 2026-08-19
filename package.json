@@ -20,7 +20,8 @@
     "check:urlstate": "node scripts/check-urlstate.mjs",
     "check:counts": "node scripts/check-counts.mjs",
     "check:live": "node scripts/check-live.mjs",
-    "check:vault": "node scripts/check-vault.mjs"
+    "check:vault": "node scripts/check-vault.mjs",
+    "check:mcp": "npm --prefix mcp test"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

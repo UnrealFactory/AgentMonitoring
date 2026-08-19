@@ -1,0 +1,20 @@
+{
+  "name": "agentmon-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Context-budgeted MCP server over the agentmon CLI: five tools, short results.",
+  "main": "server.mjs",
+  "bin": {
+    "agentmon-mcp": "server.mjs"
+  },
+  "scripts": {
+    "test": "node test/server.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}

@@ -90,6 +90,22 @@ Point them at [docs/AGENT_MANUAL.md](docs/AGENT_MANUAL.md). It is written to be 
 thing an agent needs to read: the body contract, three copy-pasteable recipes, backdating,
 exit codes and `--json` output.
 
+## MCP
+
+`mcp/` is an MCP server that puts the CLI in an agent's tool list, so it records work by
+calling a tool instead of writing a shell command:
+
+```bash
+claude mcp add agentmon -- node C:/Code/AgentMonitoring/mcp/server.mjs \
+  --vault C:/AgentVault --project myproj --agent my-agent
+```
+
+Five tools shaped like the workflow, not sixteen mirroring the CLI. It is built to a
+context budget — the whole tool list costs 4,650 bytes and a write returns about 200
+characters — because both are re-read by the model on every turn. Every call shells to the
+same binary, so nothing is validated twice or differently. [docs/MCP.md](docs/MCP.md) has
+the tools, the exit-code mapping and an optional Stop-hook snippet.
+
 ## The vault
 
 One directory holds everything: `vault.json` names it, and each project is a folder under
@@ -110,6 +126,7 @@ src/                    React 18 + TypeScript frontend (plain CSS, tokens in sty
 src-tauri/              Tauri 2 shell: commands + the filesystem watcher
 crates/agentmon-core/   vault schema, parsing, validation, writes — shared by both
 crates/agentmon-cli/    the `agentmon` binary agents run
+mcp/                    MCP server: the CLI as five tools (docs/MCP.md)
 docs/AGENT_MANUAL.md    the manual agents read
 progress/               build history: rounds, screenshots, the progress page
 vault/                  the live vault this app reads
@@ -139,6 +156,7 @@ npm run check:urlstate   # view state survives reload, Back and a pasted link
 npm run check:keys       # keyboard: lists, palette, focus, one current page
 npm run check:live       # a CLI write reaches an open window without a reload
 npm run check:vault      # the vault opens from anywhere, and moving it changes nothing
+npm run check:mcp        # the MCP server over stdio: lifecycle, errors, context budgets
 ```
 
 `check:live` and `check:vault` write records, and only ever to a copy in the temp
