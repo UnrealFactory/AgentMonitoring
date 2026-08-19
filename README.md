@@ -163,11 +163,19 @@ npm run check:live       # a CLI write reaches an open window without a reload
 npm run check:vault      # the vault opens from anywhere, and moving it changes nothing
 npm run check:mcp        # the MCP server over stdio: lifecycle, errors, context budgets
 npm run check:i18n       # every screen in Korean: no English left in the app's own words
+npm run check:errors     # every backend failure, read through the app's words, on both transports
 ```
 
 Every gate that reads words off the screen takes `--locale ko|en` and reads its
 expectations from the same dictionaries the window does (`src/lib/i18n/`), so both
 languages are walked rather than one being tested and the other assumed.
+
+`check:errors` is the one that does not drive a browser, on purpose. Every other gate here
+talks to the Vite dev server, and the dev server is not the product: the desktop app calls
+`agentmon-core` in process, so it meets sentences (and a missing HTTP status) that no
+Playwright run can reach. That gate provokes each failure twice — once from the real
+`agentmon` binary, once from the dev server — and requires the two to arrive at the same
+headline in the reader's language.
 
 `check:live`, `check:vault` and `check:keys` write records — `check:keys` builds a
 12-project vault and archives projects in it — and only ever to a copy in the temp

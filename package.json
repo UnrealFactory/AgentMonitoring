@@ -18,6 +18,7 @@
     "progress": "node scripts/build-progress.mjs",
     "check:keys": "node scripts/check-keys.mjs",
     "check:i18n": "node scripts/check-i18n.mjs --locale ko && node scripts/check-i18n.mjs --locale en",
+    "check:errors": "node scripts/check-errors.mjs",
     "check:urlstate": "node scripts/check-urlstate.mjs",
     "check:counts": "node scripts/check-counts.mjs",
     "check:live": "node scripts/check-live.mjs",

@@ -12,10 +12,13 @@ export interface AsyncState<T> {
    */
   refreshError: string | undefined;
   /**
-   * The status the failure carried, when it carried one — 404 for a record or project
-   * that is not in the vault. Screens use it to say what actually happened instead of
-   * blaming the vault for a link that outlived its record. Set for a failed background
-   * refresh too, which is how an open record notices it has been deleted underneath.
+   * The status the failure carried, when it carried one — 404 for a record or project that
+   * is not in the vault, in browser mode. **Never on the desktop**, where a Tauri command
+   * answers with a bare string (src/lib/api.ts), so a screen that branches on this alone
+   * branches on which build it is running in. Pass it, with the message, to `failureKind` /
+   * `failureTitle` / `nothingToRetry`, which read the message first and use this only to
+   * break a tie. Set for a failed background refresh too, which is how an open record
+   * notices it has been deleted underneath.
    */
   status: number | undefined;
   loading: boolean;

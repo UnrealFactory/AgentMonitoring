@@ -22,7 +22,7 @@ import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useProjectSlug, useVaultNonce } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
-import { api, failureTitle } from "../lib/api";
+import { api, failureTitle, nothingToRetry } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
 import { useUrlFilters } from "../lib/useUrlFilters";
@@ -298,7 +298,7 @@ export function BugsPage() {
         <ErrorState
           title={failureTitle(error, httpStatus)}
           message={error}
-          onRetry={httpStatus === 404 ? undefined : reload}
+          onRetry={nothingToRetry(error, httpStatus) ? undefined : reload}
           action={
             <Link className="button" to="/projects">
               {t("nav.allProjects")}

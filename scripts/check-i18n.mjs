@@ -138,7 +138,7 @@ const OTHER_TONGUE = [".locale-toggle"];
 
 /** Values that are data rather than language, and are the same in every locale. */
 const TOKENS = [
-  /\b(WORK|BUG)-\d+\b/g,
+  /\b(WORK|BUG)-(?:\d+|N{4})\b/g, // an id — and the shape of one, which a bad address is told
   /\bAgentMonitoring\b/g,
   /\bUTC\b/g,
   /\bCtrl\b/g,
@@ -397,9 +397,15 @@ try {
      exactly as a real slug is — the app prints back what it was asked for. */
   const NO_SUCH_PROJECT = "does-not-exist";
   vaultWords.add(NO_SUCH_PROJECT);
+  /* Likewise an id that is not one: the app prints back the address it was given. */
+  const BAD_ID = "NOTANID";
+  vaultWords.add(BAD_ID);
   screens.push(
     { name: "work detail, no such record", path: `/p/${slug}/work/WORK-9999`, wait: ".error-title" },
     { name: "bug detail, no such record", path: `/p/${slug}/bugs/BUG-9999`, wait: ".error-title" },
+    /* An address that could never have been a record — a different headline from the two
+       above, and a sentence the desktop backend words differently again (check-errors.mjs). */
+    { name: "work detail, unusable id", path: `/p/${slug}/work/${BAD_ID}`, wait: ".error-title" },
     { name: "dashboard, no such project", path: `/p/${NO_SUCH_PROJECT}`, wait: ".error-title" },
     { name: "work list, no such project", path: `/p/${NO_SUCH_PROJECT}/work`, wait: ".error-title" },
     { name: "bug board, no such project", path: `/p/${NO_SUCH_PROJECT}/bugs`, wait: ".error-title" },

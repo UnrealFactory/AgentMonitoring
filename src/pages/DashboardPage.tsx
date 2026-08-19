@@ -29,7 +29,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp, useProjectSlug, useVaultNonce } from "../AppContext";
-import { api, failureTitle } from "../lib/api";
+import { api, failureTitle, nothingToRetry } from "../lib/api";
 import { agentColumnWidth } from "../lib/columns";
 import { useAsync } from "../lib/useAsync";
 import { useUrlFilters } from "../lib/useUrlFilters";
@@ -299,7 +299,7 @@ export function DashboardPage() {
         <ErrorState
           title={failureTitle(error, status)}
           message={error}
-          onRetry={status === 404 ? undefined : reload}
+          onRetry={nothingToRetry(error, status) ? undefined : reload}
           action={
             <Link className="button" to="/projects">
               {t("nav.allProjects")}

@@ -10,7 +10,7 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCurrentProject, useProjectSlug, useVaultNonce } from "../AppContext";
-import { api, failureTitle } from "../lib/api";
+import { api, failureTitle, nothingToRetry } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useActiveSection } from "../lib/useActiveSection";
 import { Markdown, RecordTitles } from "../lib/markdown";
@@ -109,13 +109,13 @@ export function WorkDetailPage() {
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {
-    const missing = status === 404;
+    const noRetry = nothingToRetry(error, status);
     return (
       <div className="page">
         <ErrorState
           title={failureTitle(error, status, id)}
           message={error}
-          onRetry={missing ? undefined : reload}
+          onRetry={noRetry ? undefined : reload}
           action={
             <Link className="button" to={`/p/${slug}/work`}>
               {t("wd.backToList")}
@@ -147,7 +147,7 @@ export function WorkDetailPage() {
             status={status}
             onRetry={reload}
             action={
-              status === 404 ? (
+              nothingToRetry(refreshError, status) ? (
                 <Link className="button button-sm" to={`/p/${slug}/work`}>
                   {t("wd.workList")}
                 </Link>

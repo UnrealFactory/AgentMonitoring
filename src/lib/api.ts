@@ -34,17 +34,34 @@ export const isTauri = (): boolean =>
 
 export const transport = (): "tauri" | "browser" => (isTauri() ? "tauri" : "browser");
 
-/** Errors carry the message the backend produced — those messages say how to fix things. */
+/**
+ * Errors carry the message the backend produced — those messages say how to fix things.
+ *
+ * Written with a plain field rather than a constructor parameter property so that Node can
+ * load this module by stripping its types: `npm run check:errors` imports the real
+ * {@link failureKind} and {@link vaultErrorMessage} rather than a copy of them, and a gate
+ * that tests a copy tests nothing.
+ */
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status?: number
-  ) {
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
     super(message);
     this.name = "ApiError";
+    this.status = status;
   }
 }
 
+/**
+ * The desktop transport. Note what it cannot give you: a status.
+ *
+ * A Tauri command answers a failure with a string — `Result<T, String>` in
+ * src-tauri/src/lib.rs, whose `Err` is `CoreError`'s Display and nothing else. There is no
+ * status code on this side of the app and there never will be; HTTP is the browser's
+ * accident, not a fact about a vault. So nothing above this file may ask "was it a 404?" to
+ * find out what happened — see {@link failureKind}, which asks the message instead, and is
+ * therefore the same answer on both transports.
+ */
 async function invokeCommand<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
   const { invoke } = await import("@tauri-apps/api/core");
   try {
@@ -284,13 +301,59 @@ export const api = {
  */
 export const DEFAULT_ACTOR = "app";
 
+/* --------------------------------------------------------------------------
+   What a failure was
+   ----------------------------------------------------------------------- */
+
+/**
+ * What a failed read *was* — one classification, read off the message, not the transport.
+ *
+ * `no_project` / `no_record` are stale links: the vault is fine and the address is not.
+ * `not_here` is the same thing said less precisely (a 404 whose sentence this list has not
+ * learned). `unreadable` is the vault actually failing.
+ */
+export type FailureKind = "no_project" | "no_record" | "bad_address" | "not_here" | "unreadable";
+
+/** `project 'x' not found …` — the shape both backends produce, hint clause or not. */
+const NO_PROJECT = /^project '([^']+)' not found\b/;
+/** `record 'BUG-9999' not found in project 'x' …` — likewise. */
+const NO_RECORD = /^record '([^']+)' not found in project '([^']+)'/;
+/** `invalid id 'NOTANID' …` / `invalid project slug 'Bad Slug' …` — an unusable address. */
+const BAD_ADDRESS = /^invalid (?:id|project slug) '/;
+
+/**
+ * Classify a failure. **The message decides**, and the status only breaks ties.
+ *
+ * The round-2 shape of this function asked `status !== 404` first, and that one line made
+ * the desktop app — the product — answer every stale link with "could not read the vault",
+ * because {@link invokeCommand} has no status to give it and never had: Tauri commands
+ * return `Result<T, String>`. Browser mode, whose `fetchJson` attaches `res.status`, said
+ * "this project has no BUG-9999" for the identical condition. One condition, two sentences,
+ * one app — and the gate that walks the screens drives the dev server, so it could only ever
+ * see the half that was right.
+ *
+ * The message is the half both transports share. `agentmon-core` (desktop, in-process) and
+ * `scripts/vault-fs.mjs` (browser dev server) are separate implementations that print the
+ * same sentence for the same condition, deliberately, and {@link vaultErrorMessage} below
+ * already relies on exactly that to say those sentences in Korean. So the headline is read
+ * off the same place, the two transports cannot disagree, and `npm run check:errors` proves
+ * it against the strings the real `agentmon` binary emits — including the two hint clauses
+ * that exist only in Rust and that no Playwright gate can reach.
+ */
+export function failureKind(error: string, status?: number): FailureKind {
+  const text = error.trim();
+  if (NO_PROJECT.test(text)) return "no_project";
+  if (NO_RECORD.test(text)) return "no_record";
+  if (BAD_ADDRESS.test(text)) return "bad_address";
+  return status === 404 ? "not_here" : "unreadable";
+}
+
 /**
  * What a failed read actually was, in the reader's words rather than the transport's.
  *
- * Both transports answer a missing record the same way — 404 with a message naming the id
- * or the slug — and that case is not "could not read the vault", it is "that is not here".
- * A reader who follows a link to `BUG-9999` and is told the vault is unreadable goes and
- * checks their disk; the truth is that the link is stale.
+ * A missing record is not "could not read the vault", it is "that is not here": a reader who
+ * follows a link to `BUG-9999` and is told the vault is unreadable goes and checks their
+ * disk, when the truth is that the link is stale.
  *
  * *In the reader's words* means in the reader's language too. This function used to return
  * four English literals while their Korean twins sat unused in the dictionary, so five of
@@ -299,11 +362,38 @@ export const DEFAULT_ACTOR = "app";
  * failure in Korean. One condition, two languages, one app.
  */
 export function failureTitle(error: string, status: number | undefined, id?: string): string {
-  if (status !== 404) return t("vault.readFailed");
-  const project = /^project '([^']+)' not found/.exec(error);
-  if (project) return t("vault.noProject", project[1]);
-  if (id) return t("vault.noRecord", id);
-  return t("vault.notInThisVault");
+  switch (failureKind(error, status)) {
+    case "no_project":
+      return t("vault.noProject", NO_PROJECT.exec(error.trim())![1]);
+    case "no_record":
+      /* The id in the message is the record that was asked for, which is the record the
+         reader clicked; `id` is the route's own copy of it, and only the list screens (which
+         are not looking up a record) lack one. */
+      return t("vault.noRecord", id ?? NO_RECORD.exec(error.trim())![1]);
+    case "bad_address":
+      /* Nothing was missing: the address cannot name a record at all. Saying "could not read
+         the vault" over a body that says which form an id takes blames the disk for a typo. */
+      return t("vault.badAddress");
+    case "not_here":
+      return id ? t("vault.noRecord", id) : t("vault.notInThisVault");
+    default:
+      return t("vault.readFailed");
+  }
+}
+
+/**
+ * True when a retry could not possibly help — so the screen offers no retry button.
+ *
+ * The record is not in the vault, or the address could never have named one: the button
+ * would re-ask a question that has been answered, and offering it tells the reader the app
+ * is unsure. False for an unreadable vault, which a second later often is not.
+ *
+ * Screens used to spell this `status === 404` inline, five times, which is the same
+ * transport bug as the headline had and shipped in the same window: the desktop app offered
+ * "다시 시도" under a record that will never exist.
+ */
+export function nothingToRetry(error: string, status?: number): boolean {
+  return failureKind(error, status) !== "unreadable";
 }
 
 /* --------------------------------------------------------------------------
@@ -327,7 +417,14 @@ const code = (value: string): string => value.trim().replace(/^`|`$/g, "");
  * across untouched. Anything unrecognised is returned exactly as it came: a true sentence
  * in the wrong language is worth more than a confident guess in the right one, and an
  * English string that reaches a Korean screen this way is a message this list has not
- * learned yet, which `npm run check:i18n` says out loud.
+ * learned yet.
+ *
+ * Two gates say that out loud, and it takes both. `npm run check:i18n` reads the rendered
+ * screens, which is the only way to catch a string that never reaches this function — but it
+ * drives the dev server, so every clause `agentmon-core` adds and the middleware does not
+ * (the `(expected file …)` and `(run \`agentmon project list\` …)` hints) is invisible to it.
+ * `npm run check:errors` closes that half: it runs the real `agentmon` binary, takes the
+ * sentences it actually prints, and reads them through this list.
  */
 export function vaultErrorMessage(message: string): string {
   const text = message.trim();
@@ -372,23 +469,35 @@ const MESSAGES: [RegExp, (m: RegExpExecArray) => string][] = [
   ],
   [/^that folder cannot be read: (.+)$/s, (m) => t("err.folderUnreadable", code(m[1]))],
   /* both transports: the record that is not there, with the hint each one adds */
+  /* These two arrive with a hint clause on the desktop and without one in browser mode —
+     `agentmon-core` appends it, `scripts/vault-fs.mjs` does not. The hint is handed to the
+     dictionary rather than concatenated onto its answer, so the sentence boundary between
+     the two clauses is decided in the file that knows how the language ends a sentence. */
   [
     /^project '([^']+)' not found in vault (.+?)(?: \(run (.+?) to see projects\))?\.?$/s,
     (m) =>
-      t("err.projectNotFound", m[1], code(m[2])) +
-      (m[3] ? t("err.projectListHint", code(m[3])) : ""),
+      t("err.projectNotFound", m[1], code(m[2]), m[3] ? t("err.projectListHint", code(m[3])) : ""),
   ],
   [
     /^record '([^']+)' not found in project '([^']+)'(?: \(expected file (.+?)\))?\.?$/s,
-    (m) => t("err.recordNotFound", m[1], m[2]) + (m[3] ? t("err.expectedFile", code(m[3])) : ""),
+    (m) => t("err.recordNotFound", m[1], m[2], m[3] ? t("err.expectedFile", code(m[3])) : ""),
   ],
   /* both transports: an address that cannot be a record at all */
+  /* browser: checkSlug() in scripts/vault-fs.mjs */
   [
     /^invalid project slug '([^']*)': expected lowercase letters.*$/s,
     (m) => t("err.badSlug", m[1]),
   ],
+  /* desktop: CoreError::InvalidId — which is *also* what a bad project slug arrives as
+     (validate_slug in crates/agentmon-core/src/vault.rs), and which words itself "expected
+     the form X" where the middleware says "expected X". Both are matched: this pair spent a
+     round untranslated, English under a Korean headline, on the desktop only. */
   [
-    /^invalid id '([^']*)': expected (\S+) \(e\.g\. (\S+?)\)$/s,
+    /^invalid id '([^']*)': expected the form lowercase letters, digits.*$/s,
+    (m) => t("err.badSlug", m[1]),
+  ],
+  [
+    /^invalid id '([^']*)': expected (?:the form )?(.+?) \(e\.g\. (.+?)\)\.?$/s,
     (m) => t("err.badId", m[1], m[2], m[3]),
   ],
   [/^no vault-api (?:write )?route for (.+)$/s, (m) => t("err.noRoute", code(m[1]))],

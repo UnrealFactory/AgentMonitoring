@@ -3,7 +3,7 @@
  * a small coloured dot plus a label, never a shouting block of colour.
  */
 import { useState, type ReactNode } from "react";
-import { vaultErrorMessage } from "../lib/api";
+import { nothingToRetry, vaultErrorMessage } from "../lib/api";
 import { t } from "../lib/i18n";
 import type { BugStatus, Severity, WorkStatus } from "../lib/types";
 import { bugStatusLabel, severityLabel, unassigned, workStatusLabel } from "../lib/words";
@@ -353,11 +353,15 @@ export function StaleRecordBar({
   action?: ReactNode;
 }) {
   const [headline] = message.split(" — ");
+  /* Which of the two sentences this is comes off the message, not the status: the desktop
+     app has no status to give (src/lib/api.ts), and a record deleted under an open page said
+     "could not re-read it" there while browser mode said "no longer in this vault". */
+  const gone = nothingToRetry(message, status);
   return (
     <div className="vault-alert vault-alert-inline" role="status">
       <span className="vault-alert-dot" aria-hidden="true" />
       <span className="vault-alert-text">
-        <strong>{status === 404 ? t("rec.staleGone", id) : t("rec.staleUnread", id)}</strong>{" "}
+        <strong>{gone ? t("rec.staleGone", id) : t("rec.staleUnread", id)}</strong>{" "}
         {t("rec.staleBody")}{" "}
         <span className="vault-alert-detail" title={message}>
           <InlineCode text={headline} />

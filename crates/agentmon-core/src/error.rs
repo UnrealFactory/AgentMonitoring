@@ -9,6 +9,10 @@ pub enum CoreError {
     #[error("no vault found at {path}: {hint}")]
     VaultNotFound { path: PathBuf, hint: String },
 
+    /// The parenthesised hint here and in `RecordNotFound` exists nowhere else: the dev
+    /// server's twin of these messages (scripts/vault-fs.mjs) stops at the slug. The desktop
+    /// app shows them to a human, in Korean, so `src/lib/api.ts` matches both shapes and
+    /// re-says them — see the tests at the foot of this file before changing the wording.
     #[error("project '{slug}' not found in vault {vault} (run `agentmon project list` to see projects)")]
     ProjectNotFound { slug: String, vault: PathBuf },
 
@@ -115,7 +119,9 @@ impl CoreError {
         }
     }
 
-    /// Stable machine-readable kind, mirrored by the CLI's exit codes and `--json` errors.
+    /// Stable machine-readable kind, mirrored by the CLI's exit codes, the `--json` errors,
+    /// and — through that envelope — by `npm run check:errors`, which requires the desktop
+    /// app to classify each of these the same way the browser build does.
     pub fn kind(&self) -> &'static str {
         match self {
             CoreError::VaultNotFound { .. } => "vault_not_found",
@@ -128,5 +134,88 @@ impl CoreError {
             CoreError::Locked { .. } => "locked",
             CoreError::Io { .. } => "io_error",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// These three sentences are read by a human, in Korean, in the desktop app.
+    ///
+    /// `Display` is the whole API here: Tauri commands return `Result<T, String>`
+    /// (src-tauri/src/lib.rs), so what reaches the window is exactly this text, and
+    /// `src/lib/api.ts` matches it with a regex to say it in the reader's language. There is
+    /// no type between the two halves — this test is the type. Change the wording and it
+    /// fails here, next to the string, rather than as English on a Korean screen that only
+    /// the desktop build shows; `npm run check:errors` is the same assertion from the other
+    /// side, made against the binary this crate builds.
+    #[test]
+    fn the_messages_the_app_translates() {
+        let project = CoreError::ProjectNotFound {
+            slug: "nosuch".into(),
+            vault: PathBuf::from("/v"),
+        };
+        assert_eq!(
+            project.to_string(),
+            "project 'nosuch' not found in vault /v (run `agentmon project list` to see projects)"
+        );
+
+        let record = CoreError::RecordNotFound {
+            id: "BUG-9999".into(),
+            slug: "demo".into(),
+            path: PathBuf::from("/v/BUG-9999.md"),
+        };
+        assert_eq!(
+            record.to_string(),
+            "record 'BUG-9999' not found in project 'demo' (expected file /v/BUG-9999.md)"
+        );
+
+        let id = CoreError::InvalidId {
+            id: "NOTANID".into(),
+            expected: "BUG-NNNN (e.g. BUG-0001)".into(),
+        };
+        assert_eq!(
+            id.to_string(),
+            "invalid id 'NOTANID': expected the form BUG-NNNN (e.g. BUG-0001)"
+        );
+
+        let vault = CoreError::VaultNotFound {
+            path: PathBuf::from("/v"),
+            hint: "no vault.json in that directory. Run `agentmon init --vault <dir>` to create one.".into(),
+        };
+        assert!(vault.to_string().starts_with("no vault found at /v: "));
+    }
+
+    /// The kinds `src/lib/api.ts` maps onto a headline. A new variant that lands in none of
+    /// them is a failure the app will call "could not read the vault" — which is a sentence
+    /// about the disk, and usually a lie about a link.
+    #[test]
+    fn kinds_are_stable() {
+        assert_eq!(
+            CoreError::ProjectNotFound {
+                slug: "x".into(),
+                vault: PathBuf::from("/v"),
+            }
+            .kind(),
+            "project_not_found"
+        );
+        assert_eq!(
+            CoreError::RecordNotFound {
+                id: "WORK-0001".into(),
+                slug: "x".into(),
+                path: PathBuf::from("/v"),
+            }
+            .kind(),
+            "record_not_found"
+        );
+        assert_eq!(
+            CoreError::InvalidId {
+                id: "x".into(),
+                expected: "y".into(),
+            }
+            .kind(),
+            "invalid_argument"
+        );
     }
 }

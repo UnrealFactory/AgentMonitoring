@@ -408,6 +408,8 @@ export const en = {
   "vault.notInThisVault": "Not in this vault",
   "vault.noProject": (slug: string) => `This vault has no project called “${slug}”`,
   "vault.noRecord": (id: string) => `This project has no ${id}`,
+  /** An address that could not name a record whatever the vault held: `/work/NOTANID`. */
+  "vault.badAddress": "That address is not a record",
   "vault.source.query": "?vault= in this window's address",
   "vault.source.env": "the AGENTMON_VAULT environment variable",
   "vault.source.flag": "the folder opened in this app",
@@ -437,11 +439,15 @@ export const en = {
   "err.notAVault": (dir: string, cmd: string) =>
     `Not a vault folder — \`${dir}\` has no \`vault.json\`. Pick the folder that holds \`vault.json\` and \`projects/\`, or make one there with \`${cmd}\``,
   "err.folderUnreadable": (detail: string) => `That folder cannot be read: \`${detail}\``,
-  "err.projectNotFound": (slug: string, vault: string) =>
-    `This vault has no project \`${slug}\` — vault: \`${vault}\``,
+  /* These two carry a hint clause that only the Rust backend adds, so the join lives here,
+     where both halves are on one line and a missing full stop is visible. Assembled in
+     api.ts, the two clauses ran together into one sentence — on the desktop only, which is
+     the half no browser gate can read. */
+  "err.projectNotFound": (slug: string, vault: string, hint: string) =>
+    `This vault has no project \`${slug}\` — vault: \`${vault}\`.${hint}`,
   "err.projectListHint": (cmd: string) => ` The projects it does have: \`${cmd}\``,
-  "err.recordNotFound": (id: string, slug: string) =>
-    `Project \`${slug}\` has no \`${id}\``,
+  "err.recordNotFound": (id: string, slug: string, hint: string) =>
+    `Project \`${slug}\` has no \`${id}\`.${hint}`,
   "err.expectedFile": (path: string) => ` Expected the file \`${path}\``,
   "err.badSlug": (slug: string) =>
     `Not a usable project slug — \`${slug}\`. Lower-case letters, digits, \`-\` and \`_\` only.`,

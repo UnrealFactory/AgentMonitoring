@@ -10,6 +10,9 @@
  *
  *   작업 로그   a work log (never 기록, 항목, 로그 alone)
  *   버그        a bug
+ *   기록        a **record**: the two nouns above, when which one it is cannot be known —
+ *               a stale link, a ref chip, the backend's own `record 'BUG-9999' not found`.
+ *               Never a work log that is known to be one; that is 작업 로그, always.
  *   에이전트    an agent
  *   볼트        the vault — the directory of plain files. Deliberately not 보관함/보관소,
  *               which would collide with 보관됨 (archived) one row away in the same column.
@@ -449,6 +452,7 @@ export const ko: Dict = {
   "vault.notInThisVault": "이 볼트에 없습니다",
   "vault.noProject": (slug) => `이 볼트에는 “${slug}” 프로젝트가 없습니다`,
   "vault.noRecord": (id) => `이 프로젝트에 ${id} 기록이 없습니다`,
+  "vault.badAddress": "잘못된 주소입니다",
   "vault.source.query": "이 창 주소의 ?vault=",
   "vault.source.env": "AGENTMON_VAULT 환경 변수",
   "vault.source.flag": "이 앱에서 연 폴더",
@@ -478,11 +482,18 @@ export const ko: Dict = {
   "err.notAVault": (dir, cmd) =>
     `볼트 폴더가 아닙니다 — \`${dir}\`에 \`vault.json\`이 없습니다. \`vault.json\`과 \`projects/\`가 들어 있는 폴더를 고르거나, 다음 명령으로 새 볼트를 만드세요: \`${cmd}\``,
   "err.folderUnreadable": (detail) => `이 폴더를 읽지 못했습니다: \`${detail}\``,
-  "err.projectNotFound": (slug, vault) =>
-    `이 볼트에 \`${slug}\` 프로젝트가 없습니다 — 볼트 경로: \`${vault}\``,
-  "err.projectListHint": (cmd) => ` 등록된 프로젝트는 다음 명령으로 볼 수 있습니다: \`${cmd}\``,
-  "err.recordNotFound": (id, slug) => `\`${slug}\` 프로젝트에 \`${id}\` 기록이 없습니다`,
-  "err.expectedFile": (path) => ` 찾은 파일 경로: \`${path}\``,
+  /* 뒤에 힌트가 붙을 수 있는 두 문장. 힌트를 이어 붙이는 자리를 이 파일 안에 두는 이유:
+     "…없습니다" 뒤에 곧바로 다음 절이 오면 한 문장처럼 읽힌다. 마침표를 어느 쪽이 찍는지
+     api.ts가 정하던 때는 실제로 그렇게 붙어 나갔다 — 데스크톱 앱에서만, 힌트 절을 Rust만
+     쓰기 때문에. 이제 두 절이 사전의 한 줄에 함께 보이므로 경계를 눈으로 확인할 수 있다. */
+  "err.projectNotFound": (slug, vault, hint) =>
+    `이 볼트에 \`${slug}\` 프로젝트가 없습니다. 볼트 경로: \`${vault}\`.${hint}`,
+  "err.projectListHint": (cmd) => ` 등록된 프로젝트는 다음 명령으로 확인하세요: \`${cmd}\``,
+  "err.recordNotFound": (id, slug, hint) =>
+    `\`${slug}\` 프로젝트에 \`${id}\` 기록이 없습니다.${hint}`,
+  /* 찾은 ≠ 찾으려던. 앞 문장이 "없습니다"인데 "찾은 파일 경로"라고 하면 *찾아낸* 경로가
+     되어 뜻이 뒤집힌다 — 앱이 그 경로를 확인했지만 파일은 없었다는 뜻이어야 한다. */
+  "err.expectedFile": (path) => ` 찾으려던 파일 경로: \`${path}\``,
   "err.badSlug": (slug) =>
     `쓸 수 없는 프로젝트 슬러그입니다 — \`${slug}\`. 소문자와 숫자, \`-\`, \`_\` 만 쓸 수 있습니다.`,
   "err.badId": (id, expected, example) =>
