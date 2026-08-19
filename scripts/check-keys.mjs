@@ -212,6 +212,21 @@ try {
   );
   check("…and the palette closed behind it", !(await paletteOpen(page)));
 
+  /* The rows stopped being <button>s this round, so the mouse has to be checked with the
+     keyboard: an option that only the arrows can reach is a different regression. */
+  await openPalette(page);
+  const clickTarget = (await page.locator(".palette-item").nth(2).locator(".palette-hint").textContent())?.trim();
+  await page.locator(".palette-item").nth(2).click();
+  await ready(page);
+  check(
+    "a result row still opens on a click",
+    page.url().includes(String(clickTarget ?? "")),
+    `clicked ${clickTarget}; landed on ${page.url()}`,
+  );
+  await openPalette(page);
+  await page.locator(".palette-scrim").click({ position: { x: 10, y: 10 } });
+  check("a click on the scrim closes it", !(await paletteOpen(page)));
+
   // The modal lock the list screens read, visible to anything that needs it.
   await openPalette(page);
   check(
