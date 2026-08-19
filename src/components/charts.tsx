@@ -67,6 +67,38 @@ function niceTicks(max: number): { top: number; ticks: number[] } {
   return { top: count * step, ticks: Array.from({ length: count + 1 }, (_, i) => i * step) };
 }
 
+/* --------------------------------------------------------------------------
+   Word order
+   ----------------------------------------------------------------------- */
+
+/**
+ * A count and the word it counts, in the order the language puts them.
+ *
+ * **The number goes where the language puts it.** English counts first — "24 done"; Korean
+ * names the thing first and counts after — "완료 24", which is how the severity chips one
+ * card away read, how the project cards read, how the work list's "진행 중 2개" reads, and
+ * how this chart's own spoken summary reads (`chart.summary`: "작업 로그: 시작 24, 완료 24").
+ * A bare numeral in front of a state word is English grammar wearing Korean words, and
+ * src/lib/i18n/ko.ts says so in as many words beside `word.inProgressCount`: "2 진행 중"처럼
+ * 숫자가 상태어 앞에 오는 영어 어순은 쓰지 않는다.
+ *
+ * **It is a function because the last time it was a call site it was written once.** Round 1
+ * found hard-coded value-then-label in the legend, where it disagreed with its own aria-label
+ * on the same element, and fixed the legend. The tooltip 150 lines above it kept English
+ * order for four more rounds: hovering the 작업 chart printed "11 시작 · 11 완료 · 0 진행 중"
+ * over a legend reading "시작 27 · 완료 27 · 진행 중 0" and a spoken status reading
+ * "시작 11, 완료 11" — one chart, one word, two orders (P9 round 5 critic). Every surface
+ * that prints a bare count beside one of the app's own words calls this now, so the rule
+ * lives in one place instead of once per element.
+ *
+ * `space` inserts the separator the flow needs: the legend and tip rows are flex boxes with
+ * their own `gap`, the gap line is running text in a `<p>` and needs a real space.
+ */
+function counted(value: ReactNode, label: ReactNode, space = false): ReactNode[] {
+  const parts = getLocale() === "ko" ? [label, value] : [value, label];
+  return space ? [parts[0], " ", parts[1]] : parts;
+}
+
 const PAD = { top: 12, right: 10, bottom: 22, left: 30 };
 /** A tick that also carries the date it opens needs a second line under it. */
 const PAD_BOTTOM_DATED = 34;
@@ -334,7 +366,15 @@ export function BurnUp({
               <TipRow color={lower.color} value={at.lower} label={lower.label} added={at.addedLower} />
             </ul>
             <p className="tip-gap">
-              <span className="tip-gap-value tabular">{at.upper - at.lower}</span> {gap.label}
+              {counted(
+                <span key="value" className="tip-gap-value tabular">
+                  {at.upper - at.lower}
+                </span>,
+                <span key="label" className="tip-gap-label">
+                  {gap.label}
+                </span>,
+                true
+              )}
             </p>
           </ChartTip>
         )}
@@ -412,8 +452,14 @@ function TipRow({
   return (
     <li className="tip-row">
       <span className="key-line" style={{ background: color }} aria-hidden="true" />
-      <span className="tip-value tabular">{value}</span>
-      <span className="tip-label">{label}</span>
+      {counted(
+        <span key="value" className="tip-value tabular">
+          {value}
+        </span>,
+        <span key="label" className="tip-label">
+          {label}
+        </span>
+      )}
       {added.length > 0 && (
         <span className="tip-added">
           +{added.length} · {added.slice(0, 3).join(", ")}
@@ -538,12 +584,8 @@ export function SplitBar({
  * hover will admit to. A line-key for a line, a taller block for a filled band, matching
  * the mark it stands for.
  *
- * **The number goes where the language puts it.** English counts first — "24 done"; Korean
- * names the thing first and counts after — "완료 24", which is how the severity chips one
- * card away read, how the project cards read, and how this chart's own spoken summary reads
- * (`chart.summary`: "작업 로그: 시작 24, 완료 24"). Hard-coded value-then-label, the legend
- * was the one place on the dashboard printing English word order in Korean, and it
- * disagreed with its own aria-label on the same element (P9 round 1 critic).
+ * The number goes where the language puts it: see {@link counted}, which the tooltip 150
+ * lines above also calls, because for four rounds it did not.
  */
 export function Legend({
   items,
@@ -558,7 +600,6 @@ export function Legend({
     deltaTitle?: string;
   }[];
 }) {
-  const labelFirst = getLocale() === "ko";
   return (
     <ul className="chart-legend">
       {items.map((it) => {
@@ -580,7 +621,7 @@ export function Legend({
               style={{ background: it.color }}
               aria-hidden="true"
             />
-            {labelFirst ? [label, value] : [value, label]}
+            {counted(value, label)}
             {it.delta !== undefined && it.delta !== null && (
               <span
                 className={`legend-delta tabular${it.delta === 0 ? " is-flat" : ""}`}

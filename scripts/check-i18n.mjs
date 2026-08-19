@@ -49,6 +49,16 @@
  * not clipped and nothing here asked whether it was still attached to its number (P9 round 4
  * critic). A break is not overflow, so it needs its own question and its own widths.
  *
+ * **And a fourth: which side of the word is the number on?** {@link COUNTED_KEYS} and
+ * {@link ORDER_PAIRS}. Korean names the thing and counts after — 완료 24 — and the three
+ * questions above are all blind to a number printed in front of it: 시작 is Korean, the pill
+ * equals a dictionary value, nothing wrapped and nothing overflowed. So the burn-up tooltip
+ * printed "11 시작 · 11 완료 · 0 진행 중" for four rounds, 200px above its own legend reading
+ * "시작 27 · 완료 27 · 진행 중 0" (P9 round 5 critic). That tooltip only exists while a chart
+ * is hovered or focused, which is also why nothing had ever looked at it — so this gate now
+ * opens it, by pointer and by arrow key, on both charts of both projects and at every width
+ * in the sweep.
+ *
  * Everything else must be Korean — and `--locale en` is the same walk with the alphabets
  * swapped, because a Korean string typed into a component is just as invisible to `tsc` as
  * an English one, and the app ships in two languages. Runs against the live vault read-only.
@@ -301,8 +311,82 @@ const HANGUL = /[가-힣]+/g;
  * The list is the counters this app actually prints (see src/lib/i18n/ko.ts): the calendar's
  * 년/월/일, the durations 시간/분/초/개월/주, and the counters 개/건/명/번. Time units are in
  * it because “17시간 39분” is on the dashboard beside the dates.
+ *
+ * The sweep also carries the app's own state words as whole tokens ({@link COUNTED_KEYS}),
+ * for the same reason and one step out: 시작 has no space in it and may not gain one from the
+ * line breaker either. The chart tooltip printed it as 시 over 작 — one syllable per line —
+ * because the tip is laid out in whatever room is left to the right of the crosshair and all
+ * three of the row's flex items were shrinkable, so the label got 19px for a 21px word. Found
+ * by rendering the tooltip, which nothing here had ever done.
  */
 const COUNTERS = ["년", "개월", "월", "일", "시간", "분", "초", "주", "개", "건", "명", "번"];
+
+/**
+ * The app's own counted words — and the fourth question: **which side of the word is the
+ * number on?**
+ *
+ * Three gates read a count-and-its-word and all three pass an English sentence written in
+ * Korean. `check:i18n`'s alphabet walk asks which *language* a string is in — 시작 is Korean.
+ * {@link VOCABULARIES} asks whether a pill equals a dictionary value — it does, exactly.
+ * {@link COUNTERS} asks whether a line break parted a number from its counter — nothing
+ * wrapped. `check:clipping` measures overflow — nothing overflowed. So "11 시작 · 11 완료 ·
+ * 0 진행 중" sat in the burn-up tooltip for four rounds, 200px above a legend reading
+ * "시작 27 · 완료 27 · 진행 중 0" and one element away from a spoken status reading
+ * "시작 11, 완료 11" — one chart, one word, two orders (P9 round 5 critic). Nothing here
+ * asked the only question that separates them.
+ *
+ * The rule is the dictionary's own, written beside `word.inProgressCount` in
+ * src/lib/i18n/ko.ts: "2 진행 중"처럼 숫자가 상태어 앞에 오는 영어 어순은 쓰지 않는다. Korean
+ * names the thing and counts after — 완료 24, 미해결 2개, 진행 중 2개 — and `dash.countPart`
+ * already keeps both orders in the dictionary where they belong (ko `${label} ${count}`,
+ * en `${count} ${label}`).
+ *
+ * So: on a Korean screen a **bare** numeral may not stand immediately in front of one of
+ * these words. Bare is the whole rule — "작업 로그 2개 진행 중" and "12개 중 2개 진행 중" are
+ * grammatical and pass, because the 의존명사 binds the number into a noun phrase; it is the
+ * naked digit with nothing but space between it and the state word that is English grammar
+ * wearing Korean words.
+ *
+ * Read from the dictionary rather than typed here, so a re-worded state is not a new gate
+ * failure. Korean only, and not because English is exempt from having an order: English has
+ * two legitimate ones — "24 done" in a legend, "started 16 · done 16" in the day mix — so a
+ * blanket rule would be wrong. The elements where English has exactly one order are gated
+ * structurally instead; see {@link ORDER_PAIRS}.
+ */
+const COUNTED_KEYS = [
+  ...VOCABULARIES.flatMap((vocab) => vocab.keys),
+  "word.inProgress",
+  "word.done",
+  "word.abandoned",
+  "word.open",
+  "word.resolved",
+  "word.closed",
+  "word.unresolved",
+  "word.unresolvedLabel",
+  "word.unassigned",
+  "word.unassignedLabel",
+  "word.doneOrAbandoned",
+  "word.resolvedOrClosed",
+  /* The burn-up's two upper series: the words the tooltip printed behind its numbers. */
+  "dash.seriesStarted",
+  "dash.seriesFiled",
+];
+
+/**
+ * The elements that carry a count and its word as two siblings, and which of them comes first.
+ *
+ * The sweep above reads text, which is the reader's view and is Korean-only. This reads
+ * *structure*, in both languages: for each of these boxes the value element and the label
+ * element must be in the order the language puts them — label first in Korean, value first
+ * in English. It is the half that a mutation cannot slip past in either direction, and it is
+ * deliberately the trio the critic caught disagreeing with each other on one card: the
+ * legend under the plot, the tooltip's rows, and the tooltip's gap line.
+ */
+const ORDER_PAIRS = [
+  { name: "chart legend", selector: ".chart-legend li", value: ".legend-value", label: ".legend-label" },
+  { name: "chart tooltip row", selector: ".tip-row", value: ".tip-value", label: ".tip-label" },
+  { name: "chart tooltip gap", selector: ".tip-gap", value: ".tip-gap-value", label: ".tip-gap-label" },
+];
 
 /**
  * The screens whose Korean is swept, and what makes each one wrap-sensitive.
@@ -319,6 +403,14 @@ const SWEEP_SCREENS = (slug) => [
   { name: `dashboard ${slug}`, path: `/p/${slug}`, wait: ".now-strip .now-hero-value" },
   { name: `work ${slug}`, path: `/p/${slug}/work`, wait: ".work-rows .work-row" },
   { name: `bugs ${slug}`, path: `/p/${slug}/bugs?tab=all`, wait: ".work-rows .bug-row" },
+  /* The tooltips, open, at every width in the list — the state the burn-up tip is read in
+     and the one no gate had ever rendered (see openTips). */
+  {
+    name: `dashboard ${slug} chart tips`,
+    path: `/p/${slug}`,
+    wait: ".chart-tip",
+    prepare: openTips(true),
+  },
 ];
 
 /**
@@ -331,8 +423,15 @@ const SWEEP_SCREENS = (slug) => [
  * word it looks like on screen; whitespace nodes stay in that string, which is why a pair is
  * only a pair when nothing at all sits between the digits and the counter.
  */
-const BREAK_PROBE = ({ counters, exempt }) => {
-  const re = new RegExp(`\\d+(?:[.,]\\d+)?(?:${counters.join("|")})`, "g");
+const BREAK_PROBE = ({ counters, words, exempt }) => {
+  /* Two shapes, one question. A number and its 의존명사 are one word; so is each of the app's
+     own state words, which have no space in them and may not gain one from the line breaker —
+     the chart tooltip printed 시작 as 시 over 작, one syllable per line, because the row's
+     flex items were all shrinkable and the label was handed 19px for a 21px word. */
+  const re = new RegExp(
+    `\\d+(?:[.,]\\d+)?(?:${counters.join("|")})` + (words.length ? `|${words.join("|")}` : ""),
+    "g",
+  );
   /* The block container whose line boxes a text node lives in: an inline element shares its
      parent's lines, anything else starts its own. */
   const blockOf = (node) => {
@@ -406,6 +505,212 @@ const BREAK_PROBE = ({ counters, exempt }) => {
     }
   }
   return found;
+};
+
+/**
+ * Runs in the page. Returns every bare numeral standing in front of one of the app's own
+ * counted words (see {@link COUNTED_KEYS}) — English word order in a Korean window.
+ *
+ * Two things make this harder than a regex over `textContent`, and both are what the defect
+ * hid behind:
+ *
+ *   1. **The phrase is spread across elements.** The tooltip's number and its word are two
+ *      sibling `<span>`s with no text node between them, so the text is read flattened per
+ *      container the way {@link BREAK_PROBE} reads it — `<span>11</span><span>시작</span>` is
+ *      the "11 시작" a reader sees, not two unrelated strings. And the container is a *line*
+ *      container, not a block one: a flex row blockifies its children, so grouping by
+ *      `display !== inline` puts the number and the word in two different groups and finds
+ *      nothing. Every element that is a flex or grid item is climbed through.
+ *   2. **…which makes separate things look adjacent.** Two remedies, because one is not
+ *      enough. A group never crosses a **unit** — a control, a list item, a table cell —
+ *      since the work list's four filter tabs sit in one row and "전체 27" beside "진행 중 0"
+ *      is not the phrase "27 진행 중". And what survives that is *measured*: a Range is laid
+ *      over the match and asked where it was painted. One line, and no gap between its pieces
+ *      wider than a word space, or it is two things that happen to share a row.
+ *
+ * `title` and `aria-label` are read too — the tooltip on a status dot is a sentence somebody
+ * reads — and there the string is already one piece, so no measuring is needed.
+ */
+const ORDER_PROBE = ({ words, exempt }) => {
+  const escape = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const alternation = [...words]
+    .sort((a, b) => b.length - a.length)
+    .map(escape)
+    .join("|");
+  /* `\d+` then nothing but space: a digit followed by its 의존명사 ("2개 진행 중") never
+     reaches the word, which is the point — that phrase is correct Korean and must pass. */
+  const re = new RegExp(`(\\d+)[ \\t\\u00a0]*(${alternation})(?![가-힣])`, "g");
+  /** How far apart two painted pieces may be and still be one phrase, in px. */
+  const ADJACENT = 24;
+  /**
+   * How much bigger than its word a number has to be set before it stops being a word in a
+   * phrase and becomes a **figure with a caption**.
+   *
+   * The NOW panel's 48px 0 over a 12px "진행 중 · 전체 작업 로그 27개", and the 32px 92 over
+   * "이벤트 기록됨", are stat tiles: a display figure and the caption naming it, a register
+   * Korean sets exactly as English does, with the grammatical sentence carried on the tile's
+   * own tooltip ("작업 로그 27개 중 0개 진행 중"). The tooltip's 14px number beside its 12px
+   * word is not that — it is one phrase, read as one line, and it takes the language's word
+   * order. 1.5× sits in the empty middle: the phrases measure 1.1–1.2×, the figures 2.7–4×.
+   */
+  const FIGURE = 1.5;
+  /** One thing a reader reads as one thing: a control, a list item, a cell. */
+  const UNIT = "a,button,li,td,th,label,summary,[role=tab],[role=button],[role=option],[role=row]";
+  const isTrack = (el) => /flex|grid/.test(getComputedStyle(el).display);
+  const blockOf = (node) => {
+    for (let cur = node.parentElement; cur; cur = cur.parentElement) {
+      if (cur.matches(UNIT)) return cur;
+      const display = getComputedStyle(cur).display;
+      const inline = display === "inline" || display === "contents";
+      /* A flex/grid item is laid out on its parent's line beside its siblings, whatever its
+         own blockified `display` says. */
+      const item = cur.parentElement && isTrack(cur.parentElement);
+      if (!inline && !item) return cur;
+    }
+    return document.body;
+  };
+  const label = (el) => {
+    const parts = [];
+    for (let cur = el; cur && parts.length < 3; cur = cur.parentElement) {
+      const cls =
+        typeof cur.className === "string" && cur.className.trim()
+          ? `.${cur.className.trim().split(/\s+/)[0]}`
+          : "";
+      parts.unshift(`${cur.tagName.toLowerCase()}${cls}`);
+    }
+    return parts.join(" > ");
+  };
+
+  const found = [];
+
+  /* Every text node in the block, author-owned ones included, because dropping a node makes
+     its neighbours adjacent that never were: an id chip between a number and a pill would
+     turn `BUG-0012` + `열림` into the phrase "0012열림". They are kept in the string and
+     ruled out at the match instead — a number an agent wrote is not the app's word order. */
+  const groups = new Map();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.parentElement || !node.textContent) continue;
+    const block = blockOf(node);
+    if (!groups.has(block)) groups.set(block, []);
+    groups.get(block).push(node);
+  }
+  for (const [block, nodes] of groups) {
+    let flat = "";
+    const map = [];
+    for (const node of nodes) {
+      map.push({ node, start: flat.length, end: flat.length + node.textContent.length });
+      flat += node.textContent;
+    }
+    const at = (offset) => {
+      const hit = map.find((e) => offset >= e.start && offset < e.end) ?? map[map.length - 1];
+      return { node: hit.node, offset: Math.min(offset - hit.start, hit.node.textContent.length) };
+    };
+    re.lastIndex = 0;
+    for (let m = re.exec(flat); m; m = re.exec(flat)) {
+      const from = at(m.index);
+      const to = at(m.index + m[0].length - 1);
+      const number = from.node.parentElement;
+      const word = to.node.parentElement;
+      if ([number, word].some((el) => exempt.some((sel) => el.closest(sel)))) continue;
+      const size = (el) => parseFloat(getComputedStyle(el).fontSize) || 0;
+      if (size(number) >= size(word) * FIGURE) continue; // a figure and its caption
+
+      /* Painted where a reader would read it as one phrase, or not a phrase. */
+      const range = document.createRange();
+      range.setStart(from.node, from.offset);
+      range.setEnd(to.node, to.offset + 1);
+      const rects = [...range.getClientRects()]
+        .filter((r) => r.width > 0.5 && r.height > 0.5)
+        .sort((a, b) => a.left - b.left);
+      if (!rects.length) continue;
+      /* One line, by overlap rather than by a shared top: the number is set larger than the
+         word beside it and the two are baseline-aligned, so equal tops would be the wrong
+         question. A wrap gives no overlap at all. */
+      const sameLine = (r) =>
+        Math.min(r.bottom, rects[0].bottom) - Math.max(r.top, rects[0].top) > 1;
+      if (rects.some((r) => !sameLine(r))) continue;
+      if (rects.some((r, i) => i > 0 && r.left - rects[i - 1].right > ADJACENT)) continue;
+
+      found.push({
+        phrase: m[0],
+        context: flat.replace(/\s+/g, " ").trim().slice(0, 120),
+        at: label(word),
+      });
+    }
+  }
+
+  for (const el of document.querySelectorAll("[title], [aria-label]")) {
+    if (exempt.some((sel) => el.closest(sel))) continue;
+    for (const attr of ["title", "aria-label"]) {
+      const text = el.getAttribute(attr);
+      if (!text) continue;
+      re.lastIndex = 0;
+      for (let m = re.exec(text); m; m = re.exec(text)) {
+        found.push({
+          phrase: m[0],
+          context: text.replace(/\s+/g, " ").trim().slice(0, 120),
+          at: `${label(el)} [${attr}]`,
+        });
+      }
+    }
+  }
+  return found;
+};
+
+/**
+ * Runs in the page. Returns every count/word pair whose two elements are in the wrong order
+ * for this language — the structural half of the same question (see {@link ORDER_PAIRS}).
+ */
+const PAIR_PROBE = ({ pairs, labelFirst }) => {
+  const found = [];
+  for (const pair of pairs) {
+    for (const box of document.querySelectorAll(pair.selector)) {
+      const value = box.querySelector(pair.value);
+      const label = box.querySelector(pair.label);
+      if (!value || !label) continue;
+      /* DOCUMENT_POSITION_FOLLOWING = 4: the label comes after the value in the DOM, and a
+         flex row with no `order` paints in DOM order. */
+      const labelIsFirst = !(value.compareDocumentPosition(label) & 4);
+      if (labelIsFirst === labelFirst) continue;
+      found.push({
+        where: pair.name,
+        text: box.textContent.replace(/\s+/g, " ").trim().slice(0, 80),
+        first: labelIsFirst ? "the word" : "the number",
+      });
+    }
+  }
+  return found;
+};
+
+/**
+ * Put both burn-up tooltips on screen at the same time, one by arrow key and one by pointer.
+ *
+ * The tip is the surface a mouse reader meets most and the one nothing in this repo had ever
+ * rendered in a gate: it only exists while the chart is hovered or focused. `keyboardFirst`
+ * swaps which chart gets which input, so across the two dashboard entries each chart is
+ * driven both ways. The arrow keys are pressed rather than simulated because
+ * `onKeyDown`/`onFocus` are two different paths into the same `active` state, and the critic
+ * reproduced the defect through both.
+ */
+const openTips = (keyboardFirst) => async (page) => {
+  await page.waitForSelector(".chart-plot", { state: "visible", timeout: 15_000 });
+  await page.waitForFunction(() => !document.querySelector(".skeleton"));
+  const plots = page.locator(".chart-plot");
+  const count = await plots.count();
+  if (count === 0) return; // a project with nothing to plot draws .chart-empty instead
+  const [byKey, byPointer] = keyboardFirst ? [0, 1] : [count - 1, 0];
+  await plots.nth(byKey).focus();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  if (count > 1 && byPointer !== byKey) {
+    await plots.nth(byPointer).hover({ position: { x: 120, y: 60 } });
+  }
+  await page.waitForFunction(
+    (want) => document.querySelectorAll(".chart-tip").length >= want,
+    count > 1 ? 2 : 1,
+    { timeout: 5_000 },
+  );
 };
 
 let failures = 0;
@@ -516,6 +821,24 @@ try {
       { name: `dashboard ${p.slug} 7d`, path: `/p/${p.slug}?range=7d`, wait: ".chart-legend" },
       { name: `work ${p.slug}`, path: `/p/${p.slug}/work`, wait: ".work-rows .work-row" },
       { name: `bugs ${p.slug}`, path: `/p/${p.slug}/bugs?tab=all`, wait: ".work-rows .bug-row" },
+      /* …and the same dashboard with the tooltips *open*, which is the only state they are
+         ever read in and the one no gate had ever loaded: the burn-up tip exists on hover or
+         on focus and is in no screenshot, no DOM this gate walked and no clipping run, so
+         four rounds of Korean gates never saw the English word order printed inside it
+         (P9 round 5 critic). Both charts at once, and both ways in — a hover does not move
+         focus, so the keyboard's tip stays open under the mouse's. */
+      {
+        name: `dashboard ${p.slug} chart tips`,
+        path: `/p/${p.slug}`,
+        wait: ".chart-tip",
+        prepare: openTips(true),
+      },
+      {
+        name: `dashboard ${p.slug} 7d chart tips`,
+        path: `/p/${p.slug}?range=7d`,
+        wait: ".chart-tip",
+        prepare: openTips(false),
+      },
     );
     /* Every record, not a sample of four.
      *
@@ -703,6 +1026,45 @@ try {
     ),
   }));
 
+  /* The words a bare numeral may not stand in front of, in this language's own spelling. */
+  const countedWords = [...new Set(COUNTED_KEYS.map((key) => t(LOCALE, key)).filter(Boolean))];
+  /* …and the same words as single tokens, which the line breaker may not open up. A word
+     with a space in it ("완료 또는 중단") is three of them: Korean breaks at a space and
+     nowhere else, so only the space-free pieces are one word, and a one-syllable piece
+     cannot be split at all. */
+  const wholeWords = [
+    ...new Set(countedWords.flatMap((w) => w.split(/\s+/)).filter((w) => w.length > 1)),
+  ];
+  /* Korean names the thing and counts after; English counts first. */
+  const LABEL_FIRST = LOCALE === "ko";
+  const orderProbe = async (page) => {
+    const findingsHere = [];
+    if (LOCALE === "ko") {
+      for (const hit of await page.evaluate(ORDER_PROBE, { words: countedWords, exempt: AUTHOR })) {
+        findingsHere.push({
+          kind: "word order",
+          text: hit.context,
+          at: hit.at,
+          words: [`“${hit.phrase}” — 숫자가 상태어 앞에 오는 영어 어순 (ko.ts: word.inProgressCount)`],
+        });
+      }
+    }
+    for (const hit of await page.evaluate(PAIR_PROBE, {
+      pairs: ORDER_PAIRS,
+      labelFirst: LABEL_FIRST,
+    })) {
+      findingsHere.push({
+        kind: "count order",
+        text: hit.text,
+        at: hit.where,
+        words: [
+          `${hit.first} comes first; ${LOCALE} puts ${LABEL_FIRST ? "the word" : "the number"} first`,
+        ],
+      });
+    }
+    return findingsHere;
+  };
+
   log(
     SWEEP_ONLY
       ? `word-integrity sweep only · ${SWEEP_WIDTHS.join("/")}px · language ${LOCALE}`
@@ -759,6 +1121,12 @@ try {
           words: [`not one of: ${[...vocab.words].join(" / ")}`],
         });
       }
+
+      /* …and a fourth: which side of the word is the number on? (see COUNTED_KEYS) */
+      for (const item of await orderProbe(page)) {
+        bad += 1;
+        findings.push({ screen: `${screen.name} @${width}`, ...item });
+      }
       if (VERBOSE || bad) log(`${screen.name} @${width}: ${printed.length} strings, ${bad} bad`);
     }
   };
@@ -804,7 +1172,11 @@ try {
    *
    * Korean only, and not because English is exempt from the rule: English writes “18 Aug
    * 2026”, where the break the reader gets is at a space that was always there. There is no
-   * pair to split, and a sweep with nothing to find is a minute of gate time saying nothing. */
+   * pair to split, and a sweep with nothing to find is a minute of gate time saying nothing.
+   *
+   * The same readings answer the word-order question (COUNTED_KEYS): the critic photographed
+   * the tooltip at 1440, so the sweep opens the dashboard's tips at every width in the list
+   * rather than trusting that word order is a thing that cannot depend on layout. */
   if (LOCALE === "ko") {
     for (const width of SWEEP_WIDTHS) {
       const ctx = await browser.newContext(view(width));
@@ -812,10 +1184,12 @@ try {
       const sweepPage = await ctx.newPage();
       for (const screen of SWEEP_SCREENS(slug)) {
         await sweepPage.goto(`${ORIGIN}${screen.path}`, { waitUntil: "domcontentloaded" });
+        if (screen.prepare) await screen.prepare(sweepPage);
         await sweepPage.waitForSelector(screen.wait, { state: "visible", timeout: 15_000 });
         await sweepPage.waitForFunction(() => !document.querySelector(".skeleton"));
         const broken = await sweepPage.evaluate(BREAK_PROBE, {
           counters: COUNTERS,
+          words: wholeWords,
           exempt: AUTHOR,
         });
         swept += 1;
@@ -825,11 +1199,21 @@ try {
             kind: "word split",
             text: item.context,
             at: item.at,
-            words: [`“${item.pair}” is broken across two lines — a counter left its number`],
+            words: [
+              `“${item.pair}” is broken across two lines — ` +
+                (/\d/.test(item.pair) ? "a counter left its number" : "a word lost a syllable"),
+            ],
           });
         }
-        if (VERBOSE || broken.length) {
-          log(`${screen.name} @${width}: ${broken.length} split word(s)`);
+        const misordered = await orderProbe(sweepPage);
+        for (const item of misordered) {
+          findings.push({ screen: `${screen.name} @${width}`, ...item });
+        }
+        if (VERBOSE || broken.length || misordered.length) {
+          log(
+            `${screen.name} @${width}: ${broken.length} split word(s), ` +
+              `${misordered.length} misordered count(s)`,
+          );
         }
       }
       await ctx.close();
@@ -838,19 +1222,22 @@ try {
 
   if (findings.length) {
     failures = findings.length;
-    /* Two kinds of finding now: a string in the wrong language, and a string that is in the
-       right language and is not a word. Counted apart, because "3 English strings" over a
-       list of Korean fragments is the gate misreporting its own result. */
+    /* Four kinds of finding now: a string in the wrong language; a string that is in the
+       right language and is not a word; a word the line breaker cut off its number; and a
+       number standing on the wrong side of its word. Counted apart, because "3 English
+       strings" over a list of Korean fragments is the gate misreporting its own result. */
     const split = findings.filter((f) => f.kind === "word split").length;
+    const order = findings.filter((f) => /word order|count order/.test(f.kind)).length;
     const foreign = findings.filter(
-      (f) => !/vocabulary|short form|word split/.test(f.kind),
+      (f) => !/vocabulary|short form|word split|word order|count order/.test(f.kind),
     ).length;
     const parts = [];
     if (foreign) parts.push(`${foreign} ${OTHER} string(s)`);
-    if (findings.length - foreign - split) {
-      parts.push(`${findings.length - foreign - split} not in the vocabulary`);
+    if (findings.length - foreign - split - order) {
+      parts.push(`${findings.length - foreign - split - order} not in the vocabulary`);
     }
     if (split) parts.push(`${split} word(s) split across a line break`);
+    if (order) parts.push(`${order} count(s) on the wrong side of their word`);
     console.error(`\n  ${parts.join(", ")}, printed by the app in ${LOCALE}:\n`);
     for (const f of findings.slice(0, 40)) {
       console.error(`  FAIL  [${f.screen}] ${f.kind} at ${f.at}`);
@@ -869,14 +1256,14 @@ try {
 const span = `${SWEEP_WIDTHS[0]}–${SWEEP_WIDTHS[SWEEP_WIDTHS.length - 1]}px`;
 const sweepNote =
   LOCALE === "ko"
-    ? `, and whole across ${swept} readings at ${SWEEP_WIDTHS.length} widths ${span}`
+    ? `, and whole and correctly ordered across ${swept} readings at ${SWEEP_WIDTHS.length} widths ${span}`
     : " (the word-integrity sweep is Korean's; English breaks at spaces)";
 log(
   failures !== 0
     ? `${failures} finding(s) on ${checked} screens and ${swept} sweep readings`
     : SWEEP_ONLY
-      ? `clean: ${swept} readings at ${SWEEP_WIDTHS.length} widths ${span} — no number was parted from its counter`
-      : `clean: ${checked} screens at ${WIDE}px and ${NARROW}px — every word the app printed is ${LOCALE}, and is a word${sweepNote}`,
+      ? `clean: ${swept} readings at ${SWEEP_WIDTHS.length} widths ${span} — no word lost a syllable, no number was parted from its counter, and none stood in front of its word`
+      : `clean: ${checked} screens at ${WIDE}px and ${NARROW}px — every word the app printed is ${LOCALE}, is a word, and counts on the side ${LOCALE} counts on${sweepNote}`,
 );
 await new Promise((r) => setTimeout(r, 60));
 process.exit(failures === 0 ? 0 : 1);

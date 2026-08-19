@@ -3976,16 +3976,31 @@ kbd {
   align-self: center;
 }
 
-/* the value leads, the series name follows: the reader has the series already */
+/* Which of the two comes first is the language's business, not this file's: the row is a
+   flex box and `counted()` in components/charts.tsx orders the children — value then name in
+   English, name then value in Korean, the same swap the legend under the plot makes.
+
+   Neither of them shrinks. A tip pinned near the right edge of its plot is laid out in the
+   space left of that edge, so it comes out at its 168px floor rather than its 260px ceiling,
+   and the row's three flex items were all shrinkable: the series name was handed 19px for a
+   word that measures 21, and Korean broke it — 시작 became 시 over 작, one syllable per line,
+   in the tooltip's own label (found while gating this file's word order). `.tip-added` is the
+   part that is allowed to give: it is the ids that also sit in the card below, and it has had
+   an ellipsis for exactly this since it was written. `keep-all` is the same rule the vault
+   bar's cells carry — Korean may break at a space and nowhere else. */
 .tip-value {
+  flex: none;
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 
 .tip-label {
+  flex: none;
   font-size: var(--text-sm);
   color: var(--text-secondary);
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .tip-added {
@@ -4003,6 +4018,8 @@ kbd {
   border-top: 1px solid var(--border-subtle);
   font-size: var(--text-sm);
   color: var(--text-secondary);
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .tip-gap-value {
