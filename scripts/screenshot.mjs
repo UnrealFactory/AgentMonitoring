@@ -62,7 +62,7 @@ Options (flag, or environment variable):
   --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
   --width <n>      $SHOT_WIDTH    viewport width (default 1600; the shell is judged at 1152 too)
   --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail,
-                                  projects, palette
+                                  projects, palette, palette-vault
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
   --project <slug> $SHOT_PROJECT  project to shoot (default: the one with the most records)
   --record <ids>   $SHOT_RECORD   record ids for the detail screens, e.g. WORK-0009 or
