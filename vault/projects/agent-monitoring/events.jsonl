@@ -177,3 +177,4 @@
 {"ts":"2026-08-20T02:39:24Z","actor":"p9-i18n-builder","type":"work_updated","ref":"WORK-0029","summary":"Round 9 closes the checklist this round was given, all five items, each mutation-tested."}
 {"ts":"2026-08-20T03:52:00Z","actor":"p10-titlebar-builder","type":"work_started","ref":"WORK-0030","summary":"The window frame is the app's now: a frameless title bar with the three buttons drawn in the app's own language"}
 {"ts":"2026-08-20T04:30:35Z","actor":"p10-titlebar-builder","type":"work_done","ref":"WORK-0030","summary":"Verified in the real WebView2 window (npm run tauri:dev), by driving and photographing it, not by reading the code."}
+{"ts":"2026-08-20T04:32:24Z","actor":"p10-titlebar-builder","type":"work_updated","ref":"WORK-0030","summary":"One clarification about the gate line in the outcome, because it can be read as a claim it does not make: every gate in that list drives browser mode, where…"}
