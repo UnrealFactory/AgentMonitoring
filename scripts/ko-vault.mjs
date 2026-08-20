@@ -23,6 +23,16 @@
  * shape of a Korean engineering note. Long unbroken sentences on purpose — a line breaker is
  * only interesting where a line has to break.
  *
+ * **And the records point at each other** (`--refs`), which is not decoration. A fixture is a
+ * question the gate is able to ask, and the first version of this one had no refs at all, so
+ * 관련 항목 was empty on every screen it swept and `.rel-title` — the one author-title box in
+ * this app that *wraps* rather than ellipsising — was never handed a Korean title. The gate
+ * asked the right question of the right screens and got no answer, while the live vault filled
+ * the same box with English, which only breaks at spaces (P9 round 7 critic). So every record
+ * the sweep opens has a rail: WORK-0003 points at BUG-0001 and WORK-0001, WORK-0002 at
+ * BUG-0002, and 배송's bug at the work log that normalised the states it is about — which
+ * fills both directions, since a reference is drawn on the record it points at too.
+ *
  * Timestamps are relative to the moment it is built, so the dashboard's last-24-hours panel,
  * its hour strip and both burn-ups have something in them at every range.
  */
@@ -86,6 +96,7 @@ const PLAN = [
   ["work", "start", "-p", "gyeolje", "--agent", "정산-에이전트",
     "--title", "부분 환불 금액이 원 단위에서 어긋나는 문제를 정산 쪽에서 먼저 확인하기",
     "--tags", "정산,환불",
+    "--refs", "BUG-0002",
     "--started-at", ago(9),
     "--body", `## What
 부분 환불을 두 번 이상 나누어 받은 주문에서 마지막 환불 금액이 1원 어긋나는 일이 있어서, 정산 배치가 만드는 금액과 결제 승인 원장의 금액을 나란히 놓고 어디서 갈라지는지 보고 있습니다.
@@ -124,6 +135,27 @@ const PLAN = [
     "--resolution",
     "원인은 배치 스케줄러가 서머타임이 없는 지역에서도 자정을 두 번 지나는 날을 만들어 낸 것이었습니다. 고친 방법은 실행 시각이 아니라 정산 대상 날짜를 잠금 열쇠로 삼아, 같은 날짜의 정산이 이미 있으면 두 번째 실행이 아무 일도 하지 않고 끝나게 한 것입니다. 지난 석 달치 정산을 다시 돌려서 중복이 하나도 생기지 않는 것을 확인했습니다."],
 
+  /* The work log the two bugs above point the reader at — and the record whose 관련 항목 rail
+     is the one this fixture exists to fill (see the header). Two outgoing rows, both carrying
+     a title somebody wrote long, which is the only shape `.rel-title` wraps in. */
+  ["work", "start", "-p", "gyeolje", "--agent", "결제팀-에이전트",
+    "--title", "결제 화면이 장바구니에서 받은 금액을 그대로 쓰지 않고 스스로 다시 물어보게 바꾸기",
+    "--tags", "결제,장바구니",
+    "--refs", "BUG-0001,WORK-0001",
+    "--started-at", ago(8),
+    "--body", `## What
+장바구니에서 넘겨받은 금액을 그대로 그리던 카드번호 입력 화면이, 열릴 때 주문 금액을 스스로 한 번 더 물어보고 그 답으로 그리도록 바꿉니다.
+
+## Why
+수량을 바꾼 직후에 결제하기를 누르면 금액을 다시 계산하는 요청과 화면 이동이 경쟁해서 낡은 금액이 남아 있었습니다. 장바구니 쪽에서 이동을 붙잡아 순서를 맞출 수도 있었지만, 그러면 느린 응답 하나가 결제 흐름 전체를 세웁니다. 금액을 아는 화면이 스스로 묻는 편이 화면 수가 늘어도 무너지지 않습니다.
+
+## How
+결제 화면이 열리면 주문 금액을 다시 물어보고, 답이 오기 전까지는 결제 버튼을 누를 수 없게 두었습니다. 금액이 달라졌으면 바뀐 금액과 달라진 이유를 함께 보여 주고, 사용자가 확인한 뒤에만 승인을 요청합니다.`],
+  ["work", "update", "WORK-0003", "-p", "gyeolje", "--agent", "결제팀-에이전트",
+    "--at", ago(2),
+    "--message",
+    "결제 화면이 금액을 다시 물어보는 부분까지 끝냈습니다. 금액이 달라졌을 때 보여 줄 안내 문구는 결제 흐름을 멈추지 않는 쪽으로 다시 쓰고 있습니다."],
+
   ["work", "start", "-p", "baesong", "--agent", "배송팀-에이전트",
     "--title", "택배사 세 곳의 배송 상태를 하나의 상태 값으로 정규화하기",
     "--tags", "배송,정규화",
@@ -144,6 +176,7 @@ const PLAN = [
     "--title", "배송 완료 안내 문구가 반품 접수된 주문에도 그대로 나갑니다",
     "--severity", "medium",
     "--labels", "배송,안내",
+    "--refs", "WORK-0001",
     "--created-at", ago(11),
     "--body",
     "반품이 접수된 주문에서 택배사가 회수 완료를 보내면 우리 쪽에서는 배송 완료로 읽고, 고객에게 상품이 도착했다는 안내 문구가 나갑니다. 회수와 배송을 방향으로 구분하지 않은 것이 원인으로 보입니다."],

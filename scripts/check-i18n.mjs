@@ -72,6 +72,15 @@
  * Korean project, Korean titles, Korean bodies, Korean handles — on its own dev server, in a
  * temp directory that is deleted when the gate ends.
  *
+ * **And a sixth, which is about this file rather than about the app: was the question asked?**
+ * The round after the fixture arrived, the same defect shipped one box further out —
+ * `.rel-title`, a record's title in the 관련 항목 rail — because no record in the fixture had
+ * `refs`, so that rail was empty on every screen swept and the whole-page question passed over
+ * a box with nothing in it. On the live vault the same box held English, which only breaks at
+ * spaces. So each swept screen now declares the surfaces the fixture exists to fill, and an
+ * empty one is a finding (see {@link FILLED_PROBE}): a gate that cannot reach a surface must
+ * say so rather than report it clean.
+ *
  * Everything else must be Korean — and `--locale en` is the same walk with the alphabets
  * swapped, because a Korean string typed into a component is just as invisible to `tsc` as
  * an English one, and the app ships in two languages. Runs against the live vault read-only.
@@ -446,16 +455,41 @@ const BREAKABLE = [
  * width where it wraps.
  */
 const SWEEP_SCREENS = (projects) => [
-  { name: "projects", path: "/projects", wait: ".project-row" },
+  { name: "projects", path: "/projects", wait: ".project-row", filled: [".project-desc", ".feed-summary"] },
   ...projects.flatMap(({ slug, work, bug }) => [
-    { name: `dashboard ${slug}`, path: `/p/${slug}`, wait: ".now-strip .now-hero-value" },
-    { name: `work ${slug}`, path: `/p/${slug}/work`, wait: ".work-rows .work-row" },
-    { name: `bugs ${slug}`, path: `/p/${slug}/bugs?tab=all`, wait: ".work-rows .bug-row" },
+    {
+      name: `dashboard ${slug}`,
+      path: `/p/${slug}`,
+      wait: ".now-strip .now-hero-value",
+      filled: [".now-row-title", ".feed-summary"],
+    },
+    {
+      name: `work ${slug}`,
+      path: `/p/${slug}/work`,
+      wait: ".work-rows .work-row",
+      filled: [".work-row-title"],
+    },
+    {
+      name: `bugs ${slug}`,
+      path: `/p/${slug}/bugs?tab=all`,
+      wait: ".work-rows .bug-row",
+      filled: [".work-row-title"],
+    },
     ...(work
-      ? [{ name: `work detail ${work}`, path: `/p/${slug}/work/${work}`, wait: ".record-title" }]
+      ? [{
+          name: `work detail ${work}`,
+          path: `/p/${slug}/work/${work}`,
+          wait: ".record-title",
+          filled: [".record-title", ".prose", ".rel-title"],
+        }]
       : []),
     ...(bug
-      ? [{ name: `bug detail ${bug}`, path: `/p/${slug}/bugs/${bug}`, wait: ".record-title" }]
+      ? [{
+          name: `bug detail ${bug}`,
+          path: `/p/${slug}/bugs/${bug}`,
+          wait: ".record-title",
+          filled: [".record-title", ".prose", ".rel-title"],
+        }]
       : []),
     /* The tooltips, open, at every width in the list — the state the burn-up tip is read in
        and the one no gate had ever rendered (see openTips). */
@@ -467,6 +501,27 @@ const SWEEP_SCREENS = (projects) => [
     },
   ]),
 ];
+
+/**
+ * Runs in the page. Returns the declared surfaces that are **not** holding Korean.
+ *
+ * The gate that missed `.rel-title` for a round asked the right question — is every Korean
+ * word on this page still whole? — of the right screens, and got no answer from that box,
+ * because nothing in the fixture ever put a Korean title in it: no record had `refs`, so
+ * 관련 항목 was absent from every screen the sweep opened, while the live vault filled the
+ * same box with English, which only breaks at spaces (P9 round 7 critic). A question asked of
+ * an empty box passes, and reports the same "clean" as a question that was answered.
+ *
+ * So each swept screen names the surfaces the Korean-content fixture exists to fill, and this
+ * fails when one of them holds no Hangul. It is a check on the *fixture*, not on the app: it
+ * runs only against the built vault (where every record is Korean by construction), never
+ * against the live one, whose records are English and are supposed to be.
+ */
+const FILLED_PROBE = (selectors) =>
+  selectors.filter(
+    (sel) =>
+      ![...document.querySelectorAll(sel)].some((el) => /[가-힣]{2,}/.test(el.textContent || "")),
+  );
 
 /**
  * Runs in the page. Returns every Korean word the line breaker split in two.
@@ -1282,7 +1337,7 @@ try {
    * One vault, swept at every width. `where` names it in the findings, because "@1200" over
    * a body nobody recognises is not a place somebody can go and look.
    */
-  const sweep = async (origin, sweepProjects, where) => {
+  const sweep = async (origin, sweepProjects, where, { fixture = false } = {}) => {
     for (const width of SWEEP_WIDTHS) {
       const ctx = await browser.newContext(view(width));
       await useLocale(ctx, LOCALE);
@@ -1294,6 +1349,24 @@ try {
         await sweepPage.waitForSelector(screen.wait, { state: "visible", timeout: 15_000 });
         await sweepPage.waitForFunction(() => !document.querySelector(".skeleton"));
         await sweepPage.evaluate(() => document.fonts.ready);
+        /* Is the question being answered at all? (see FILLED_PROBE) — once per screen, at the
+           first width, because "does this box hold Korean" is a fact about the fixture and
+           not about the layout. */
+        if (fixture && screen.filled && width === SWEEP_WIDTHS[0]) {
+          for (const sel of await sweepPage.evaluate(FILLED_PROBE, screen.filled)) {
+            findings.push({
+              screen: at,
+              kind: "fixture gap",
+              text: `${sel} holds no Korean on this screen`,
+              at: sel,
+              words: [
+                "the Korean-content vault stopped filling a surface this sweep reads — " +
+                  "a line-break question asked of an empty box passes without being answered " +
+                  "(scripts/ko-vault.mjs)",
+              ],
+            });
+          }
+        }
         const broken = [
           // The app's own counted words and its numbers, minus what the author wrote.
           ...(await sweepPage.evaluate(BREAK_PROBE, {
@@ -1365,27 +1438,31 @@ try {
       const bugs = await (await fetch(`${koOrigin}/vault-api/projects/${p.slug}/bugs`)).json();
       koProjects.push({ slug: p.slug, work: works[0]?.id ?? null, bug: bugs[0]?.id ?? null });
     }
-    await sweep(koOrigin, koProjects, "ko-vault ");
+    await sweep(koOrigin, koProjects, "ko-vault ", { fixture: true });
   }
 
   if (findings.length) {
     failures = findings.length;
-    /* Four kinds of finding now: a string in the wrong language; a string that is in the
-       right language and is not a word; a word the line breaker cut off its number; and a
-       number standing on the wrong side of its word. Counted apart, because "3 English
-       strings" over a list of Korean fragments is the gate misreporting its own result. */
+    /* Five kinds of finding now: a string in the wrong language; a string that is in the
+       right language and is not a word; a word the line breaker cut off its number; a number
+       standing on the wrong side of its word; and a surface the Korean fixture stopped
+       filling, which is the gate reporting that it could not ask. Counted apart, because
+       "3 English strings" over a list of Korean fragments is the gate misreporting its own
+       result. */
     const split = findings.filter((f) => f.kind === "word split").length;
     const order = findings.filter((f) => /word order|count order/.test(f.kind)).length;
+    const gaps = findings.filter((f) => f.kind === "fixture gap").length;
     const foreign = findings.filter(
-      (f) => !/vocabulary|short form|word split|word order|count order/.test(f.kind),
+      (f) => !/vocabulary|short form|word split|word order|count order|fixture gap/.test(f.kind),
     ).length;
     const parts = [];
     if (foreign) parts.push(`${foreign} ${OTHER} string(s)`);
-    if (findings.length - foreign - split - order) {
-      parts.push(`${findings.length - foreign - split - order} not in the vocabulary`);
+    if (findings.length - foreign - split - order - gaps) {
+      parts.push(`${findings.length - foreign - split - order - gaps} not in the vocabulary`);
     }
     if (split) parts.push(`${split} word(s) split across a line break`);
     if (order) parts.push(`${order} count(s) on the wrong side of their word`);
+    if (gaps) parts.push(`${gaps} surface(s) the Korean fixture no longer fills`);
     console.error(`\n  ${parts.join(", ")}, printed by the app in ${LOCALE}:\n`);
     for (const f of findings.slice(0, 40)) {
       console.error(`  FAIL  [${f.screen}] ${f.kind} at ${f.at}`);

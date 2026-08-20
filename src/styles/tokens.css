@@ -349,8 +349,18 @@ dt {
  *
  * `overflow-wrap: break-word` is the escape hatch, and it is why the record's long tokens are
  * safe: a path or a stack frame that cannot fit a column at all still breaks, and `.prose
- * code` keeps its own `anywhere` for the ones that need to break mid-token. A record's title
- * needs nothing here — it is an `h1`, and the heading rule above already carries both.
+ * code` keeps its own `anywhere` for the ones that need to break mid-token.
+ *
+ * A record's title is not on this list and is *not* an exception: it is covered twice, in the
+ * two places it is drawn. As an `h1` (`.record-title`) the heading rule at the top of this
+ * file already carries both properties. As a row in the 관련 항목 rail (`.rel-title`) it
+ * carries them where its own reason lives, in app.css — that box is the one title in the app
+ * that wraps to four lines instead of ellipsising, and it needs `overflow-wrap: anywhere`
+ * rather than `break-word`, so pulling it up here would have meant restating the exception on
+ * top of the group. It was left out of both for a round on the reasoning "it is an `h1`" —
+ * true of one of the two elements — and Korean titles were cut mid-syllable in every record's
+ * rail (P9 round 7 critic). A rule that covers a surface *by name* is worth more than a rule
+ * that covers a component's idea of itself.
  */
 .prose,
 .project-desc,

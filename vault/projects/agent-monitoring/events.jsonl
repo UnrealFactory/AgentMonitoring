@@ -173,3 +173,4 @@
 {"ts":"2026-08-19T22:45:00Z","actor":"p9-i18n-builder","type":"work_started","ref":"WORK-0029","summary":"A Korean record keeps its words: the line breaker, the tooltip, the counters, and a vault the gates can read Korean out of"}
 {"ts":"2026-08-19T23:38:04Z","actor":"p9-i18n-builder","type":"work_updated","ref":"WORK-0028","summary":"Correction: the flex: none this log put on .tip-value and .tip-label was a regression. keep-all alone was the fix for Korean — mutation-tested at the same…"}
 {"ts":"2026-08-19T23:38:22Z","actor":"p9-i18n-builder","type":"work_done","ref":"WORK-0029","summary":"Shipped, each finding reproduced before the fix and measured after at the widths it was found at."}
+{"ts":"2026-08-20T00:54:50Z","actor":"p9-i18n-builder","type":"work_updated","ref":"WORK-0029","summary":"Correction to the first bullet of ## What: the keep-all law went onto the four selectors the round-6 critic listed, not onto the surface that critic named, and…"}

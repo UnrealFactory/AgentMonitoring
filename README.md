@@ -165,7 +165,8 @@ npm run check:vault      # the vault opens from anywhere, and moving it changes 
 npm run check:mcp        # the MCP server over stdio: lifecycle, errors, context budgets
 npm run check:i18n       # every screen in Korean: no English left in the app's own words, and
                          # no Korean word broken across a line — on this vault and on one whose
-                         # records are Korean, built for the run with the release CLI
+                         # records are Korean, built for the run with the release CLI, whose
+                         # screens must still be *holding* Korean where the sweep reads
 npm run check:errors     # every backend failure, read through the app's words, on both transports
 ```
 
