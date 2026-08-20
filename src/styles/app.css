@@ -917,6 +917,57 @@
   }
 }
 
+/* ===========================================================================
+   TOOLTIP — every `title` in the app, drawn by the app
+
+   The same bar as the context menu above and the chart's own tip: raised surface, hairline
+   border, small radius, one shadow. Smaller type than a menu (12px, not 13) because a
+   tooltip is an aside about the thing under the pointer, not a thing to act on.
+
+   Positioned in JS — off the cursor, or under a focused element, flipped at the window edge
+   (components/Tooltip.tsx). Nothing here may set `left`/`top`: they are inline, per shot.
+   ======================================================================== */
+
+.tooltip {
+  position: fixed;
+  z-index: 90; /* over the context menu (70) and the toast (80): it is an aside about them */
+  /* One line up to this, then wrapped. 360 is wide enough for the longest compound title
+     this app builds — a project name, its work counts and its bug counts in one string —
+     and narrow enough that the eye does not have to travel back to find the next line. */
+  max-width: 360px;
+  padding: 5px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--text-primary);
+  /* `pre-line` for the few titles that carry a newline of their own (a vault error), and so
+     the runs of spaces in a formatted one collapse the way they do in the attribute. */
+  white-space: pre-line;
+  /* Korean breaks at the spaces the author wrote, never between two syllables — the rule the
+     whole app keeps (tokens.css). `break-word` is the escape hatch for a lone long Latin
+     token: a vault path with no spaces in it still has to fit 360px. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  font-variant-numeric: tabular-nums;
+  /* It must never be the thing under the pointer: a tooltip that can be hovered would send a
+     `mouseout` to the element it describes and blink itself away. */
+  pointer-events: none;
+  animation: tooltip-in var(--duration-fast) var(--ease);
+}
+
+/* 90ms of opacity and nothing else. No slide, no scale: the box is placed where the reader is
+   already looking, and a tooltip that travels to get there is a tooltip you watch instead of
+   read. It is measured and positioned before the first paint, so this fade always starts from
+   the final position (components/Tooltip.tsx). */
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* --- page scaffold -------------------------------------------------------- */
 
 .page {

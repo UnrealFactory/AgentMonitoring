@@ -5,6 +5,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { Sidebar } from "./components/Sidebar";
 import { Titlebar } from "./components/Titlebar";
+import { TooltipLayer } from "./components/Tooltip";
 import { InlineCode, plainMarks, Skeleton } from "./components/ui";
 import { isTauri, vaultErrorMessage } from "./lib/api";
 import { formatDateTimeUtc } from "./lib/format";
@@ -165,6 +166,9 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
+        {/* Draws every `title` in the app, so the WebView never draws one of its own — one
+            layer, document-level delegation, no component opts in (components/Tooltip.tsx). */}
+        <TooltipLayer />
       </ContextMenuProvider>
     </AppProvider>
   );
