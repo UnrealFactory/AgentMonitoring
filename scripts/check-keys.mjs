@@ -57,10 +57,16 @@
  *      on the work list, the bug board and the dashboard in turn, each with real rows on it —
  *      lands on the app's no-such-project screen from the poll alone, with no reload and no
  *      navigation; parking that window on /projects, which this gate did for a round, could
- *      only ever see the list that updates itself (P12 round 2 critic). Its mirror is checked
- *      too: the whole vault directory going away leaves those rows exactly where they are
- *      under the shell's one line, because a vault that is briefly unreadable is not a
- *      project that was deleted. And it **owns the window** while it is up:
+ *      only ever see the list that updates itself (P12 round 2 critic). Parked on a *record*
+ *      of that project it keeps the copy it has instead, and offers **no retry** beside the
+ *      sentence promising to keep it: a retry is a manual reload, and a manual reload that
+ *      fails trades the reader's last copy of a permanently deleted record for an error card
+ *      (P12 round 3 critic). Both mirrors are checked too, because neither claim may be
+ *      bought by breaking the other: the whole vault directory going away leaves those rows
+ *      and that record exactly where they are under the shell's one line, and a record whose
+ *      *file* stops parsing keeps its retry, because a vault that is briefly unreadable is
+ *      not a project that was deleted and a record that could not be re-read is not a record
+ *      that is gone. And it **owns the window** while it is up:
  *      Alt+Left does not navigate the page out from under it, Ctrl+K opens no palette over
  *      it, and a right-click raises no menu below its scrim — the three ways an armed
  *      confirmation came to be floating over a screen about a *different* project, one of
@@ -69,7 +75,15 @@
  * Two scratch vaults are built in temp directories — a 12-project one for (5) and the same
  * copy for the writes and the deletes in (8). ./vault is read, never written.
  */
-import { cpSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -1321,6 +1335,155 @@ try {
     await parked.close();
   }
 
+  /* 9d. The same delete under a window parked on a *record* of that project.
+
+     A record page is the one screen that does not turn into the no-such-project card, and
+     for a good reason: the reader still has the thing they came for, and the vault has no
+     undo and no recycle bin to get it back from. So it keeps its copy and says so in a bar
+     over the top — "WORK-0001 — 이 볼트에 더 이상 없습니다. 아래는 마지막으로 읽었을 때 화면에
+     있던 내용입니다."
+
+     What it must not put beside that sentence is 다시 시도. Retry is a *manual* reload, and
+     `useAsync` answers a failed manual reload by dropping `data` for the error card — so one
+     click on the button next to the promise threw the promise away, and the last copy of a
+     permanently deleted record with it (P12 round 3 critic, photographed in the WebView2
+     window and reproduced in both languages). The one button here is the way out, and the
+     way out has to lead somewhere that still exists. */
+  log("--- a window parked on a record of the project it loses");
+
+  const recordCases = [
+    { slug: "scratch-5", screen: "the work log", kind: "worklogs", at: "/work", out: T("wd.workList") },
+    { slug: "scratch-6", screen: "the bug", kind: "bugs", at: "/bugs", out: T("bd.bugBoard") },
+  ];
+
+  for (const { slug, screen, kind, at, out } of recordCases) {
+    stock(slug);
+    const name = (await manyProjects()).find((p) => p.slug === slug)?.name;
+    const record = (
+      await (await fetch(`${manyOrigin}/vault-api/projects/${slug}/${kind}`)).json()
+    )[0];
+    const parked = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+    await useLocale(parked, LOCALE);
+    let parkedLoads = 0;
+    parked.on("load", () => (parkedLoads += 1));
+    await parked.goto(`${manyOrigin}/p/${slug}${at}/${record.id}`, { waitUntil: "domcontentloaded" });
+    await ready(parked);
+    parkedLoads = 0;
+    const parkedUrl = parked.url();
+    const sectionsBefore = await parked.locator(".record-section").count();
+    const titleBefore = ((await parked.locator(".record-title").textContent()) ?? "").trim();
+    check(
+      `${screen} ${record.id}, parked inside ${slug}, is on screen in full before the delete`,
+      sectionsBefore > 0 && titleBefore.includes(record.title) && titleBefore.includes(record.id),
+      `${sectionsBefore} sections, title "${titleBefore}"`,
+    );
+
+    await wide.goto(`${manyOrigin}/projects`, { waitUntil: "domcontentloaded" });
+    await ready(wide);
+    await openDialogFromRow(wide, name);
+    await wide.locator(".modal .input").fill(slug);
+    await wide.locator(".modal .button-danger").click();
+    check(`${slug} is gone from the vault`, await goneFromVault(slug));
+
+    await parked.waitForSelector(".vault-alert-inline", { state: "visible", timeout: 25_000 });
+    check(
+      `…and ${screen} says so over the copy it kept, without being told`,
+      ((await parked.locator(".vault-alert-inline strong").textContent()) ?? "").trim() ===
+        T("rec.staleGone", record.id),
+      `bar reads "${await parked.locator(".vault-alert-inline").textContent()}"`,
+    );
+    check(
+      "…with the record still drawn under it, in full",
+      (await parked.locator(".record-section").count()) === sectionsBefore &&
+        ((await parked.locator(".record-title").textContent()) ?? "").trim() === titleBefore &&
+        (await parked.locator(".error-state").count()) === 0,
+      `${await parked.locator(".record-section").count()} sections, was ${sectionsBefore}`,
+    );
+    /* The fix itself. There is nothing to retry: the record is off the disk, and the button
+       would spend the reader's last copy of it on re-asking a question already answered. */
+    check(
+      "…and offers no retry beside a sentence promising to keep it",
+      (await parked.locator(".vault-alert-inline button").count()) === 0,
+      `buttons: ${JSON.stringify(await parked.locator(".vault-alert-inline button").allTextContents())}`,
+    );
+    check(
+      "…the one thing it offers being the way out",
+      (await parked.locator(".vault-alert-inline a.button").count()) === 1 &&
+        ((await parked.locator(".vault-alert-inline a.button").textContent()) ?? "").trim() === out,
+      `links: ${JSON.stringify(await parked.locator(".vault-alert-inline a.button").allTextContents())}`,
+    );
+    check("…without reloading the page", parkedLoads === 0, `${parkedLoads} load events`);
+    check(
+      "…and without navigating: the reader is still on the record they were reading",
+      parked.url() === parkedUrl,
+      `went to ${parked.url()} from ${parkedUrl}`,
+    );
+
+    /* Leaving is the reader's own decision, and it lands on the screen the round above
+       built: the list of a project that is not in this vault any more. */
+    await parked.locator(".vault-alert-inline a.button").click();
+    await parked.waitForSelector(".error-state", { state: "visible", timeout: 15_000 });
+    check(
+      "…which, when the reader takes it, lands on the app's no-such-project screen",
+      ((await parked.locator(".error-title").textContent()) ?? "").trim() ===
+        T("vault.noProject", slug),
+      `title reads "${await parked.locator(".error-title").textContent()}"`,
+    );
+    await parked.close();
+  }
+
+  /* The mirror of that, which the fix must not have cost: a record that could not be
+     *re-read* is not a record that is gone. The file itself is made unreadable here — its
+     frontmatter taken away, which both backends answer with a 500 and not a 404 — so the bar
+     says "다시 읽지 못했습니다" over the same kept copy, and it does offer the retry, because
+     the record is still on the disk and a second read is exactly what is called for. */
+  log("--- a record that could not be re-read is not a record that is gone");
+  const unread = "scratch-10";
+  stock(unread);
+  const unreadRec = (
+    await (await fetch(`${manyOrigin}/vault-api/projects/${unread}/worklogs`)).json()
+  )[0];
+  const recPath = join(manyVault, "projects", unread, "worklogs", `${unreadRec.id}.md`);
+  const recBytes = readFileSync(recPath);
+  const shaken = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  await useLocale(shaken, LOCALE);
+  await shaken.goto(`${manyOrigin}/p/${unread}/work/${unreadRec.id}`, { waitUntil: "domcontentloaded" });
+  await ready(shaken);
+  const shakenSections = await shaken.locator(".record-section").count();
+  writeFileSync(recPath, "This file lost its frontmatter while somebody was reading it.\n");
+  try {
+    await shaken.waitForSelector(".vault-alert-inline", { state: "visible", timeout: 25_000 });
+    check(
+      "a record that stops parsing raises the bar over the copy on screen",
+      ((await shaken.locator(".vault-alert-inline strong").textContent()) ?? "").trim() ===
+        T("rec.staleUnread", unreadRec.id),
+      `bar reads "${await shaken.locator(".vault-alert-inline").textContent()}"`,
+    );
+    check(
+      "…and this is the failure that keeps its retry: the record is still on the disk",
+      (await shaken.locator(".vault-alert-inline button").count()) === 1 &&
+        ((await shaken.locator(".vault-alert-inline button").textContent()) ?? "").trim() ===
+          T("app.retry"),
+      `buttons: ${JSON.stringify(await shaken.locator(".vault-alert-inline button").allTextContents())}`,
+    );
+    check(
+      "…over a copy that is still all there",
+      (await shaken.locator(".record-section").count()) === shakenSections &&
+        (await shaken.locator(".error-state").count()) === 0,
+    );
+  } finally {
+    writeFileSync(recPath, recBytes);
+  }
+  /* And the file coming back is enough: the poll re-reads it and the bar goes, with no
+     reload and nothing for the reader to do. */
+  await shaken.waitForSelector(".vault-alert-inline", { state: "detached", timeout: 40_000 });
+  check(
+    "…and when the file parses again the bar goes, leaving the record current",
+    (await shaken.locator(".record-section").count()) === shakenSections &&
+      (await shaken.locator(".error-state").count()) === 0,
+  );
+  await shaken.close();
+
   /* And the other half of that claim, which matters as much: a vault that is *briefly
      unreadable* is not a project that was deleted. Conflating them would replace a screen
      somebody is reading with an error card every time a dev server restarts. Here the whole
@@ -1335,6 +1498,18 @@ try {
   await ready(held);
   const heldRows = await held.locator(".work-row").count();
   check(`a work list parked on ${survivor} has rows before the vault goes away`, heldRows > 0);
+
+  /* A record of the same project, parked beside it: the screen that keeps a copy is the one
+     with the most to lose from "the vault blinked" being read as "this was deleted". */
+  const heldRec = (
+    await (await fetch(`${manyOrigin}/vault-api/projects/${survivor}/worklogs`)).json()
+  )[0];
+  const heldRecord = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  await useLocale(heldRecord, LOCALE);
+  await heldRecord.goto(`${manyOrigin}/p/${survivor}/work/${heldRec.id}`, { waitUntil: "domcontentloaded" });
+  await ready(heldRecord);
+  const heldSections = await heldRecord.locator(".record-section").count();
+  check(`…and ${heldRec.id} is open beside it, in full`, heldSections > 0);
 
   /* Windows refuses a directory rename while anything inside it is open, and the cursor poll
      reads every record file twice a second — so ask again rather than fail the gate on a
@@ -1367,6 +1542,21 @@ try {
       (await held.locator(".error-state").count()) === 0,
       `error title "${await held.locator(".error-title").textContent().catch(() => "")}"`,
     );
+    await heldRecord.waitForSelector(".vault-alert-wrap .vault-alert", { state: "visible", timeout: 40_000 });
+    check("…and the record open beside it hears the same one line", true);
+    check(
+      "…keeps every word it had, with no error card",
+      (await heldRecord.locator(".record-section").count()) === heldSections &&
+        (await heldRecord.locator(".error-state").count()) === 0,
+      `${await heldRecord.locator(".record-section").count()} sections, was ${heldSections}`,
+    );
+    check(
+      "…and is not told the record was deleted, because it was not",
+      !((await heldRecord.locator(".vault-alert-inline").textContent().catch(() => "")) ?? "").includes(
+        T("rec.staleGone", heldRec.id),
+      ),
+      `inline bar reads "${await heldRecord.locator(".vault-alert-inline").textContent().catch(() => "")}"`,
+    );
   } finally {
     await moveDir(away, manyVault);
   }
@@ -1377,7 +1567,14 @@ try {
     (await held.locator(".work-row").count()) === heldRows &&
       (await held.locator(".error-state").count()) === 0,
   );
+  await heldRecord.waitForSelector(".vault-alert-wrap", { state: "detached", timeout: 60_000 });
+  check(
+    "…and the record beside it comes back the same way, whole",
+    (await heldRecord.locator(".record-section").count()) === heldSections &&
+      (await heldRecord.locator(".error-state").count()) === 0,
+  );
   await held.close();
+  await heldRecord.close();
 
   /* Deleting the project the reader is standing *inside*. Left where they were, the next
      read would answer with "this vault has no project called …" — an error card in place of

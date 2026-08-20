@@ -380,6 +380,12 @@ export function Skeleton({ rows = 4 }: { rows?: number }) {
  * tell at all without this: the board drops the row and the open detail tab goes on
  * rendering the record in full, indefinitely, so two windows on the same vault disagree and
  * neither says why. Same amber bar as the shell's, one page down.
+ *
+ * `onRetry` belongs to the unreadable case alone, and the caller gates it on the same
+ * {@link nothingToRetry} this bar reads its own headline from: a retry is a *manual* reload,
+ * and a manual reload that fails replaces the page with an error card — which over a deleted
+ * record throws away, in one click, the copy the sentence beside the button has just promised
+ * to keep. There is no undo and no recycle bin behind it.
  */
 export function StaleRecordBar({
   id,

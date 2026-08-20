@@ -153,6 +153,12 @@ export function BugDetailPage() {
     null
   );
 
+  /* The twin of the work log's — see the comment there. The background read failed because
+     this bug is not in the vault any more, so the bar offers the board rather than a retry:
+     retrying is a manual reload, and a manual reload that fails takes the copy on screen
+     with it, for a record no one can bring back. */
+  const gone = refreshError !== undefined && nothingToRetry(refreshError, status);
+
   return (
     <RecordTitles.Provider value={related.titles}>
       <div className="page page-detail">
@@ -163,9 +169,9 @@ export function BugDetailPage() {
             id={bug.id}
             message={refreshError}
             status={status}
-            onRetry={reload}
+            onRetry={gone ? undefined : reload}
             action={
-              nothingToRetry(refreshError, status) ? (
+              gone ? (
                 <Link className="button button-sm" to={`/p/${slug}/bugs`}>
                   {t("bd.bugBoard")}
                 </Link>

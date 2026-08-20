@@ -135,6 +135,18 @@ export function WorkDetailPage() {
 
   const duration = formatDuration(work.started, work.finished);
 
+  /* The background read failed because this record is not in the vault any more — deleted,
+     or its project was — rather than because the vault blinked. Both halves of the bar hang
+     off it: the way out it offers, and whether it offers a retry at all.
+
+     A retry here is a *manual* reload, so `useAsync` treats the failure as a load failure
+     and drops `data` for the error card — which on a deleted record throws away the copy
+     the bar has just promised to keep, and there is no undo and no recycle bin to get it
+     back from. It is the same gate the error branch above and the work list, the bug board
+     and the dashboard already use; this bar was the one place left offering 다시 시도 next
+     to "이 볼트에 더 이상 없습니다" (P12 round 3 critic, both transports, ko and en). */
+  const gone = refreshError !== undefined && nothingToRetry(refreshError, status);
+
   return (
     <RecordTitles.Provider value={related.titles}>
       <div className="page page-detail">
@@ -145,9 +157,9 @@ export function WorkDetailPage() {
             id={work.id}
             message={refreshError}
             status={status}
-            onRetry={reload}
+            onRetry={gone ? undefined : reload}
             action={
-              nothingToRetry(refreshError, status) ? (
+              gone ? (
                 <Link className="button button-sm" to={`/p/${slug}/work`}>
                   {t("wd.workList")}
                 </Link>

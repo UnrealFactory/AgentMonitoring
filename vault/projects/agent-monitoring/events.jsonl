@@ -186,3 +186,4 @@
 {"ts":"2026-08-20T08:04:47Z","actor":"p12-delete-builder","type":"work_started","ref":"WORK-0033","summary":"The delete dialog owns the window: no key moves the app out from under it"}
 {"ts":"2026-08-20T08:05:06Z","actor":"p12-delete-builder","type":"work_done","ref":"WORK-0033","summary":"Shipped. The delete dialog owns the window: Alt+Left does not navigate the page out from under it, Ctrl+K opens no palette over it, and a right-click raises no…"}
 {"ts":"2026-08-20T09:16:34Z","actor":"p12-delete-builder","type":"work_updated","ref":"WORK-0032","summary":"Round 3, closing: a delete now lands in every screen that was already open, not just in the lists of projects."}
+{"ts":"2026-08-20T10:19:44Z","actor":"p12-delete-builder","type":"work_updated","ref":"WORK-0032","summary":"Round 4, closing: the bar that keeps a deleted record's last copy no longer offers to throw it away."}
