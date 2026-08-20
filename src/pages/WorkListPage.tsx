@@ -13,7 +13,7 @@ import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useProjectSlug, useVaultNonce } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
-import { api, failureTitle, nothingToRetry } from "../lib/api";
+import { api, failureTitle, nothingToRetry, projectGone } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useListKeyboard } from "../lib/useListKeyboard";
 import { useUrlFilters } from "../lib/useUrlFilters";
@@ -53,10 +53,18 @@ export function WorkListPage() {
   const {
     data,
     error,
+    refreshError,
     status: httpStatus,
     loading,
     reload,
   } = useAsync(() => api.listWorklogs(slug), [slug], useVaultNonce());
+  /* The project went out from under an open list — deleted in another window, or from this
+     window's own sidebar. A list of a project that is not in the vault has nothing left to
+     be a list of, so the screen becomes the one the app already draws for a stale project
+     link rather than going on printing rows for files that are off the disk (lib/api.ts,
+     `projectGone`). Any other failed refresh keeps the last good screen and is the shell's
+     line to say: a vault that is briefly unreadable is not a project that is gone. */
+  const failure = error ?? (projectGone(refreshError, httpStatus) ? refreshError : undefined);
 
   const searchRef = useRef<HTMLInputElement>(null);
   /** Right-click (or Shift+F10) on a row: open it, or take its id, title or link. */
@@ -172,13 +180,13 @@ export function WorkListPage() {
     resetKey: `${status}|${agent}|${tag}|${query}`,
   });
 
-  if (error) {
+  if (failure) {
     return (
       <div className="page">
         <ErrorState
-          title={failureTitle(error, httpStatus)}
-          message={error}
-          onRetry={nothingToRetry(error, httpStatus) ? undefined : reload}
+          title={failureTitle(failure, httpStatus)}
+          message={failure}
+          onRetry={nothingToRetry(failure, httpStatus) ? undefined : reload}
           action={
             <Link className="button" to="/projects">
               {t("nav.allProjects")}

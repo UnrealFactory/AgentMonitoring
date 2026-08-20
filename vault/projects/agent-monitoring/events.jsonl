@@ -185,3 +185,4 @@
 {"ts":"2026-08-20T06:20:30Z","actor":"p12-delete-builder","type":"work_done","ref":"WORK-0032","summary":"Shipped. Archive is gone from the app and from both dictionaries; 삭제 is on every project surface and opens one dialog that will not act until the slug is typed."}
 {"ts":"2026-08-20T08:04:47Z","actor":"p12-delete-builder","type":"work_started","ref":"WORK-0033","summary":"The delete dialog owns the window: no key moves the app out from under it"}
 {"ts":"2026-08-20T08:05:06Z","actor":"p12-delete-builder","type":"work_done","ref":"WORK-0033","summary":"Shipped. The delete dialog owns the window: Alt+Left does not navigate the page out from under it, Ctrl+K opens no palette over it, and a right-click raises no…"}
+{"ts":"2026-08-20T09:16:34Z","actor":"p12-delete-builder","type":"work_updated","ref":"WORK-0032","summary":"Round 3, closing: a delete now lands in every screen that was already open, not just in the lists of projects."}

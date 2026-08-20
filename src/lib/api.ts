@@ -402,6 +402,32 @@ export function nothingToRetry(error: string, status?: number): boolean {
   return failureKind(error, status) !== "unreadable";
 }
 
+/**
+ * The one failed *background* refresh a project-scoped screen may not sit through: the
+ * project itself is not in the vault any more.
+ *
+ * Everything else a refresh can fail with — a dev server restarting, a record caught
+ * mid-write, a vault folder renamed — leaves the last good screen exactly where it was,
+ * because the reader is reading and one missed poll is not news (useAsync, and the shell's
+ * one line above the page). This is different in kind: a work list, a bug board and a
+ * dashboard are lists *of a project*, and when that folder leaves the disk every row on
+ * them names a file that is not there. Left alone the window contradicts itself — its own
+ * sidebar has already dropped the project while the pane beside it goes on counting twelve
+ * work logs, indefinitely (P12 round 2 critic, measured on both transports). So the three
+ * list screens turn this one into the screen the app already draws for a stale project
+ * link, and a *record* page keeps its copy with `StaleRecordBar` over it: there the reader
+ * still has the thing they came to read.
+ *
+ * Read off the message via {@link failureKind}, so it is the same answer in the desktop
+ * app — which has no status to give — as in browser mode. Deliberately not `not_here`: that
+ * is the fallback for a 404 whose sentence this file has not learned, it can only ever be
+ * reached on the transport that carries statuses, and a branch that nukes a screen in the
+ * browser while keeping it on the desktop is the transport split this file exists to avoid.
+ */
+export function projectGone(refreshError: string | undefined, status?: number): boolean {
+  return refreshError !== undefined && failureKind(refreshError, status) === "no_project";
+}
+
 /* --------------------------------------------------------------------------
    The sentence under the headline
    ----------------------------------------------------------------------- */

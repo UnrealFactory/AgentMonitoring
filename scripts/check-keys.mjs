@@ -53,7 +53,14 @@
  *      deletes nothing, esc and the scrim delete nothing, and when it does run the project
  *      leaves the disk, the row leaves an *already-open second window* with no reload, and
  *      a reader standing inside the deleted project is moved to /projects rather than left
- *      on a screen whose vault entry is gone. And it **owns the window** while it is up:
+ *      on a screen whose vault entry is gone. A second window parked *inside* the project —
+ *      on the work list, the bug board and the dashboard in turn, each with real rows on it —
+ *      lands on the app's no-such-project screen from the poll alone, with no reload and no
+ *      navigation; parking that window on /projects, which this gate did for a round, could
+ *      only ever see the list that updates itself (P12 round 2 critic). Its mirror is checked
+ *      too: the whole vault directory going away leaves those rows exactly where they are
+ *      under the shell's one line, because a vault that is briefly unreadable is not a
+ *      project that was deleted. And it **owns the window** while it is up:
  *      Alt+Left does not navigate the page out from under it, Ctrl+K opens no palette over
  *      it, and a right-click raises no menu below its scrim — the three ways an armed
  *      confirmation came to be floating over a screen about a *different* project, one of
@@ -62,7 +69,7 @@
  * Two scratch vaults are built in temp directories — a 12-project one for (5) and the same
  * copy for the writes and the deletes in (8). ./vault is read, never written.
  */
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -1198,6 +1205,179 @@ try {
   check("a second window already open on the vault loses the row too", true);
   check("…without reloading the page", watcherLoads === 0, `${watcherLoads} load events`);
   await watcher.close();
+
+  /* 9c. The second window parked *inside* the project — the half the check above cannot see.
+
+     A list of projects updates when one leaves, because the thing it lists is projects. The
+     three screens *scoped to* a project are the ones with something to lose, and they used
+     to lose nothing: `useAsync` carries `refreshError` precisely so an open screen can
+     notice its data went away, and the work list, the bug board and the dashboard destructured
+     around it. Measured: a window parked on /p/<slug>/work went on printing "작업 로그 12개 ·
+     진행 중 2개" and all twelve rows, indefinitely, while its own sidebar had already dropped
+     the project — one window contradicting itself — and the dashboard kept flying its 실시간
+     flag over a folder that is not on the disk (P12 round 2 critic, both transports). The
+     dialog's own warning promises otherwise: "링크는 볼트에 없는 주소가 되고, 앱은 그 화면에서
+     없는 프로젝트라고 알려 줍니다".
+
+     So: one parked window per project-scoped list screen, each with real rows on it, each
+     deleted from the other window, each expected to land on the app's designed
+     no-such-project screen — from the poll, with no reload and no navigation. */
+  log("--- a window parked inside the project it loses");
+
+  /** Give a scratch project something to have on screen: an empty list losing nothing proves nothing. */
+  const stock = (slug) => {
+    execFileSync(bin, [
+      "--vault", manyVault, "--json", "work", "start", "-p", slug, "--agent", "check-keys",
+      "--title", "Work that is on the screen when the folder leaves the disk",
+      "--body",
+      "## What\nA work log, written by scripts/check-keys.mjs.\n\n" +
+        "## Why\nSo a window parked on this project's work list has a row to lose.\n\n" +
+        "## How\nThe CLI, into a scratch vault in a temp directory.",
+    ]);
+    execFileSync(bin, [
+      "--vault", manyVault, "--json", "bug", "create", "-p", slug, "--agent", "check-keys",
+      "--severity", "high",
+      "--title", "A bug that is on the board when the folder leaves the disk",
+      "--body", "Filed by scripts/check-keys.mjs so a parked bug board has a row to lose.",
+    ]);
+  };
+
+  /* Each case: where the window parks, and what proves it was full before the delete. The
+     dashboard's tell is its live flag — the loudest claim to be current in the app. */
+  const parkedCases = [
+    { slug: "scratch-1", path: "/work", screen: "the work list", full: ".work-row" },
+    { slug: "scratch-2", path: "/bugs", screen: "the bug board", full: ".bug-row" },
+    { slug: "scratch-3", path: "", screen: "the dashboard", full: ".live-flag" },
+  ];
+
+  for (const { slug, path, screen, full } of parkedCases) {
+    stock(slug);
+    const name = (await manyProjects()).find((p) => p.slug === slug)?.name;
+    const parked = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+    await useLocale(parked, LOCALE);
+    let parkedLoads = 0;
+    parked.on("load", () => (parkedLoads += 1));
+    await parked.goto(`${manyOrigin}/p/${slug}${path}`, { waitUntil: "domcontentloaded" });
+    await ready(parked);
+    parkedLoads = 0;
+    const parkedUrl = parked.url();
+    check(
+      `${screen}, parked inside ${slug}, has something on it before the delete`,
+      (await parked.locator(full).count()) > 0,
+      `no ${full} on ${parkedUrl}`,
+    );
+
+    await wide.goto(`${manyOrigin}/projects`, { waitUntil: "domcontentloaded" });
+    await ready(wide);
+    await openDialogFromRow(wide, name);
+    await wide.locator(".modal .input").fill(slug);
+    await wide.locator(".modal .button-danger").click();
+    check(`${slug} is gone from the vault`, await goneFromVault(slug));
+
+    /* The whole point: the parked window finds out on its own, from the same poll that
+       updates its sidebar, and says the one true thing about the address it is on. */
+    await parked.waitForSelector(".error-state", { state: "visible", timeout: 25_000 });
+    check(
+      `…and ${screen} lands on the app's no-such-project screen without being told`,
+      ((await parked.locator(".error-title").textContent()) ?? "").trim() ===
+        T("vault.noProject", slug),
+      `title reads "${await parked.locator(".error-title").textContent()}"`,
+    );
+    check(
+      "…with nothing of the deleted project still drawn beside it",
+      (await parked.locator(full).count()) === 0 &&
+        (await parked.locator(".page-head-meta").count()) === 0,
+      `${await parked.locator(full).count()} × ${full}`,
+    );
+    /* The defect was a window contradicting itself, so both halves have to be true at once.
+       Waited for rather than sampled: the sidebar's read walks every project and the page's
+       404s immediately, so the pane can honestly be first — which is the harmless order. */
+    const agrees = await parked
+      .waitForFunction(
+        (n) =>
+          ![...document.querySelectorAll(".nav-sub-name")].some((el) => el.textContent.trim() === n),
+        name,
+        { timeout: 20_000 },
+      )
+      .then(() => true, () => false);
+    check("…and the window agrees with itself: the sidebar drops it too", agrees);
+    check(
+      "…with the screen still saying so once both halves have caught up",
+      (await parked.locator(".error-state").count()) === 1 &&
+        (await parked.locator(full).count()) === 0,
+    );
+    check(
+      "…offering the way out the screen is designed with",
+      ((await parked.locator(".error-actions .button").textContent()) ?? "").trim() ===
+        T("nav.allProjects"),
+      await parked.locator(".error-actions .button").textContent(),
+    );
+    check("…without reloading the page", parkedLoads === 0, `${parkedLoads} load events`);
+    check(
+      "…and without navigating anywhere: the state is the screen's, not a redirect",
+      parked.url() === parkedUrl,
+      `went to ${parked.url()} from ${parkedUrl}`,
+    );
+    await parked.close();
+  }
+
+  /* And the other half of that claim, which matters as much: a vault that is *briefly
+     unreadable* is not a project that was deleted. Conflating them would replace a screen
+     somebody is reading with an error card every time a dev server restarts. Here the whole
+     vault directory goes away under a parked work list — the shell says so in its one line,
+     and the rows stay exactly where they were. */
+  log("--- a vault that goes quiet is not a project that was deleted");
+  const survivor = "scratch-4";
+  stock(survivor);
+  const held = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  await useLocale(held, LOCALE);
+  await held.goto(`${manyOrigin}/p/${survivor}/work`, { waitUntil: "domcontentloaded" });
+  await ready(held);
+  const heldRows = await held.locator(".work-row").count();
+  check(`a work list parked on ${survivor} has rows before the vault goes away`, heldRows > 0);
+
+  /* Windows refuses a directory rename while anything inside it is open, and the cursor poll
+     reads every record file twice a second — so ask again rather than fail the gate on a
+     collision that has nothing to do with what is being measured. */
+  const moveDir = async (from, to) => {
+    const deadline = Date.now() + 15_000;
+    for (;;) {
+      try {
+        renameSync(from, to);
+        return;
+      } catch (err) {
+        if (Date.now() > deadline) throw err;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    }
+  };
+
+  const away = `${manyVault}-away`;
+  await moveDir(manyVault, away);
+  try {
+    await held.waitForSelector(".vault-alert-wrap .vault-alert", { state: "visible", timeout: 40_000 });
+    check("a vault that stops answering raises the shell's one line", true);
+    check(
+      "…and the screen keeps every row it had",
+      (await held.locator(".work-row").count()) === heldRows,
+      `${await held.locator(".work-row").count()} rows, was ${heldRows}`,
+    );
+    check(
+      "…rather than the screen for a project that is not in this vault",
+      (await held.locator(".error-state").count()) === 0,
+      `error title "${await held.locator(".error-title").textContent().catch(() => "")}"`,
+    );
+  } finally {
+    await moveDir(away, manyVault);
+  }
+  await held.waitForSelector(".vault-alert-wrap", { state: "detached", timeout: 60_000 });
+  check("…and the line goes away when the vault comes back", true);
+  check(
+    "…with the rows still there and still no error card",
+    (await held.locator(".work-row").count()) === heldRows &&
+      (await held.locator(".error-state").count()) === 0,
+  );
+  await held.close();
 
   /* Deleting the project the reader is standing *inside*. Left where they were, the next
      read would answer with "this vault has no project called …" — an error card in place of

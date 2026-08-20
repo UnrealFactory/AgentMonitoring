@@ -9,6 +9,13 @@ export interface AsyncState<T> {
    * Not an error state — nothing on screen changes — but not nothing either: without it a
    * board whose vault went unreadable freezes on stale numbers forever with no tell. The
    * shell turns it into one line above the page (AppContext, App.tsx).
+   *
+   * Two screens do more with it than that, because for them "nothing changes" would be a
+   * lie rather than politeness. A *record* page draws StaleRecordBar over the copy it still
+   * has (components/ui.tsx). A project-scoped *list* has no copy worth keeping once the
+   * project itself is gone, so it becomes the screen the app draws for a stale project
+   * link — see `projectGone` in lib/api.ts, which is the only kind of failure that earns
+   * that, and the reason a vault that is briefly unreadable does not.
    */
   refreshError: string | undefined;
   /**

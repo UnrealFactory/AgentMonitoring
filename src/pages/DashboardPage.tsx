@@ -29,7 +29,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp, useProjectSlug, useVaultNonce } from "../AppContext";
-import { api, failureTitle, nothingToRetry } from "../lib/api";
+import { api, failureTitle, nothingToRetry, projectGone } from "../lib/api";
 import { agentColumnWidth } from "../lib/columns";
 import { useAsync } from "../lib/useAsync";
 import { useUrlFilters } from "../lib/useUrlFilters";
@@ -154,7 +154,7 @@ export function DashboardPage() {
      here without a navigation and without a skeleton — the flag says live, the clock ticks
      every thirty seconds, and now the numbers under them are as new as the sidebar's. */
   const nonce = useVaultNonce();
-  const { data, error, status, loading, reload } = useAsync<Snapshot>(
+  const { data, error, refreshError, status, loading, reload } = useAsync<Snapshot>(
     () =>
       Promise.all([
         api.getProject(slug),
@@ -165,6 +165,14 @@ export function DashboardPage() {
     [slug],
     nonce
   );
+  /* The project went out from under an open dashboard — deleted in another window, or from
+     this window's own sidebar. This screen is the one that most loudly claims to be current:
+     a live flag, a clock that ticks, "last activity — just now". Saying that about a folder
+     that is not on the disk any more is the worst version of the stale screen, so it becomes
+     the one the app already draws for a stale project link (lib/api.ts, `projectGone`). Any
+     other failed refresh keeps the last good screen — the `trouble` flag below already drops
+     the live claim for it, which is the honest answer to a vault that briefly went quiet. */
+  const failure = error ?? (projectGone(refreshError, status) ? refreshError : undefined);
 
   const now = useNow();
   const { values, set } = useUrlFilters(DEFAULTS, ALLOWED);
@@ -293,13 +301,13 @@ export function DashboardPage() {
   const agents = useMemo(() => agentRows(scoped, works), [scoped, works]);
   const dayGroups = useMemo(() => groupByDay(scoped), [scoped]);
 
-  if (error) {
+  if (failure) {
     return (
       <div className="page">
         <ErrorState
-          title={failureTitle(error, status)}
-          message={error}
-          onRetry={nothingToRetry(error, status) ? undefined : reload}
+          title={failureTitle(failure, status)}
+          message={failure}
+          onRetry={nothingToRetry(failure, status) ? undefined : reload}
           action={
             <Link className="button" to="/projects">
               {t("nav.allProjects")}
