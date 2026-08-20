@@ -34,7 +34,18 @@ import { done, inProgress, unresolvedLabel, unresolvedMeans } from "../lib/words
 import { useAsync } from "../lib/useAsync";
 import type { Project, VaultEvent } from "../lib/types";
 
-/** A display name a human types, turned into the directory-safe id the vault uses. */
+/**
+ * A display name a human types, turned into the directory-safe id the vault uses.
+ *
+ * It can come out **empty**, and that is not a failure of this function: a slug is a
+ * directory name in `projects/`, the vault format allows `[a-z0-9_-]` in it (the CLI rejects
+ * anything else with `invalid id`), and a name written in Hangul — or Japanese, or Greek —
+ * has nothing in it this may keep. `결제 화면 재작성`, which is this app's own Korean
+ * placeholder for the name field, derives to `""`.
+ *
+ * The caller must therefore treat "" as *a name that needs a slug typed for it* and say so;
+ * see {@link CreateProject}. It shipped as a dead button instead.
+ */
 export function slugify(name: string): string {
   return name
     .toLowerCase()
@@ -749,7 +760,25 @@ function CreateProject({
   const effectiveSlug = slugEdited ? slug : slugify(name);
   const taken = existing.some((p) => p.slug === effectiveSlug);
   const slugOk = SLUG_RE.test(effectiveSlug);
-  const ready = name.trim().length > 0 && slugOk && !taken;
+  const named = name.trim().length > 0;
+  const ready = named && slugOk && !taken;
+  /**
+   * A name that cannot become a slug — the state the form used to answer with silence.
+   *
+   * `slugify` keeps `[a-z0-9]` and nothing else, so every Hangul name derives to "": type
+   * this dictionary's own Korean example, `결제 화면 재작성`, and the slug box stays empty,
+   * 프로젝트 만들기 is disabled, and the hint under the box went on reading the neutral
+   * "projects/ 아래의 디렉터리 이름입니다" — the branch that says why is `effectiveSlug &&
+   * !slugOk`, and "" is falsy, so it never fired. English typed the same name and was ready
+   * in the same breath. The reader this app defaults to Korean for was the only one who had
+   * to already know the rule before the button would work (P9 rounds 7 and 8 critics).
+   *
+   * The constraint itself is right — a slug is a directory name and the CLI rejects `결제`
+   * with `invalid id` — so the fix is the sentence, not the rule: the hint states it, names
+   * the box to type in, and the button stays disabled and explained rather than dead. The
+   * moment a slug is typed by hand the form is ready, whatever language the name is in.
+   */
+  const slugNeeded = named && !effectiveSlug;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -800,17 +829,26 @@ function CreateProject({
             className="input mono"
             value={effectiveSlug}
             placeholder={t("proj.form.slugPlaceholder")}
+            /* Typed here, the slug is taken as typed and at once — `slugEdited` stops the
+               name from deriving over it — so a Korean name plus `gyeolje` is ready before
+               the reader lifts a finger. That path always worked; nothing on screen said it
+               was there. */
+            aria-invalid={taken || slugNeeded || (!!effectiveSlug && !slugOk) || undefined}
             onChange={(e) => {
               setSlugEdited(true);
               setSlug(e.target.value);
             }}
           />
-          <span className="field-hint">
+          {/* Four states, one line, and the empty one is a state rather than the absence of
+              one: taken, unusable, missing-and-underivable, and the plain rule. */}
+          <span className={`field-hint${taken || slugNeeded || (effectiveSlug && !slugOk) ? " is-blocking" : ""}`}>
             {taken
               ? t("proj.form.slugTaken")
               : effectiveSlug && !slugOk
                 ? t("proj.form.slugBad")
-                : t("proj.form.slugHint")}
+                : slugNeeded
+                  ? t("proj.form.slugNeeded")
+                  : t("proj.form.slugHint")}
           </span>
         </label>
         <label className="field field-wide">

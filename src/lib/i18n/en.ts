@@ -377,6 +377,11 @@ export const en = {
   "proj.form.slugPlaceholder": "checkout-rewrite",
   "proj.form.slugTaken": "A project with this slug already exists in the vault.",
   "proj.form.slugBad": "Lowercase letters, digits, - or _ only.",
+  /* The name has nothing a directory name can be made of — every Hangul name, and any other
+     script's. Says the rule, then the one thing left to do, because this hint is the only
+     thing on screen while the create button is disabled (P9 rounds 7 and 8 critics). */
+  "proj.form.slugNeeded":
+    "No slug can be made from this name — the slug is the directory name under projects/, so it takes lowercase letters, digits, - or _ only. Type one here.",
   "proj.form.slugHint": "The directory name under projects/. Immutable once created.",
   "proj.form.description": "Description",
   "proj.form.descriptionPlaceholder":

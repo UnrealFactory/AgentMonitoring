@@ -27,7 +27,15 @@
  *            loaded screen: the tip exists only under a pointer or a focus ring, so for
  *            eight rounds this gate walked past it, and the round it was given `flex: none`
  *            it started printing "…or abandoned" over the plot at every width from 1280 up.
- *            It is opened at seven crosshairs per chart now, both ends included.
+ *            It is opened at nine crosshairs per chart now, both ends included.
+ *   TIPCUT   …and the same tooltip with the failure the other way round: not ink escaping
+ *            the tip, but the tip escaping its **card**, which hides overflow and takes a
+ *            slice off it. TIP could not see it by construction — it clips the ink by every
+ *            ancestor that bounds overflow *before* comparing it to the tip's own box, so a
+ *            tip cut in half reads as a tip whose text is all inside it. At 1072px, where
+ *            the two chart cards sit side by side and the plot is 346px, the crosshair at
+ *            0.35 anchored a 260px tip at x=122 and the card sliced 19px off its right edge
+ *            — border, ids and all, in both languages (P9 round 8 critic).
  *
  * All three are correctness bugs on screens whose whole job is to show a record faithfully, so
  * this walks EVERY record of EVERY project (not just the first one: the row that breaks is
@@ -64,7 +72,7 @@ if (flag("--help") || flag("-h")) {
   node scripts/check-clipping.mjs --widths 1600,960 --project relay
 
 Options:
-  --widths a,b,c        viewport widths to walk (default 1600,1440,1280,1152,1104,1024,960)
+  --widths a,b,c        viewport widths to walk (default 1600,1440,1280,1152,1104,1072,1024,960)
   --port <n>            dev-server port to boot on / check against (default 5173)
   --url <origin>        check an already-running server instead of booting one
   --project <slug>      only this project (default: every project in the vault)
@@ -75,7 +83,11 @@ Options:
 
 const PORT = Number(value("--port", process.env.SHOT_PORT || 5173));
 const ORIGIN = value("--url", `http://localhost:${PORT}`).replace(/\/$/, "");
-const WIDTHS = value("--widths", "1600,1440,1280,1152,1104,1024,960")
+/* 1072 is not an ordinary width: it is the narrowest at which the dashboard still puts its
+   two chart cards side by side, so it is where a plot is at its smallest and a tooltip has
+   the least room to be laid out in — which is exactly where the card was found cutting it
+   (see TIPCUT). The other six are the ones this gate has always walked. */
+const WIDTHS = value("--widths", "1600,1440,1280,1152,1104,1072,1024,960")
   .split(",")
   .map((w) => Number(w.trim()))
   .filter(Boolean);
@@ -309,8 +321,15 @@ const PROBE = (slack) => {
  * rather than its 260px ceiling — which is the only width at which the defect below exists.
  * The five in the middle are there so a finding can be told apart from "this tip is always
  * broken".
+ *
+ * 0.35 and 0.65 are the round-8 pair, and they are here because they are *not* ordinary
+ * middles: they are where the tip's anchor changes hands. Left-anchored below 130px from the
+ * left edge, right-anchored above 130px from the right, centred between — on a 346px plot
+ * those bands overlap nowhere and touch nowhere, and the two crosshairs that fall in the
+ * seams were the two this list stepped over (0.2 and 0.4 sit either side of 0.35). A gate
+ * that samples round fractions samples the middle of the states, never their boundaries.
  */
-const CROSSHAIRS = [0.03, 0.2, 0.4, 0.6, 0.8, 0.94, 0.99];
+const CROSSHAIRS = [0.03, 0.2, 0.35, 0.4, 0.6, 0.65, 0.8, 0.94, 0.99];
 
 /**
  * Runs in the page. Returns every piece of tooltip text painted outside its own card.
@@ -327,6 +346,14 @@ const CROSSHAIRS = [0.03, 0.2, 0.4, 0.6, 0.8, 0.94, 0.99];
  *
  * Ink, not boxes, and clipped by any ancestor that bounds horizontal overflow — `.tip-added`
  * ellipsises the ids on purpose, and an honest ellipsis is not an escape.
+ *
+ * …and then the question that clipping makes it blind to, which is why both live in one
+ * probe: **is the tip itself inside the boxes that clip it?** The loop above deliberately
+ * intersects each run of ink with every ancestor that hides overflow before comparing it to
+ * the tip, so a tooltip with 19px sliced off its right edge by its own card reports nothing
+ * at all — the ink that survived is inside the tip, and the ink that did not is gone.
+ * `kind: "cut"` measures the tip's border box against those same ancestors' content boxes,
+ * which is the reader's question: is any of this tooltip missing? (P9 round 8 critic.)
  */
 const TIP_PROBE = (slack) => {
   const style = (el) => getComputedStyle(el);
@@ -343,6 +370,23 @@ const TIP_PROBE = (slack) => {
   const out = [];
   for (const tip of document.querySelectorAll(".chart-tip")) {
     const inner = contentBox(tip);
+
+    /* The tip's own box against everything that clips it. */
+    const own = tip.getBoundingClientRect();
+    for (let el = tip.parentElement; el; el = el.parentElement) {
+      if (!bounds(el)) continue;
+      const p = contentBox(el);
+      const cut = Math.max(p.left - own.left, own.right - p.right);
+      if (cut <= slack) continue;
+      const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/)[0] : "";
+      out.push({
+        kind: "cut",
+        el: `${el.tagName.toLowerCase()}${cls ? "." + cls : ""}`,
+        text: (tip.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40),
+        px: Math.round(cut * 10) / 10,
+        tip: Math.round(own.width),
+      });
+    }
     const walker = document.createTreeWalker(tip, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (!(node.textContent || "").trim()) continue;
@@ -362,6 +406,7 @@ const TIP_PROBE = (slack) => {
           const el = node.parentElement;
           const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/)[0] : "";
           out.push({
+            kind: "ink",
             el: `${el.tagName.toLowerCase()}${cls ? "." + cls : ""}`,
             text: node.textContent.trim().slice(0, 40),
             px: Math.round(over * 10) / 10,
@@ -502,8 +547,11 @@ try {
               for (const o of await page.evaluate(TIP_PROBE, SLACK)) {
                 failures += 1;
                 lines.push(
-                  `TIP     ${where} ${o.el} paints ${o.px}px outside its ${o.tip}px card ` +
-                    `(plot ${i + 1}, crosshair ${f}) — "${o.text}"`,
+                  o.kind === "cut"
+                    ? `TIPCUT  ${where} ${o.el} cuts ${o.px}px off the ${o.tip}px tooltip ` +
+                      `(plot ${i + 1}, crosshair ${f}) — "${o.text}"`
+                    : `TIP     ${where} ${o.el} paints ${o.px}px outside its ${o.tip}px card ` +
+                      `(plot ${i + 1}, crosshair ${f}) — "${o.text}"`,
                 );
               }
             }
@@ -530,7 +578,7 @@ try {
 log(`${checked} screen loads, ${tipReadings} open tooltips`);
 log(
   failures === 0
-    ? "clean: nothing is cut without an ellipsis, no heading truncates itself, nothing is painted over anything, and no tooltip leaves its card"
+    ? "clean: nothing is cut without an ellipsis, no heading truncates itself, nothing is painted over anything, and no tooltip leaves its card or is cut by it"
     : `${failures} finding(s)`,
 );
 await new Promise((r) => setTimeout(r, 60));

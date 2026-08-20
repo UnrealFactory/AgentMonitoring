@@ -1935,6 +1935,10 @@ a.button {
   color: #9fdcbd;
 }
 
+/* The Korean line-break rule for this box lives with its sibling `.claim-when`, in the
+   keep-all group in tokens.css. It prints a date and two durations — the shape that breaks
+   worst — and it wrapped mid-syllable through 1102–1156px for two rounds because it was the
+   one such class not on that list (P9 round 8 critic). */
 .outcome-when {
   margin-left: auto;
   font-size: var(--text-sm);
@@ -3949,8 +3953,33 @@ kbd {
 
 /* --- chart tooltip -------------------------------------------------------- */
 
+/*
+ * Where the tip is put, and the one line that keeps it inside the card.
+ *
+ * `ChartTip` (src/components/charts.tsx) hands this two lengths — `--tip-x`, where the
+ * crosshair is inside the plot, and `--tip-room`, how wide the plot is — and the anchor
+ * comes from the side class below. The width in the clamp is `100%`, which inside
+ * `translateX` is the element's *own* border box: the one number the tooltip knows and the
+ * component does not, because it is decided by the content (168px with no ids in the
+ * bucket, 260px with four).
+ *
+ *   left edge = clamp(0, x − anchor, room − own width)
+ *
+ * The middle term is where the crosshair asks for it; the two bounds are the card. Before
+ * this, the anchor *was* the position — left-anchored below 130px from the left edge,
+ * right-anchored below 130 from the right, centred between — and 130 is half the 260px
+ * ceiling, so only the centred case was ever guaranteed to fit. On a 346px plot (two chart
+ * cards side by side at 1072px) a crosshair 0.35 of the way across anchored a 260px tip at
+ * x = 122 and the card, which hides overflow, sliced 19px off it (P9 round 8 critic).
+ *
+ * If the plot is narrower than the tip, `room − 100%` is negative, the clamp's max is below
+ * its min, and CSS resolves that to the min — the tip sits at the plot's left edge, which is
+ * still 17px inside the card. Nothing here may set `transform` on `.chart-tip` again: it is
+ * this clamp, and a second declaration silently replaces it.
+ */
 .chart-tip {
   position: absolute;
+  left: 0;
   top: 4px;
   z-index: 5;
   min-width: 168px;
@@ -3961,11 +3990,15 @@ kbd {
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   pointer-events: none;
+  --tip-anchor: 50%;
+  transform: translateX(
+    clamp(0px, calc(var(--tip-x) - var(--tip-anchor)), calc(var(--tip-room) - 100%))
+  );
 }
 
-.chart-tip.is-mid { transform: translateX(-50%); }
-.chart-tip.is-end { transform: translateX(-100%); }
-.chart-tip.is-start { transform: none; }
+.chart-tip.is-start { --tip-anchor: 0px; }
+.chart-tip.is-mid { --tip-anchor: 50%; }
+.chart-tip.is-end { --tip-anchor: 100%; }
 
 .tip-when {
   font-size: var(--text-xs);
@@ -4989,6 +5022,16 @@ a.pill-archived:hover {
 .field-hint {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
+}
+
+/* The same line when it is the reason the form's button is disabled — the rule, not the
+   tip. Tertiary grey is the register of "by the way", and it was the only thing on screen
+   while 프로젝트 만들기 sat dead under a Korean name that cannot derive a slug: a reader
+   read it as chrome and had nothing to act on (P9 rounds 7 and 8 critics). Amber rather
+   than red because nothing has failed — a field is waiting for something only the reader
+   can supply. */
+.field-hint.is-blocking {
+  color: var(--amber);
 }
 
 /* the filter search box sets a fixed width on .input; a form field takes its column */

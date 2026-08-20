@@ -86,12 +86,19 @@
  * an English one, and the app ships in two languages. Runs against the live vault read-only.
  */
 import { mkdtempSync, rmSync } from "node:fs";
+import { register } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright";
 import { ensureServer, startServer, stopServer, waitForServer } from "./dev-server.mjs";
 import { t, useLocale } from "./i18n.mjs";
 import { buildKoreanVault } from "./ko-vault.mjs";
+
+/* The app's own duration formatter, for choosing which record the sweep reads — the gate must
+   not carry a second opinion about how long "5시간 48분" is (see resolvedBugIn). Outside a
+   window it speaks the default locale, which is Korean, which is the sweep's language. */
+register("./ts-hooks.mjs", import.meta.url);
+const { formatDuration } = await import("../src/lib/format.ts");
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -104,12 +111,18 @@ const value = (name, fallback) => {
  * The widths the word-integrity sweep reads, and why each one is in the list.
  *
  * 960 is the floor tauri.conf.json sets and 1600 the roomy end this gate already read; the
- * seven between them are there because the defect that named this sweep lived *only* between
+ * ones between them are there because the defects that named this sweep lived *only* between
  * them. 1190 and 1200 are where the vault bar broke “2026년 8” ⏎ “월 18일”, 1360 and 1440 the
  * ends of the band where it broke “…18” ⏎ “일”, 1280 the client area of the real desktop
  * window the round-4 critic photographed, and 1060 and 1520 are ordinary widths between.
+ *
+ * 1110 and 1150 are the round-8 lesson, and they are two widths rather than one because the
+ * box they were added for breaks *differently* on either side of a 55px band: the resolution
+ * header printed “…등록 5” ⏎ “시간 48분 후” at 1102–1124 and “…등록 5시간 ” ⏎ “48분 후” at
+ * 1144–1156, and this list stepped straight over both (1060 → 1190). A width sweep that only
+ * ever reads round numbers is a sweep of the widths somebody thought of.
  */
-const SWEEP_DEFAULT = "960,1060,1190,1200,1280,1360,1440,1520,1600";
+const SWEEP_DEFAULT = "960,1060,1110,1150,1190,1200,1280,1360,1440,1520,1600";
 
 if (flag("--help") || flag("-h")) {
   console.log(`Fail on a word the app prints in the language the screen is not in.
@@ -158,6 +171,40 @@ const api = async (path) => {
   const res = await fetch(`${ORIGIN}/vault-api${path}`);
   if (!res.ok) throw new Error(`GET /vault-api${path} -> ${res.status}`);
   return res.json();
+};
+
+/**
+ * The bug in `bugs` whose resolution header is the longest — the worst case for the line
+ * breaker — or null if this project has no bug with a resolution.
+ *
+ * Two choices here, and both were the round-8 defect in miniature.
+ *
+ * *Which bugs qualify*: `status === "resolved"` is not the question the screen asks. The card
+ * is drawn on `bug.resolution`, the text of the fix (src/pages/BugDetailPage.tsx), which the
+ * list endpoint does not carry, so each candidate's detail is read. A bug the sweep then finds
+ * no card on would make the new screen wait 15s and die of a timeout — a real failure, but not
+ * the one it is for.
+ *
+ * *Which of them to sweep*: not the first. This gate asks a **layout** question, and the first
+ * of anything is not the hardest case of it — the live vault's first resolved bug is a
+ * four-minute fix ("등록 4분 후", one short line at every width) while the header that broke for
+ * two rounds belongs to a five-hour one ("등록 5시간 48분 후"). So the candidates are scored by
+ * what fills that box: the duration, formatted by the app's own `formatDuration` rather than
+ * by a copy of it, and the handle of the agent who resolved it.
+ */
+const resolvedBugIn = async (origin, slug, bugs) => {
+  let best = null;
+  for (const b of bugs) {
+    if (!b.resolved && b.status !== "resolved") continue;
+    const res = await fetch(`${origin}/vault-api/projects/${slug}/bugs/${b.id}`);
+    if (!res.ok) continue;
+    const detail = await res.json();
+    if (!detail.resolution) continue;
+    const header =
+      formatDuration(b.created, b.resolved) + (b.resolvedBy ?? b.assignee ?? "");
+    if (!best || header.length > best.length) best = { id: b.id, length: header.length };
+  }
+  return best?.id ?? null;
 };
 
 /**
@@ -453,10 +500,38 @@ const BREAKABLE = [
  * this round, and they are the ones that would have caught the round-6 defect: `.prose` was
  * exempt from the question *and* absent from the list, so the sweep never loaded a body at a
  * width where it wraps.
+ *
+ * **A record of each kind is not a record in each state.** `bug` here is `bugs[0]`, and this
+ * vault sorts bugs open-first (scripts/vault-fs.mjs), so it is an *open* bug on every project
+ * of both vaults — which means `.outcome-card.is-resolution` was never rendered on any screen
+ * this sweep opened, at any width, and the 해결 내용 header inside it broke Korean words for
+ * two rounds under a gate that reported clean (P9 round 8 critic: 74 of 837 readings of that
+ * one box on the live vault, 1102–1156px). So the resolved bug is its own screen, chosen by
+ * asking the vault which bug has a resolution rather than by taking the first one, and a
+ * vault with no such bug is reported as a gap rather than skipped (see `sweep`).
  */
 const SWEEP_SCREENS = (projects) => [
   { name: "projects", path: "/projects", wait: ".project-row", filled: [".project-desc", ".feed-summary"] },
-  ...projects.flatMap(({ slug, work, bug }) => [
+  /* The app's first write action, in the state a Korean name puts it in: the create panel
+     with a name that cannot derive a slug, where the hint becomes the rule and the button
+     stays disabled and explained (src/pages/ProjectsPage.tsx). It is the longest Korean
+     sentence the chrome prints anywhere, in a half-width column, and it is a *typed* state,
+     so no gate had ever loaded it — the sweep types its way in. */
+  {
+    name: "new project form, Korean name",
+    path: "/projects",
+    wait: ".field-hint.is-blocking",
+    prepare: async (page) => {
+      await page.waitForSelector(".project-row", { state: "visible", timeout: 15_000 });
+      await page.getByRole("button", { name: t("ko", "proj.new"), exact: true }).click();
+      await page.waitForSelector(".create-panel", { state: "visible", timeout: 15_000 });
+      await page
+        .locator(".create-grid .field input")
+        .first()
+        .fill(t("ko", "proj.form.namePlaceholder"));
+    },
+  },
+  ...projects.flatMap(({ slug, work, bug, resolvedBug }) => [
     {
       name: `dashboard ${slug}`,
       path: `/p/${slug}`,
@@ -491,6 +566,17 @@ const SWEEP_SCREENS = (projects) => [
           filled: [".record-title", ".prose", ".rel-title"],
         }]
       : []),
+    /* The one screen in the app that prints a date *and* two durations in one box — the
+       header of the resolution card. It waits on the card rather than on the title, so a
+       screen that somehow has no resolution fails here instead of passing quietly. */
+    ...(resolvedBug
+      ? [{
+          name: `resolved bug ${resolvedBug}`,
+          path: `/p/${slug}/bugs/${resolvedBug}`,
+          wait: ".outcome-card.is-resolution .outcome-when",
+          filled: [".record-title", ".prose", ".outcome-body .prose"],
+        }]
+      : []),
     /* The tooltips, open, at every width in the list — the state the burn-up tip is read in
        and the one no gate had ever rendered (see openTips). */
     {
@@ -522,6 +608,26 @@ const FILLED_PROBE = (selectors) =>
     (sel) =>
       ![...document.querySelectorAll(sel)].some((el) => /[가-힣]{2,}/.test(el.textContent || "")),
   );
+
+/**
+ * Runs in the page. Returns every monogram wearing a lowercase Latin initial.
+ *
+ * The avatar's glyphs are chosen by a function with two branches — Latin handles take the
+ * first letter of each of the first two parts, uppercased; Hangul handles take one syllable,
+ * which has no case (agentInitials, src/components/ui.tsx). A handle that is *both* went down
+ * the Korean branch uncased, so `nova-배송팀` wore a lowercase "n" beside the uppercase PI and
+ * PM monograms on the same screen, and wore only that "n", so two teams' agents shared one
+ * monogram (P9 rounds 7 and 8 critics). Every other initial in this app is uppercase, and
+ * "every other" is exactly what a gate can check without knowing the rule.
+ *
+ * Read from the rendered avatar rather than from the function, because the function is in a
+ * `.tsx` and this gate runs in Node: the surface is the thing being promised anyway.
+ */
+const MONOGRAM_PROBE = () =>
+  [...document.querySelectorAll(".agent-avatar")]
+    .map((el) => (el.textContent || "").trim())
+    .filter((text) => /\p{Ll}/u.test(text))
+    .filter((text, i, all) => all.indexOf(text) === i);
 
 /**
  * Runs in the page. Returns every Korean word the line breaker split in two.
@@ -936,7 +1042,12 @@ try {
   for (const p of projects) {
     const works = await api(`/projects/${p.slug}/worklogs`);
     const bugs = await api(`/projects/${p.slug}/bugs`);
-    sweepProjects.push({ slug: p.slug, work: works[0]?.id ?? null, bug: bugs[0]?.id ?? null });
+    sweepProjects.push({
+      slug: p.slug,
+      work: works[0]?.id ?? null,
+      bug: bugs[0]?.id ?? null,
+      resolvedBug: await resolvedBugIn(ORIGIN, p.slug, bugs),
+    });
     for (const w of works) {
       vaultWords.add(w.agent);
       for (const tag of w.tags ?? []) vaultWords.add(tag);
@@ -1263,6 +1374,18 @@ try {
         findings.push({ screen: `${screen.name} @${width}`, ...item });
       }
 
+      /* …and: is any monogram wearing a lowercase initial? (see MONOGRAM_PROBE) */
+      for (const text of await page.evaluate(MONOGRAM_PROBE)) {
+        bad += 1;
+        findings.push({
+          screen: `${screen.name} @${width}`,
+          kind: "monogram case",
+          text,
+          at: ".agent-avatar",
+          words: ["a Latin initial is uppercase — every other monogram in this app is"],
+        });
+      }
+
       /* …and a fifth: is every Korean word on this screen still whole? The width sweep below
          asks the same question harder, but only of the screens that reflow; this asks it of
          every screen and every record in the vault, at the two widths already loaded. Both
@@ -1338,6 +1461,23 @@ try {
    * a body nobody recognises is not a place somebody can go and look.
    */
   const sweep = async (origin, sweepProjects, where, { fixture = false } = {}) => {
+    /* A vault with no resolved bug in it cannot answer the resolution card's question, and
+       the sweep says so rather than walking one screen fewer and reporting clean. This is
+       the shape of the hole that hid the 해결 내용 header for two rounds: the screen was
+       never opened, so nothing failed (P9 round 8 critic), and it is the same lesson
+       FILLED_PROBE was written for one box further in. */
+    if (!sweepProjects.some((p) => p.resolvedBug)) {
+      findings.push({
+        screen: `${where}(vault)`,
+        kind: "fixture gap",
+        text: "no project in this vault has a bug with a resolution",
+        at: ".outcome-card.is-resolution",
+        words: [
+          "the resolution card is never rendered, so the one box in the app that prints a " +
+            "date and two durations is never read at any width",
+        ],
+      });
+    }
     for (const width of SWEEP_WIDTHS) {
       const ctx = await browser.newContext(view(width));
       await useLocale(ctx, LOCALE);
@@ -1364,6 +1504,20 @@ try {
                   "a line-break question asked of an empty box passes without being answered " +
                   "(scripts/ko-vault.mjs)",
               ],
+            });
+          }
+        }
+        /* …and the monogram beside every Korean handle, once per screen for the same reason:
+           case is not a function of the viewport. The live vault has no mixed handle in it —
+           this is the question only the Korean fixture can answer (see MONOGRAM_PROBE). */
+        if (width === SWEEP_WIDTHS[0]) {
+          for (const text of await sweepPage.evaluate(MONOGRAM_PROBE)) {
+            findings.push({
+              screen: at,
+              kind: "monogram case",
+              text,
+              at: ".agent-avatar",
+              words: ["a Latin initial is uppercase — every other monogram in this app is"],
             });
           }
         }
@@ -1436,32 +1590,42 @@ try {
     for (const p of await (await fetch(`${koOrigin}/vault-api/projects`)).json()) {
       const works = await (await fetch(`${koOrigin}/vault-api/projects/${p.slug}/worklogs`)).json();
       const bugs = await (await fetch(`${koOrigin}/vault-api/projects/${p.slug}/bugs`)).json();
-      koProjects.push({ slug: p.slug, work: works[0]?.id ?? null, bug: bugs[0]?.id ?? null });
+      koProjects.push({
+        slug: p.slug,
+        work: works[0]?.id ?? null,
+        bug: bugs[0]?.id ?? null,
+        resolvedBug: await resolvedBugIn(koOrigin, p.slug, bugs),
+      });
     }
     await sweep(koOrigin, koProjects, "ko-vault ", { fixture: true });
   }
 
   if (findings.length) {
     failures = findings.length;
-    /* Five kinds of finding now: a string in the wrong language; a string that is in the
+    /* Six kinds of finding now: a string in the wrong language; a string that is in the
        right language and is not a word; a word the line breaker cut off its number; a number
-       standing on the wrong side of its word; and a surface the Korean fixture stopped
-       filling, which is the gate reporting that it could not ask. Counted apart, because
-       "3 English strings" over a list of Korean fragments is the gate misreporting its own
-       result. */
+       standing on the wrong side of its word; a monogram wearing a lowercase initial; and a
+       surface the Korean fixture stopped filling, which is the gate reporting that it could
+       not ask. Counted apart, because "3 English strings" over a list of Korean fragments is
+       the gate misreporting its own result. */
     const split = findings.filter((f) => f.kind === "word split").length;
     const order = findings.filter((f) => /word order|count order/.test(f.kind)).length;
     const gaps = findings.filter((f) => f.kind === "fixture gap").length;
+    const cased = findings.filter((f) => f.kind === "monogram case").length;
     const foreign = findings.filter(
-      (f) => !/vocabulary|short form|word split|word order|count order|fixture gap/.test(f.kind),
+      (f) =>
+        !/vocabulary|short form|word split|word order|count order|fixture gap|monogram case/.test(
+          f.kind,
+        ),
     ).length;
     const parts = [];
     if (foreign) parts.push(`${foreign} ${OTHER} string(s)`);
-    if (findings.length - foreign - split - order - gaps) {
-      parts.push(`${findings.length - foreign - split - order - gaps} not in the vocabulary`);
+    if (findings.length - foreign - split - order - gaps - cased) {
+      parts.push(`${findings.length - foreign - split - order - gaps - cased} not in the vocabulary`);
     }
     if (split) parts.push(`${split} word(s) split across a line break`);
     if (order) parts.push(`${order} count(s) on the wrong side of their word`);
+    if (cased) parts.push(`${cased} monogram(s) wearing a lowercase initial`);
     if (gaps) parts.push(`${gaps} surface(s) the Korean fixture no longer fills`);
     console.error(`\n  ${parts.join(", ")}, printed by the app in ${LOCALE}:\n`);
     for (const f of findings.slice(0, 40)) {

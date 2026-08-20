@@ -180,6 +180,17 @@ const PLAN = [
     "--created-at", ago(11),
     "--body",
     "반품이 접수된 주문에서 택배사가 회수 완료를 보내면 우리 쪽에서는 배송 완료로 읽고, 고객에게 상품이 도착했다는 안내 문구가 나갑니다. 회수와 배송을 방향으로 구분하지 않은 것이 원인으로 보입니다."],
+  /* A **mixed** handle, and the only one in this fixture: a Latin agent name with a Korean
+     team on the end of it, which is what a Korean team's vault looks like the day it adopts
+     an off-the-shelf agent. It is here because the monogram beside it is drawn by a function
+     with a Korean branch and a Latin branch (agentInitials, src/components/ui.tsx), and a
+     handle that is both went down the Korean one and came out as a lowercase "n" — the only
+     lowercase monogram in an app full of uppercase ones (P9 rounds 7 and 8 critics). One
+     comment on a swept screen is enough for the gate to read it. */
+  ["bug", "comment", "BUG-0001", "-p", "baesong", "--agent", "nova-배송팀",
+    "--at", ago(5),
+    "--message",
+    "회수 건은 택배사 응답에 방향 표시가 따로 오고 있어서, 상태 표에 방향 칸을 하나 더 두면 배송 완료와 회수 완료를 갈라낼 수 있습니다. 안내 문구는 그 뒤에 방향별로 나누어 쓰면 됩니다."],
 ];
 
 /** Run one CLI call against `dir`, with the fixture's own error message on failure. */

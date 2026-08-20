@@ -258,15 +258,30 @@ export function CommandLine({ text }: { text: string }) {
  * thing src/lib/i18n/ko.ts's own header forbids in as many words: a Hangul syllable is not an
  * initial (P9 round 6 critic). 결 is a syllable somebody wrote; 결에 is not.
  *
- * So a handle with any Hangul in it takes one glyph — the first syllable of its first part,
- * which is where a Korean reader looks anyway. No case folding is needed or possible: Hangul
- * has no case, and `toUpperCase()` on it is the identity.
+ * So a Hangul handle takes one glyph — the first syllable of its first part, which is where
+ * a Korean reader looks anyway. Hangul has no case, so nothing is folded there.
+ *
+ * A **mixed** handle is neither, and reading it as Hangul cost it both halves: `nova-배송팀`
+ * returned `parts[0][0]` uncased and wore a lowercase "n" beside the uppercase PI and PM
+ * monograms on the same screen (P9 rounds 7 and 8 critics) — and it wore *only* that "n", so
+ * `nova-배송팀` and `nova-결제팀` were one monogram twice. Latin is initialled the way Latin
+ * is, and the Hangul part keeps its syllable: `N배`, `N결`. Two scripts, one rule each, no
+ * fabricated Korean word — 배 is a syllable somebody wrote and `N배` is not read as one.
  */
 export const agentInitials = (name: string): string => {
+  const hangul = /[가-힣]/;
   const parts = name.split(/[-_\s]/).filter(Boolean);
   if (!parts.length) return "?";
-  if (/[가-힣]/.test(name)) return parts[0][0];
-  return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+  /** A part's first character, cased the way its own script is cased. */
+  const glyph = (part: string): string =>
+    hangul.test(part[0]) ? part[0] : part[0].toUpperCase();
+  if (!hangul.test(name)) return parts.slice(0, 2).map(glyph).join("") || "?";
+  const lead = glyph(parts[0]);
+  if (hangul.test(lead)) return lead;
+  /* A Latin lead, and Hangul somewhere behind it: the syllable that opens the first Hangul
+     part, or failing that the first Hangul in the handle (`nova배송팀` is one part). */
+  const syllable = parts.slice(1).find((p) => hangul.test(p[0]))?.[0] ?? name.match(hangul)?.[0];
+  return lead + (syllable ?? "");
 };
 
 /**

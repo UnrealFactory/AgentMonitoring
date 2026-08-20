@@ -22,6 +22,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -471,14 +472,54 @@ function TipRow({
 }
 
 /**
- * Follows the crosshair, and flips rather than leaving the card. Hidden from assistive
- * technology on purpose: it is a visual echo of the status line above, which says the
- * same thing in a sentence.
+ * Follows the crosshair, and stays inside the plot. Hidden from assistive technology on
+ * purpose: it is a visual echo of the status line above, which says the same thing in a
+ * sentence.
+ *
+ * ## Why an anchor is not a position
+ *
+ * It used to pick one of three anchors from the crosshair alone — left edge, centre, right
+ * edge, at 130px from either end — and 130 is half of the tip's 260px ceiling, so only the
+ * *centred* case was ever guaranteed to fit. Left-anchored needs a whole tip's width to the
+ * right of the crosshair, and on a dashboard whose two chart cards sit side by side the plot
+ * is 346px wide: at a crosshair 0.35 of the way across, x = 122 — too far right to anchor
+ * left, too far left to centre — and the tip ran from 122 to 382 in a 346px box. Its card
+ * hides overflow, so the reader got a tooltip with 19px sliced off its right edge, ids and
+ * rounded border and all, in both languages, at 1072px (P9 round 8 critic, noted; and it is
+ * the same promise round 6 was failed for — "flips rather than leaving the card").
+ *
+ * There is no anchor that always fits, so the anchor is a preference and the *bounds* are
+ * the rule: put it where the crosshair asks, then slide it back inside the plot.
+ *
+ * ## Why the clamp is CSS and not arithmetic here
+ *
+ * The bounds need the tip's own width, which is content-dependent — a bucket with four ids
+ * is 260px, one with none is 168 — and reading it in a layout effect means the position is
+ * computed from the *previous* bucket's width for one commit. That is not theoretical: it
+ * shipped for an afternoon and check-clipping caught it, a 260px tooltip standing at the
+ * 170px tooltip's offset, 27px of it under the card's edge, for the two frames before the
+ * correction landed.
+ *
+ * So the element does its own arithmetic, in the one unit only it knows: `100%` inside
+ * `translateX` is the element's own border box. This component passes the two lengths it
+ * *does* know — where the crosshair is (`--tip-x`) and how much room the plot has
+ * (`--tip-room`) — and app.css clamps `x − anchor` between 0 and `room − 100%`. One frame,
+ * one truth, whatever the content does.
+ *
+ * The offset is a `transform` rather than `left`, and that is load-bearing too: an
+ * absolutely positioned box with `left: L` is laid out in the room left over to its right,
+ * so its width would depend on where it was put — which is a box that gets narrower as it
+ * approaches the right edge and wraps its label at 0.8 of the way across. With `left: 0` it
+ * always lays out against the whole plot and the transform moves the finished box.
  */
 function ChartTip({ x, width, children }: { x: number; width: number; children: ReactNode }) {
   const side = x < 130 ? "start" : x > width - 130 ? "end" : "mid";
   return (
-    <div className={`chart-tip is-${side}`} style={{ left: x }} aria-hidden="true">
+    <div
+      className={`chart-tip is-${side}`}
+      style={{ "--tip-x": `${Math.round(x)}px`, "--tip-room": `${Math.round(width)}px` } as CSSProperties}
+      aria-hidden="true"
+    >
       {children}
     </div>
   );
