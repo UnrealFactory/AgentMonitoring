@@ -12,8 +12,8 @@
 //   * events newest first (ties break on append order, reversed), malformed lines skipped;
 //   * ids/slugs validated before touching the filesystem.
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { readFileSync, readdirSync, existsSync, realpathSync, rmSync, statSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export class VaultError extends Error {
   constructor(status, message) {
@@ -695,6 +695,10 @@ export function handleVaultApi(reader, pathname, searchParams) {
 // there would corrupt a vault rather than mis-render one. So browser mode writes by running
 // the `agentmon` binary itself: the same core code the desktop app calls in-process, and
 // the same code an agent at a terminal runs.
+//
+// With exactly one exception, at the foot of this file: deleting a project, which has no CLI
+// verb to run because it is the human's action in the app and not part of the interface
+// agents script against. See handleVaultDelete for the rules it keeps instead.
 
 const BIN = process.env.AGENTMON_BIN;
 
@@ -770,14 +774,56 @@ export function handleVaultWrite(reader, repoRoot, pathname, body) {
     return reader.getProject(slug);
   }
 
-  if (a === "projects" && b && c === "status") {
-    const status = REQUIRED(body, "status");
-    if (status !== "active" && status !== "archived") {
-      throw new VaultError(400, `unknown project status '${status}': expected active or archived`);
-    }
-    run(["project", "update", checkSlug(b), "--status", status, "--agent", actor]);
-    return reader.getProject(b);
+  throw new VaultError(404, `no vault-api write route for ${pathname}`);
+}
+
+/**
+ * `DELETE /vault-api/projects/<slug>` — the browser twin of the desktop app's
+ * `delete_project` command (src-tauri/src/lib.rs).
+ *
+ * **The one write in this file that does not shell out to `agentmon`**, and deliberately so:
+ * there is no `agentmon project delete` and there is not going to be one. Deleting a project
+ * is the human's action inside the app, not a verb in the interface agents script against,
+ * so browser mode — which exists to drive the same UI without building the desktop app —
+ * implements it here, with the same two rules the Rust side keeps:
+ *
+ *   * the slug is validated before it touches the filesystem (`checkSlug`, the same
+ *     `[a-z0-9_-]` rule `validate_slug` applies), and
+ *   * the directory is resolved through symlinks and required to still be a *direct child*
+ *     of this vault's own `projects/` — a link out of the vault is refused, not followed.
+ *
+ * Answers with what was there a moment before, because afterwards there is nothing to read:
+ * the same `{ ok, slug, name, path, counts, deletedBy }` shape the Tauri command returns.
+ */
+export function handleVaultDelete(reader, pathname, searchParams) {
+  const parts = pathname.replace(/^\/+|\/+$/g, "").split("/");
+  const [, a, b, c] = parts;
+  if (a !== "projects" || !b || c) {
+    throw new VaultError(404, `no vault-api delete route for ${pathname}`);
+  }
+  const slug = checkSlug(b);
+  // Throws `project '<slug>' not found in vault <dir>` when it is not there — the same
+  // sentence the desktop app produces, which src/lib/api.ts already says in Korean.
+  const project = reader.getProject(slug);
+
+  const projects = realpathSync(join(reader.vaultDir, "projects"));
+  const dir = realpathSync(join(reader.vaultDir, "projects", slug));
+  const rel = relative(projects, dir);
+  if (!rel || rel.startsWith("..") || rel.includes(sep) || isAbsolute(rel)) {
+    throw new VaultError(
+      400,
+      `${dir} is not a project directory inside ${projects} — refusing to follow a path out ` +
+        `of the vault`
+    );
   }
 
-  throw new VaultError(404, `no vault-api write route for ${pathname}`);
+  rmSync(dir, { recursive: true, force: false });
+  return {
+    ok: true,
+    slug,
+    name: project.name,
+    path: dir,
+    counts: project.counts,
+    deletedBy: (searchParams?.get("agent") ?? "").trim() || "app",
+  };
 }

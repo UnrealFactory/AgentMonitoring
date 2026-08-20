@@ -45,12 +45,18 @@
  *      switcher**; then **"Across the vault"** on /projects — twelve record rows, the same
  *      class and layout as the dashboard's, the only feed whose rows name another project —
  *      plus the **breadcrumb** at the head of every record and an **id written into prose**.
- *   9. Nothing in it deletes (the vault is append-only), Archive says so before the click,
- *      and archiving really does leave a way back — from the Projects screen's undo bar, and
- *      from the toast when it is invoked anywhere else.
+ *   9. **Nothing about a record deletes**, and the one thing that does is hard to do by
+ *      accident. Work logs and bugs are append-only by SPEC, so no menu over one offers a
+ *      delete. A *project* can be deleted — by the human, in this app — and every guard
+ *      around that is measured here: the item says what it costs before the click, the
+ *      dialog will not arm its button until the slug is typed exactly, ↵ on an empty field
+ *      deletes nothing, esc and the scrim delete nothing, and when it does run the project
+ *      leaves the disk, the row leaves an *already-open second window* with no reload, and
+ *      a reader standing inside the deleted project is moved to /projects rather than left
+ *      on a screen whose vault entry is gone.
  *
  * Two scratch vaults are built in temp directories — a 12-project one for (5) and the same
- * copy for the writes in (8). ./vault is read, never written.
+ * copy for the writes and the deletes in (8). ./vault is read, never written.
  */
 import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -71,8 +77,9 @@ const MANY_PORT = Number(value("--many-port", PORT + 61));
 /* Menus and nav rows are words. `--locale en` walks the same 126 checks in English. */
 const LOCALE = value("--locale", process.env.SHOT_LOCALE || "ko");
 const T = (key, ...args) => t(LOCALE, key, ...args);
-/* "There is deliberately no Delete in this menu" is a claim about meaning, not about
-   English: a menu that offered 삭제 would break the same promise. */
+/* "There is deliberately no Delete over a record" is a claim about meaning, not about
+   English: an item reading 삭제 would break the same promise. Records are append-only by
+   SPEC; the project menu is the one place this word is allowed to appear. */
 const DESTRUCTIVE = /delete|remove|discard|삭제|제거|지우기/i;
 const log = (...m) => console.log("[check-keys]", ...m);
 
@@ -571,7 +578,7 @@ try {
   check(
     "the breadcrumb at the head of a record opens its project's menu",
     (await page.getAttribute(".ctx-menu", "aria-label")) === crumbName &&
-      same(await menuItems(page), ["open", "work", "bugs", "copy-slug", "archive"]),
+      same(await menuItems(page), ["open", "work", "bugs", "copy-slug", "delete"]),
     `label ${await page.getAttribute(".ctx-menu", "aria-label")} vs ${crumbName}, items ${JSON.stringify(await menuItems(page))}`,
   );
   await page.keyboard.press("Escape");
@@ -720,12 +727,14 @@ try {
   );
   check(
     "…the same five items the small copy of that project below it opens",
-    same(await menuItems(page), ["open", "work", "bugs", "copy-slug", "archive"]),
+    same(await menuItems(page), ["open", "work", "bugs", "copy-slug", "delete"]),
     JSON.stringify(await menuItems(page)),
   );
   check(
-    "…and still nothing that deletes",
-    !DESTRUCTIVE.test((await page.locator(".ctx-menu").textContent()) ?? ""),
+    "…with Delete last, marked destructive rather than drawn like the other four",
+    (await page.locator('.ctx-item[data-item="delete"].is-danger').count()) === 1 &&
+      (await page.locator(".ctx-item").last().getAttribute("data-item")) === "delete",
+    JSON.stringify(await menuItems(page)),
   );
   check(
     "…and right-clicking it did not also drop its dropdown open",
@@ -928,90 +937,181 @@ try {
   check(
     "a vault-feed row about the project itself opens the project menu",
     (await wide.getAttribute(".ctx-menu", "aria-label")) === evName &&
-      same(await menuItems(wide), ["open", "work", "bugs", "copy-slug", "archive"]),
+      same(await menuItems(wide), ["open", "work", "bugs", "copy-slug", "delete"]),
     `label ${await wide.getAttribute(".ctx-menu", "aria-label")} vs ${evName}, items ${JSON.stringify(await menuItems(wide))}`,
   );
   await wide.keyboard.press("Escape");
 
-  /* 8. Archive, from the menu — the one item in this app that writes. It is run against the
-     scratch copy, never ./vault, and what is checked is the promise the item makes in its
-     own hint: the records are kept, and there is a way back from wherever it was invoked. */
-  log("--- archive, and the way back");
+  /* 8. Delete, from the menu — the one action in this app that destroys anything, and the
+     only one no agent can perform (no CLI verb, no MCP tool).
+
+     Everything below runs against the **scratch copy**, on its own server, and only ever on
+     the `scratch-N` projects this file created a hundred lines above; ./vault is never
+     opened by this page. The four cancels are checked before the one delete, because a
+     dialog that deletes on esc has already cost somebody their records by the time the
+     happy path passes. */
+  log("--- delete, and the four ways out of it");
   const manyProjects = async () => (await (await fetch(`${manyOrigin}/vault-api/projects`)).json());
-  const statusOf = async (s) => (await manyProjects()).find((p) => p.slug === s)?.status;
-  const settles = async (s, want, ms = 10_000) => {
+  const exists = async (s) => (await manyProjects()).some((p) => p.slug === s);
+  const goneFromVault = async (s, ms = 10_000) => {
     const deadline = Date.now() + ms;
     while (Date.now() < deadline) {
-      if ((await statusOf(s)) === want) return true;
+      if (!(await exists(s))) return true;
       await new Promise((r) => setTimeout(r, 120));
     }
     return false;
   };
-  const workCount = async (s) =>
-    (await (await fetch(`${manyOrigin}/vault-api/projects/${s}/worklogs`)).json()).length;
-
-  const projectName = projects.find((p) => p.slug === slug)?.name;
-  const recordsBefore = await workCount(slug);
-  const projectRow = wide
-    .locator(".project-row")
-    .filter({ has: wide.locator(`.project-name:text-is(${JSON.stringify(projectName)})`) })
-    .first();
-  await projectRow.click({ button: "right", position: { x: 24, y: 18 } });
-  await wide.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
-  check(
-    "the project menu says what Archive costs before the click",
-    ((await wide.locator('.ctx-item[data-item="archive"] .ctx-hint').textContent()) ?? "").trim() ===
-      T("menu.archiveHint"),
-  );
-  check(
-    "…and there is deliberately no Delete in it",
-    !DESTRUCTIVE.test((await wide.locator(".ctx-menu").textContent()) ?? ""),
-  );
-  /* This row is below the fold in a 12-project vault, so reaching it scrolls the page —
-     and a scroll still settling as the menu opens used to dismiss it on the spot. */
-  await wide.waitForTimeout(300);
-  check(
-    "…and a menu opened on a row that had to be scrolled to is still there a moment later",
-    await wide.locator(".ctx-menu").isVisible(),
-  );
-  await wide.locator('.ctx-item[data-item="archive"]').click();
-  await wide.waitForSelector(".undo-bar", { state: "visible", timeout: 10_000 });
-  check("archiving from a row menu on /projects raises that screen's own undo bar", true);
-  check(`…and ${slug} really is archived in the vault`, await settles(slug, "archived"));
-  check(
-    "…with every record it had still in it",
-    (await workCount(slug)) === recordsBefore,
-    `${await workCount(slug)} vs ${recordsBefore}`,
-  );
-  await wide.locator(".undo-bar .button").click();
-  check("…and Undo puts it back", await settles(slug, "active"));
-
-  /* The same action from the sidebar, where there is no undo bar to raise: the way back
-     arrives as a toast, and — like the bar — it waits rather than fading. */
-  await wide.goto(`${manyOrigin}/p/${slug}`, { waitUntil: "domcontentloaded" });
-  await ready(wide);
-  const pick = await wide.evaluate(() => {
-    const rows = [...document.querySelectorAll(".nav-sub")].filter(
-      (r) => !r.classList.contains("nav-more"),
+  const dialogOpen = (page) => page.locator(".modal.is-danger").isVisible();
+  const armed = async (page) =>
+    !(await page.locator(".modal .button-danger").isDisabled());
+  /** Open the menu on the /projects row of `name` and click its Delete item. */
+  const openDialogFromRow = async (page, name) => {
+    const row = page
+      .locator(".project-row")
+      .filter({ has: page.locator(`.project-name:text-is(${JSON.stringify(name)})`) })
+      .first();
+    await row.click({ button: "right", position: { x: 24, y: 18 } });
+    await page.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+    /* This row can be below the fold in a 12-project vault, so reaching it scrolls the
+       page — and a scroll still settling as the menu opens used to dismiss it on the spot. */
+    await page.waitForTimeout(300);
+    check(
+      "a menu opened on a row that had to be scrolled to is still there a moment later",
+      await page.locator(".ctx-menu").isVisible(),
     );
-    const i = rows.findIndex((r) => !r.classList.contains("is-current"));
-    return i < 0 ? null : { i, name: rows[i].querySelector(".nav-sub-name").textContent.trim() };
-  });
-  const pickedSlug = (await manyProjects()).find((p) => p.name === pick?.name)?.slug;
-  await wide.locator(".nav-sub").nth(pick.i).click({ button: "right" });
+    await page.locator('.ctx-item[data-item="delete"]').click();
+    await page.waitForSelector(".modal.is-danger", { state: "visible", timeout: 5_000 });
+  };
+
+  const victim = "scratch-9";
+  const victimName = (await manyProjects()).find((p) => p.slug === victim)?.name;
+  await wide.goto(`${manyOrigin}/projects`, { waitUntil: "domcontentloaded" });
+  await ready(wide);
+
+  const victimRow = wide
+    .locator(".project-row")
+    .filter({ has: wide.locator(`.project-name:text-is(${JSON.stringify(victimName)})`) })
+    .first();
+  await victimRow.click({ button: "right", position: { x: 24, y: 18 } });
   await wide.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
-  await wide.locator('.ctx-item[data-item="archive"]').click();
-  await wide.waitForSelector(".toast", { state: "visible", timeout: 10_000 });
-  check(`archiving ${pickedSlug} from the sidebar archives it`, await settles(pickedSlug, "archived"));
   check(
-    "…and answers with a toast offering the way back",
-    ((await wide.locator(".toast .button").textContent()) ?? "").trim() === T("app.undo"),
+    "the project menu says what Delete costs before the click",
+    ((await wide.locator('.ctx-item[data-item="delete"] .ctx-hint').textContent()) ?? "").trim() ===
+      T("menu.deleteHint"),
   );
-  // An undo that fades is an undo for people who were already looking (the P5 rule).
-  await wide.waitForTimeout(3_000);
-  check("…which does not fade out from under the reader", await wide.locator(".toast").isVisible());
-  await wide.locator(".toast .button").click();
-  check("…and it works", await settles(pickedSlug, "active"));
+  await wide.keyboard.press("Escape");
+
+  // esc, from the field the dialog put the keyboard in.
+  await openDialogFromRow(wide, victimName);
+  check(
+    "the dialog takes the keyboard, in the box that has to be typed into",
+    await wide.evaluate(() => !!document.activeElement?.closest?.(".modal")),
+    `focus is ${await focused(wide)}`,
+  );
+  check("…and its button starts disabled", !(await armed(wide)));
+  check(
+    "…and the modal lock is declared, so the screen behind stands down",
+    (await wide.getAttribute("html", "data-modal")) === "open",
+  );
+  // ↵ on an empty field: the browser's implicit submit, over a dialog about deleting.
+  await wide.keyboard.press("Enter");
+  await wide.waitForTimeout(400);
+  check("↵ in the empty field deletes nothing", await exists(victim));
+  check("…and leaves the dialog up rather than closing it", await dialogOpen(wide));
+  await wide.keyboard.press("Escape");
+  check("esc closes it", !(await wide.locator(".modal").count()));
+  check("…and deletes nothing", await exists(victim));
+
+  // The wrong slug, and a near miss.
+  await openDialogFromRow(wide, victimName);
+  await wide.locator(".modal .input").fill("scratch");
+  check("a slug that is only a prefix does not arm the button", !(await armed(wide)));
+  await wide.locator(".modal .input").fill(`${victim}x`);
+  check("…nor one with a character too many", !(await armed(wide)));
+  await wide.keyboard.press("Enter");
+  await wide.waitForTimeout(400);
+  check("…and ↵ on a wrong slug deletes nothing", await exists(victim));
+  // The scrim.
+  await wide.locator(".modal-scrim").click({ position: { x: 8, y: 8 } });
+  check("a click on the scrim closes it", !(await wide.locator(".modal").count()));
+  check("…and deletes nothing", await exists(victim));
+
+  /* The delete itself — and a second window, already open on the same vault, which finds
+     out about it the way any other window would: from the watcher, with no reload. */
+  log("--- delete, for real");
+  const watcher = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  await useLocale(watcher, LOCALE);
+  let watcherLoads = 0;
+  watcher.on("load", () => (watcherLoads += 1));
+  await watcher.goto(`${manyOrigin}/projects`, { waitUntil: "domcontentloaded" });
+  await ready(watcher);
+  watcherLoads = 0;
+  const rowsBefore = await watcher.locator(".project-row").count();
+
+  await openDialogFromRow(wide, victimName);
+  check(
+    "the dialog counts what will be lost rather than asking 'are you sure?'",
+    ((await wide.locator(".modal-facts dd").textContent()) ?? "").includes("·"),
+    await wide.locator(".modal-facts dd").textContent(),
+  );
+  await wide.locator(".modal .input").fill(victim);
+  check("typing the slug exactly arms the button", await armed(wide));
+  await wide.locator(".modal .button-danger").click();
+  check(`${victim} is gone from the vault`, await goneFromVault(victim));
+  await wide.waitForSelector(".toast", { state: "visible", timeout: 10_000 });
+  check(
+    "…and one line says so, naming the project",
+    ((await wide.locator(".toast-text").textContent()) ?? "").includes(victimName),
+    await wide.locator(".toast-text").textContent(),
+  );
+  await wide.waitForFunction(
+    (n) => document.querySelectorAll(".project-row").length === n,
+    rowsBefore - 1,
+    { timeout: 10_000 },
+  );
+  check("…and the row leaves the list it was deleted from", true);
+
+  await watcher.waitForFunction(
+    (n) => document.querySelectorAll(".project-row").length === n,
+    rowsBefore - 1,
+    { timeout: 20_000 },
+  );
+  check("a second window already open on the vault loses the row too", true);
+  check("…without reloading the page", watcherLoads === 0, `${watcherLoads} load events`);
+  await watcher.close();
+
+  /* Deleting the project the reader is standing *inside*. Left where they were, the next
+     read would answer with "this vault has no project called …" — an error card in place of
+     the thing they just asked for. */
+  const inside = "scratch-8";
+  const insideName = (await manyProjects()).find((p) => p.slug === inside)?.name;
+  await wide.goto(`${manyOrigin}/p/${inside}/work`, { waitUntil: "domcontentloaded" });
+  await ready(wide);
+  await wide.locator(".switcher-button").click({ button: "right", position: { x: 60, y: 20 } });
+  await wide.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
+  await wide.locator('.ctx-item[data-item="delete"]').click();
+  await wide.waitForSelector(".modal.is-danger", { state: "visible", timeout: 5_000 });
+  check(
+    "the switcher's own menu opens the same dialog, about the project it names",
+    ((await wide.locator(".modal-project-slug").textContent()) ?? "").trim() === inside,
+    await wide.locator(".modal-project-slug").textContent(),
+  );
+  await wide.locator(".modal .input").fill(inside);
+  await wide.locator(".modal .button-danger").click();
+  check(`${inside} is gone from the vault`, await goneFromVault(inside));
+  await wide.waitForURL(`${manyOrigin}/projects`, { timeout: 10_000 });
+  await ready(wide);
+  check("…and the reader who was standing in it is moved to /projects", true);
+  check(
+    "…rather than being left on an error card about the vault",
+    (await wide.locator(".error-state").count()) === 0 &&
+      ((await wide.locator(".page-title").textContent()) ?? "").trim() === T("proj.title"),
+    `title reads "${await wide.locator(".page-title").textContent()}"`,
+  );
+  check(
+    "…and the deleted project is not in the sidebar any more",
+    !(await wide.locator(".nav-sub-name").allTextContents()).includes(insideName),
+  );
 
   await wide.close();
 } catch (err) {

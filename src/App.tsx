@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
 import { AppProvider, useApp } from "./AppContext";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenuProvider } from "./components/ContextMenu";
+import { DeleteProjectProvider } from "./components/DeleteProject";
 import { Sidebar } from "./components/Sidebar";
 import { Titlebar } from "./components/Titlebar";
 import { TooltipLayer } from "./components/Tooltip";
@@ -154,18 +155,25 @@ export default function App() {
       {/* Owns the right button for the whole document — including the parts of it that have
           no menu, where the browser's own would otherwise appear (components/ContextMenu.tsx). */}
       <ContextMenuProvider>
-        <Routes>
-          <Route element={<Shell />}>
-            <Route index element={<Home />} />
-            <Route path="projects" element={<ProjectsPage />} />
-            <Route path="p/:project" element={<DashboardPage />} />
-            <Route path="p/:project/work" element={<WorkListPage />} />
-            <Route path="p/:project/work/:id" element={<WorkDetailPage />} />
-            <Route path="p/:project/bugs" element={<BugsPage />} />
-            <Route path="p/:project/bugs/:id" element={<BugDetailPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
+        {/* The confirm dialog for the app's one destructive action, above every screen
+            because the menu that opens it is on every surface that names a project — the
+            sidebar's list, the switcher, a record's breadcrumb, the vault feed — and a
+            dialog owned by /projects could not be raised from any of them
+            (components/DeleteProject.tsx). */}
+        <DeleteProjectProvider>
+          <Routes>
+            <Route element={<Shell />}>
+              <Route index element={<Home />} />
+              <Route path="projects" element={<ProjectsPage />} />
+              <Route path="p/:project" element={<DashboardPage />} />
+              <Route path="p/:project/work" element={<WorkListPage />} />
+              <Route path="p/:project/work/:id" element={<WorkDetailPage />} />
+              <Route path="p/:project/bugs" element={<BugsPage />} />
+              <Route path="p/:project/bugs/:id" element={<BugDetailPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </DeleteProjectProvider>
         {/* Draws every `title` in the app, so the WebView never draws one of its own — one
             layer, document-level delegation, no component opts in (components/Tooltip.tsx). */}
         <TooltipLayer />

@@ -150,6 +150,21 @@ const post = async (path, body) => {
   }
 };
 
+/**
+ * The one destructive route. Only ever aimed at a **temp copy** of the vault in this file —
+ * every call below runs against a server started with `AGENTMON_VAULT=<temp dir>`, and the
+ * repo vault is hashed before and after to prove it.
+ */
+const del = async (path) => {
+  const res = await fetch(`${ORIGIN}${path}`, { method: "DELETE" });
+  const text = await res.text();
+  try {
+    return { status: res.status, body: JSON.parse(text) };
+  } catch {
+    return { status: res.status, body: text };
+  }
+};
+
 const REPO_VAULT = join(repoRoot, "vault");
 const enc = encodeURIComponent;
 
@@ -403,85 +418,111 @@ try {
   check("…and still without a reload", loads === 0, `${loads} load events`);
 
   /* ------------------------------------------------------------------ *
-     2b. archiving a project is a change the whole app agrees about
+     2b. deleting a project takes it off the disk, and the whole app agrees
+
+     The app's one destructive route, and the only write in it that no agent can reach:
+     there is no `agentmon project delete` and no MCP tool, so this endpoint is the app's
+     confirm dialog and nothing else (scripts/vault-fs.mjs, src-tauri/src/lib.rs). It runs
+     against the *temp copy* opened above (AGENTMON_VAULT=<temp>), never ./vault — which the
+     fingerprint at the end of this gate proves.
+
+     What is checked is the containment, first: a slug that is not a slug, and a project that
+     is not there, must be refused before anything is removed.
      ------------------------------------------------------------------ */
 
-  const archived = all.find((p) => p.slug !== slug) ?? all[0];
-  const archiveRes = await post(`/vault-api/projects/${enc(archived.slug)}/status`, {
-    status: "archived",
-    agent: "check-vault",
-  });
+  const doomed = all.find((p) => p.slug !== slug) ?? all[0];
+  const doomedDir = join(live, "projects", doomed.slug);
+  check(`the temp vault really holds ${doomed.slug}`, existsSync(doomedDir), doomedDir);
+
+  for (const bad of ["..", "%2e%2e%2f%2e%2e", "NOT-A-SLUG", "no-such-project-here"]) {
+    const refused = await del(`/vault-api/projects/${enc(bad)}`);
+    check(
+      `DELETE of ${JSON.stringify(bad)} is refused rather than resolved`,
+      refused.status >= 400,
+      `${refused.status} ${JSON.stringify(refused.body).slice(0, 160)}`,
+    );
+  }
   check(
-    `archiving ${archived.slug} goes through the same core write path`,
-    archiveRes.status === 200 && archiveRes.body.status === "archived",
-    `${archiveRes.status} ${JSON.stringify(archiveRes.body).slice(0, 200)}`,
+    "…and the vault still has every project it had",
+    (await json("/vault-api/projects")).body.length === all.length,
+    `${(await json("/vault-api/projects")).body.length} vs ${all.length}`,
+  );
+
+  const deleted = await del(`/vault-api/projects/${enc(doomed.slug)}?agent=check-vault`);
+  check(
+    `deleting ${doomed.slug} answers with what it removed`,
+    deleted.status === 200 &&
+      deleted.body.slug === doomed.slug &&
+      deleted.body.name === doomed.name &&
+      deleted.body.counts.workTotal === doomed.counts.workTotal,
+    `${deleted.status} ${JSON.stringify(deleted.body).slice(0, 240)}`,
+  );
+  check(
+    "…and the directory is off the disk, records and all",
+    !existsSync(doomedDir),
+    `${doomedDir} is still there`,
+  );
+  check(
+    "…and asking for it again is a missing project, not a second delete",
+    (await del(`/vault-api/projects/${enc(doomed.slug)}`)).status >= 400,
   );
 
   await page.goto(`${ORIGIN}/projects`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".project-row", { state: "visible" });
   await page.waitForFunction(() => !document.querySelector(".skeleton"));
   const counts = await page.evaluate(
-    ([activeProjects, projectsNav]) => {
+    ([projectsFact, projectsNav]) => {
       const fact = (label) =>
         [...document.querySelectorAll(".vault-bar-facts div")]
           .find((d) => d.querySelector("dt")?.textContent?.trim() === label)
           ?.querySelector("dd")
           ?.textContent?.trim() ?? null;
       return {
-        vaultBar: fact(activeProjects),
+        vaultBar: fact(projectsFact),
         sidebar:
           [...document.querySelectorAll(".nav-item")]
             .find((n) => n.textContent?.trim().startsWith(projectsNav))
             ?.querySelector(".nav-count")
             ?.textContent?.trim() ?? null,
-        activeRows: document.querySelectorAll(".project-section .project-rows .project-row").length,
+        rows: document.querySelectorAll(".project-section .project-rows .project-row").length,
+        names: [...document.querySelectorAll(".project-name")].map((n) => n.textContent?.trim()),
       };
     },
-    [T("vault.activeProjects"), T("nav.projects")],
+    [T("vault.projects"), T("nav.projects")],
   );
   check(
-    "the vault bar and the sidebar count the same projects after an archive",
-    counts.sidebar === String(all.length - 1) && counts.vaultBar?.startsWith(String(all.length - 1)),
-    `vault bar "${counts.vaultBar}", sidebar "${counts.sidebar}", ${all.length} projects in the vault`,
+    "the vault bar, the sidebar and the list all count the vault after a delete",
+    counts.sidebar === String(all.length - 1) &&
+      counts.vaultBar === String(all.length - 1) &&
+      counts.rows === all.length - 1,
+    `vault bar "${counts.vaultBar}", sidebar "${counts.sidebar}", ${counts.rows} rows, ${all.length} projects before`,
   );
   check(
-    "…and the vault bar says how many are archived rather than hiding them",
-    (counts.vaultBar ?? "").includes(T("vault.archivedAside", 1).trim().replace(/^·s*/, "")),
-    `vault bar reads "${counts.vaultBar}"`,
+    "…and the deleted project is not one of the rows",
+    !counts.names.includes(doomed.name),
+    `rows: ${JSON.stringify(counts.names)}`,
   );
 
-  await page.goto(`${ORIGIN}/p/${archived.slug}`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".page-title", { state: "visible" });
-  await page.waitForFunction(() => !document.querySelector(".skeleton"));
-  const onArchived = await page.evaluate(() => ({
-    head: document.querySelector(".page-head-meta")?.textContent?.trim() ?? "",
-    live: !!document.querySelector(".live-flag"),
-    archived: !!document.querySelector(".page-head-meta .pill-archived"),
+  /* A link into the project that is gone. The app has a designed answer for an address this
+     vault does not have, and after a delete it is the answer a bookmark gets. */
+  await page.goto(`${ORIGIN}/p/${doomed.slug}`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".error-state", { state: "visible", timeout: 15_000 });
+  const stale = await page.evaluate(() => ({
+    title: document.querySelector(".error-state .error-title")?.textContent?.trim() ?? "",
+    // The retry is the only <button> in that row; the way out beside it is a <Link>.
+    retry: !!document.querySelector(".error-actions button"),
+    out: document.querySelector(".error-actions a")?.textContent?.trim() ?? null,
   }));
   check(
-    "an archived project's dashboard says archived, not live",
-    onArchived.archived && !onArchived.live,
-    `head reads "${onArchived.head}"`,
+    "a link into the deleted project lands on the app's 'no such project' screen",
+    stale.title === T("vault.noProject", doomed.slug),
+    `headline reads "${stale.title}", expected "${T("vault.noProject", doomed.slug)}"`,
   );
-
-  await page.click(".switcher-button");
-  const inSwitcher = await page.evaluate(() =>
-    [...document.querySelectorAll(".switcher-item-name")].map((n) => n.textContent?.trim()),
-  );
+  check("…offering no Try again, because a retry cannot help", !stale.retry);
   check(
-    "…and the switcher still lists the project the reader is standing on",
-    inSwitcher.some((n) => n?.startsWith(archived.name)),
-    `switcher offers ${JSON.stringify(inSwitcher)}`,
-  );
-
-  const restored = await post(`/vault-api/projects/${enc(archived.slug)}/status`, {
-    status: "active",
-    agent: "check-vault",
-  });
-  check(
-    "unarchiving puts it back",
-    restored.status === 200 && restored.body.status === "active",
-    `${restored.status} ${JSON.stringify(restored.body).slice(0, 160)}`,
+    "…and a way out instead",
+    stale.out === T("nav.allProjects"),
+    `the action reads "${stale.out}"`,
   );
 
   await browser.close();

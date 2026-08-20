@@ -276,11 +276,6 @@
   text-overflow: ellipsis;
 }
 
-.switcher-item-flag {
-  color: var(--text-tertiary);
-  font-weight: var(--weight-normal);
-}
-
 .switcher-item-meta {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
@@ -431,11 +426,6 @@
 .nav-sub:hover .nav-bullet,
 .nav-sub.is-current .nav-bullet {
   background: var(--accent-text);
-}
-
-.nav-bullet.is-archived {
-  background: none;
-  box-shadow: inset 0 0 0 1px var(--text-tertiary);
 }
 
 .nav-sub-name {
@@ -771,6 +761,139 @@
 }
 
 /* ===========================================================================
+   MODAL — a question the app has to stop and ask
+
+   One instance so far: deleting a project (components/DeleteProject.tsx). Deliberately the
+   palette's own surface — same scrim, same raised panel, same border, radius and shadow —
+   because a dialog drawn in a second visual language reads as something the app did not
+   write. It sits a little lower and narrower: this one is read, not typed through.
+   ======================================================================== */
+
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80; /* over the palette and the context menu, which stand down for it */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16vh var(--space-4) var(--space-4);
+  background: var(--bg-scrim);
+  backdrop-filter: blur(1.5px);
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(460px, 100%);
+  padding: var(--space-4);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+/* A hairline of the colour of the thing about to happen, along the top edge. The panel
+   itself stays the app's surface — a dialog washed in red is a dialog that tells the
+   reader what to feel instead of what it is about to do. */
+.modal.is-danger {
+  border-top: 2px solid var(--red);
+}
+
+.modal-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modal-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+
+/* The name and the slug of what is about to go, on one line: the name is what the reader
+   recognises, the slug is what they are about to type. */
+.modal-project {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.modal-project-name {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modal-project-slug {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* What goes with it, counted. Not "are you sure?" over a name. */
+.modal-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.modal-facts dt {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* `margin: 0` because a <dd> carries a 40px inset by default, and this one has to line up
+   under the label that names it rather than under nothing. */
+.modal-facts dd {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.modal-warn {
+  font-size: var(--text-base);
+  line-height: var(--leading-snug);
+  color: #f4a0a0;
+}
+
+.modal-warn code {
+  color: inherit;
+}
+
+.modal-note {
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The filter search box sets a fixed width on .input; a field in a dialog takes the panel. */
+.modal-form .input {
+  width: 100%;
+  height: 32px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ===========================================================================
    CONTEXT MENU (right-click, Shift+F10)
 
    The same bar as the filter menu and the project switcher — raised surface, hairline
@@ -824,6 +947,25 @@
   outline: none;
   background: var(--bg-selected);
   color: var(--text-primary);
+}
+
+/* Delete. Red at rest — a destructive item that only turns red once the pointer is on it
+   has already been read by somebody about to click it — and the highlight is the same red,
+   so the row does not go grey at the moment of decision. Colour is not the message: the
+   word says 삭제 and the hint beside it says what that costs (src/lib/menus.ts). */
+.ctx-item.is-danger {
+  color: var(--red);
+}
+
+.ctx-item.is-danger:hover,
+.ctx-item.is-danger:focus,
+.ctx-item.is-danger:focus-visible {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.ctx-item.is-danger .ctx-hint {
+  color: #c47a7a;
 }
 
 .ctx-label {
@@ -4653,13 +4795,39 @@ a.feed-row:hover .feed-ref {
   background: var(--accent-hover);
 }
 
+/* The one button in the app that destroys something. It is filled, like the primary, so it
+   reads as the action of the dialog it is in — in the app's own red rather than the accent,
+   because the accent means "the thing you probably came here to do" everywhere else. */
+.button-danger {
+  background: var(--red);
+  border-color: transparent;
+  color: #fff;
+}
+
+.button-danger:hover:not(:disabled) {
+  background: #d94a4a;
+}
+
+/* Disabled is the *normal* state of this button — it is armed only once the slug has been
+   typed — so it may not look broken while it waits. Flatter and quieter than a disabled
+   primary, still legibly the word it will become. */
+.button-danger:disabled {
+  background: var(--red-soft);
+  color: #f4a0a0;
+  opacity: 1;
+}
+
 .button:disabled,
 .button-primary:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-/* A button that is a sentence's worth of action, not a control: archive, show, hide. */
+.button-danger:disabled {
+  cursor: default;
+}
+
+/* A button that is a sentence's worth of action, not a control. */
 .link-button {
   font-size: var(--text-sm);
   color: var(--text-secondary);
@@ -4678,6 +4846,19 @@ a.feed-row:hover .feed-ref {
   cursor: default;
 }
 
+/* Delete, on a project row. Quiet until it is pointed at: a red word standing on every row
+   of the Projects screen is the app shouting about the one thing it hopes nobody does. It
+   still answers on hover and on focus in the colour of what it opens. */
+.link-button.is-danger {
+  color: var(--text-tertiary);
+}
+
+.link-button.is-danger:hover,
+.link-button.is-danger:focus-visible {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
 .form-error {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius);
@@ -4687,33 +4868,9 @@ a.feed-row:hover .feed-ref {
   border: 1px solid rgba(235, 87, 87, 0.3);
 }
 
-/* The way back from the one action on this screen that moves a row out of the list.
-   It sits in the layout rather than floating over it, and it waits: a toast that fades
-   after four seconds is an undo for people who were already looking. */
-.undo-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-  border-radius: var(--radius);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-}
-
-.undo-text {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--text-base);
-  color: var(--text-secondary);
-}
-
-.undo-text strong {
-  color: var(--text-primary);
-  font-weight: var(--weight-medium);
-}
-
-.undo-dismiss {
+/* The × on a toast (components/ContextMenu.tsx): a line reporting something that already
+   happened can be waved away rather than waited out. */
+.toast-dismiss {
   display: grid;
   place-items: center;
   width: 22px;
@@ -4726,7 +4883,7 @@ a.feed-row:hover .feed-ref {
   transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
 }
 
-.undo-dismiss:hover {
+.toast-dismiss:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
@@ -4821,13 +4978,6 @@ a.feed-row:hover .feed-ref {
   min-width: 0;
 }
 
-/* The qualifier on a fact: "· 1 archived", "· from the AGENTMON_VAULT variable". */
-.vault-bar-aside {
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-normal);
-}
-
 .vault-bar-hint {
   max-width: 34ch;
   font-size: var(--text-xs);
@@ -4898,14 +5048,6 @@ a.feed-row:hover .feed-ref {
   background: var(--bg-raised);
 }
 
-.project-row.is-archived {
-  background: var(--bg-app);
-}
-
-.project-row.is-archived .project-name {
-  color: var(--text-secondary);
-}
-
 .project-row-main {
   display: flex;
   flex-direction: column;
@@ -4958,18 +5100,6 @@ a.feed-row:hover .feed-ref {
   color: var(--text-tertiary);
   white-space: nowrap;
   flex: none;
-}
-
-.pill-archived {
-  background: var(--grey-soft);
-  color: var(--text-secondary);
-  padding: 1px 8px;
-}
-
-/* On the dashboard the pill is a link to the screen that can restore the project. */
-a.pill-archived:hover {
-  background: var(--bg-active);
-  color: var(--text-primary);
 }
 
 /* Wrapped, never clamped: a description cut mid-word is a description the reader has to

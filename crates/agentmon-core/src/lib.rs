@@ -37,7 +37,7 @@ pub use model::{
 pub use vault::{next_id, validate_id, validate_slug, Vault};
 pub use write::{
     parse_bug_status, parse_project_status, parse_severity, parse_work_status, AbandonWork,
-    FinishWork, NewBug, NewProject, StartWork, UpdateProject, Written,
+    Deleted, FinishWork, NewBug, NewProject, StartWork, UpdateProject, Written,
 };
 
 /// Vault schema version this build reads and writes.

@@ -348,7 +348,14 @@ dt {
  */
 .outcome-when,
 .strip-meta,
-.side-rel {
+.side-rel,
+/* The delete dialog's two paragraphs — the app's own sentences, and the only ones in the
+   product a reader meets while deciding to destroy something. They wrap inside a 460px
+   panel, which is exactly the width band this list exists for: without the rule the Korean
+   warning broke "지워집니다" across two lines (caught by the word-integrity sweep in
+   scripts/check-i18n.mjs the first time that dialog was read at 1600px). */
+.modal-warn,
+.modal-note {
   word-break: keep-all;
   overflow-wrap: break-word;
 }

@@ -72,8 +72,11 @@ pub struct UpdateProject {
     pub description: Option<String>,
     /// Replaces the tag list (it is a set, not a log).
     pub tags: Option<Vec<String>>,
-    /// Archive or bring back: the one piece of project state a human, not an agent, sets.
-    /// Archiving hides a project from the app's default view; it deletes nothing.
+    /// The v1 schema's `active | archived` field. Written when asked and read back by both
+    /// readers, but **the app ignores it** — archiving was removed from the product, and a
+    /// project the human is finished with is deleted rather than filed away
+    /// ([`Vault::delete_project`]). Kept so a writer cannot silently drop a key that v1
+    /// files in the wild carry.
     pub status: Option<ProjectStatus>,
     pub actor: String,
     pub at: Option<String>,
@@ -151,6 +154,44 @@ impl<T> Written<T> {
             event,
             record,
         }
+    }
+}
+
+/// What a project was, immediately before [`Vault::delete_project`] removed it.
+///
+/// Every other mutation answers with the record re-read from disk (invariant 4 at the head
+/// of this module). This one cannot: the file it would read is gone, and that is the point.
+/// So it answers with the account taken a moment earlier — the name the window puts in its
+/// "deleted" line, the directory that is no longer there, and the counts, which are the only
+/// record left of how much went with it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Deleted {
+    pub ok: bool,
+    pub slug: String,
+    pub name: String,
+    /// The directory that was removed, as it resolved on this machine.
+    pub path: String,
+    pub counts: ProjectCounts,
+    /// Who the caller recorded as doing it. Empty from this crate: there is no event log
+    /// left to append to — the file that held one was inside the directory — so the actor
+    /// is filled in by the shell that has one and is written to *its* log, not to the vault.
+    pub deleted_by: String,
+}
+
+/// Is `dir` a project directory of this vault — a direct child of its own `projects/`?
+///
+/// Both paths arrive canonicalised, so this is the question after every symlink, junction
+/// and `..` has already been resolved: exactly one component below `projects`, and no route
+/// out of it. Split out from [`Vault::delete_project`] because a containment rule that is
+/// only exercised by deleting real directories is a rule nobody tests the failing half of.
+pub(crate) fn inside_projects(projects: &Path, dir: &Path) -> bool {
+    match dir.strip_prefix(projects) {
+        Ok(rel) => {
+            let mut parts = rel.components();
+            matches!(parts.next(), Some(std::path::Component::Normal(_))) && parts.next().is_none()
+        }
+        Err(_) => false,
     }
 }
 
@@ -350,6 +391,63 @@ impl Vault {
             self.append_event_at(&slug, &actor, EV_PROJECT_UPDATED, Some(&slug), &summary, &ts)?;
         let record = self.project(&slug)?;
         Ok(Written::new(slug, &dir, event, record))
+    }
+
+    /// Remove a project directory and everything inside it. **Permanently.**
+    ///
+    /// The one destructive operation in this crate, and the only one whose result cannot be
+    /// read back off disk afterwards — so what it returns is what was there a moment before
+    /// it ran ([`Deleted`]), which is what the window then says out loud.
+    ///
+    /// **Who may call it.** The desktop app, from a dialog a human typed the slug into
+    /// (`delete_project` in src-tauri/src/lib.rs). Deliberately *not* the `agentmon` CLI and
+    /// not the MCP server: agents append to this vault, they do not empty it, and a verb
+    /// that removes a folder of records is not one to leave lying in the interface they
+    /// script against. This function is public because the Tauri shell is a separate crate,
+    /// not because it is for general use.
+    ///
+    /// **Where it may point.** A slug is validated the same way every other path-forming
+    /// argument is ([`validate_slug`]), and then the directory is canonicalised and required
+    /// to be a direct child of this vault's own `projects/` — so a symlink, a junction or a
+    /// name that resolved somewhere unexpected is refused rather than followed. The check is
+    /// [`inside_projects`], which is where the rule is tested.
+    pub fn delete_project(&self, slug: &str) -> Result<Deleted> {
+        let dir = self.project_dir(slug)?;
+        let slug = validate_slug(slug)?.to_string();
+        // Read it before it stops existing: the counts are the only honest account of what
+        // this call is about to destroy.
+        let project = self.project(&slug)?;
+
+        let projects = crate::vault::normalize(&self.projects_dir());
+        let resolved = crate::vault::normalize(&dir);
+        if !inside_projects(&projects, &resolved) {
+            return Err(CoreError::conflict(
+                format!(
+                    "{} is not a project directory inside {}",
+                    resolved.display(),
+                    projects.display()
+                ),
+                "delete it from the app while that vault is the one open, or remove the \
+                 folder yourself — this refuses to follow a path out of the vault",
+            ));
+        }
+        if !resolved.join("project.json").is_file() {
+            return Err(CoreError::ProjectNotFound {
+                slug: slug.clone(),
+                vault: self.root().to_path_buf(),
+            });
+        }
+
+        fs::remove_dir_all(&resolved).map_err(|e| CoreError::io(&resolved, e))?;
+
+        Ok(Deleted {
+            ok: true,
+            slug,
+            name: project.name,
+            path: resolved.display().to_string(),
+            counts: project.counts,
+            deleted_by: String::new(),
+        })
     }
 
     // -- work ---------------------------------------------------------------
@@ -1119,7 +1217,7 @@ pub fn parse_severity(value: &str) -> Result<Severity> {
     }
 }
 
-/// Parse a project status (`agentmon project update --status`, and the app's archive button).
+/// Parse a project status (`agentmon project update --status`; the app never sets one).
 pub fn parse_project_status(value: &str) -> Result<ProjectStatus> {
     match value.trim().to_ascii_lowercase().as_str() {
         "active" | "unarchived" => Ok(ProjectStatus::Active),
@@ -1164,5 +1262,40 @@ pub fn record_path(vault: &Vault, slug: &str, id: &str) -> PathBuf {
         dir.join("bugs").join(format!("{id}.md"))
     } else {
         dir.join("worklogs").join(format!("{id}.md"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::inside_projects;
+    use std::path::Path;
+
+    /**
+     * The rule that decides whether a directory may be removed.
+     *
+     * Every one of these is a path that has *already been canonicalised* — which is the only
+     * reason the answer can be a string comparison. A junction inside `projects/` pointing at
+     * `C:\Users` resolves to `C:\Users` and lands on the third case below; `..` is gone before
+     * this is asked. The two that must be false and look true at a glance are the last pair:
+     * a sibling directory whose name merely *starts* with the vault's path, and a project's
+     * own subdirectory (deleting `projects/demo/worklogs` would be a delete that took half a
+     * project with it).
+     */
+    #[test]
+    fn only_a_direct_child_of_this_vaults_projects_may_be_deleted() {
+        let projects = Path::new("/v/projects");
+        assert!(inside_projects(projects, Path::new("/v/projects/demo")));
+        assert!(inside_projects(projects, Path::new("/v/projects/agent-monitoring")));
+
+        // Out of the vault entirely — where a symlink or a junction resolves to.
+        assert!(!inside_projects(projects, Path::new("/etc")));
+        assert!(!inside_projects(projects, Path::new("/v")));
+        assert!(!inside_projects(projects, Path::new("/w/projects/demo")));
+        // The projects directory itself is not a project.
+        assert!(!inside_projects(projects, projects));
+        // A sibling that shares the prefix as *text* but not as a path.
+        assert!(!inside_projects(projects, Path::new("/v/projects-old/demo")));
+        // Deeper than a project: `projects/demo/worklogs` is half of one.
+        assert!(!inside_projects(projects, Path::new("/v/projects/demo/worklogs")));
     }
 }

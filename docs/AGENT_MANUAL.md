@@ -644,14 +644,17 @@ agentmon project update checkout-rewrite \
   --agent my-agent
 ```
 
-`--status archived` puts a project out of the way: the app's Projects screen moves it under
-"Archived" and stops offering it in the switcher. It deletes nothing — every record stays
-exactly where it is, and `--status active` brings it back. The app's Archive button runs
-this same code.
+`--status` writes the schema's `active | archived` field and nothing more. **The app ignores
+it**: archiving was removed from the product, so every project in a vault is listed, in the
+switcher and on the Projects screen, whatever this field says. The flag is still here because
+v1 vaults in the wild carry the field and a writer that dropped it would rewrite them; it is
+not a way to hide a project from a reader.
 
-```bash
-agentmon project update checkout-rewrite --status archived --agent my-agent
-```
+**There is no `agentmon project delete`, and there will not be one.** Deleting a project
+removes its folder and every record in it from the disk, permanently — that is the human's
+decision, taken in the desktop app, behind a dialog that will not act until they have typed
+the project's slug. Nothing an agent can run removes a record from a vault. If a project
+should not have been created, say so in a work log and leave the history intact.
 
 ### `agentmon project list`
 

@@ -14,8 +14,12 @@
  *               a stale link, a ref chip, the backend's own `record 'BUG-9999' not found`.
  *               Never a work log that is known to be one; that is 작업 로그, always.
  *   에이전트    an agent
- *   볼트        the vault — the directory of plain files. Deliberately not 보관함/보관소,
- *               which would collide with 보관됨 (archived) one row away in the same column.
+ *   볼트        the vault — the directory of plain files. Deliberately not 보관함/보관소:
+ *               a 함/소 noun says "a place things are put away", which is the opposite of
+ *               what this directory is — the one place the records actually live.
+ *   삭제        deleting a project: the folder and its files, gone from the disk. The app's
+ *               one destructive word, and it is used for nothing else — never for closing a
+ *               bug, abandoning work or dismissing a line (닫기 · 중단 · 해제).
  *
  *   work:  진행 중 · 완료 · 중단
  *   bug:   열림 · 진행 중 · 해결됨 · 닫힘
@@ -79,7 +83,6 @@ export const ko: Dict = {
   "app.retry": "다시 시도",
   "app.dismiss": "닫기",
   "app.cancel": "취소",
-  "app.undo": "실행 취소",
   "app.copy": "복사",
   "app.copied": "복사됨",
   "app.selectIt": "직접 선택",
@@ -125,10 +128,9 @@ export const ko: Dict = {
   "nav.allProjects": "전체 프로젝트",
   "nav.noWorkYet": "작업 로그 없음",
   "nav.manageProjects": "프로젝트 관리…",
-  "nav.activeProjects": (n) => `활성 프로젝트 ${n}개`,
+  "nav.projectCount": (n) => `이 볼트의 프로젝트 ${n}개`,
   "nav.moreOnProjects": (n) => `프로젝트 화면에 ${n}개 더`,
   "nav.moreTip": (n) => `이 볼트에는 프로젝트가 ${n}개 있습니다. 프로젝트 화면에서 모두 볼 수 있습니다.`,
-  "nav.archivedFlag": " 보관됨",
 
   "vault.none": "열린 볼트 없음",
   "vault.unreadable": "읽을 수 없음 — 볼트를 여세요",
@@ -143,10 +145,10 @@ export const ko: Dict = {
   "menu.copyTitle": "제목 복사",
   "menu.copyLink": "링크 복사",
   "menu.copySlug": "슬러그 복사",
-  "menu.archive": "보관",
-  "menu.unarchive": "보관 해제",
-  "menu.archiveHint": "기록은 그대로 보존",
-  "menu.unarchiveHint": "전환 메뉴로 복귀",
+  /* 이 앱에서 무언가를 지우는 항목은 이것 하나뿐이다. 힌트는 "위험" 같은 분류가 아니라 결과를
+     그대로 적는다 — 뒤따르는 확인 창이 반복하는 바로 그 말이다. */
+  "menu.delete": "삭제",
+  "menu.deleteHint": "영구 삭제 — 되돌릴 수 없습니다",
   "menu.openHint": "대시보드",
   "menu.selection": "선택 영역",
   "menu.theTitle": "제목",
@@ -156,8 +158,22 @@ export const ko: Dict = {
      title — cannot take 을/를 without knowing how the value ends. Noun-final says the same
      thing and is right whatever is copied. */
   "menu.copiedWhat": (what) => `${what} 복사됨`,
-  "menu.archivedToast": (name) => `${name} — 보관했습니다. 삭제된 것은 없습니다.`,
-  "menu.restoredToast": (name) => `${name} — 전환 메뉴로 되돌렸습니다.`,
+
+  /* -- 프로젝트 삭제 (components/DeleteProject.tsx) ---------------------------
+     조사는 프로젝트 이름 뒤가 아니라 "프로젝트" 뒤에 붙는다: 이름은 볼트에서 온 데이터이고,
+     그 뒤에 무슨 조사가 맞는지 정하는 규칙은 없다(이 파일 머리말). */
+
+  "del.title": "프로젝트 삭제",
+  "del.contains": "이 프로젝트에 들어 있는 기록",
+  "del.warn": (slug) =>
+    `볼트 폴더의 \`projects/${slug}\` 디렉터리와 그 안의 파일이 모두 영구히 지워집니다. 휴지통으로 가지 않고, 되돌릴 수 없습니다.`,
+  "del.warnRefs":
+    "다른 프로젝트의 기록은 그대로 남습니다. 다만 이 프로젝트를 가리키던 링크는 볼트에 없는 주소가 되고, 앱은 그 화면에서 없는 프로젝트라고 알려 줍니다.",
+  "del.confirmLabel": "확인을 위해 슬러그를 입력하세요",
+  "del.confirmHint": (slug) => `정확히 일치해야 합니다: ${slug}`,
+  "del.confirm": "프로젝트 삭제",
+  "del.deleting": "삭제하는 중…",
+  "del.doneToast": (name) => `${name} 프로젝트를 삭제했습니다`,
 
   /* -- command palette ------------------------------------------------------ */
 
@@ -398,22 +414,8 @@ export const ko: Dict = {
   "proj.newTitle": "새 프로젝트",
   "proj.create": "프로젝트 만들기",
   "proj.creating": "만드는 중…",
-  "proj.active": "활성",
-  "proj.archived": "보관됨",
-  "proj.archivedPill": "보관됨",
-  "proj.show": "펼치기",
-  "proj.hide": "접기",
+  "proj.inVault": "이 볼트의 프로젝트",
   "proj.count": (n) => `프로젝트 ${n}개`,
-  "proj.allArchived":
-    "이 볼트의 프로젝트가 모두 보관되었습니다. 아래에서 되돌리거나 새로 만드세요.",
-  "proj.archive": "보관",
-  "proj.archiving": "보관하는 중…",
-  "proj.unarchive": "보관 해제",
-  "proj.restoring": "되돌리는 중…",
-  "proj.archiveTip":
-    "전환 메뉴와 기본 목록에서 이 프로젝트를 숨깁니다. 삭제되는 것은 없고, 바로 아래 줄에서 실행 취소할 수 있습니다.",
-  "proj.undoBar": (name) =>
-    `${name} — 보관했습니다. 삭제된 것은 없습니다. 작업 로그와 버그, 이벤트는 볼트에 그대로 있고 계속 읽을 수 있습니다.`,
   "proj.noDescription": "아직 설명이 없습니다.",
   "proj.workLogs": "작업 로그",
   "proj.unresolvedBugs": "미해결 버그",
@@ -430,7 +432,6 @@ export const ko: Dict = {
   "proj.startedOn": (date) => `시작 ${date}`,
   "proj.noActivity": "아직 활동 없음",
   "proj.createdOn": (date) => `생성 ${date}`,
-  "proj.dotArchived": "보관된 프로젝트",
   "proj.dotLive": "최근 두 시간 안에 기록됨",
   "proj.dotQuiet": "최근 활동 없음",
   "proj.dotStale": "하루 넘게 활동 없음",
@@ -470,8 +471,7 @@ export const ko: Dict = {
 
   "vault.bar": "볼트",
   "vault.label": "볼트",
-  "vault.activeProjects": "활성 프로젝트",
-  "vault.archivedAside": (n) => ` · 보관 ${n}개`,
+  "vault.projects": "프로젝트",
   "vault.schema": "스키마",
   "vault.created": "생성",
   /* "읽는 주체"는 번역서의 말투다. 이 칸이 실제로 구분하는 것은 데스크톱 앱이냐 개발 서버냐,
@@ -579,9 +579,6 @@ export const ko: Dict = {
   "dash.rangeAll": "전체 기간",
   "dash.live": "실시간",
   "dash.liveTip": "최근 두 시간 안에 기록된 활동이 있습니다",
-  "dash.archivedPill": "보관됨",
-  "dash.archivedTip":
-    "보관된 프로젝트입니다. 삭제된 것은 없으며, 프로젝트 화면에서 되돌릴 수 있습니다.",
   "dash.lastActivity": (when) => `마지막 활동 ${when}`,
   /* "…는 ${range} 기준입니다" rather than "…는 ${range}을 다룹니다": 기준입니다 needs no
      particle, so the sentence stays right whether the range ends in 일, 건 or a digit. */

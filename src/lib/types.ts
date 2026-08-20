@@ -6,7 +6,6 @@
 export type WorkStatus = "in_progress" | "done" | "abandoned";
 export type BugStatus = "open" | "in_progress" | "resolved" | "closed";
 export type Severity = "critical" | "high" | "medium" | "low";
-export type ProjectStatus = "active" | "archived";
 
 export interface VaultInfo {
   version: number;
@@ -33,10 +32,35 @@ export interface Project {
   slug: string;
   name: string;
   description: string;
-  status: ProjectStatus;
+  /**
+   * The v1 schema's `active | archived` field, still written by
+   * `agentmon project update --status` and still carried by both readers — **and ignored by
+   * every screen in this app**. Archiving was removed from the product (P12): a project the
+   * human has stopped using is deleted, not filed away, and a status the app reads nowhere
+   * cannot make a project half-visible. Kept on the wire because v1 files in the wild carry
+   * it and a reader that dropped it would rewrite them.
+   */
+  status: string;
   tags: string[];
   createdAt: string | null;
   counts: ProjectCounts;
+}
+
+/**
+ * What a project was, immediately before it was deleted — the answer to
+ * `api.deleteProject`, since the record it would otherwise return no longer exists.
+ *
+ * Mirrors `agentmon_core::Deleted` (crates/agentmon-core/src/write.rs) and the JSON the
+ * dev server's `DELETE /vault-api/projects/:slug` returns.
+ */
+export interface DeletedProject {
+  ok: boolean;
+  slug: string;
+  name: string;
+  /** The directory that was removed, as it resolved on this machine. */
+  path: string;
+  counts: ProjectCounts;
+  deletedBy: string;
 }
 
 export type EventType =

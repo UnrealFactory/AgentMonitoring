@@ -7,7 +7,7 @@ An agent finishes a piece of work and runs `agentmon work done` with what shippe
 it was verified. It files what it broke with `agentmon bug create`. Each command appends
 plain text files to a **vault** — a directory you can copy to another machine, read with
 `cat`, and put in version control. The desktop app (Tauri 2 + React) reads that directory
-and never writes to it except when you create or archive a project.
+and never writes to it except when you create or delete a project.
 
 The vault in this repository is this app's own build history: every screen below is drawn
 from work logs the agents that built it wrote as they went.
@@ -182,5 +182,5 @@ Playwright run can reach. That gate provokes each failure twice — once from th
 headline in the reader's language.
 
 `check:live`, `check:vault` and `check:keys` write records — `check:keys` builds a
-12-project vault and archives projects in it — and only ever to a copy in the temp
+12-project vault and deletes projects out of it — and only ever to a copy in the temp
 directory; the vault in this repository is real history and is never written to by a test.

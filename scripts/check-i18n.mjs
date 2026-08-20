@@ -1058,6 +1058,16 @@ try {
       if (b.assignee) vaultWords.add(b.assignee);
       for (const l of b.labels ?? []) vaultWords.add(l);
     }
+    /* Actors off the event log too, not only off the records.
+     *
+     * An actor is a handle out of the vault wherever it is printed — the feed's `.feed-actor`
+     * draws it exactly as the byline draws `nova`. Reading them only off worklogs and bugs
+     * missed the one actor that appears on *events alone*: `app`, which is what the desktop
+     * app records when a human, not an agent, writes something (DEFAULT_ACTOR in
+     * src/lib/api.ts). So the day this vault got its first human-made write, five screens
+     * started failing this gate for printing a name that came out of the vault they were
+     * reading. */
+    for (const e of await api(`/projects/${p.slug}/events`)) vaultWords.add(e.actor);
     if (p.slug === projects[0].slug) {
       firstWork = works[0]?.id ?? null;
       firstBug = bugs[0]?.id ?? null;
@@ -1139,6 +1149,23 @@ try {
       prepare: async (page) => {
         await page.waitForSelector(".nav-sub", { state: "visible" });
         await page.locator(".nav-sub").first().click({ button: "right" });
+      },
+    },
+    /* The delete dialog — the app's one destructive surface, and four paragraphs of the
+       app's own prose that exist nowhere else. It is *opened* and read; nothing is typed
+       into it and nothing is clicked, and the button it would need is disabled until the
+       project's slug is typed exactly, so this walk cannot delete anything from the live
+       vault it is reading (components/DeleteProject.tsx). */
+    {
+      name: "delete dialog",
+      path: "/projects",
+      wait: ".modal.is-danger",
+      prepare: async (page) => {
+        await page.waitForSelector(".project-row", { state: "visible" });
+        await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        await page.locator(".project-row").first().click({ button: "right", position: { x: 24, y: 18 } });
+        await page.waitForSelector(".ctx-menu", { state: "visible" });
+        await page.locator('.ctx-item[data-item="delete"]').click();
       },
     },
     {

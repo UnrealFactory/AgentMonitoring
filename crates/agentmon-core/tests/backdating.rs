@@ -595,11 +595,17 @@ fn project_update_changes_metadata_and_logs_an_event() {
     assert_eq!(report.warnings(), 0, "project_updated is a known event type");
 }
 
-/// Archiving is the one piece of project state a human sets, from the app's Projects
-/// screen or from `agentmon project update --status archived`. It has to be reversible and
-/// it has to delete nothing — an archived project is out of the way, not gone.
+/// `--status archived` is a v1 schema field and nothing else.
+///
+/// The app used to act on it — the Projects screen filed the project away and the switcher
+/// stopped offering it — and no longer does: archiving was removed from the product (P12),
+/// so every project in a vault is listed whatever this field says, and a project the human
+/// is finished with is deleted (`tests/delete_project.rs`). What still has to hold is the
+/// *writing* of it: the flag round-trips, it is reversible, it deletes nothing, and it is
+/// logged like every other mutation — because v1 files in the wild carry the key and a
+/// reader that mangled it would rewrite somebody's vault.
 #[test]
-fn project_archive_hides_nothing_and_is_reversible() {
+fn project_status_round_trips_and_removes_nothing() {
     let tv = TempVault::new("project-archive");
     tv.vault
         .start_work(
@@ -634,12 +640,12 @@ fn project_archive_hides_nothing_and_is_reversible() {
 
     let p = tv.vault.project("demo").unwrap();
     assert_eq!(p.status, ProjectStatus::Archived);
-    assert_eq!(p.counts.work_total, 1, "archiving deletes no records");
+    assert_eq!(p.counts.work_total, 1, "a status change deletes no records");
     assert_eq!(p.name, "Demo", "and changes nothing else");
     assert_eq!(tv.vault.worklogs("demo").unwrap().len(), 1);
     assert!(
         tv.vault.projects().unwrap().iter().any(|x| x.slug == "demo"),
-        "an archived project is still in the vault listing; the app decides what to show"
+        "the listing carries every project on disk; the app draws all of them"
     );
 
     // …and back again.

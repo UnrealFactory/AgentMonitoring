@@ -6,6 +6,7 @@
 import {
   createVaultReader,
   handleVaultApi,
+  handleVaultDelete,
   handleVaultWrite,
   resolveVault,
   VaultError,
@@ -59,6 +60,13 @@ function middleware(repoRoot, logger) {
       if (req.method === "POST") {
         const body = await readBody(req);
         send(res, 200, handleVaultWrite(reader, repoRoot, url.pathname, body));
+        return;
+      }
+      // The one destructive route, and the only thing that reaches it is the app's own
+      // confirm dialog: there is no CLI verb and no MCP tool for deleting a project, by
+      // design (scripts/vault-fs.mjs, src-tauri/src/lib.rs).
+      if (req.method === "DELETE") {
+        send(res, 200, handleVaultDelete(reader, url.pathname, url.searchParams));
         return;
       }
       if (req.method && req.method !== "GET" && req.method !== "HEAD") {

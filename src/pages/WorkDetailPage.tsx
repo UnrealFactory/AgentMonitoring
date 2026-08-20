@@ -158,7 +158,7 @@ export function WorkDetailPage() {
         <nav className="breadcrumb">
           {/* The crumb is a link to the project, so it opens the project's menu — the same
               one the sidebar row for it opens. Only "Work" between them stays plain: a list
-              screen is not a thing there is anything to copy or archive about. */}
+              screen is not a thing there is a slug to copy or a folder to delete for. */}
           <Link
             to={`/p/${slug}`}
             {...contextMenu(() => (project ? projectMenu(project) : null))}

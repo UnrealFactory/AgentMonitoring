@@ -54,10 +54,16 @@ export interface MenuItem {
   /** Stable inside its menu; also the hook a gate can drive it by (`data-item`). */
   id: string;
   label: string;
-  /** The value or consequence, in small type on the right — "relay", "records are kept". */
+  /** The value or consequence, in small type on the right — "relay", "영구 삭제". */
   hint?: string;
   /** Draw a hairline above this item. */
   separator?: boolean;
+  /**
+   * This one destroys something. Drawn in red, and — because colour is not a label — its
+   * hint says what it costs in words (src/lib/menus.ts). Exactly one item in the app sets
+   * it: 삭제 on a project, which opens a dialog rather than acting.
+   */
+  danger?: boolean;
   run: () => void;
 }
 
@@ -81,8 +87,6 @@ interface Request {
 }
 
 export interface ToastOptions {
-  /** A button on the toast. A toast with one does not fade — see below. */
-  action?: { label: string; run: () => void };
   tone?: "info" | "warn";
 }
 
@@ -103,7 +107,7 @@ const Ctx = createContext<ContextMenuApi | null>(null);
 const MARGIN = 8;
 const NUDGE = 2;
 
-/** How long a plain "Copied" stays. One with an action stays until it is answered. */
+/** How long a toast stays. Every toast in this app is one line reporting a fact. */
 const TOAST_MS = 2200;
 
 /** Anything Tab can reach — what a row hands the focus back to when the menu closes. */
@@ -269,16 +273,16 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
   }, [open, showToast]);
 
   // A menu anchored to a row on a screen the reader has left is a menu about nothing.
-  useEffect(() => {
-    setRequest(null);
-    setToast((t) => (t?.action ? null : t));
-  }, [location.pathname, location.search]);
+  // The toast is not: "relay 프로젝트를 삭제했습니다" is raised by an action that *navigates*
+  // (src/components/DeleteProject.tsx), so clearing it here would silence the one line
+  // reporting the deletion the reader just asked for.
+  useEffect(() => setRequest(null), [location.pathname, location.search]);
 
-  /* A toast with an action is an undo, and an undo that fades is an undo for people who
-     were already looking (the same rule the Projects screen's bar was built on). Only the
-     plain ones — "Copied WORK-0011" — go away by themselves. */
+  /* One line, then gone. Every toast in this app reports something that already happened
+     and leaves no trace on screen — a copy, a delete — and none of them is a question, so
+     none of them waits for an answer. */
   useEffect(() => {
-    if (!toast || toast.action) return;
+    if (!toast) return;
     const timer = setTimeout(() => setToast((t) => (t?.id === toast.id ? null : t)), TOAST_MS);
     return () => clearTimeout(timer);
   }, [toast]);
@@ -463,7 +467,7 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
               type="button"
               role="menuitem"
               data-item={item.id}
-              className="ctx-item"
+              className={`ctx-item${item.danger ? " is-danger" : ""}`}
               ref={(el) => {
                 itemRefs.current[i] = el;
               }}
@@ -514,18 +518,7 @@ function ToastBar({ toast, onDismiss }: { toast: Toast; onDismiss: () => void })
           )}
         </span>
         <span className="toast-text">{toast.text}</span>
-        {toast.action && (
-          <button
-            className="button button-sm"
-            onClick={() => {
-              toast.action?.run();
-              onDismiss();
-            }}
-          >
-            {toast.action.label}
-          </button>
-        )}
-        <button className="undo-dismiss" aria-label={t("app.dismiss")} onClick={onDismiss}>
+        <button className="toast-dismiss" aria-label={t("app.dismiss")} onClick={onDismiss}>
           ×
         </button>
       </div>

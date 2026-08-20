@@ -123,6 +123,11 @@ Body sections:
 Every CLI mutation also appends one line to `events.jsonl`. Timestamps: UTC ISO8601.
 IDs are immutable and per-project. Parsing must be lenient on unknown keys (forward compat).
 
+`project.json`'s `status` stays in the schema (v1 files in the wild carry it, and
+`project update --status` still writes it) but **the app ignores it**: archiving was removed
+from the product, every project renders, and a project the human has finished with is
+deleted from the app instead (screen 7).
+
 ## CLI surface (`agentmon`, gh-style)
 
 ```
@@ -174,7 +179,11 @@ Rejected with exit `2`: a time in the future, or one earlier than the state it f
 5. **Bug board** (vscode issues bar) — filterable list (status, severity, label, assignee),
    open/resolved counts, severity badges.
 6. **Bug detail** — report, comment thread, resolution record, status history.
-7. **Projects** — list/create/switch; vault path display + "open different vault folder".
+7. **Projects** — list/create/switch/**delete**; vault path display + "open different vault
+   folder". Delete is **human-only and app-only**: it removes `projects/<slug>/` and every
+   record in it from disk, permanently, behind a dialog that will not arm its button until
+   the human types the slug. There is no CLI subcommand and no MCP tool for it — agents
+   write records into a vault and never take one away.
 
 Live updates: Tauri watches the vault (notify crate) and emits events → UI refreshes.
 

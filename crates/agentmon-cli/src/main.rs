@@ -193,8 +193,8 @@ enum ProjectCmd {
         /// Replacement tag list, comma-separated.
         #[arg(long, value_delimiter = ',')]
         tags: Option<Vec<String>>,
-        /// active | archived. Archiving hides the project from the app's default view and
-        /// deletes nothing; the records stay exactly where they are.
+        /// active | archived. The v1 schema field, kept for compatibility — the app ignores
+        /// it and lists every project. It hides nothing and deletes nothing.
         #[arg(long, value_name = "STATE")]
         status: Option<String>,
         /// Agent recorded as the actor of the project_updated event.
@@ -722,7 +722,7 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
             let p = &written.record;
             println!("Updated project {} ({})", p.name, p.slug);
             if p.status == agentmon_core::ProjectStatus::Archived {
-                println!("  archived — its records are still in the vault");
+                println!("  status: archived — a v1 field; the app lists this project anyway");
             }
             if !p.description.is_empty() {
                 println!("  {}", clip(&p.description, 100));

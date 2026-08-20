@@ -120,11 +120,12 @@ export function Sidebar() {
   }, [menuOpen]);
 
   const base = current ? `/p/${current.slug}` : undefined;
-  const active = projects.filter((p) => p.status !== "archived");
-  /* An archived project is still readable, and somebody standing on one must not find
-     themselves in a place the switcher denies exists. It is listed while it is open. */
-  const switchable: Project[] =
-    current && current.status === "archived" ? [...active, current] : active;
+  /* Every project in the vault, and no filter in front of it. There used to be one — a
+     project could be "archived", which took it out of this list and out of the switcher
+     while leaving it readable by its address, so the column had to make an exception for
+     the archived project you happened to be standing in. Both are gone (P12): the vault's
+     projects are the vault's projects, and one you have finished with is deleted. */
+  const switchable: Project[] = projects;
   const listed = switchable.slice(0, NAV_PROJECT_LIMIT);
   /** The vault's own directory name — "…/Temp/vault-live-test" against "…/AgentMonitoring/vault". */
   const folder = vault?.path?.split(/[\\/]/).filter(Boolean).pop() ?? "";
@@ -172,7 +173,7 @@ export function Sidebar() {
               }
             >
               {!current
-                ? t("proj.count", active.length)
+                ? t("proj.count", projects.length)
                 : current.counts.workTotal === 0
                   ? t("nav.noWorkYet")
                   : inProgressOf(current.counts.workInProgress, current.counts.workTotal)}
@@ -203,12 +204,7 @@ export function Sidebar() {
                 onClick={() => navigate(`/p/${p.slug}`)}
                 {...contextMenu(() => projectMenu(p))}
               >
-                <span className="switcher-item-name">
-                  {p.name}
-                  {p.status === "archived" && (
-                    <span className="switcher-item-flag">{t("nav.archivedFlag")}</span>
-                  )}
-                </span>
+                <span className="switcher-item-name">{p.name}</span>
                 {/* Both numbers, both named: a bare "12" beside a bare "2" invites the
                     reader to compare two things that are not the same measure. */}
                 <span
@@ -301,8 +297,8 @@ export function Sidebar() {
         <NavLink to="/projects" className="nav-item">
           <NavIcon name="projects" />
           {t("nav.projects")}
-          <span className="nav-count tabular" title={t("nav.activeProjects", active.length)}>
-            {active.length}
+          <span className="nav-count tabular" title={t("nav.projectCount", projects.length)}>
+            {projects.length}
           </span>
         </NavLink>
 
@@ -323,10 +319,7 @@ export function Sidebar() {
             )} · ${bugTip(p.counts.bugsOpen, p.counts.bugsTotal)}`}
             {...contextMenu(() => projectMenu(p))}
           >
-            <span
-              className={`nav-bullet${p.status === "archived" ? " is-archived" : ""}`}
-              aria-hidden="true"
-            />
+            <span className="nav-bullet" aria-hidden="true" />
             <span className="nav-sub-name">{p.name}</span>
             {/* One measure only, and it says which: a bare number here would be the third
                 different denominator in this column. */}

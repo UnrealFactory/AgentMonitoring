@@ -26,7 +26,6 @@ export const en = {
   "app.retry": "Try again",
   "app.dismiss": "Dismiss",
   "app.cancel": "Cancel",
-  "app.undo": "Undo",
   "app.copy": "Copy",
   "app.copied": "Copied",
   "app.selectIt": "Select it",
@@ -68,11 +67,10 @@ export const en = {
   "nav.allProjects": "All projects",
   "nav.noWorkYet": "no work logs yet",
   "nav.manageProjects": "Manage projects…",
-  "nav.activeProjects": (n: number) => `${n} active projects`,
+  "nav.projectCount": (n: number) => `${n} projects in this vault`,
   "nav.moreOnProjects": (n: number) => `${n} more on Projects…`,
   "nav.moreTip": (n: number) =>
     `This vault has ${n} projects. See them all on the Projects screen.`,
-  "nav.archivedFlag": " archived",
 
   "vault.none": "no vault open",
   "vault.unreadable": "could not be read — open one",
@@ -87,18 +85,30 @@ export const en = {
   "menu.copyTitle": "Copy title",
   "menu.copyLink": "Copy link",
   "menu.copySlug": "Copy slug",
-  "menu.archive": "Archive",
-  "menu.unarchive": "Unarchive",
-  "menu.archiveHint": "records are kept",
-  "menu.unarchiveHint": "back in the switcher",
+  /* The only item in the app that destroys anything. Its hint is not a category ("danger")
+     but the consequence, in the words the dialog behind it repeats. */
+  "menu.delete": "Delete",
+  "menu.deleteHint": "permanent — cannot be undone",
   "menu.openHint": "Dashboard",
   "menu.selection": "Selection",
   "menu.theTitle": "the title",
   "menu.copiedSelection": "Copied the selection",
   "menu.copyFailed": "Could not reach the clipboard — select the text and copy it.",
   "menu.copiedWhat": (what: string) => `Copied ${what}`,
-  "menu.archivedToast": (name: string) => `${name} is archived. Nothing was deleted.`,
-  "menu.restoredToast": (name: string) => `${name} is back in the switcher.`,
+
+  /* -- deleting a project (components/DeleteProject.tsx) ---------------------- */
+
+  "del.title": "Delete project",
+  "del.contains": "This project holds",
+  "del.warn": (slug: string) =>
+    `This permanently removes the folder \`projects/${slug}\` and every file in it from the vault directory. It does not go to the recycle bin, and there is no undo.`,
+  "del.warnRefs":
+    "Records in other projects are not touched. Links that pointed into this one become addresses this vault no longer has, and the app answers them with the screen that says so.",
+  "del.confirmLabel": "Type the slug to confirm",
+  "del.confirmHint": (slug: string) => `Must match exactly: ${slug}`,
+  "del.confirm": "Delete project",
+  "del.deleting": "Deleting…",
+  "del.doneToast": (name: string) => `Deleted ${name}.`,
 
   /* -- command palette ------------------------------------------------------ */
 
@@ -341,21 +351,8 @@ export const en = {
   "proj.newTitle": "New project",
   "proj.create": "Create project",
   "proj.creating": "Creating…",
-  "proj.active": "Active",
-  "proj.archived": "Archived",
-  "proj.archivedPill": "archived",
-  "proj.show": "Show",
-  "proj.hide": "Hide",
+  "proj.inVault": "In this vault",
   "proj.count": (n: number) => (n === 1 ? "1 project" : `${n} projects`),
-  "proj.allArchived": "Every project in this vault is archived. Bring one back below, or start a new one.",
-  "proj.archive": "Archive",
-  "proj.archiving": "Archiving…",
-  "proj.unarchive": "Unarchive",
-  "proj.restoring": "Restoring…",
-  "proj.archiveTip":
-    "Hide this project from the switcher and the default list. Nothing is deleted, and the next line offers Undo.",
-  "proj.undoBar": (name: string) =>
-    `${name} is archived. Nothing was deleted — its work logs, bugs and events are still in the vault, and the project is still readable.`,
   "proj.noDescription": "No description yet.",
   "proj.workLogs": "Work logs",
   "proj.unresolvedBugs": "Unresolved bugs",
@@ -370,7 +367,6 @@ export const en = {
   "proj.startedOn": (date: string) => `started ${date}`,
   "proj.noActivity": "No activity yet",
   "proj.createdOn": (date: string) => `created ${date}`,
-  "proj.dotArchived": "archived project",
   "proj.dotLive": "something recorded in the last two hours",
   "proj.dotQuiet": "quiet project",
   "proj.dotStale": "stale project",
@@ -405,8 +401,7 @@ export const en = {
 
   "vault.bar": "Vault",
   "vault.label": "Vault",
-  "vault.activeProjects": "Active projects",
-  "vault.archivedAside": (n: number) => ` · ${n} archived`,
+  "vault.projects": "Projects",
   "vault.schema": "Schema",
   "vault.created": "Created",
   "vault.readBy": "Read by",
@@ -510,9 +505,6 @@ export const en = {
   "dash.rangeAll": "All time",
   "dash.live": "live",
   "dash.liveTip": "Something was recorded in the last two hours",
-  "dash.archivedPill": "archived",
-  "dash.archivedTip":
-    "This project is archived. Nothing was deleted — restore it on the Projects screen.",
   "dash.lastActivity": (when: string) => `Last activity ${when}`,
   "dash.scope": (range: string) =>
     `The charts, the agents and the feed below cover ${range}. The strip above is always now, and every date and time on this page is UTC.`,

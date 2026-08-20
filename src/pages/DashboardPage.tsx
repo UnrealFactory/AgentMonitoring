@@ -331,12 +331,8 @@ export function DashboardPage() {
   /** Named once, so the charts, their deltas and the sentence above them agree. */
   const scopeLabel = days === null ? null : t("dash.rangeDays", days);
   const changeNote = scopeLabel ? t("dash.changeOver", scopeLabel) : "";
-  const archived = project.status === "archived";
-  /* An archived project is history, not a live board: a green LIVE flag over one is the
-     screen contradicting the Projects page that just filed it away (round 1 critic). And a
-     window that has just said it cannot read the vault may not also claim to be live. */
-  const live =
-    !archived && !trouble && freshness(project.counts.lastActivity, now) === "live";
+  /* A window that has just said it cannot read the vault may not also claim to be live. */
+  const live = !trouble && freshness(project.counts.lastActivity, now) === "live";
 
   return (
     <div className="page dashboard">
@@ -350,16 +346,12 @@ export function DashboardPage() {
             and saying so beside "Last activity 19h ago" was the flag contradicting the
             sentence next to it (round 1 critic). */}
         <div className="page-head-meta tabular">
-          {archived ? (
-            <Link className="pill pill-archived" to="/projects" title={t("dash.archivedTip")}>
-              {t("dash.archivedPill")}
-            </Link>
-          ) : live ? (
+          {live && (
             <span className="live-flag" title={t("dash.liveTip")}>
               <span className="live-dot" aria-hidden="true" />
               {t("dash.live")}
             </span>
-          ) : null}
+          )}
           {t("dash.lastActivity", formatRelative(project.counts.lastActivity, new Date(now)))}
         </div>
       </header>

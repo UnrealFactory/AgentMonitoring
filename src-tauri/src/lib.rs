@@ -10,8 +10,8 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use agentmon_core::{
-    Bug, BugDetail, Event, NewProject, Project, ProjectStatusSnapshot, UpdateProject, Vault,
-    VaultInfo, WorklogDetail, WorklogSummary,
+    Bug, BugDetail, Deleted, Event, NewProject, Project, ProjectStatusSnapshot, Vault, VaultInfo,
+    WorklogDetail, WorklogSummary,
 };
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -625,27 +625,43 @@ fn create_project(
     Ok(written.record)
 }
 
-/// Archive or restore a project. Deletes nothing: the records stay in the vault and the
-/// change is logged like any other mutation.
+/// Delete a project: its directory, its records and its event log, off the disk.
+///
+/// **The only destructive command in this app, and it is the app's alone.** There is no
+/// `agentmon project delete` and no MCP tool for it — agents write records into this vault
+/// and never take one away — so this is reachable from exactly one place: the dialog on the
+/// Projects screen, which will not enable its button until the human has typed the slug
+/// (src/components/DeleteProject.tsx). Browser mode has the same route for the same dialog
+/// (`DELETE /vault-api/projects/:slug`, scripts/vault-fs.mjs).
+///
+/// The path safety is `agentmon-core`'s: the slug is validated the way every other
+/// path-forming argument is, and the directory is canonicalised and required to still be a
+/// direct child of the open vault's `projects/` before anything is removed.
+///
+/// `agent` is who the app records as doing it. It cannot go into the vault — the event log
+/// that would hold the line is inside the directory being removed — so it goes to this
+/// process's own stderr, which is where a human running the app from a terminal will look,
+/// and comes back in the payload so the window can say it.
 #[tauri::command]
-fn set_project_status(
-    project: String,
-    status: String,
-    agent: String,
+fn delete_project(
+    slug: String,
+    agent: Option<String>,
     state: State<'_, VaultState>,
-) -> CmdResult<Project> {
-    let status = agentmon_core::parse_project_status(&status).map_err(|e| e.to_string())?;
-    let written = open(&state)?
-        .update_project(
-            &project,
-            &UpdateProject {
-                status: Some(status),
-                actor: agent,
-                ..Default::default()
-            },
-        )
-        .map_err(|e| e.to_string())?;
-    Ok(written.record)
+) -> CmdResult<Deleted> {
+    let vault = open(&state)?;
+    let mut gone = vault.delete_project(&slug).map_err(|e| e.to_string())?;
+    gone.deleted_by = agent.unwrap_or_else(|| "app".to_string());
+    eprintln!(
+        "agentmonitoring: {} deleted project {} ({}) — {} work logs, {} bugs, {} events, from {}",
+        gone.deleted_by,
+        gone.slug,
+        gone.name,
+        gone.counts.work_total,
+        gone.counts.bugs_total,
+        gone.counts.events,
+        gone.path
+    );
+    Ok(gone)
 }
 
 #[tauri::command]
@@ -745,7 +761,7 @@ pub fn run() {
             list_projects,
             get_project,
             create_project,
-            set_project_status,
+            delete_project,
             list_worklogs,
             get_worklog,
             list_bugs,
@@ -871,6 +887,45 @@ mod tests {
         drop(slot);
         fs::remove_dir_all(&old).ok();
         fs::remove_dir_all(&new).ok();
+    }
+
+    /**
+     * A project being deleted has to reach an open window the same way a record being
+     * written does.
+     *
+     * Delete is the one change that removes rows rather than adding them, and it is invoked
+     * from a dialog in *this* window — but the second window on the same vault, and the
+     * sidebar of this one, only find out through the watcher. `remove_dir_all` produces a
+     * burst of Remove events on files that no longer exist, so `is_record_change` cannot
+     * probe them with `is_dir()`; it reads the extension, which is why that burst still
+     * names the project it emptied instead of being filtered as directory noise.
+     */
+    #[test]
+    fn deleting_a_project_directory_is_reported_as_a_change_to_that_project() {
+        let root = tmp_vault("delete");
+        let dir = root.join("projects").join("demo");
+        fs::write(
+            dir.join("worklogs").join("WORK-0001.md"),
+            "---\nid: WORK-0001\n---\n\n## What\n\nx\n",
+        )
+        .unwrap();
+        fs::write(dir.join("project.json"), "{\"slug\":\"demo\"}").unwrap();
+        fs::write(dir.join("events.jsonl"), "{\"ts\":\"t\"}\n").unwrap();
+
+        let (tx, rx) = channel::<VaultChanged>();
+        let _watcher = spawn_vault_watcher(&root, move |c| {
+            let _ = tx.send(c);
+        })
+        .expect("watcher starts");
+        std::thread::sleep(Duration::from_millis(300));
+
+        fs::remove_dir_all(&dir).unwrap();
+
+        let change = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("deleting a project reaches the window");
+        assert_eq!(change.projects, vec!["demo".to_string()]);
+        fs::remove_dir_all(&root).ok();
     }
 
     #[test]

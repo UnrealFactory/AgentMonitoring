@@ -12,8 +12,8 @@ import { t } from "./i18n";
 import type {
   BugDetail,
   BugSummary,
+  DeletedProject,
   Project,
-  ProjectStatus,
   ProjectStatusSnapshot,
   VaultEvent,
   VaultInfo,
@@ -279,18 +279,24 @@ export const api = {
           body: JSON.stringify({ ...input, agent: input.agent ?? DEFAULT_ACTOR }),
         }),
 
-  /** Archive or unarchive a project (a `project_updated` event, like every other write). */
-  setProjectStatus: (
-    project: string,
-    status: ProjectStatus,
-    agent = DEFAULT_ACTOR
-  ): Promise<Project> =>
+  /**
+   * Delete a project — its directory, its records, its event log — from the vault folder.
+   *
+   * **The only call in this file that takes something away, and the only one no agent can
+   * make.** There is no `agentmon project delete` and no MCP tool: an agent appends to this
+   * vault. This is reachable from one place in the product, the confirm dialog that will not
+   * enable its button until a human has typed the slug (components/DeleteProject.tsx).
+   *
+   * It answers with what was there a moment before rather than with a record re-read from
+   * disk — there is nothing left to read — so the window can name what it removed.
+   */
+  deleteProject: (project: string, agent = DEFAULT_ACTOR): Promise<DeletedProject> =>
     isTauri()
-      ? invokeCommand<Project>("set_project_status", { project, status, agent })
-      : fetchJson<Project>(`/vault-api/projects/${enc(project)}/status`, {
-          method: "POST",
-          body: JSON.stringify({ status, agent }),
-        }),
+      ? invokeCommand<DeletedProject>("delete_project", { slug: project, agent })
+      : fetchJson<DeletedProject>(
+          `/vault-api/projects/${enc(project)}?agent=${enc(agent)}`,
+          { method: "DELETE" }
+        ),
 };
 
 /**

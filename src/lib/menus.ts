@@ -23,10 +23,12 @@
  *
  * Three rules the items obey:
  *
- *   * **Nothing here deletes.** The vault is append-only by SPEC: a project is archived,
- *     which hides it from the switcher and the default list and keeps every work log, bug
- *     and event it ever had. The item says so, in its hint, before the click — and the
- *     archive is undoable from the affordance the screen already has.
+ *   * **Nothing about a *record* deletes.** Work logs and bugs are append-only by SPEC:
+ *     they are corrected, resolved and abandoned in place, never removed, and no menu over
+ *     one offers otherwise. A **project** can be deleted — by the human, in this app, after
+ *     typing its slug into the dialog the item opens (components/DeleteProject.tsx) — and
+ *     the item says exactly that in its hint, in red, under a divider, before the click.
+ *     Nothing an agent can reach deletes anything: there is no CLI verb and no MCP tool.
  *   * **A hint is the value.** "Copy slug · relay" tells the reader what is about to be on
  *     their clipboard; a menu that says only "Copy link" has to be tried to be understood.
  *   * **The same items in the same order, wherever the row is drawn.** A menu that drops
@@ -36,12 +38,12 @@
  */
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useApp } from "../AppContext";
-import { useContextMenuApi, useCopy, type MenuItem, type MenuSpec } from "../components/ContextMenu";
+import { useCopy, type MenuItem, type MenuSpec } from "../components/ContextMenu";
+import { useDeleteProject } from "../components/DeleteProject";
 import { api } from "./api";
 import { t } from "./i18n";
 import { unresolvedCount, workLogs } from "./words";
-import type { Project, ProjectStatus } from "./types";
+import type { Project } from "./types";
 
 /** A record, as much of it as a menu needs. */
 export interface RecordRef {
@@ -123,98 +125,63 @@ export function useRecordMenu() {
 }
 
 /**
- * Projects: where to go in one, what to take from it, and the one state it can be put in.
+ * Projects: where to go in one, what to take from it, and the one way to be rid of it.
  *
  * `Open` is the project's dashboard, which is why it says so in its hint rather than
  * appearing twice under two names — a menu with two rows that fire the same navigation is
  * a menu padding itself out.
  *
- * `archive` lets a screen keep its own way back: the Projects screen answers an archive
- * with the undo bar it already has, in the layout beside the list. Anywhere else — the
- * switcher, the sidebar — there is no such bar, so the same undo arrives as a toast that
- * does not fade.
+ * `delete` is last, alone under a divider, drawn in red, and it does not delete: it opens
+ * the dialog that asks for the slug (components/DeleteProject.tsx). A menu item that
+ * destroys a folder of records on one click is a menu item that eventually destroys the
+ * wrong one, and the two-inch gap between a right-click and a row's real name is exactly
+ * where that mistake lives. Its hint is the whole cost of the action in five words, so the
+ * reader knows before the pointer moves.
  */
-export function useProjectMenu(overrides?: {
-  archive?: (project: Project, status: ProjectStatus) => void;
-}) {
+export function useProjectMenu() {
   const navigate = useNavigate();
   const copy = useCopy();
-  const { toast } = useContextMenuApi();
-  const { refresh } = useApp();
-  const override = overrides?.archive;
-
-  // Annotated, not inferred: the Undo action calls it again, and a self-referencing
-  // initializer has no type to infer from.
-  const setStatus: (project: Project, status: ProjectStatus) => Promise<void> = useCallback(
-    async (project: Project, status: ProjectStatus) => {
-      try {
-        await api.setProjectStatus(project.slug, status);
-        refresh();
-        if (status === "archived") {
-          toast(t("menu.archivedToast", project.name), {
-            action: { label: t("app.undo"), run: () => void setStatus(project, "active") },
-          });
-        } else {
-          toast(t("menu.restoredToast", project.name));
-        }
-      } catch (err) {
-        toast(err instanceof Error ? err.message : String(err), { tone: "warn" });
-      }
-    },
-    [refresh, toast]
-  );
+  const requestDelete = useDeleteProject();
 
   return useCallback(
-    (p: Project): MenuSpec => {
-      const archived = p.status === "archived";
-      const archive = (status: ProjectStatus) =>
-        override ? override(p, status) : void setStatus(p, status);
-      return {
-        label: p.name,
-        items: [
-          {
-            id: "open",
-            label: t("menu.open"),
-            hint: t("menu.openHint"),
-            run: () => navigate(`/p/${p.slug}`),
-          },
-          {
-            id: "work",
-            label: t("nav.work"),
-            hint: workLogs(p.counts.workTotal),
-            run: () => navigate(`/p/${p.slug}/work`),
-          },
-          {
-            id: "bugs",
-            label: t("nav.bugs"),
-            hint: unresolvedCount(p.counts.bugsOpen),
-            run: () => navigate(`/p/${p.slug}/bugs`),
-          },
-          {
-            id: "copy-slug",
-            label: t("menu.copySlug"),
-            hint: p.slug,
-            separator: true,
-            run: () => copy(p.slug, p.slug),
-          },
-          archived
-            ? {
-                id: "unarchive",
-                label: t("menu.unarchive"),
-                hint: t("menu.unarchiveHint"),
-                separator: true,
-                run: () => archive("active"),
-              }
-            : {
-                id: "archive",
-                label: t("menu.archive"),
-                hint: t("menu.archiveHint"),
-                separator: true,
-                run: () => archive("archived"),
-              },
-        ],
-      };
-    },
-    [navigate, copy, setStatus, override]
+    (p: Project): MenuSpec => ({
+      label: p.name,
+      items: [
+        {
+          id: "open",
+          label: t("menu.open"),
+          hint: t("menu.openHint"),
+          run: () => navigate(`/p/${p.slug}`),
+        },
+        {
+          id: "work",
+          label: t("nav.work"),
+          hint: workLogs(p.counts.workTotal),
+          run: () => navigate(`/p/${p.slug}/work`),
+        },
+        {
+          id: "bugs",
+          label: t("nav.bugs"),
+          hint: unresolvedCount(p.counts.bugsOpen),
+          run: () => navigate(`/p/${p.slug}/bugs`),
+        },
+        {
+          id: "copy-slug",
+          label: t("menu.copySlug"),
+          hint: p.slug,
+          separator: true,
+          run: () => copy(p.slug, p.slug),
+        },
+        {
+          id: "delete",
+          label: t("menu.delete"),
+          hint: t("menu.deleteHint"),
+          separator: true,
+          danger: true,
+          run: () => requestDelete(p),
+        },
+      ],
+    }),
+    [navigate, copy, requestDelete]
   );
 }

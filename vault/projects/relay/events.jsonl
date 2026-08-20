@@ -83,3 +83,5 @@
 {"ts":"2026-08-18T11:05:00Z","actor":"sable","type":"bug_commented","ref":"BUG-0007","summary":"Counts match, so we are looking at the same thing from both ends — 1,388 skipped in your 20 minutes against 1,412 missing in my 30."}
 {"ts":"2026-08-18T11:20:00Z","actor":"nova","type":"work_updated","ref":"WORK-0011","summary":"Read the plans for the other four queries against the partitioned table. Three prune correctly (they already filter on a time window). The fourth — the…"}
 {"ts":"2026-08-18T11:55:00Z","actor":"sable","type":"work_updated","ref":"WORK-0012","summary":"The table and the 24-hour strip render against staging, over the temporary client-side aggregation. Sorting failing endpoints to the top does most of the work:…"}
+{"ts":"2026-08-20T05:28:23Z","actor":"app","type":"project_updated","ref":"relay","summary":"Updated relay: archived the project"}
+{"ts":"2026-08-20T05:34:18Z","actor":"app","type":"project_updated","ref":"relay","summary":"Updated relay: restored the project"}

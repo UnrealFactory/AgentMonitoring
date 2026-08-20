@@ -461,7 +461,11 @@ fn read_to_string(path: &Path) -> Result<String> {
     fs::read_to_string(path).map_err(|e| CoreError::io(path, e))
 }
 
-fn normalize(p: &Path) -> PathBuf {
+/// A path as the filesystem really has it: symlinks and junctions resolved, `..` gone, and
+/// Windows' `\\?\` prefix taken back off. Used when a vault is opened, and again by
+/// [`crate::write::Vault::delete_project`], which may only remove a directory that is still
+/// inside the vault after every one of those has been resolved.
+pub(crate) fn normalize(p: &Path) -> PathBuf {
     // dunce-free: canonicalize when possible, otherwise keep what we were given so the
     // error message shows the path the user actually typed.
     match fs::canonicalize(p) {

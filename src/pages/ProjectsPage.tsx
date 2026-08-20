@@ -18,11 +18,12 @@
  * A vault screen that looks weaker than the list screens beside it is the wrong screen; the
  * row is the form this app already uses for "a list of things you can open".
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp, useVaultNonce } from "../AppContext";
 import { CommandLine, ErrorState, InlineCode, RichText, Skeleton, Tag } from "../components/ui";
 import { useContextMenu } from "../components/ContextMenu";
+import { useDeleteProject } from "../components/DeleteProject";
 import { recordKind, useProjectMenu, useRecordMenu, type RecordRef } from "../lib/menus";
 import { EventIcon } from "../components/EventIcon";
 import { useNow } from "../components/charts";
@@ -62,22 +63,7 @@ export function ProjectsPage() {
   const navigate = useNavigate();
   const now = useNow(60_000);
   const [creating, setCreating] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  /**
-   * The project the last Archive click moved, so it can be moved back.
-   *
-   * Archiving is one click, it is the only action on this screen that changes what the app
-   * shows, and it happens to a row that then leaves the list — which is the shape of thing
-   * that needs a way back (P5 critic). Not a toast that fades: it stays until it is used,
-   * dismissed or the screen is left, because a reader who looks up three seconds later has
-   * the same right to it as one who was watching.
-   */
-  const [undo, setUndo] = useState<Project | null>(null);
-
-  const active = useMemo(() => projects.filter((p) => p.status !== "archived"), [projects]);
-  const archived = useMemo(() => projects.filter((p) => p.status === "archived"), [projects]);
 
   /* A vault that cannot be read is not an empty vault: the screen says which one it is,
      and how to make one, because "no vault.json" is the state a fresh machine starts in.
@@ -130,20 +116,6 @@ export function ProjectsPage() {
     );
   }
 
-  const setStatus = async (project: Project, status: "active" | "archived") => {
-    setBusy(project.slug);
-    setActionError(null);
-    try {
-      await api.setProjectStatus(project.slug, status);
-      setUndo(status === "archived" ? project : null);
-      refresh();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(null);
-    }
-  };
-
   return (
     <div className="page">
       <header className="page-head">
@@ -163,36 +135,13 @@ export function ProjectsPage() {
         onError={setActionError}
         transport={transport}
         vault={vault}
-        active={active.length}
-        archived={archived.length}
+        count={projects.length}
       />
 
       {actionError && (
         <p className="form-error" role="alert">
           <InlineCode text={vaultErrorMessage(actionError)} />
         </p>
-      )}
-
-      {undo && (
-        <div className="undo-bar" role="status">
-          <span className="undo-text">
-            <RichText text={t("proj.undoBar", `**${undo.name}**`)} />
-          </span>
-          <button
-            className="button button-sm"
-            disabled={busy === undo.slug}
-            onClick={() => setStatus(undo, "active")}
-          >
-            {busy === undo.slug ? t("proj.restoring") : t("app.undo")}
-          </button>
-          <button
-            className="undo-dismiss"
-            aria-label={t("app.dismiss")}
-            onClick={() => setUndo(null)}
-          >
-            ×
-          </button>
-        </div>
       )}
 
       {creating && (
@@ -215,56 +164,23 @@ export function ProjectsPage() {
         <Onboarding dir={vault?.path ?? null} opened canCreate transport={transport} />
       ) : (
         <>
+          {/* One list, because a project is either in this vault or it is not.
+              There used to be a second section under it — Archived — with a show/hide
+              button and a status that made a project half-present: listed here, missing
+              from the switcher, still readable by its address. It is gone (P12): the
+              projects are the projects, and one you have stopped using is deleted from
+              the row's own menu rather than filed behind a disclosure. */}
           <section className="project-section">
             <header className="project-section-head">
-              <h2 className="section-title">{t("proj.active")}</h2>
-              <span className="section-count tabular">{t("proj.count", active.length)}</span>
+              <h2 className="section-title">{t("proj.inVault")}</h2>
+              <span className="section-count tabular">{t("proj.count", projects.length)}</span>
             </header>
-            {active.length === 0 ? (
-              <p className="now-note">{t("proj.allArchived")}</p>
-            ) : (
-              <ul className="project-rows">
-                {active.map((p) => (
-                  <ProjectRow
-                    key={p.slug}
-                    project={p}
-                    now={now}
-                    busy={busy === p.slug}
-                    onArchive={() => setStatus(p, "archived")}
-                  />
-                ))}
-              </ul>
-            )}
+            <ul className="project-rows">
+              {projects.map((p) => (
+                <ProjectRow key={p.slug} project={p} now={now} />
+              ))}
+            </ul>
           </section>
-
-          {archived.length > 0 && (
-            <section className="project-section">
-              <header className="project-section-head">
-                <h2 className="section-title">{t("proj.archived")}</h2>
-                <span className="section-count tabular">{t("proj.count", archived.length)}</span>
-                <button
-                  className="link-button"
-                  aria-expanded={showArchived}
-                  onClick={() => setShowArchived((v) => !v)}
-                >
-                  {showArchived ? t("proj.hide") : t("proj.show")}
-                </button>
-              </header>
-              {showArchived && (
-                <ul className="project-rows">
-                  {archived.map((p) => (
-                    <ProjectRow
-                      key={p.slug}
-                      project={p}
-                      now={now}
-                      busy={busy === p.slug}
-                      onRestore={() => setStatus(p, "active")}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
-          )}
 
           <VaultActivity projects={projects} now={now} />
         </>
@@ -292,15 +208,13 @@ const SOURCE_TEXT: Record<string, () => string> = {
 
 function VaultBar({
   vault,
-  active,
-  archived,
+  count,
   transport,
   onSwitched,
   onError,
 }: {
   vault: ReturnType<typeof useApp>["vault"];
-  active: number;
-  archived: number;
+  count: number;
   transport: "tauri" | "browser";
   onSwitched: () => void;
   onError: (message: string) => void;
@@ -321,16 +235,11 @@ function VaultBar({
       </div>
       <dl className="vault-bar-facts">
         <div>
-          {/* Named, because the sidebar counts the active ones: two labels reading
-              "Projects" with different numbers under them is the app disagreeing with
-              itself about a word. */}
-          <dt>{t("vault.activeProjects")}</dt>
-          <dd className="tabular">
-            {active}
-            {archived > 0 && (
-              <span className="vault-bar-aside">{t("vault.archivedAside", archived)}</span>
-            )}
-          </dd>
+          {/* One number, and the sidebar's is the same one. It used to read "Active
+              projects" with an "· 1 archived" aside beside it, because the two counters
+              counted different sets; with archiving gone they count the vault. */}
+          <dt>{t("vault.projects")}</dt>
+          <dd className="tabular">{count}</dd>
         </div>
         <div>
           <dt>{t("vault.schema")}</dt>
@@ -432,50 +341,25 @@ function CreateVaultButton({
    One project
    ======================================================================= */
 
-function ProjectRow({
-  project: p,
-  now,
-  busy,
-  onArchive,
-  onRestore,
-}: {
-  project: Project;
-  now: number;
-  busy: boolean;
-  onArchive?: () => void;
-  onRestore?: () => void;
-}) {
-  /* An archived project is never "live", whatever the clock says. Archiving is itself an
-     event, so the last thing that happened in one is usually the archiving — which lit the
-     filled dot and printed "Active just now" beside the word "archived".
-
-     The row says "Last activity 3h ago" rather than "Active 3h ago" for the same reason
-     the section above it is headed Active: on this screen `active` is a project's status,
-     the opposite of archived, and one word may not also mean "somebody wrote something
-     recently" (lib/words.ts). */
-  const archived = p.status === "archived";
-  const state = archived ? "stale" : freshness(p.counts.lastActivity, now);
+function ProjectRow({ project: p, now }: { project: Project; now: number }) {
+  /* The row says "Last activity 3h ago" rather than "Active 3h ago": in this app `active`
+     was a project's *status*, and one word may not also mean "somebody wrote something
+     recently" (lib/words.ts). The status is gone; the sentence stays, because the
+     distinction it was drawn for is still true of the dot beside it. */
+  const state = freshness(p.counts.lastActivity, now);
   const c = p.counts;
 
-  /* The row's own menu. Archive is handed back to the page rather than done by the menu,
-     because this screen already answers an archive with the undo bar above the list — the
-     way back has to appear where the reader is looking, and here that is the layout, not a
-     toast. Off this screen the shared menu shows the same undo as a toast that does not
-     fade. */
+  /* The row's own menu — the same one the sidebar, the switcher and every breadcrumb open,
+     built in one place (lib/menus.ts). The Delete item in it opens the confirm dialog,
+     which is mounted above every screen (components/DeleteProject.tsx) because the menu is
+     not this screen's. */
   const contextMenu = useContextMenu();
-  const projectMenu = useProjectMenu({
-    archive:
-      onArchive || onRestore
-        ? (_project, status) => (status === "archived" ? onArchive?.() : onRestore?.())
-        : undefined,
-  });
+  const projectMenu = useProjectMenu();
+  const requestDelete = useDeleteProject();
 
   return (
     <li>
-      <article
-        className={`project-row${archived ? " is-archived" : ""}`}
-        {...contextMenu(() => projectMenu(p))}
-      >
+      <article className="project-row" {...contextMenu(() => projectMenu(p))}>
         <div className="project-row-main">
           <div className="project-row-head">
             <Link className="project-link" to={`/p/${p.slug}`}>
@@ -488,21 +372,16 @@ function ProjectRow({
                 }
                 role="img"
                 aria-label={
-                  archived
-                    ? t("proj.dotArchived")
-                    : state === "live"
-                      ? t("proj.dotLive")
-                      : state === "quiet"
-                        ? t("proj.dotQuiet")
-                        : t("proj.dotStale")
+                  state === "live"
+                    ? t("proj.dotLive")
+                    : state === "quiet"
+                      ? t("proj.dotQuiet")
+                      : t("proj.dotStale")
                 }
               />
               <span className="project-name">{p.name}</span>
             </Link>
             <span className="project-slug mono">{p.slug}</span>
-            {p.status === "archived" && (
-              <span className="pill pill-archived">{t("proj.archivedPill")}</span>
-            )}
             {p.tags.length > 0 && (
               <span className="tag-row">
                 {p.tags.map((t) => (
@@ -568,22 +447,22 @@ function ProjectRow({
               </>
             )}
           </span>
+          {/* The one place Delete is visible without a right-click.
+              The row's menu carries it too, and so does every other surface that names a
+              project — but this is the screen a reader comes to *to manage* projects, and
+              an action that exists only behind a gesture is an action half the readers of
+              this app will never find. Muted until it is pointed at, because a red word on
+              every row is a screen shouting about the one thing it hopes nobody does; and
+              it opens the same dialog the menu opens, so there is one confirmation, in one
+              place, with one set of words. */}
           <span className="project-actions">
-            {onArchive && (
-              <button
-                className="link-button"
-                disabled={busy}
-                onClick={onArchive}
-                title={t("proj.archiveTip")}
-              >
-                {busy ? t("proj.archiving") : t("proj.archive")}
-              </button>
-            )}
-            {onRestore && (
-              <button className="link-button" disabled={busy} onClick={onRestore}>
-                {busy ? t("proj.restoring") : t("proj.unarchive")}
-              </button>
-            )}
+            <button
+              className="link-button is-danger"
+              onClick={() => requestDelete(p)}
+              title={t("menu.deleteHint")}
+            >
+              {t("menu.delete")}
+            </button>
           </span>
         </div>
       </article>
@@ -668,12 +547,9 @@ function VaultActivity({ projects, now }: { projects: Project[]; now: number }) 
  * about a record opens that record's menu, and a line about the project itself — created,
  * renamed — points at the project and opens the project's. So no row in this list is dead.
  *
- * Two things are true here and nowhere else. The row carries the project's name, so the
+ * One thing is true here and nowhere else: the row carries the project's name, so the
  * record menu it opens is the only one in the app whose Copy link can name a project other
- * than the one the sidebar is standing in. And Archive is answered by the toast rather than
- * by this screen's undo bar (which the project rows above use), because that bar is at the
- * top of a page whose feed is at the bottom: an undo the reader has to scroll to find is
- * one they will not find.
+ * than the one the sidebar is standing in.
  */
 function VaultFeedRow({
   event,
