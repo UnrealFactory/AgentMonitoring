@@ -4,8 +4,9 @@ import { AppProvider, useApp } from "./AppContext";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { Sidebar } from "./components/Sidebar";
+import { Titlebar } from "./components/Titlebar";
 import { InlineCode, plainMarks, Skeleton } from "./components/ui";
-import { vaultErrorMessage } from "./lib/api";
+import { isTauri, vaultErrorMessage } from "./lib/api";
 import { formatDateTimeUtc } from "./lib/format";
 import { t, useLocale } from "./lib/i18n";
 import { useWindowTitle } from "./lib/useWindowTitle";
@@ -45,6 +46,12 @@ function Home() {
 function Shell() {
   const navigate = useNavigate();
 
+  /* The desktop window has no frame of its own (tauri.conf.json `decorations: false`), so
+     the app draws the strip that moves, maximises and closes it — above the shell, and
+     only there. Browser mode has a browser frame and renders nothing extra: same DOM, same
+     `class="app"`, same screenshots (components/Titlebar.tsx). */
+  const desktop = isTauri();
+
   // The vault subscription lives in AppProvider: every screen reads the nonce it feeds,
   // so the whole app refreshes together (AppContext.tsx).
   useWindowTitle();
@@ -59,14 +66,17 @@ function Shell() {
   }, [navigate]);
 
   return (
-    <div className="app">
-      <Sidebar />
-      <main className="main" id="main">
-        <VaultTroubleBar />
-        <Outlet />
-      </main>
-      <CommandPalette />
-    </div>
+    <>
+      {desktop && <Titlebar />}
+      <div className={desktop ? "app has-titlebar" : "app"}>
+        <Sidebar />
+        <main className="main" id="main">
+          <VaultTroubleBar />
+          <Outlet />
+        </main>
+        <CommandPalette />
+      </div>
+    </>
   );
 }
 

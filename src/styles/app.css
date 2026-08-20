@@ -11,9 +11,101 @@
   overflow: hidden;
 }
 
+/* The desktop app draws its own title bar above the shell, so the shell is that much
+   shorter. This is the only rule the strip costs the layout, and browser mode never has
+   the class: there, `.app` is 100vh, byte for byte what every screenshot has recorded. */
+.app.has-titlebar {
+  height: calc(100vh - var(--titlebar-height));
+}
+
 .main {
   overflow-y: auto;
   background: var(--bg-app);
+}
+
+/* --- the window's own title bar (desktop only) ----------------------------
+   `decorations: false` in tauri.conf.json, and this in its place: an empty band that is
+   the same two surfaces as the shell below it, continued upward. Nothing is drawn on the
+   left because nothing belongs there — the app's name is in the sidebar and the reader's
+   location is on the screen; the taskbar and Alt+Tab still carry the full window title.
+   See components/Titlebar.tsx for the drag region and the three commands. -------------- */
+
+.titlebar {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  height: var(--titlebar-height);
+  flex: none;
+  background: var(--bg-app);
+  /* Above every layer in this file (menus 30/40, palette 60, context menu 70, toast 80).
+     A modal that covered the window buttons would leave a window that cannot be moved or
+     closed until it is dismissed — which is not something an app gets to decide. */
+  z-index: 90;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The sidebar's column, continued to the top of the window: same width, same background,
+   same hairline, so the strip reads as the app rather than as a bar on top of it. Paint,
+   not an element — Tauri's drag script walks the elements under the pointer, and a real
+   child here would be a hole in the drag region (Titlebar.tsx). */
+.titlebar::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--sidebar-width);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-subtle);
+  pointer-events: none;
+}
+
+/* 46px wide, full height, square: the Windows hit target, in this app's colours. */
+.titlebar-button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.titlebar-button:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.titlebar-button:active {
+  background: var(--bg-hover);
+}
+
+/* The one button with a colour, and the only place in this app that paints an area red:
+   closing is the irreversible one, and every desktop this app runs on says so this way. */
+.titlebar-close:hover,
+.titlebar-close:active {
+  background: var(--red);
+  color: #fff;
+}
+
+.titlebar-close:active {
+  filter: brightness(0.92);
+}
+
+/* One inset hairline rather than the app's 2px offset ring: an outline with room around it
+   does not fit a 34px strip, and this is chrome — it should not shout at a Tab press. */
+.titlebar-button:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -4px;
+  border-radius: 0;
+  color: var(--text-primary);
+}
+
+.titlebar-glyph {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
 }
 
 /* --- sidebar -------------------------------------------------------------- */

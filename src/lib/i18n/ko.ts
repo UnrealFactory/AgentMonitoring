@@ -87,6 +87,16 @@ export const ko: Dict = {
   "app.notFound.title": "화면이 없습니다",
   "app.notFound.sub": "이 주소에 해당하는 화면이 앱에 없습니다.",
 
+  /* -- the window's own title bar (desktop only) ----------------------------
+     Windows' own Korean words for these buttons: 최소화 · 최대화 · 이전 크기로 · 닫기.
+     A title bar this app draws itself has no licence to invent new ones — a reader who
+     has used a window before already knows what they are called. */
+
+  "window.minimize": "최소화",
+  "window.maximize": "최대화",
+  "window.restore": "이전 크기로",
+  "window.close": "닫기",
+
   "shell.trouble.headline": "지금 볼트를 읽지 못하고 있습니다.",
   /* 경로 뒤에 조사를 붙이지 않는다 — 이 파일의 규칙이고, "…\vault 에서"처럼 한 칸 띄운 조사는
      그 규칙을 어긴 흔적이다. 경로는 문장 끝에 이름표를 달아 따로 붙인다. */

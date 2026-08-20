@@ -204,6 +204,10 @@
   --content-max: 1240px;
   --prose-max: 78ch;
   --header-height: 48px;
+  /* The strip the desktop app draws where Windows used to draw a title bar. Only the
+     desktop app has one (browser mode never renders it), so nothing else in this file
+     may assume the space: the shell subtracts it, in the one rule `.app.has-titlebar`. */
+  --titlebar-height: 34px;
 }
 
 /* ===========================================================================

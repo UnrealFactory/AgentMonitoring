@@ -34,6 +34,16 @@ export const en = {
   "app.notFound.title": "Nothing here",
   "app.notFound.sub": "That address does not match a screen in this app.",
 
+  /* -- the window's own title bar (desktop only) ----------------------------
+     Four words the app never printed before: the native bar drew these buttons itself, in
+     whatever language Windows was in. It is our strip now, so they are our words, in the
+     language the rest of the window is in (components/Titlebar.tsx). */
+
+  "window.minimize": "Minimize",
+  "window.maximize": "Maximize",
+  "window.restore": "Restore down",
+  "window.close": "Close",
+
   "shell.trouble.headline": "Not reading the vault right now.",
   "shell.trouble.body": (path: string | null, when: string) =>
     `Everything below is the last good data${path ? ` from ${path}` : ""}, as of ${when}.`,

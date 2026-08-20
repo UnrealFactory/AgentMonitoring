@@ -175,3 +175,5 @@
 {"ts":"2026-08-19T23:38:22Z","actor":"p9-i18n-builder","type":"work_done","ref":"WORK-0029","summary":"Shipped, each finding reproduced before the fix and measured after at the widths it was found at."}
 {"ts":"2026-08-20T00:54:50Z","actor":"p9-i18n-builder","type":"work_updated","ref":"WORK-0029","summary":"Correction to the first bullet of ## What: the keep-all law went onto the four selectors the round-6 critic listed, not onto the surface that critic named, and…"}
 {"ts":"2026-08-20T02:39:24Z","actor":"p9-i18n-builder","type":"work_updated","ref":"WORK-0029","summary":"Round 9 closes the checklist this round was given, all five items, each mutation-tested."}
+{"ts":"2026-08-20T03:52:00Z","actor":"p10-titlebar-builder","type":"work_started","ref":"WORK-0030","summary":"The window frame is the app's now: a frameless title bar with the three buttons drawn in the app's own language"}
+{"ts":"2026-08-20T04:30:35Z","actor":"p10-titlebar-builder","type":"work_done","ref":"WORK-0030","summary":"Verified in the real WebView2 window (npm run tauri:dev), by driving and photographing it, not by reading the code."}
