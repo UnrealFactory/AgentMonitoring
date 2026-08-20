@@ -182,8 +182,9 @@ Rejected with exit `2`: a time in the future, or one earlier than the state it f
 7. **Projects** — list/create/switch/**delete**; vault path display + "open different vault
    folder". Delete is **human-only and app-only**: it removes `projects/<slug>/` and every
    record in it from disk, permanently, behind a dialog that will not arm its button until
-   the human types the slug. There is no CLI subcommand and no MCP tool for it — agents
-   write records into a vault and never take one away.
+   the human types the slug, and that owns the window while it is up (nothing navigates the
+   page out from under it and nothing opens over it). There is no CLI subcommand and no MCP
+   tool for it — agents write records into a vault and never take one away.
 
 Live updates: Tauri watches the vault (notify crate) and emits events → UI refreshes.
 

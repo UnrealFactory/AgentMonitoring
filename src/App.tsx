@@ -11,6 +11,7 @@ import { InlineCode, plainMarks, Skeleton } from "./components/ui";
 import { isTauri, vaultErrorMessage } from "./lib/api";
 import { formatDateTimeUtc } from "./lib/format";
 import { t, useLocale } from "./lib/i18n";
+import { isModalOpen } from "./lib/modal";
 import { useWindowTitle } from "./lib/useWindowTitle";
 import { DashboardPage } from "./pages/DashboardPage";
 import { WorkListPage } from "./pages/WorkListPage";
@@ -58,10 +59,26 @@ function Shell() {
   // so the whole app refreshes together (AppContext.tsx).
   useWindowTitle();
 
-  // Backspace-free navigation: Alt+Left goes back, matching the desktop shell.
+  /* Backspace-free navigation: Alt+Left goes back, matching the desktop shell.
+   *
+   * **Not while a modal is up.** This is a `window` listener, so it is bound by the rule in
+   * src/lib/modal.ts — and it was the listener that broke it. With the delete dialog open
+   * and armed on /projects, one Alt+Left — the desktop app's only Back gesture, added in
+   * this file — moved the page behind the scrim to another project's screen and left the
+   * dialog sitting over it, still about the first project, still one ↵ from deleting it.
+   * That is what it did, on disk, in the real window (P12 round 2 critic). The key is
+   * swallowed rather than merely ignored: in a browser Alt+Left is also the browser's own
+   * Back, and a modal the app declines to navigate out from under must not be navigated out
+   * from under by the frame it is drawn in either.
+   */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.altKey && e.key === "ArrowLeft") navigate(-1);
+      if (!(e.altKey && e.key === "ArrowLeft")) return;
+      if (isModalOpen()) {
+        e.preventDefault();
+        return;
+      }
+      navigate(-1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

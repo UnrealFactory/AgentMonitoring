@@ -183,3 +183,5 @@
 {"ts":"2026-08-20T05:13:12Z","actor":"p11-tooltip-builder","type":"work_done","ref":"WORK-0031","summary":"Shipped. Every title in the app is now drawn by src/components/Tooltip.tsx — one layer, document-level delegation, no component edited — and the WebView's…"}
 {"ts":"2026-08-20T06:20:00Z","actor":"p12-delete-builder","type":"work_started","ref":"WORK-0032","summary":"Archive out, delete in: a project the human can remove, and no agent can"}
 {"ts":"2026-08-20T06:20:30Z","actor":"p12-delete-builder","type":"work_done","ref":"WORK-0032","summary":"Shipped. Archive is gone from the app and from both dictionaries; 삭제 is on every project surface and opens one dialog that will not act until the slug is typed."}
+{"ts":"2026-08-20T08:04:47Z","actor":"p12-delete-builder","type":"work_started","ref":"WORK-0033","summary":"The delete dialog owns the window: no key moves the app out from under it"}
+{"ts":"2026-08-20T08:05:06Z","actor":"p12-delete-builder","type":"work_done","ref":"WORK-0033","summary":"Shipped. The delete dialog owns the window: Alt+Left does not navigate the page out from under it, Ctrl+K opens no palette over it, and a right-click raises no…"}

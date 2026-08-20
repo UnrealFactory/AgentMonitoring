@@ -12,21 +12,62 @@
  * purpose — the callers are event handlers, not components, and they need the answer at the
  * instant the key is pressed rather than at the last render.
  *
+ * **The app's own Back gesture is one of those listeners**, and it was the one that ignored
+ * this file for three rounds: Alt+Left (src/App.tsx) navigated the page behind an armed
+ * 프로젝트 삭제 dialog, leaving it on top of a screen about a different project — where ↵
+ * still deleted the first one, off the disk, measured (P12 round 2 critic). A modal that can
+ * be navigated out from under is not a modal, whatever it does with Escape.
+ *
  * The same flag is mirrored onto `<html data-modal="open">` so CSS and the headless gates
  * (scripts/check-keys.mjs) can see it too.
  */
 import { useEffect } from "react";
 
+/**
+ * What kind of thing holds the lock — the difference between "stand down" and "stay".
+ *
+ * A **menu** is the shallowest surface in the app: it is drawn under a dialog's scrim
+ * (`.ctx-layer` is z-index 70, `.modal-scrim` 80), so anything dialog-shaped that opens over
+ * one buries it, and it closes rather than sitting there answering keys from behind the
+ * glass. A **dialog** — the command palette, the delete confirmation — owns the window while
+ * it is up: nothing else opens over it, so the layer the reader is looking at is always the
+ * layer their keys reach.
+ *
+ * The distinction is not decoration. Without it, "a modal arrived over me" is one number and
+ * every modal has to guess: a copy menu raised on the slug printed inside the delete dialog
+ * would either bury the dialog (it did — invisibly, holding the keyboard, and the next
+ * Escape closed the dialog underneath while the menu stayed) or be treated as a takeover and
+ * dismiss the dialog the reader was halfway through typing into.
+ */
+export type ModalKind = "menu" | "dialog";
+
 let depth = 0;
+let dialogs = 0;
 
 /** True while any modal is on screen. Cheap enough to call from a keydown handler. */
 export function isModalOpen(): boolean {
   return depth > 0;
 }
 
+/**
+ * True while a *dialog* is on screen.
+ *
+ * What the two things that can appear from anywhere ask before appearing: the command
+ * palette's Ctrl+K (components/CommandPalette.tsx) and the context menu's open
+ * (components/ContextMenu.tsx). Neither may open over a dialog.
+ */
+export function isDialogOpen(): boolean {
+  return dialogs > 0;
+}
+
 /** How many modals are stacked. What a modal compares against to notice one arrived over it. */
 export function modalDepth(): number {
   return depth;
+}
+
+/** How many of those are dialogs. What a dialog compares against for the same reason. */
+export function dialogDepth(): number {
+  return dialogs;
 }
 
 const watchers = new Set<(depth: number) => void>();
@@ -47,19 +88,26 @@ export function onModalChange(fn: (depth: number) => void): () => void {
   };
 }
 
-/** Hold the modal lock for as long as `open` is true. */
-export function useModalLock(open: boolean): void {
+/**
+ * Hold the modal lock for as long as `open` is true.
+ *
+ * `kind` defaults to `"dialog"` because that is the stronger claim — a surface that owns the
+ * window until it is answered — and the weaker one should have to say so.
+ */
+export function useModalLock(open: boolean, kind: ModalKind = "dialog"): void {
   useEffect(() => {
     if (!open) return;
     depth += 1;
+    if (kind === "dialog") dialogs += 1;
     document.documentElement.setAttribute("data-modal", "open");
     for (const fn of [...watchers]) fn(depth);
     return () => {
       depth = Math.max(0, depth - 1);
+      if (kind === "dialog") dialogs = Math.max(0, dialogs - 1);
       if (depth === 0) document.documentElement.removeAttribute("data-modal");
       for (const fn of [...watchers]) fn(depth);
     };
-  }, [open]);
+  }, [open, kind]);
 }
 
 /** Everything inside `root` that Tab can reach, in tab order. */

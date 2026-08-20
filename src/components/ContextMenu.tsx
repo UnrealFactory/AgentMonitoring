@@ -43,7 +43,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation } from "react-router-dom";
-import { modalDepth, onModalChange, useModalLock } from "../lib/modal";
+import { isDialogOpen, modalDepth, onModalChange, useModalLock } from "../lib/modal";
 import { vaultErrorMessage } from "../lib/api";
 import { writeClipboard } from "../lib/clipboard";
 import { t } from "../lib/i18n";
@@ -214,8 +214,21 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
 
   const close = useCallback(() => setRequest(null), []);
 
+  /**
+   * …and nothing opens over a dialog.
+   *
+   * This menu is drawn under a dialog's scrim (`.ctx-layer` is z-index 70, `.modal-scrim`
+   * 80) and takes the keyboard onto its first item as it opens. Over the delete
+   * confirmation that combination is at its worst: selecting the `projects/<slug>` printed
+   * in the dialog's own warning and right-clicking it raised Copy *behind the glass* —
+   * nothing visible on screen changed, the focus left the dialog for a menu the reader could
+   * not see, and the next Escape closed the dialog while the invisible menu stayed
+   * (measured, P12 round 2). A text field inside a dialog still keeps the browser's own menu,
+   * which is the one place the native one is worth more than ours; everything else the
+   * dialog answers itself.
+   */
   const open = useCallback((spec: MenuSpec, at: Point, invoker: HTMLElement | null) => {
-    if (!spec.items.length) return;
+    if (!spec.items.length || isDialogOpen()) return;
     seq.current += 1;
     setRequest({ id: seq.current, spec, at, invoker });
   }, []);
@@ -306,8 +319,10 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
   const { items } = request.spec;
 
   // While it is up it owns the keyboard: the list screens' window-level handler stands down
-  // (src/lib/modal.ts), so ↓ moves the menu and never the board behind it.
-  useModalLock(true);
+  // (src/lib/modal.ts), so ↓ moves the menu and never the board behind it. As a *menu* —
+  // the shallowest surface in the app, which anything dialog-shaped may open over, and
+  // which stands down when one does (below).
+  useModalLock(true, "menu");
 
   /* Flip rather than overflow. A menu opened 40px from the right edge of a 960px window
      grows to the left; one opened near the bottom grows upward; either way it stays whole

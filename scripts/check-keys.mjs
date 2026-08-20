@@ -53,7 +53,11 @@
  *      deletes nothing, esc and the scrim delete nothing, and when it does run the project
  *      leaves the disk, the row leaves an *already-open second window* with no reload, and
  *      a reader standing inside the deleted project is moved to /projects rather than left
- *      on a screen whose vault entry is gone.
+ *      on a screen whose vault entry is gone. And it **owns the window** while it is up:
+ *      Alt+Left does not navigate the page out from under it, Ctrl+K opens no palette over
+ *      it, and a right-click raises no menu below its scrim — the three ways an armed
+ *      confirmation came to be floating over a screen about a *different* project, one of
+ *      which took a directory off the disk from a screen about Relay (P12 round 2 critic).
  *
  * Two scratch vaults are built in temp directories — a 12-project one for (5) and the same
  * copy for the writes and the deletes in (8). ./vault is read, never written.
@@ -1035,6 +1039,121 @@ try {
   await wide.locator(".modal-scrim").click({ position: { x: 8, y: 8 } });
   check("a click on the scrim closes it", !(await wide.locator(".modal").count()));
   check("…and deletes nothing", await exists(victim));
+
+  /* 9b. The dialog owns the window while it is up.
+
+     Everything above measures the dialog answering its own keys. This measures the keys that
+     move the app *around* it, and every one of them was a way for an armed confirmation to
+     end up floating over a screen about a different project:
+
+       * **Alt+Left**, the desktop app's only Back gesture (src/App.tsx), was a bare `window`
+         listener with no modal check at all. One press navigated the page behind the scrim
+         and left the dialog on top of it, still armed, still about the project the reader
+         had left — and ↵ from there deleted it, off the disk, from a screen about Relay
+         (P12 round 2 critic).
+       * **Ctrl+K** opened the palette on top, and the first Escape then closed the *dialog
+         underneath* rather than the palette the reader was looking at.
+       * **A right-click** on the `projects/<slug>` printed in the dialog's own warning
+         raised the copy menu *under* the scrim (z-index 70 against 80): nothing visible
+         changed, the keyboard left the dialog for a menu nobody could see, and the next
+         Escape closed the dialog and left the menu.
+
+     The victim here is a different scratch project from the one above, and it is expected to
+     be on disk at the end of all three. */
+  log("--- the dialog owns the window");
+  const owned = "scratch-7";
+  const ownedName = (await manyProjects()).find((p) => p.slug === owned)?.name;
+  /* In-app history, so Alt+Left is a route change inside the running app rather than a
+     document load — which is the case that keeps the dialog mounted, and the reported one. */
+  await wide.locator(".nav-sub").first().click();
+  await ready(wide);
+  await wide.locator('.nav-item[href="/projects"]').first().click();
+  await ready(wide);
+  const backTo = await wide.evaluate(() => history.length > 1);
+  check("the gate has in-app history to go back to", backTo);
+
+  await openDialogFromRow(wide, ownedName);
+  await wide.locator(".modal .input").fill(owned);
+  check("the dialog is armed before the keys that used to move the page", await armed(wide));
+  const heldUrl = wide.url();
+  await wide.keyboard.press("Alt+ArrowLeft");
+  await wide.waitForTimeout(600);
+  check(
+    "Alt+Left does not navigate the page behind an open dialog",
+    wide.url() === heldUrl,
+    `went to ${wide.url()} from ${heldUrl}`,
+  );
+  check(
+    "…and the dialog is still there, still armed, still holding the keyboard",
+    (await dialogOpen(wide)) &&
+      (await armed(wide)) &&
+      (await wide.evaluate(() => !!document.activeElement?.closest?.(".modal"))),
+    `dialog ${await wide.locator(".modal").count()}, focus ${await focused(wide)}`,
+  );
+
+  await wide.keyboard.press("Control+k");
+  await wide.waitForTimeout(600);
+  check(
+    "Ctrl+K opens no palette over a dialog",
+    (await wide.locator(".palette").count()) === 0,
+    `palettes ${await wide.locator(".palette").count()}`,
+  );
+  check(
+    "…and the dialog still has the window to itself",
+    (await dialogOpen(wide)) && (await armed(wide)),
+  );
+
+  /* The right button, inside the dialog, on a selection: the app's own menu draws below the
+     scrim, so it may not open here at all. The keyboard has to stay in the dialog. */
+  const onSlug = await wide.evaluate(() => {
+    const code = document.querySelector(".modal-warn code");
+    if (!code) return null;
+    const range = document.createRange();
+    range.selectNodeContents(code);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const b = code.getBoundingClientRect();
+    return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) };
+  });
+  check("the dialog prints the slug it is asking for, in its warning", !!onSlug);
+  await wide.mouse.click(onSlug.x, onSlug.y, { button: "right" });
+  await wide.waitForTimeout(400);
+  check(
+    "a right-click inside the dialog raises no menu under its scrim",
+    !(await menuOpen(wide)),
+    `menus ${await wide.locator(".ctx-menu").count()}, focus ${await focused(wide)}`,
+  );
+  check("…and the dialog is still up", await dialogOpen(wide));
+  /* That click landed on prose, which is not focusable, so the browser dropped the focus on
+     <body> — and the box this dialog exists to have typed into must still get the typing. */
+  await wide.locator(".modal .input").fill("");
+  await wide.evaluate(() => document.activeElement?.blur?.());
+  await wide.keyboard.type(owned);
+  check(
+    "typing with the focus dropped goes into the confirm box",
+    (await wide.locator(".modal .input").inputValue()) === owned && (await armed(wide)),
+    `box reads ${JSON.stringify(await wide.locator(".modal .input").inputValue())}`,
+  );
+  // One esc, on the layer the reader is looking at, and nothing was deleted by any of it.
+  await wide.keyboard.press("Escape");
+  await wide.waitForTimeout(300);
+  check("one esc closes the dialog", !(await wide.locator(".modal").count()));
+  check("…with no modal lock left behind", (await wide.getAttribute("html", "data-modal")) === null);
+  check(`…and ${owned} is still in the vault after all of it`, await exists(owned));
+
+  /* The other half of every stand-down in this app: it must not be a mute. With nothing
+     open, the same Alt+Left is the Back gesture the desktop shell added it for. */
+  const beforeBack = wide.url();
+  await wide.keyboard.press("Alt+ArrowLeft");
+  await wide.waitForTimeout(600);
+  check(
+    "…and with no dialog open Alt+Left still goes back",
+    wide.url() !== beforeBack,
+    `stayed on ${wide.url()}`,
+  );
+  await wide.locator('.nav-item[href="/projects"]').first().click();
+  await ready(wide);
 
   /* The delete itself — and a second window, already open on the same vault, which finds
      out about it the way any other window would: from the watcher, with no reload. */

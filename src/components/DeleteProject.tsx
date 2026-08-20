@@ -19,6 +19,13 @@
  *     line above. The button stays disabled until it matches exactly, and ↵ in an empty
  *     field does nothing at all.
  *   * **Every way out is cheap.** esc, the scrim, Cancel — and none of them ask twice.
+ *   * **It owns the window while it is up.** The keys that move the app all stand down for
+ *     it: Alt+Left does not walk the page out from under it, Ctrl+K does not open the
+ *     palette over it, and a right-click raises no menu on top of it. That is not
+ *     housekeeping — every one of those was a way for the confirmation to end up floating
+ *     over a screen about a *different* project, armed, with ↵ still pointed at this one.
+ *     Alt+Left did it, and `nav-victim` left the disk from a screen about Relay (P12 round 2
+ *     critic). The rules live in src/lib/modal.ts; this dialog is the reason they are rules.
  *
  * It lives here, above the screens, rather than on /projects: the menu that opens it is on
  * every surface that names a project (the sidebar's list, the switcher and its dropdown, the
@@ -39,7 +46,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../AppContext";
 import { api, vaultErrorMessage } from "../lib/api";
 import { t } from "../lib/i18n";
-import { trapTab, useModalLock } from "../lib/modal";
+import { dialogDepth, modalDepth, onModalChange, trapTab, useModalLock } from "../lib/modal";
 import { bugCount, eventCount, workLogs } from "../lib/words";
 import { useContextMenuApi } from "./ContextMenu";
 import { InlineCode, RichText } from "./ui";
@@ -59,14 +66,15 @@ export function useDeleteProject(): Request {
 export function DeleteProjectProvider({ children }: { children: ReactNode }) {
   const [project, setProject] = useState<Project | null>(null);
   const request = useCallback((p: Project) => setProject(p), []);
+  // Stable, because the dialog binds window listeners to it: an `onClose` rebuilt on every
+  // render of this provider would tear down and re-register them on every keystroke.
+  const close = useCallback(() => setProject(null), []);
   return (
     <Ctx.Provider value={request}>
       {children}
       {/* Keyed by slug: asking about a second project must not inherit the first one's
           half-typed confirmation. */}
-      {project && (
-        <DeleteDialog key={project.slug} project={project} onClose={() => setProject(null)} />
-      )}
+      {project && <DeleteDialog key={project.slug} project={project} onClose={close} />}
     </Ctx.Provider>
   );
 }
@@ -91,9 +99,40 @@ function DeleteDialog({ project, onClose }: { project: Project; onClose: () => v
   const armed = typed.trim() === project.slug;
   const c = project.counts;
 
-  // Every screen-level key handler in the app asks this first (src/lib/modal.ts) — so the
-  // list underneath does not answer the arrows while this is up.
+  /* Every screen-level key handler in the app asks this first (src/lib/modal.ts) — so the
+     list underneath does not answer the arrows while this is up, and the app's Back gesture
+     does not walk the page out from under it (src/App.tsx). As a *dialog*: nothing may open
+     over it, which is what the palette's Ctrl+K and the context menu now check. */
   useModalLock(true);
+
+  /* Where this dialog sits in the modal stack, read after its own lock is taken (effects run
+     in declaration order, so the count above already includes it). Two rules come out of it:
+
+       * anything **above** it answers the keyboard first. Without that, its esc below would
+         close the dialog out from under a menu the reader is actually looking at — which is
+         precisely the defect it was written to avoid, upside down.
+       * a **dialog** arriving over it would bury it, so it stands down, the way the context
+         menu does (components/ContextMenu.tsx). Nothing opens one today; this is what keeps
+         that true when a third modal is written. */
+  const mine = useRef(0);
+  useEffect(() => {
+    mine.current = modalDepth();
+    const mineDialogs = dialogDepth();
+    return onModalChange(() => {
+      if (dialogDepth() > mineDialogs) onClose();
+    });
+  }, [onClose]);
+
+  /* And if the page underneath moves, the dialog goes with it.
+     Nothing should be able to move it now — Alt+Left stands down, the palette will not open,
+     the scrim eats the clicks — but a confirmation that outlives the screen it was raised
+     from is how "delete this project" comes to be answered on a screen about another one.
+     It cost `nav-victim` its directory once already (P12 round 2 critic). The delete's own
+     navigation is not this: submit closes the dialog before it navigates. */
+  const openedAt = useRef(location.pathname);
+  useEffect(() => {
+    if (location.pathname !== openedAt.current) onClose();
+  }, [location.pathname, onClose]);
 
   useEffect(() => {
     const el = document.activeElement;
@@ -112,6 +151,8 @@ function DeleteDialog({ project, onClose }: { project: Project; onClose: () => v
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
+      // Something is open over this dialog: it answers first, and this stays where it is.
+      if (modalDepth() > mine.current) return;
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
@@ -124,6 +165,15 @@ function DeleteDialog({ project, onClose }: { project: Project; onClose: () => v
           e.preventDefault();
           e.stopPropagation();
         }
+        return;
+      }
+      /* A character typed while the focus has drifted — a click on this dialog's own
+         warning text is enough, since prose is not focusable and the browser hands the
+         focus to <body> — belongs in the box the dialog is asking to be typed into. The
+         palette answers stray typing the same way; here it matters more, because the only
+         way out of this dialog other than leaving is typing. */
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+        if (!dialogRef.current?.contains(document.activeElement)) inputRef.current?.focus();
       }
     };
     window.addEventListener("keydown", onKey, true);

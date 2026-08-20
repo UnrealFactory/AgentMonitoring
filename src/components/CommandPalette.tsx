@@ -41,7 +41,7 @@ import {
   workLogs,
   workStatusLabel,
 } from "../lib/words";
-import { trapTab, useModalLock } from "../lib/modal";
+import { isDialogOpen, trapTab, useModalLock } from "../lib/modal";
 import type { BugSummary, Project, WorklogSummary } from "../lib/types";
 /* The avatar's monogram is the avatar's, wherever it is drawn: one function, so a Korean
    handle cannot wear two different marks on two screens (components/ui.tsx). */
@@ -211,15 +211,26 @@ export function CommandPalette() {
   // Every screen-level key handler in the app asks this first (src/lib/modal.ts).
   useModalLock(open);
 
-  // Ctrl/Cmd+K anywhere, including from inside a search box — and the same key closes it.
+  /* Ctrl/Cmd+K anywhere, including from inside a search box — and the same key closes it.
+   *
+   * **Anywhere except over a dialog.** A menu it may open over: a menu is the shallowest
+   * thing in the app and stands down for it (src/lib/modal.ts, P8 round 2). A dialog it may
+   * not. Over the delete confirmation it used to open on top and leave both on screen, and
+   * the first Escape then closed the *dialog underneath* rather than the palette the reader
+   * was looking at — the wrong-layer-answers-Escape defect this repo had already fixed once,
+   * returning on the one surface where a modal that quietly dismisses matters most, and on
+   * the one that also navigates (P12 round 2 critic). While a dialog is up the key does
+   * nothing at all, which is what a modal dialog means.
+   */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setOpen((v) => !v);
+        setOpen((v) => (v ? false : !isDialogOpen()));
       }
     };
-    const onEvent = () => setOpen(true);
+    // The sidebar's search button, which is behind that scrim anyway — same answer.
+    const onEvent = () => setOpen((v) => v || !isDialogOpen());
     window.addEventListener("keydown", onKey);
     window.addEventListener(PALETTE_EVENT, onEvent);
     return () => {

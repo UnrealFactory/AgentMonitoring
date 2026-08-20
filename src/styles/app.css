@@ -772,7 +772,11 @@
 .modal-scrim {
   position: fixed;
   inset: 0;
-  z-index: 80; /* over the palette and the context menu, which stand down for it */
+  /* Over the palette (60) and the context menu (70) — and because it is over them, neither
+     may open while it is up: a menu raised under this scrim is invisible and still holds the
+     keyboard, which is what a right-click inside this dialog used to do (src/lib/modal.ts,
+     isDialogOpen). The z-index is the reason the rule exists, so it is written here too. */
+  z-index: 80;
   display: flex;
   justify-content: center;
   align-items: flex-start;
