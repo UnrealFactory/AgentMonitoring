@@ -168,6 +168,9 @@ pub struct WorklogDetail {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NoteType {
+    /// Required reading: what every session must read before working — the index that
+    /// points at the notes that matter now. Every list surfaces these first.
+    Essential,
     /// A durable fact about this project a future agent needs: a gotcha, a convention,
     /// an invariant that is not obvious from the code.
     Memory,
@@ -184,6 +187,7 @@ pub enum NoteType {
 impl NoteType {
     pub fn as_str(self) -> &'static str {
         match self {
+            NoteType::Essential => "essential",
             NoteType::Memory => "memory",
             NoteType::Handoff => "handoff",
             NoteType::Decision => "decision",
@@ -191,7 +195,8 @@ impl NoteType {
         }
     }
 
-    pub const ALL: [NoteType; 4] = [
+    pub const ALL: [NoteType; 5] = [
+        NoteType::Essential,
         NoteType::Memory,
         NoteType::Handoff,
         NoteType::Decision,

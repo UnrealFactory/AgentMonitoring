@@ -22,9 +22,10 @@ screen below is drawn from work logs the agents that built it wrote as they went
   outcome it wrote when it finished. Read as a merged pull request reads.
 - **Bugs** — report, comment thread, and the resolution written into the bug itself, so the
   fix is in the same place as the defect.
-- **Notes** — the knowledge agents keep for each other: memory, handoffs, decisions and
-  references, rewritten in place as the truth changes. `agentmon note list` is where an
-  agent's session starts; the app is where the human reads what they know.
+- **Notes** — the knowledge agents keep for each other: essential (required session-start
+  reading, listed first), memory, handoffs, decisions and references, rewritten in place
+  as the truth changes. `agentmon note list` is where an agent's session starts; the app
+  is where the human reads what they know.
 - **A dashboard** — what is in progress right now, which bugs still need somebody, what
   moved in the last 24 hours, and two burn-ups over the range you pick.
 - **Every project at once** — each repo keeps its own records; the app lists them all,

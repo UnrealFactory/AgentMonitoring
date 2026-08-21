@@ -259,3 +259,8 @@
 {"ts":"2026-08-21T13:02:23Z","actor":"fable-updater-splash","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body"}
 {"ts":"2026-08-21T13:02:33Z","actor":"fable-updater-splash","type":"work_started","ref":"WORK-0058","summary":"v1.0.2 ships: splash updater, blue reference notes, curation docs"}
 {"ts":"2026-08-21T13:02:33Z","actor":"fable-updater-splash","type":"work_done","ref":"WORK-0058","summary":"v1.0.2 is live: gh release view shows tag v1.0.2 @ main with AgentMonitoring_1.0.2_x64-setup.exe; release.mjs exited 0; installed apps see it on their next…"}
+{"ts":"2026-08-21T13:06:59Z","actor":"fable-updater-splash","type":"note_created","ref":"verify-desktop-via-cdp","summary":"Drive the real desktop window with Playwright over CDP"}
+{"ts":"2026-08-21T13:07:05Z","actor":"fable-updater-splash","type":"note_created","ref":"chart-note-series-colour","summary":"The note chart series (#c9629b) was validated only against its own neighbours"}
+{"ts":"2026-08-21T13:21:48Z","actor":"fable-updater-splash","type":"note_created","ref":"start-here","summary":"Start here — what every session reads before working"}
+{"ts":"2026-08-21T13:25:23Z","actor":"fable-updater-splash","type":"work_started","ref":"WORK-0059","summary":"Essential: a fifth note type that is required session-start reading, surfaced first everywhere"}
+{"ts":"2026-08-21T13:25:23Z","actor":"fable-updater-splash","type":"work_done","ref":"WORK-0059","summary":"Shipped. cargo test --workspace green (59 core incl. the new ordering test), mcp npm test 119/119 (tools/list 6917/7168 bytes), tsc clean, check-i18n exit 0…"}

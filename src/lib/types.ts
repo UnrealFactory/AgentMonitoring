@@ -8,7 +8,7 @@ export type WorkStatus = "in_progress" | "done" | "abandoned";
 export type BugStatus = "open" | "in_progress" | "resolved" | "closed";
 export type Severity = "critical" | "high" | "medium" | "low";
 /** What a note is for: the reader's first filter (see SPEC.md, notes). */
-export type NoteType = "memory" | "handoff" | "decision" | "reference";
+export type NoteType = "essential" | "memory" | "handoff" | "decision" | "reference";
 export type FeedbackKind = "bug" | "idea";
 export type FeedbackStatus = "open" | "done";
 

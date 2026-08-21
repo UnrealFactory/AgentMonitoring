@@ -8,9 +8,10 @@ MCP tools. Write every record in **English**.
 
 ## Starting a session
 
-- Run `note(action: "list")` first. The notes previous sessions left (memory,
-  handoff, decision, reference) are this project's memory. Check `status` for work
-  in progress and open bugs.
+- Run `note(action: "list")` first. The notes previous sessions left (essential,
+  memory, handoff, decision, reference) are this project's memory — and the
+  **essential** notes the list surfaces on top are required reading before any
+  work: they index the rest. Check `status` for work in progress and open bugs.
 
 ## When you finish work
 

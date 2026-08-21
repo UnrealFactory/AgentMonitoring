@@ -184,7 +184,7 @@ name: registry-gate-gotcha        # kebab-case, 2–64 chars; the identity AND t
                                   # No NOTE-NNNN sequence: a note is looked up by what it
                                   # is about. Derived from the title, or passed explicitly.
 title: Gate scripts must sandbox the registry
-type: memory                      # memory | handoff | decision | reference
+type: memory                      # essential | memory | handoff | decision | reference
 description: Any script that runs agentmon init must set AGENTMON_REGISTRY_DIR.
                                   # one line, <=200 chars — the hook every list shows;
                                   # agents scan descriptions instead of opening bodies
@@ -200,10 +200,12 @@ refs: [WORK-0035]                 # WORK-/BUG- ids, or other notes' names
 (free-form markdown body — no mandated sections; the shape is whatever the knowledge needs)
 ```
 
-The four types answer four questions: **memory** — a durable fact or gotcha about this
-project; **handoff** — state for whoever works next, rewritten as sessions hand over;
-**decision** — a choice and its reasoning, so it is not relitigated; **reference** — a
-pointer to something outside the project. Names may not take a `work-N`/`bug-N` shape or
+The five types answer five questions: **essential** — required reading before a session
+starts work: the index that points at the notes that matter now, surfaced first by every
+list; **memory** — a durable fact or gotcha about this project; **handoff** — state for
+whoever works next, rewritten as sessions hand over; **decision** — a choice and its
+reasoning, so it is not relitigated; **reference** — a pointer to something outside the
+project. Names may not take a `work-N`/`bug-N` shape or
 a Windows reserved device name. `agentmon note update` **replaces** what it is given
 (the body wholesale) — a handoff is the current state, not a diary. `agentmon note
 remove` deletes the file and logs `note_removed`; there is no equivalent for work logs
@@ -292,9 +294,10 @@ before the note's last `updated`).
 5. **Bug board** (vscode issues bar) — filterable list (status, severity, label, assignee),
    open/resolved counts, severity badges.
 6. **Bug detail** — report, comment thread, resolution record, status history.
-7. **Notes** — the shared knowledge, filterable by type (memory / handoff / decision /
-   reference), tag, agent, search; each row shows the author's own one-line description,
-   most recently updated first (the newest handoff is addressed to whoever just arrived).
+7. **Notes** — the shared knowledge, filterable by type (essential / memory / handoff /
+   decision / reference), tag, agent, search; each row shows the author's own one-line
+   description, essential notes first and then most recently updated (the newest handoff
+   is addressed to whoever just arrived; the essentials are addressed to everyone).
 8. **Note detail** — the description as the lead, the free-form body, the related records,
    who wrote it and when it last changed. The app **reads** notes; writing is the CLI's
    and MCP's (agents' hands, not the human's mouse) — the human curates by telling agents,

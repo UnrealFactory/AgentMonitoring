@@ -78,18 +78,21 @@ export const bugStatusLabel = (status: BugStatus): string =>
         : t("word.bug.closed");
 
 /**
- * What each kind of note is for, as its one word: memory / handoff / decision / reference
- * — 지식 / 인계 / 결정 / 참조. The type is the reader's first filter, so the word is the
- * same on the tab, the pill, the palette row and the tooltip that explains it.
+ * What each kind of note is for, as its one word: essential / memory / handoff /
+ * decision / reference — 필수 / 지식 / 인계 / 결정 / 참조. The type is the reader's first
+ * filter, so the word is the same on the tab, the pill, the palette row and the tooltip
+ * that explains it.
  */
 export const noteTypeLabel = (type: NoteType): string =>
-  type === "memory"
-    ? t("word.note.memory")
-    : type === "handoff"
-      ? t("word.note.handoff")
-      : type === "decision"
-        ? t("word.note.decision")
-        : t("word.note.reference");
+  type === "essential"
+    ? t("word.note.essential")
+    : type === "memory"
+      ? t("word.note.memory")
+      : type === "handoff"
+        ? t("word.note.handoff")
+        : type === "decision"
+          ? t("word.note.decision")
+          : t("word.note.reference");
 
 export const severityLabel = (severity: Severity): string =>
   severity === "critical"

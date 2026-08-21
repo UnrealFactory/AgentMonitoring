@@ -574,7 +574,11 @@ export function openStore(root, source = "registry") {
       });
       // Parity: most recently updated first, name asc on ties — the newest handoff is
       // the one addressed to whoever just arrived.
-      out.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity) || a.name.localeCompare(b.name));
+      // Mirror of the core store's contract: essential notes first, then recency.
+      const rank = (n) => (n.type === "essential" ? 0 : 1);
+      out.sort(
+        (a, b) => rank(a) - rank(b) || b.lastActivity.localeCompare(a.lastActivity) || a.name.localeCompare(b.name)
+      );
       return out;
     },
 

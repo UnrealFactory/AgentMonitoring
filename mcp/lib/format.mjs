@@ -82,7 +82,10 @@ export function renderNoteList(records, { total }) {
     `  ${trunc(`${n.name} ${n.type} ${trunc(n.updatedBy || n.agent, 12)}`, ROW_CAP)}`,
     `    ${trunc(n.description, ROW_CAP + 8)}`,
   ]);
-  const header = `notes — ${plural(total, "note")} (name type author / description)`;
+  // Essential notes sort first (the store's contract); the header states the obligation.
+  const essentials = records.filter((n) => n.type === "essential").length;
+  const must = essentials ? ` · read the ${essentials} essential first` : "";
+  const header = `notes — ${plural(total, "note")} (name type author / description)${must}`;
   return fit(header, rows, (shown) =>
     shown < rows.length ? `more exist; filter by type or query` : null
   );

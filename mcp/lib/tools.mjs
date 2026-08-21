@@ -124,8 +124,8 @@ export const TOOLS = [
         title: { type: "string", description: "One specific line." },
         type: {
           type: "string",
-          enum: ["memory", "handoff", "decision", "reference"],
-          description: "memory: durable gotcha/how-to · handoff: state for whoever continues · decision: settled choice and why · reference: pointer to a resource.",
+          enum: ["essential", "memory", "handoff", "decision", "reference"],
+          description: "essential: required session-start reading, the index · memory: durable gotcha · handoff: state for whoever continues · decision: settled choice and why · reference: pointer to a resource.",
         },
         description: { type: "string", description: "One line a scanner reads instead of the body." },
         body: { type: "string", description: "Free-form markdown; write replaces it." },

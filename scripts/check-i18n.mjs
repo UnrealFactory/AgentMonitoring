@@ -324,11 +324,11 @@ const VOCABULARIES = [
   { name: "work status", selector: ".pill[class*='pill-work-']", keys: ["word.work.in_progress", "word.work.done", "word.work.abandoned"] },
   { name: "bug status", selector: ".pill[class*='pill-bug-']", keys: ["word.bug.open", "word.bug.in_progress", "word.bug.resolved", "word.bug.closed"] },
   /* The third record kind's own closed vocabulary: the type pill on a note's page must be
-     exactly the dictionary's word — 지식/인계/결정/참조, never a synonym or a truncation. */
+     exactly the dictionary's word — 필수/지식/인계/결정/참조, never a synonym or a truncation. */
   {
     name: "note type",
     selector: ".pill[class*='pill-note-']",
-    keys: ["word.note.memory", "word.note.handoff", "word.note.decision", "word.note.reference"],
+    keys: ["word.note.essential", "word.note.memory", "word.note.handoff", "word.note.decision", "word.note.reference"],
   },
   {
     name: "severity",

@@ -10,7 +10,8 @@ Nothing in this manual assumes you have read the project's spec or source. Every
 need is here.
 
 **Starting a session?** Run `agentmon note list` first — it is the index of what previous
-agents left for you: gotchas, handoffs, decisions ([Notes](#notes--shared-agent-knowledge)).
+agents left for you, and the **essential** notes it surfaces on top are required reading
+before any work ([Notes](#notes--shared-agent-knowledge)).
 
 **In a hurry?** Jump to [Recipes](#recipes): four copy-pasteable sequences that cover
 recording work, filing a bug, fixing someone else's bug, and leaving knowledge behind.
@@ -28,7 +29,7 @@ is fully supported — go to
 3. [Finding the project](#finding-the-project)
 4. [Identifying yourself](#identifying-yourself)
 5. [The body contract](#the-body-contract) — the part agents get wrong
-6. [Notes — shared agent knowledge](#notes--shared-agent-knowledge) — memory, handoffs, decisions
+6. [Notes — shared agent knowledge](#notes--shared-agent-knowledge) — essential (read first), memory, handoffs, decisions
 7. [Recipes](#recipes) — copy, paste, edit the prose
 8. [Backdating](#backdating) — recording things after they happened
 9. [Command reference](#command-reference)
@@ -329,10 +330,12 @@ you rewrite in place and remove when it stops being true. Every one of those mov
 on the event feed (`note_created` / `note_updated` / `note_removed`), so the file holds
 what is currently true and the feed holds who changed it and when.
 
-**The reading protocol.** Start a session with the index; open only what matters:
+**The reading protocol.** Start a session with the index; the **essential** notes sort
+first and are required reading — read them before any work, then open only what matters:
 
 ```bash
-agentmon note list                    # every note: name, type, author, one-line description
+agentmon note list                    # every note: essential first, then by recency
+agentmon note list --type essential   # only the required reading
 agentmon note list --type handoff     # just the handoffs
 agentmon note view <name>             # the whole note
 agentmon note list --search registry  # matches name, title, description, tags and body
@@ -342,14 +345,18 @@ The one-line `--description` is the whole recall mechanism: it is what the list 
 what you scan instead of opening bodies. Write it as the sentence that tells a stranger
 whether to open the note.
 
-**The four types** — pick the question your note answers:
+**The five types** — pick the question your note answers:
 
 | Type | Answers | Example |
 |---|---|---|
+| `essential` | what must every session read before working — the index that points at the rest | "start here: the release handoff, the registry gotcha, …" |
 | `memory` | a durable fact or gotcha about this project | "gate scripts must set `AGENTMON_REGISTRY_DIR`" |
 | `handoff` | what state is the work in; what should the next agent do first | "P13 list page done; wire the detail page next" |
 | `decision` | what was chosen, what was rejected, and why | "notes use name-as-identity; NOTE-NNNN was rejected because…" |
 | `reference` | where is the external thing | "the design bar is linear.app; reference shots in progress/refs/" |
+
+Keep `essential` rare — one or two notes, MEMORY.md-style: a short index whose refs and
+body point at the notes that matter now. If everything is essential, nothing is.
 
 **The hygiene rules** (they are what keep the notes worth reading):
 
@@ -1059,7 +1066,7 @@ agentmon bug view BUG-0002
 ### `agentmon note add`
 
 ```
-agentmon note add --agent <name> --title <t> --type <memory|handoff|decision|reference>
+agentmon note add --agent <name> --title <t> --type <essential|memory|handoff|decision|reference>
                   --description <one line>
                   (--body <markdown> | --body-file <file|->)
                   [--name <kebab>] [--tags a,b] [--refs ...] [--at <ISO8601>] [--json]

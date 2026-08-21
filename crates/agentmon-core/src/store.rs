@@ -377,9 +377,13 @@ impl Store {
                 meta: detail.meta,
             });
         }
+        // Essential notes are the required reading — they open every list; the rest
+        // follow by recency, so the index sits above the stream it indexes.
+        let rank = |t: NoteType| if t == NoteType::Essential { 0u8 } else { 1 };
         out.sort_by(|a, b| {
-            b.last_activity
-                .cmp(&a.last_activity)
+            rank(a.meta.note_type)
+                .cmp(&rank(b.meta.note_type))
+                .then_with(|| b.last_activity.cmp(&a.last_activity))
                 .then_with(|| a.meta.name.cmp(&b.meta.name))
         });
         Ok(out)

@@ -161,14 +161,16 @@ holds the bug the claim fails and the reply names the way past it.
 
 ### `note`
 
-The shared agent knowledge — memory, handoffs, decisions, references — in one tool.
+The shared agent knowledge — essential, memory, handoff, decision and reference notes —
+in one tool. The essential notes are required session-start reading and sort first.
 
 `action` (`list` default, `read`, `write`, `remove`), `name`, `title`, `type`
-(`memory|handoff|decision|reference`), `description`, `body`, `tags`, `refs`, `query`,
-`full`, `at`
+(`essential|memory|handoff|decision|reference`), `description`, `body`, `tags`, `refs`,
+`query`, `full`, `at`
 
-- `list` — the index: every note's name, type, author and one-line description, newest
-  first. `type` and `query` filter. Run it at the start of a session.
+- `list` — the index: every note's name, type, author and one-line description —
+  essential notes first, then newest. `type` and `query` filter. Run it at the start of
+  a session and read the essentials before working.
 - `read` — one note by `name`; `full: true` for the whole body.
 - `write` — **upsert**: against a `name` that exists it rewrites in place (only the fields
   passed; `body` replaces wholesale), which is the one-fact-one-file discipline; against a

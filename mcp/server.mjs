@@ -89,8 +89,14 @@ async function main() {
   const server = new Server(
     { name: "agentmon", version: version() },
     // Tools only. No resources or prompts: each would be another list the client fetches
-    // and keeps, and neither would say anything the six tools do not.
-    { capabilities: { tools: {} } }
+    // and keeps, and neither would say anything the seven tools do not. The instructions
+    // carry the one session-level rule no single tool description can: read the shared
+    // notes before working — they, not any model-side memory, are the project's memory.
+    {
+      capabilities: { tools: {} },
+      instructions:
+        "Start every session with note(action=\"list\") and read the essential notes it surfaces first — the shared notes are the project's memory across sessions and agents; keep knowledge there, not in any private memory of your own.",
+    }
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));

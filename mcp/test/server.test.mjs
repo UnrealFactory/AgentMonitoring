@@ -530,6 +530,33 @@ let noteName = "";
     assertIncludes(list.text, "AGENTMON_REGISTRY_DIR", "list");
   });
 
+  // The fifth type: essential notes are the required reading, first in every list.
+  const ess = await client.call("note", {
+    action: "write",
+    type: "essential",
+    name: "start-here",
+    title: "Start here — the index",
+    description: "Read this before working; it points at the notes that matter now.",
+    body: "The index every session reads first. Current pointers: the registry gotcha note.",
+  });
+  budgeted("note (write, essential)", ess);
+  check("essential is a legal type and lands in the frontmatter", () => {
+    assertIncludes(ess.text, "start-here", "result");
+    assertIncludes(readFileSync(path.join(DATA, "notes", "start-here.md"), "utf8"), "type: essential", "frontmatter");
+  });
+  const list2 = await client.call("note", { action: "list" });
+  check("the list opens with the essential note and says to read it first", () => {
+    assertIncludes(list2.text, "read the 1 essential first", "header");
+    assert(
+      list2.text.indexOf("start-here") < list2.text.indexOf(noteName),
+      `essential did not sort first:\n${list2.text}`
+    );
+  });
+  {
+    const gone = await client.call("note", { action: "remove", name: "start-here" });
+    check("the essential note removes like any other", () => assert(!gone.isError, gone.text));
+  }
+
   const read = await client.call("note", { action: "read", name: noteName });
   budgeted("note (read)", read);
   check("read returns the summary shape", () => {

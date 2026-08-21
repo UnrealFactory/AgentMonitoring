@@ -1738,11 +1738,14 @@
 .pill-bug-resolved { background: var(--status-resolved-soft); color: var(--status-resolved); }
 .pill-bug-closed { background: var(--status-closed-soft); color: var(--status-closed); }
 
-/* Note types. Not states — a note does not progress — so the four wear categorical hues
-   the app already means things with: indigo for durable knowledge (the brand's own hue),
-   amber for a handoff that wants reading before work starts, purple for a settled
-   decision, blue for a pointer elsewhere (links are blue everywhere else too — grey read
-   as "missing a colour", not as a hue of its own). The word is always beside the colour. */
+/* Note types. Not states — a note does not progress — so the five wear categorical hues
+   the app already means things with: red for the essential notes a session must read
+   before working (the one place "demands attention" is literally the message), indigo
+   for durable knowledge (the brand's own hue), amber for a handoff that wants reading
+   before work starts, purple for a settled decision, blue for a pointer elsewhere (links
+   are blue everywhere else too — grey read as "missing a colour", not as a hue of its
+   own). The word is always beside the colour. */
+.pill-note-essential { background: var(--red-soft); color: var(--red); }
 .pill-note-memory { background: var(--accent-soft); color: var(--accent-text); }
 .pill-note-handoff { background: var(--amber-soft); color: var(--amber); }
 .pill-note-decision { background: var(--purple-soft); color: var(--purple); }
@@ -3229,6 +3232,11 @@ a.rel-row:hover .rel-id {
 }
 
 /* note types, same alphabet as the pills above */
+.sdot-note-essential {
+  background: var(--red);
+  box-shadow: 0 0 0 3px var(--red-soft);
+}
+
 .sdot-note-memory {
   background: var(--accent);
 }

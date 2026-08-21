@@ -100,9 +100,9 @@ AgentMonitoring desktop app reads every such folder the human has registered.\n\
 Work logs answer three questions — ## What, ## Why, ## How — and gain an ## Outcome when they \
 finish. Bugs carry a ## Report, a comment thread and a ## Resolution. The CLI enforces that \
 shape, because a record nobody can reconstruct the work from is worse than no record.\n\n\
-Notes are the third kind: shared agent knowledge (memory, handoff, decision, reference) that \
-can be rewritten and removed as the truth changes — `agentmon note list` is where a session \
-starts.",
+Notes are the third kind: shared agent knowledge (essential, memory, handoff, decision, \
+reference) that can be rewritten and removed as the truth changes — `agentmon note list` is \
+where a session starts, and the essential notes it surfaces first are required reading.",
     after_help = ROOT_AFTER_HELP,
     propagate_version = true,
     disable_help_subcommand = false
@@ -173,7 +173,7 @@ enum Command {
     /// File, claim, discuss and resolve bugs.
     #[command(subcommand)]
     Bug(BugCmd),
-    /// Shared agent notes: memory, handoffs, decisions, references. Read them first.
+    /// Shared agent notes: essential (read first), memory, handoffs, decisions, references.
     #[command(subcommand)]
     Note(NoteCmd),
     /// Bugs and wishes about the AgentMonitoring app itself. Machine-level: works from
@@ -1856,6 +1856,17 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
                 );
                 println!("    --description \"<one line>\" --body \"...\"");
                 return Ok(());
+            }
+            let essentials = notes
+                .iter()
+                .filter(|n| n.meta.note_type == agentmon_core::NoteType::Essential)
+                .count();
+            if essentials > 0 {
+                // The list opens with the reading contract, not just rows: essential
+                // notes are what a session must read before working.
+                println!(
+                    "{essentials} essential note(s) — required reading before you start work.\n"
+                );
             }
             for n in &notes {
                 // The agent shown is whoever the current words belong to — the last

@@ -316,11 +316,12 @@ export const ko: Dict = {
 
   "notes.title": "메모",
   "notes.sub":
-    "에이전트들이 서로에게 남기는 지식 — 지식·인계·결정·참조 메모를, 사실이 바뀌면 그 자리에서 고쳐 씁니다.",
+    "에이전트들이 서로에게 남기는 지식 — 필수·지식·인계·결정·참조 메모를, 사실이 바뀌면 그 자리에서 고쳐 씁니다.",
   "notes.searchPlaceholder": "메모 검색",
   "notes.searchLabel": "메모 검색",
   "notes.sortNote": "최근 수정순 정렬 — 가장 새 인계 메모가 맨 위에 옵니다.",
   "notes.tabAllTip": "이 프로젝트의 모든 메모",
+  "notes.tipEssential": "작업 시작 전에 반드시 읽는 메모 — 나머지를 가리키는 색인",
   "notes.tipMemory": "이 프로젝트에 대한 지속 지식과 주의점",
   "notes.tipHandoff": "다음에 작업할 에이전트를 위한 인계 상태",
   "notes.tipDecision": "여기서 내린 선택과 그 이유",
@@ -827,6 +828,7 @@ export const ko: Dict = {
   "word.work.done": "완료",
   "word.work.abandoned": "중단",
   /* 메모의 네 유형 — 이 파일 머리말의 어휘. */
+  "word.note.essential": "필수",
   "word.note.memory": "지식",
   "word.note.handoff": "인계",
   "word.note.decision": "결정",
@@ -880,7 +882,7 @@ export const ko: Dict = {
   "word.doneOrAbandoned": "완료 또는 중단",
   "word.resolvedOrClosed": "해결됨 또는 닫힘",
   "word.noteTipHere": (n) =>
-    `여기의 메모 ${n}개 — 에이전트들이 서로를 위해 남기는 지식·인계·결정·참조`,
+    `여기의 메모 ${n}개 — 에이전트들이 서로를 위해 남기는 필수·지식·인계·결정·참조`,
 
   /* -- feed verbs ---------------------------------------------------------------- */
 

@@ -384,7 +384,7 @@ fn check_note(path: &Path, problems: &mut Vec<Problem>) {
                 "`updated` ({}) is before `created` ({})",
                 meta.updated, meta.created
             ),
-            "fix whichever timestamp is wrong; the notes list sorts by updated",
+            "fix whichever timestamp is wrong; the notes list sorts by updated (essential first)",
         ));
     }
 }

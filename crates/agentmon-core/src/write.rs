@@ -1510,6 +1510,7 @@ pub fn parse_severity(value: &str) -> Result<Severity> {
 /// the hard part of the flag.
 pub fn parse_note_type(value: &str) -> Result<NoteType> {
     match value.trim().to_ascii_lowercase().as_str() {
+        "essential" | "required" => Ok(NoteType::Essential),
         "memory" => Ok(NoteType::Memory),
         "handoff" => Ok(NoteType::Handoff),
         "decision" => Ok(NoteType::Decision),
@@ -1517,9 +1518,10 @@ pub fn parse_note_type(value: &str) -> Result<NoteType> {
         _ => Err(bad_value(
             "--type",
             value,
-            "one of: memory (a durable fact or gotcha), handoff (state for whoever works \
-             next), decision (a choice and its reasoning), reference (a pointer to \
-             something outside the project)",
+            "one of: essential (required reading at session start — the index), memory \
+             (a durable fact or gotcha), handoff (state for whoever works next), decision \
+             (a choice and its reasoning), reference (a pointer to something outside the \
+             project)",
         )),
     }
 }
@@ -1731,5 +1733,41 @@ mod tests {
 
         assert!(migrate(&vault, "demo", &dest).is_err(), "refuses a second run onto the same target");
         fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn essential_notes_parse_and_open_every_list() {
+        assert_eq!(parse_note_type("essential").unwrap(), NoteType::Essential);
+        assert_eq!(parse_note_type("required").unwrap(), NoteType::Essential, "the natural synonym lands");
+
+        let location = tmp_location("essential");
+        let store = Store::init(
+            &location,
+            &NewProject { name: "Demo".into(), actor: "t".into(), ..Default::default() },
+        )
+        .unwrap();
+        let note = |name: &str, ty: NoteType, at: &str| NewNote {
+            agent: "t".into(),
+            name: Some(name.into()),
+            title: format!("{name} title"),
+            note_type: ty,
+            description: "one line".into(),
+            tags: vec![],
+            refs: vec![],
+            body: "a body long enough to pass validation".into(),
+            at: Some(at.into()),
+        };
+        // The essential note is the OLDEST write; recency alone would bury it.
+        store.add_note(&note("start-here", NoteType::Essential, "2026-08-01T00:00:00Z")).unwrap();
+        store.add_note(&note("fresh-memory", NoteType::Memory, "2026-08-02T00:00:00Z")).unwrap();
+        store.add_note(&note("fresh-handoff", NoteType::Handoff, "2026-08-03T00:00:00Z")).unwrap();
+        let names: Vec<String> =
+            store.notes().unwrap().into_iter().map(|n| n.meta.name).collect();
+        assert_eq!(
+            names,
+            ["start-here", "fresh-handoff", "fresh-memory"],
+            "essential first, then the rest by recency"
+        );
+        fs::remove_dir_all(&location).ok();
     }
 }

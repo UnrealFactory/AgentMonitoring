@@ -35,21 +35,23 @@ import type { NoteSummary, NoteType } from "../lib/types";
 /** The dimensions a filter slices on — and therefore the ones a count can be exempt from. */
 type Dim = "type" | "agent" | "tag";
 
-const TYPES: (NoteType | "all")[] = ["all", "memory", "handoff", "decision", "reference"];
-const TYPE_ORDER: NoteType[] = ["memory", "handoff", "decision", "reference"];
+const TYPES: (NoteType | "all")[] = ["all", "essential", "memory", "handoff", "decision", "reference"];
+const TYPE_ORDER: NoteType[] = ["essential", "memory", "handoff", "decision", "reference"];
 const typeText = (type: string): string =>
   type === "all" ? t("filter.all") : noteTypeLabel(type as NoteType);
 /** Why each tab exists, one sentence — the type IS the reading protocol. */
 const typeTip = (type: string): string =>
-  type === "memory"
-    ? t("notes.tipMemory")
-    : type === "handoff"
-      ? t("notes.tipHandoff")
-      : type === "decision"
-        ? t("notes.tipDecision")
-        : type === "reference"
-          ? t("notes.tipReference")
-          : t("notes.tabAllTip");
+  type === "essential"
+    ? t("notes.tipEssential")
+    : type === "memory"
+      ? t("notes.tipMemory")
+      : type === "handoff"
+        ? t("notes.tipHandoff")
+        : type === "decision"
+          ? t("notes.tipDecision")
+          : type === "reference"
+            ? t("notes.tipReference")
+            : t("notes.tabAllTip");
 const MAX_TAGS = 3;
 
 /** Filters, and their defaults; anything at its default stays out of the URL. */

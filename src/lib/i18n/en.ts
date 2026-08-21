@@ -249,11 +249,12 @@ export const en = {
 
   "notes.title": "Notes",
   "notes.sub":
-    "What the agents know and want each other to know — memory, handoffs, decisions and references, rewritten in place as the truth changes.",
+    "What the agents know and want each other to know — essential, memory, handoff, decision and reference notes, rewritten in place as the truth changes.",
   "notes.searchPlaceholder": "Search notes",
   "notes.searchLabel": "Search notes",
   "notes.sortNote": "Sorted by most recently updated — the newest handoff first.",
   "notes.tabAllTip": "Every note in this project",
+  "notes.tipEssential": "Required reading before starting work — the index that points at the rest",
   "notes.tipMemory": "Durable facts and gotchas about this project",
   "notes.tipHandoff": "State left for whoever works next",
   "notes.tipDecision": "Choices made here, and the reasoning behind them",
@@ -767,6 +768,7 @@ export const en = {
   "word.work.done": "Done",
   "word.work.abandoned": "Abandoned",
   /* What each kind of note is for — the note's first filter, one word each. */
+  "word.note.essential": "Essential",
   "word.note.memory": "Memory",
   "word.note.handoff": "Handoff",
   "word.note.decision": "Decision",
@@ -822,7 +824,7 @@ export const en = {
   "word.resolvedOrClosed": "resolved or closed",
   /** The notes count's tooltip: what the number is, and what a note is. */
   "word.noteTipHere": (n: number) =>
-    `${n === 1 ? "1 note" : `${n} notes`} here — knowledge the agents keep for each other: memory, handoffs, decisions, references`,
+    `${n === 1 ? "1 note" : `${n} notes`} here — knowledge the agents keep for each other: essential, memory, handoff, decision, reference`,
 
   /* -- feed verbs ---------------------------------------------------------------- */
 
