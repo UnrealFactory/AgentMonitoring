@@ -45,8 +45,8 @@ Download `AgentMonitoring_<version>_x64-setup.exe` from the
 [latest release](https://github.com/UnrealFactory/AgentMonitoring/releases/latest) and run
 it — a per-user install, no admin prompt. The installer carries the app, the `agentmon`
 CLI and the MCP server, side by side in one folder. When a newer release is published, the
-app offers it at the foot of the sidebar; the update itself runs in a visible PowerShell
-window (download → reinstall → relaunch) while the app closes underneath it.
+app offers it at the foot of the sidebar; pressing Update shows a small "updating…"
+splash while the installer downloads and reinstalls, then the app reopens by itself.
 
 ## Quickstart
 

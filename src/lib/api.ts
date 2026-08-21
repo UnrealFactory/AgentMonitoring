@@ -454,9 +454,10 @@ export const api = {
   },
 
   /**
-   * Run the update: a visible PowerShell window downloads the installer and reinstalls,
-   * and this app exits underneath it (src-tauri/src/update.rs). Resolving means the
-   * window is up and the exit is scheduled — the card's last words, not its next state.
+   * Run the update: a splash window covers it while a hidden worker downloads the
+   * installer and reinstalls, and this app exits underneath (src-tauri/src/update.rs).
+   * Resolving means the updater is up and the exit is scheduled — the card's last words,
+   * not its next state.
    */
   installAppUpdate: (url: string, version: string): Promise<void> =>
     invokeCommand<null>("install_app_update", { url, version }).then(() => undefined),

@@ -4,10 +4,10 @@
  * Desktop only, and quiet by design: on launch (and every half hour) the Rust side asks
  * GitHub Releases whether a newer version exists (src-tauri/src/update.rs); the ordinary
  * answer — up to date, offline, nothing published — draws nothing at all. Only an actual
- * newer release earns a card, and the card's button does not download in secret: it opens
- * a visible PowerShell window that downloads the installer, reinstalls, and relaunches,
- * while this window closes underneath it. "나중에" folds the card for this run; the next
- * launch (or a newer release) brings it back.
+ * newer release earns a card, and the card's button hands off to a splash window
+ * ("updating to the new version…") while a hidden worker downloads the installer,
+ * reinstalls, and relaunches — this window closes underneath it. "나중에" folds the card
+ * for this run; the next launch (or a newer release) brings it back.
  */
 import { useEffect, useState } from "react";
 import { api, isTauri, type UpdateInfo } from "../lib/api";
@@ -53,7 +53,7 @@ export function AppUpdate() {
     setFailure(null);
     setApplying(true);
     api.installAppUpdate(info.installerUrl!, info.latest).catch((e) => {
-      // PowerShell refused to start — the app is *not* exiting, so give the card back.
+      // The updater refused to start — the app is *not* exiting, so give the card back.
       setApplying(false);
       setFailure(e instanceof Error ? e.message : String(e));
     });

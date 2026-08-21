@@ -369,6 +369,10 @@ let workId = "";
   });
   budgeted("update_work (correction on a closed log)", res);
   check("a closed log still accepts a note", () => assert(!res.isError, res.text));
+  check("the header reports the record's real status, not in_progress (FB-0001)", () => {
+    assertIncludes(res.text, `${workId} done`, "result");
+    assert(!res.text.includes("in_progress"), `a note on a done log claimed in_progress: ${res.text}`);
+  });
 }
 
 let backdatedId = "";

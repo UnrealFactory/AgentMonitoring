@@ -121,7 +121,7 @@ export const en = {
   "update.title": "New version available",
   "update.later": "Later",
   "update.go": "Update",
-  "update.applying": "Updating in the PowerShell window — this app closes in a moment.",
+  "update.applying": "The install window is opening — this app closes in a moment and reopens once it's done.",
   "update.failed": "The update could not start",
 
   /* -- the two menus (right button) ----------------------------------------- */

@@ -184,7 +184,7 @@ export const ko: Dict = {
   "update.title": "새 버전이 나왔어요",
   "update.later": "나중에",
   "update.go": "업데이트",
-  "update.applying": "PowerShell 창에서 업데이트가 진행됩니다 — 이 앱은 곧 닫힙니다.",
+  "update.applying": "설치 창이 열립니다 — 이 앱은 곧 닫히고, 설치가 끝나면 자동으로 다시 열립니다.",
   "update.failed": "업데이트를 시작하지 못했습니다",
 
   /* -- the two menus (right button) ----------------------------------------- */

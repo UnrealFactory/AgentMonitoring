@@ -1741,11 +1741,12 @@
 /* Note types. Not states — a note does not progress — so the four wear categorical hues
    the app already means things with: indigo for durable knowledge (the brand's own hue),
    amber for a handoff that wants reading before work starts, purple for a settled
-   decision, grey for a pointer elsewhere. The word is always beside the colour. */
+   decision, blue for a pointer elsewhere (links are blue everywhere else too — grey read
+   as "missing a colour", not as a hue of its own). The word is always beside the colour. */
 .pill-note-memory { background: var(--accent-soft); color: var(--accent-text); }
 .pill-note-handoff { background: var(--amber-soft); color: var(--amber); }
 .pill-note-decision { background: var(--purple-soft); color: var(--purple); }
-.pill-note-reference { background: var(--grey-soft); color: var(--text-secondary); }
+.pill-note-reference { background: var(--blue-soft); color: var(--blue); }
 
 .pill-sev-critical { background: var(--sev-critical-soft); color: var(--sev-critical); }
 .pill-sev-high { background: var(--sev-high-soft); color: var(--sev-high); }
@@ -3242,8 +3243,7 @@ a.rel-row:hover .rel-id {
 }
 
 .sdot-note-reference {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--text-tertiary);
+  background: var(--blue);
 }
 
 .sdot-missing {

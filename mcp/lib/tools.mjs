@@ -115,14 +115,18 @@ export const TOOLS = [
   {
     name: "note",
     description:
-      "Share knowledge with the other agents — memory, handoff, decision or reference notes: list scans them, read opens one, write adds or rewrites one, remove retires it.",
+      "Share the agents' memory across sessions — list scans it, read opens one, write adds or rewrites, remove retires; knowledge, not history: rewrite a note whose fact changed, remove one that misleads.",
     inputSchema: {
       type: "object",
       properties: {
         action: { type: "string", enum: ["list", "read", "write", "remove"], description: "Default list." },
         name: { type: "string", description: "Kebab-case identity; derived from title on a first write." },
         title: { type: "string", description: "One specific line." },
-        type: { type: "string", enum: ["memory", "handoff", "decision", "reference"] },
+        type: {
+          type: "string",
+          enum: ["memory", "handoff", "decision", "reference"],
+          description: "memory: durable gotcha/how-to · handoff: state for whoever continues · decision: settled choice and why · reference: pointer to a resource.",
+        },
         description: { type: "string", description: "One line a scanner reads instead of the body." },
         body: { type: "string", description: "Free-form markdown; write replaces it." },
         tags: strList,
@@ -264,6 +268,9 @@ async function updateWork(args, ctx) {
   const done = [];
   let file = "";
   let stamp = "";
+  // The header's status. A note alone does not move the record, so take the status the
+  // CLI reports back — appending to a closed log must not read as "in_progress" (FB-0001).
+  let state = "in_progress";
 
   if (note) {
     const a = ["work", "update", id, "--agent", who, "--message-file", "-", "--json"];
@@ -273,6 +280,7 @@ async function updateWork(args, ctx) {
     done.push("note added");
     file = r.json?.path ?? file;
     stamp = r.json?.event?.ts ?? stamp;
+    state = r.json?.record?.status ?? state;
   }
 
   if (outcome) {
@@ -284,6 +292,7 @@ async function updateWork(args, ctx) {
     done.push("closed");
     file = r.json?.path ?? file;
     stamp = r.json?.record?.finished ?? r.json?.event?.ts ?? stamp;
+    state = "done";
   }
 
   if (abandon) {
@@ -294,9 +303,9 @@ async function updateWork(args, ctx) {
     done.push("abandoned");
     file = r.json?.path ?? file;
     stamp = r.json?.record?.finished ?? r.json?.event?.ts ?? stamp;
+    state = "abandoned";
   }
 
-  const state = abandon ? "abandoned" : outcome ? "done" : "in_progress";
   return lines(`${id} ${state} · ${done.join(", ")} · ${who}`, stamp ? `at ${stamp}` : null, file);
 }
 
