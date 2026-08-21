@@ -217,6 +217,11 @@ IDs are immutable and per-project. Parsing must be lenient on unknown keys (forw
 a ref to a note that is later removed simply renders as a missing reference, which is the
 legal lifecycle, not corruption.
 
+In record **prose**, the app links `WORK-`/`BUG-` ids written bare, and notes written as
+`[[note-name]]` — the double brackets are the explicit opt-in (a bare kebab word in a
+sentence is usually just a word). Either shape naming a record that does not exist renders
+as a visibly-stale chip, same as a missing `refs` entry.
+
 ## CLI surface (`agentmon`, gh-style)
 
 ```

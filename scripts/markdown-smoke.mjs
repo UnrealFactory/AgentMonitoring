@@ -313,7 +313,45 @@ console.log("fixtures");
   eq("…with its src", img.src, "assets/dot.png");
 }
 
-// 17. Highlighting may be wrong about a token, never about the bytes.
+// 17. `[[note-name]]` is an explicit cross-reference (the way a live vault indexes its
+//     notes); a bare kebab word in a sentence never links.
+{
+  const nodes = parseInline("decisions live in [[unrealnetcore-mission-decisions]] now");
+  const ref = nodes.find((n) => n.kind === "ref");
+  check("wikilink parsed", !!ref);
+  eq("…to the note's name", ref.id, "unrealnetcore-mission-decisions");
+  eq(
+    "…and flattens back to the source spelling",
+    inlineText(nodes),
+    "decisions live in [[unrealnetcore-mission-decisions]] now"
+  );
+  eq(
+    "a bare kebab word stays text",
+    parseInline("the registry-gate-gotcha note").every((n) => n.kind === "text"),
+    true
+  );
+  // Inside a table cell it is still a ref — the memory-map note that motivated this.
+  const table = parseBlocks("| q | where |\n| - | - |\n| queue | [[unrealnetcore-queue]] |")[0];
+  eq("…in a table cell too", parseInline(table.rows[0][1])[0].kind, "ref");
+  // Not the syntax: spaces, array literals, code spans, bracket-opening link labels.
+  eq(
+    "spaces are not a name",
+    parseInline("[[not a name]]").every((n) => n.kind !== "ref"),
+    true
+  );
+  check(
+    "array literals stay the author's text",
+    inlineText(parseInline("pairs [[0, 1], [2, 3]] here")).includes("[[0, 1], [2, 3]]")
+  );
+  eq("a code span keeps its brackets", parseInline("`[[start-here]]`")[0].kind, "code");
+  check(
+    "…and [[label](url) is still a link",
+    parseInline("[[label](https://x.dev)").some((n) => n.kind === "link")
+  );
+  eq("a bracketed record id is a ref", parseInline("[[WORK-0004]]")[0].kind, "ref");
+}
+
+// 18. Highlighting may be wrong about a token, never about the bytes.
 {
   const samples = [
     ["js", "const n = 1; // half\nconst s = `a ${b} c`;"],

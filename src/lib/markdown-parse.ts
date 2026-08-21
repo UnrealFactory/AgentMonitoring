@@ -17,11 +17,13 @@
  *     is emphasis, and a record id inside any of them is still a cross-reference.
  */
 
-/** An inline run. `ref` is a record id (WORK-0004 / BUG-0002) written in prose. */
+/** An inline run. `ref` is a record id (WORK-0004 / BUG-0002) or a `[[note-name]]`
+ * written in prose. */
 export type Inline =
   | { kind: "text"; text: string }
   | { kind: "code"; text: string }
-  | { kind: "ref"; id: string }
+  /** `wiki` marks a `[[name]]` spelling, so flattening can restore the author's brackets. */
+  | { kind: "ref"; id: string; wiki?: boolean }
   | { kind: "strong"; children: Inline[] }
   | { kind: "em"; children: Inline[] }
   | { kind: "del"; children: Inline[] }
@@ -244,12 +246,23 @@ function withRefs(text: string, out: Inline[]): void {
   if (last < text.length) out.push({ kind: "text", text: text.slice(last) });
 }
 
+/**
+ * `[[note-name]]` — an explicit cross-reference to a note, the shape agents write by
+ * Obsidian habit (a live UnrealNetCore vault indexes its notes exactly this way). Bare
+ * kebab words in prose deliberately never link (they false-positive constantly); the
+ * double brackets are the author saying "this one is a name". The inner shape mirrors
+ * agentmon-core's `validate_note_name` — 2–64 letters/digits/hyphens, no edge hyphens —
+ * so `[[0, 1], [2, 3]]` in a sentence about arrays stays the author's literal text.
+ * `[[WORK-0004]]` also resolves: the renderer routes ids by prefix wherever they came from.
+ */
+const WIKILINK_RE = /^\[\[([A-Za-z0-9][A-Za-z0-9-]{0,62}[A-Za-z0-9])\]\]$/;
+
 const INLINE_RE =
-  /(`[^`]+`)|(!\[[^\]]*\]\([^)\s]+\))|(~~[^~\n]+~~)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(\[[^\]]+\]\([^)\s]+\))/g;
+  /(`[^`]+`)|(!\[[^\]]*\]\([^)\s]+\))|(~~[^~\n]+~~)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(\[\[[A-Za-z0-9][A-Za-z0-9-]{0,62}[A-Za-z0-9]\]\])|(\[[^\]]+\]\([^)\s]+\))/g;
 
 /**
- * Inline spans: `code`, `![alt](src)`, ~~struck~~, **bold**, *italic*, [text](href), and
- * bare record ids. Emphasis containers are parsed recursively, so markup inside them is
+ * Inline spans: `code`, `![alt](src)`, ~~struck~~, **bold**, *italic*, [text](href),
+ * [[note-name]], and bare record ids. Emphasis containers are parsed recursively, so markup inside them is
  * markup and not literal backticks on the screen. `depth` only exists to make runaway
  * nesting impossible.
  */
@@ -281,8 +294,13 @@ export function parseInline(text: string, depth = 0): Inline[] {
     } else if (token.startsWith("*")) {
       out.push({ kind: "em", children: parseInline(token.slice(1, -1), depth + 1) });
     } else {
-      const link = token.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
-      if (link) out.push({ kind: "link", href: link[2], children: parseInline(link[1], depth + 1) });
+      // WIKILINK_RE, not a prefix test: `[[label](url)` is a link whose label opens with a
+      // bracket, and it reaches here starting with the same two characters.
+      const wiki = token.match(WIKILINK_RE);
+      const link = wiki ? null : token.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
+      if (wiki) out.push({ kind: "ref", id: wiki[1], wiki: true });
+      else if (link)
+        out.push({ kind: "link", href: link[2], children: parseInline(link[1], depth + 1) });
       else withRefs(token, out);
     }
     last = m.index + token.length;
@@ -301,7 +319,10 @@ export function inlineText(nodes: Inline[]): string {
         case "code":
           return n.text;
         case "ref":
-          return n.id;
+          // The source spelling: a flattened `[[name]]` keeps its brackets, exactly as the
+          // image below keeps its syntax (scripts/markdown-smoke.mjs sweeps on this too —
+          // a Korean particle welds to the closing brackets: `[[unrealnetcore-queue]]의`).
+          return n.wiki ? `[[${n.id}]]` : n.id;
         case "image":
           // The source syntax, not just the alt: a flattened record must still say which
           // file it showed (scripts/markdown-smoke.mjs sweeps on exactly this).

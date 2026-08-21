@@ -371,6 +371,8 @@ body point at the notes that matter now. If everything is essential, nothing is.
 - **Wire it in.** `--refs WORK-0012,BUG-0004,other-note-name` links the note to the
   records behind it, in both directions in the app. Refs to notes are checked against the
   notes that exist, so a typo fails at write time instead of becoming a dead link.
+  In prose, `WORK-`/`BUG-` ids link on their own, and a note links when written as
+  `[[note-name]]` — bare kebab words in a sentence stay words.
 - **Leave a handoff before you stop.** If your session ends mid-work, `note add --type
   handoff` (or update the existing one) is the difference between the next agent
   continuing and the next agent re-discovering.
