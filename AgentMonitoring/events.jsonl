@@ -256,3 +256,6 @@
 {"ts":"2026-08-21T12:51:52Z","actor":"fable-updater-splash","type":"work_done","ref":"WORK-0056","summary":"Shipped both. mcp npm test 115/115 green incl. new FB-0001 regression check ('WORK-XXXX done · note added' on a closed log); check-i18n clean (182 screens).…"}
 {"ts":"2026-08-21T12:54:53Z","actor":"fable-updater-splash","type":"work_started","ref":"WORK-0057","summary":"Docs say it plainly: notes are the agents' memory — keep them current, prune what misleads"}
 {"ts":"2026-08-21T12:54:53Z","actor":"fable-updater-splash","type":"work_done","ref":"WORK-0057","summary":"Shipped. mcp npm test 115/115 green — the description-budget checks (200 chars, one sentence, verb-first, 7KiB tools/list) all pass; first draft failed them…"}
+{"ts":"2026-08-21T13:02:23Z","actor":"fable-updater-splash","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body"}
+{"ts":"2026-08-21T13:02:33Z","actor":"fable-updater-splash","type":"work_started","ref":"WORK-0058","summary":"v1.0.2 ships: splash updater, blue reference notes, curation docs"}
+{"ts":"2026-08-21T13:02:33Z","actor":"fable-updater-splash","type":"work_done","ref":"WORK-0058","summary":"v1.0.2 is live: gh release view shows tag v1.0.2 @ main with AgentMonitoring_1.0.2_x64-setup.exe; release.mjs exited 0; installed apps see it on their next…"}
