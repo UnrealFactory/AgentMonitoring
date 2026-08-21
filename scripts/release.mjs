@@ -59,9 +59,9 @@ if (!existsSync(join(repoRoot, "mcp", "node_modules"))) {
 log("npm run tauri:build (CLI + app + NSIS installer)…");
 execSync("npm run tauri:build", { cwd: repoRoot, stdio: "inherit" });
 
+// The workspace has one shared target/ at the repo root (src-tauri is a member).
 const installer = join(
   repoRoot,
-  "src-tauri",
   "target",
   "release",
   "bundle",
@@ -71,10 +71,12 @@ const installer = join(
 if (!existsSync(installer)) die(`the build finished but ${installer} is not there`);
 
 // ── 4 · publish ─────────────────────────────────────────────────────────────
-const gh = (args, opts = {}) =>
-  execFileSync("gh", args, { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], ...opts })
-    .toString()
-    .trim();
+const gh = (args, opts = {}) => {
+  // With stdio "inherit" (the create/upload calls, so gh's progress shows) execFileSync
+  // returns null — only stringify what was actually piped back.
+  const out = execFileSync("gh", args, { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], ...opts });
+  return out == null ? "" : out.toString().trim();
+};
 
 let exists = true;
 try {

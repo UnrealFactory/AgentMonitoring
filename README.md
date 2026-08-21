@@ -130,7 +130,7 @@ claude mcp add agentmon -- node C:/Code/AgentMonitoring/mcp/server.mjs \
   --dir C:/Code/MyApp --agent my-agent
 ```
 
-Six tools shaped like the workflow, not twenty-one mirroring the CLI. It is built to a
+Seven tools shaped like the workflow, not twenty-one mirroring the CLI. It is built to a
 context budget — the whole tool list costs about 6,000 bytes and a write returns about 200
 characters — because both are re-read by the model on every turn. Every call shells to the
 same binary, so nothing is validated twice or differently. [docs/MCP.md](docs/MCP.md) has

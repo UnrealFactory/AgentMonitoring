@@ -13,7 +13,7 @@
 //! "no network from the window" shape.
 
 use serde::Deserialize;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 /// Where releases live. The repo is public; the unauthenticated API allows 60 requests an
 /// hour per address, and this app makes two an hour (launch + the half-hour recheck).
@@ -164,7 +164,7 @@ Write-Host ''
 try {{
   $setup = Join-Path $env:TEMP {setup_name}
   Write-Host '{downloading}' -ForegroundColor Cyan
-  Invoke-WebRequest -Uri {q_url} -OutFile $setup
+  Invoke-WebRequest -Uri {q_url} -OutFile $setup -UseBasicParsing
   Write-Host '{waiting}' -ForegroundColor Cyan
   Wait-Process -Id {pid} -Timeout 60 -ErrorAction SilentlyContinue
   Start-Sleep -Milliseconds 500
@@ -300,6 +300,10 @@ mod tests {
         assert!(s.contains(r"C:\Apps\Agent''s\AgentMonitoring.exe"));
         assert!(s.contains("Wait-Process -Id 4242"));
         assert!(s.contains("-ArgumentList '/S'"), "the installer runs silently");
+        // Without this flag, Windows PowerShell 5.1 routes Invoke-WebRequest through the
+        // Internet Explorer DOM — absent on current Windows — and the download dies with
+        // WebCmdletIEDomNotSupportedException before a byte arrives (seen live).
+        assert!(s.contains("-UseBasicParsing"));
         assert!(s.contains("내려받는"), "ko: the console speaks the app's language");
         assert!(update_script("u", "1", "0", "e", 1, false).contains("Downloading"));
     }

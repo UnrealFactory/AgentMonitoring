@@ -6,8 +6,8 @@
     "resources": {
       "../mcp/server.mjs": "mcp/server.mjs",
       "../mcp/package.json": "mcp/package.json",
-      "../mcp/lib/**/*": "mcp/lib/",
-      "../mcp/node_modules/**/*": "mcp/node_modules/"
+      "../mcp/lib": "mcp/lib",
+      "../mcp/node_modules": "mcp/node_modules"
     }
   }
 }

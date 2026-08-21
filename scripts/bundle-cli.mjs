@@ -20,6 +20,13 @@
  * `npm run tauri:build` — deliberately not in tauri.conf.json, because Tauri's build script
  * fails when a declared external binary is missing, and that would make plain
  * `cargo build` / `cargo test --workspace` on a fresh clone fail until this had been run.
+ *
+ * That same release config bundles the MCP server (`resources`: mcp/server.mjs + lib +
+ * node_modules → <install>/mcp/...). Its entries are directory→directory maps on purpose:
+ * a glob source ("../mcp/lib/" + two stars + "/(star)": "mcp/lib/") flattens every match
+ * to its bare file name inside the target — tauri-utils resources.rs treats globs and
+ * directories differently — and a flattened node_modules is 3,500 files collapsing onto
+ * each other. (The glob is paraphrased here because its own characters end a JS comment.)
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, statSync } from "node:fs";
