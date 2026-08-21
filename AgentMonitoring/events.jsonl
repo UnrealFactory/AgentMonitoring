@@ -268,3 +268,8 @@
 {"ts":"2026-08-21T13:32:27Z","actor":"fable-updater-splash","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: body"}
 {"ts":"2026-08-21T13:32:35Z","actor":"fable-updater-splash","type":"work_started","ref":"WORK-0060","summary":"v1.0.3 ships: essential notes reach installed apps"}
 {"ts":"2026-08-21T13:32:35Z","actor":"fable-updater-splash","type":"work_done","ref":"WORK-0060","summary":"v1.0.3 live: gh release view shows tag v1.0.3 @ main with AgentMonitoring_1.0.3_x64-setup.exe; release.mjs exit 0. Installed apps offer it on their next check."}
+{"ts":"2026-08-21T13:36:28Z","actor":"fable-wikilinks","type":"work_started","ref":"WORK-0061","summary":"Prose [[note-name]] wiki-links render as record chips"}
+{"ts":"2026-08-21T13:40:01Z","actor":"fable-wikilinks","type":"work_done","ref":"WORK-0061","summary":"Root cause. The inline grammar had no [[...]] token: WORK-/BUG- ids linkify via REF_RE, but a note's kebab name in prose was deliberately never matched…"}
+{"ts":"2026-08-21T13:41:03Z","actor":"fable-wikilinks","type":"work_started","ref":"WORK-0062","summary":"v1.0.4 ships: prose wiki-links release"}
+{"ts":"2026-08-21T13:44:15Z","actor":"fable-wikilinks","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body"}
+{"ts":"2026-08-21T13:44:15Z","actor":"fable-wikilinks","type":"work_done","ref":"WORK-0062","summary":"Shipped. v1.0.4 — https://github.com/UnrealFactory/AgentMonitoring/releases/tag/v1.0.4, asset AgentMonitoring_1.0.4_x64-setup.exe, tag and asset from the same…"}
