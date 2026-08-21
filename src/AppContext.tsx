@@ -9,49 +9,51 @@ import {
   type ReactNode,
 } from "react";
 import { useParams } from "react-router-dom";
-import { api, subscribeVaultChanges, transport, type VaultHealth } from "./lib/api";
+import { api, subscribeProjectChanges, transport, type DataHealth } from "./lib/api";
 import { loadDesktopLocale, useLocale, type Locale } from "./lib/i18n";
 import { useAsync } from "./lib/useAsync";
-import type { Project, VaultInfo } from "./lib/types";
+import type { Project, ProjectRow } from "./lib/types";
 
 /**
- * The vault stopped answering while the app was showing it.
+ * The data layer stopped answering while the app was showing it.
  *
  * Distinct from `error`, which means nothing could be read at all and the screen says so
  * where the content would be. This is the other case: there is a screenful of real data,
  * it is no longer being kept current, and without a word about it the reader has no way to
- * tell a quiet vault from an unreachable one.
+ * tell a quiet project from an unreachable one.
  */
-export interface VaultTrouble {
+export interface DataTrouble {
   message: string;
   /** When the app last had a good answer, for "showing data from …". */
   since: number;
 }
 
 interface AppData {
-  vault: VaultInfo | undefined;
+  /** Every registered project row, available or not — what the Projects screen lists. */
+  rows: ProjectRow[];
+  /** The readable projects, most recently active first — what the sidebar lists. */
   projects: Project[];
   loading: boolean;
   error: string | undefined;
   reload: () => void;
   transport: "tauri" | "browser";
   /**
-   * Bumped once per vault change (a CLI write, an in-app create, a switch to another
-   * vault). Every screen passes it to `useAsync` as the refresh key, so the whole app
-   * moves together instead of the sidebar knowing something the page does not.
+   * Bumped once per data change (a CLI write, an in-app create, a registry change).
+   * Every screen passes it to `useAsync` as the refresh key, so the whole app moves
+   * together instead of the sidebar knowing something the page does not.
    */
-  vaultNonce: number;
-  /** Force that refresh — for a screen that has just written to the vault itself. */
+  dataNonce: number;
+  /** Force that refresh — for a screen that has just written something itself. */
   refresh: () => void;
-  /** Set while the vault cannot be read and the app is showing the last good data. */
-  trouble: VaultTrouble | null;
+  /** Set while the data cannot be read and the app is showing the last good copy. */
+  trouble: DataTrouble | null;
   /**
    * The language on screen.
    *
-   * Held here for the same reason the vault nonce is: it is a fact the *whole* window
-   * depends on. `t()` reads the locale from a module-level store rather than from this
-   * context (lib/i18n), so that lib/words.ts and lib/format.ts — which are not components —
-   * can call it too; subscribing once at the root is what turns a change to that store into
+   * Held here for the same reason the nonce is: it is a fact the *whole* window depends
+   * on. `t()` reads the locale from a module-level store rather than from this context
+   * (lib/i18n), so that lib/words.ts and lib/format.ts — which are not components — can
+   * call it too; subscribing once at the root is what turns a change to that store into
    * one repaint of every screen, instead of a sidebar in Korean above a board in English.
    */
   locale: Locale;
@@ -71,25 +73,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void loadDesktopLocale();
   }, []);
 
-  const vault = useAsync(() => api.vaultInfo(), [], nonce);
-  const projects = useAsync(() => api.listProjects(), [], nonce);
-  const [health, setHealth] = useState<VaultHealth>({ ok: true });
+  const rows = useAsync(() => api.listProjects(), [], nonce);
+  const [health, setHealth] = useState<DataHealth>({ ok: true });
 
   /**
    * The one subscription in the app. It lives here rather than in the shell because the
    * nonce it feeds is what every page reads: a listener attached beside the router would
-   * refresh the sidebar and leave the screen beside it stale, which is exactly the
-   * self-contradiction the P4 critic caught.
+   * refresh the sidebar and leave the screen beside it stale.
    *
    * The second callback is the honesty half: browser mode reports a poll that failed, and
-   * either transport reports a refresh that failed, so "the vault went away" is a sentence
+   * either transport reports a refresh that failed, so "the data went away" is a sentence
    * the app can say instead of a number that quietly stops moving.
    */
-  useEffect(() => subscribeVaultChanges(refresh, setHealth), [refresh]);
+  useEffect(() => subscribeProjectChanges(refresh, setHealth), [refresh]);
 
   const badRead = health.ok ? undefined : health.error;
-  const badRefresh = vault.refreshError ?? projects.refreshError;
-  const message = badRead ?? badRefresh;
+  const message = badRead ?? rows.refreshError;
 
   // When it started, so the banner can say how old the data on screen is. Kept in a ref
   // rather than state: it must not restart the clock on every re-render.
@@ -98,41 +97,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   if (!message) troubleSince.current = null;
   const trouble = message ? { message, since: troubleSince.current ?? Date.now() } : null;
 
-  // Stable identity: callers subscribe to this, and a function that changed on every load
-  // would tear their effects down and rebuild them each time.
-  const reload = useCallback(() => {
-    vault.reload();
-    projects.reload();
-  }, [vault.reload, projects.reload]);
-
-  const value = useMemo<AppData>(
-    () => ({
-      vault: vault.data,
-      projects: projects.data ?? [],
-      loading: vault.loading || projects.loading,
-      error: vault.error ?? projects.error,
-      reload,
+  const value = useMemo<AppData>(() => {
+    const allRows = rows.data ?? [];
+    return {
+      rows: allRows,
+      projects: allRows.flatMap((r) => (r.available && r.project ? [r.project] : [])),
+      loading: rows.loading,
+      error: rows.error,
+      reload: rows.reload,
       transport: transport(),
-      vaultNonce: nonce,
+      dataNonce: nonce,
       refresh,
       trouble,
       locale,
-    }),
-    [
-      vault.data,
-      vault.loading,
-      vault.error,
-      projects.data,
-      projects.loading,
-      projects.error,
-      reload,
-      nonce,
-      refresh,
-      trouble?.message,
-      trouble?.since,
-      locale,
-    ]
-  );
+    };
+  }, [
+    rows.data,
+    rows.loading,
+    rows.error,
+    rows.reload,
+    nonce,
+    refresh,
+    trouble?.message,
+    trouble?.since,
+    locale,
+  ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -146,22 +135,22 @@ export function useApp(): AppData {
 /**
  * The refresh key every screen's loader takes as its third argument.
  *
- * `useAsync(() => api.listBugs(slug), [slug], useVaultNonce())` is the whole contract: the
- * request is identified by the slug, and re-issued — without a skeleton, without losing
- * scroll — whenever the vault underneath it changes.
+ * `useAsync(() => api.listBugs(id), [id], useDataNonce())` is the whole contract: the
+ * request is identified by the project id, and re-issued — without a skeleton, without
+ * losing scroll — whenever the data underneath it changes.
  */
-export function useVaultNonce(): number {
-  return useApp().vaultNonce;
+export function useDataNonce(): number {
+  return useApp().dataNonce;
 }
 
-/** The project slug from the route, if the current screen is scoped to one. */
-export function useProjectSlug(): string | undefined {
+/** The project id from the route, if the current screen is scoped to one. */
+export function useProjectId(): string | undefined {
   return useParams<{ project: string }>().project;
 }
 
 /** The current project record, once the project list has loaded. */
 export function useCurrentProject(): Project | undefined {
-  const slug = useProjectSlug();
+  const id = useProjectId();
   const { projects } = useApp();
-  return projects.find((p) => p.slug === slug);
+  return projects.find((p) => p.id === id);
 }

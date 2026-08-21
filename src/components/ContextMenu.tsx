@@ -44,7 +44,7 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 import { isDialogOpen, modalDepth, onModalChange, useModalLock } from "../lib/modal";
-import { vaultErrorMessage } from "../lib/api";
+import { projectErrorMessage } from "../lib/api";
 import { writeClipboard } from "../lib/clipboard";
 import { t } from "../lib/i18n";
 import { plainMarks } from "./ui";
@@ -638,7 +638,7 @@ export function useCopy() {
         } catch (err) {
           /* An ApiError from the vault: the same sentence the error card would show,
              in the reader's language, with the marks dropped for a plain toast. */
-          toast(plainMarks(vaultErrorMessage(err instanceof Error ? err.message : String(err))), WARN);
+          toast(plainMarks(projectErrorMessage(err instanceof Error ? err.message : String(err))), WARN);
           return;
         }
         const ok = await writeClipboard(value);

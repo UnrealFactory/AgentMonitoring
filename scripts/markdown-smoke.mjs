@@ -2,8 +2,8 @@
 /**
  * Data-fidelity smoke for the record renderer's parser.
  *
- *   node scripts/markdown-smoke.mjs            # fixtures + every record in ./vault
- *   node scripts/markdown-smoke.mjs --vault X  # …and a vault somewhere else
+ *   node scripts/markdown-smoke.mjs           # fixtures + every record in ./AgentMonitoring
+ *   node scripts/markdown-smoke.mjs --dir X   # …and a project folder somewhere else
  *
  * There is no unit-test runner in this project, and one parser bug already ate a number
  * out of a live record (WORK-0005 update 1: "…503 for three hours, then / 200." rendered
@@ -18,13 +18,14 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { highlightCode } from "../src/lib/highlight.ts";
 import { parseBlocks, parseInline, inlineText } from "../src/lib/markdown-parse.ts";
 import { splitLabelledSections } from "../src/lib/sections.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
-const vaultArg = args.indexOf("--vault");
-const vault = vaultArg >= 0 && args[vaultArg + 1] ? args[vaultArg + 1] : join(root, "vault");
+const dirArg = args.indexOf("--dir");
+const dataDir = dirArg >= 0 && args[dirArg + 1] ? args[dirArg + 1] : join(root, "AgentMonitoring");
 
 let failures = 0;
 let checks = 0;
@@ -46,12 +47,24 @@ function blockText(b) {
       return `${b.lang} ${b.text}`;
     case "list":
       // Markers included: an ordered list that renumbers itself is exactly the failure
-      // this file exists to catch, and the numbers are part of what the reader sees.
+      // this file exists to catch, and the numbers are part of what the reader sees. A
+      // task's `[x]` is state the renderer draws as a box — flattened back to its
+      // source form here, so the sweep can see nothing was eaten.
       return b.items
-        .map((it, i) => `${b.ordered ? `${b.start + i}.` : "-"} ${inlineText(parseInline(it))}`)
+        .map(
+          (it, i) =>
+            `${b.ordered ? `${b.start + i}.` : "-"} ` +
+            `${it.task ? `[${it.task === "done" ? "x" : " "}] ` : ""}` +
+            inlineText(parseInline(it.text))
+        )
         .join("\n");
     case "table":
       return [b.header, ...b.rows].flat().map((c) => inlineText(parseInline(c))).join(" ");
+    case "callout":
+      // The consumed marker line, restored for the sweep.
+      return `[!${b.tone}] ${inlineText(parseInline(b.text))}`;
+    case "figure":
+      return `![${b.alt}](${b.src})`;
     case "rule":
       return "";
     default:
@@ -255,14 +268,77 @@ console.log("fixtures");
   eq("a single label is not a structure", sections.length, 0);
 }
 
+// 13. Task lists carry their state, and the state is not words.
+{
+  const blocks = parseBlocks("- [x] shipped the parser\n- [ ] draw the diagram\n- plain item");
+  eq("one list", blocks.length, 1);
+  eq("…done state read", blocks[0].items[0].task, "done");
+  eq("…open state read", blocks[0].items[1].task, "open");
+  eq("…plain item untouched", blocks[0].items[2].task, null);
+  eq("…marker not left in the words", blocks[0].items[0].text, "shipped the parser");
+}
+
+// 14. Strikethrough nests like the other emphasis containers.
+{
+  const nodes = parseInline("the flag is ~~`legacy_mode`~~ now");
+  const del = nodes.find((n) => n.kind === "del");
+  check("del parsed", !!del);
+  eq("…code inside is code", del.children[0].kind, "code");
+  eq("…and the words survive flattening", inlineText(nodes), "the flag is legacy_mode now");
+}
+
+// 15. Callouts: a bare marker line is state; a marker with trailing words is not the syntax.
+{
+  const blocks = parseBlocks(
+    "> [!warning]\n> The registry is shared.\n\n> [!warning] with trailing words\n> stays a quote"
+  );
+  eq("first is a callout", blocks[0].kind, "callout");
+  eq("…toned", blocks[0].tone, "warning");
+  eq("…with its words", blocks[0].text, "The registry is shared.");
+  eq("second stays a quote", blocks[1].kind, "quote");
+  check("…keeping the marker text", blocks[1].text.includes("[!warning] with trailing words"));
+}
+
+// 16. An image alone in a paragraph is a figure; inside a sentence it is inline data —
+//     never a literal "!" beside a link, which is what the old grammar made of it.
+{
+  const blocks = parseBlocks(
+    "![flow of a delivery](assets/flow.svg)\n\nSee ![icon](assets/dot.png) beside it."
+  );
+  eq("figure block", blocks[0].kind, "figure");
+  eq("…alt kept", blocks[0].alt, "flow of a delivery");
+  eq("…src kept", blocks[0].src, "assets/flow.svg");
+  const img = parseInline("See ![icon](assets/dot.png) beside it.").find((n) => n.kind === "image");
+  check("inline image parsed", !!img);
+  eq("…with its src", img.src, "assets/dot.png");
+}
+
+// 17. Highlighting may be wrong about a token, never about the bytes.
+{
+  const samples = [
+    ["js", "const n = 1; // half\nconst s = `a ${b} c`;"],
+    ["rust", "fn main() { let x: &'static str = \"hi\"; /* done */ }"],
+    ["python", 'def f():\n    return "x"  # done'],
+    ["bash", 'echo "$HOME" # home'],
+    ["sql", "SELECT id FROM runs WHERE state = 'done' -- newest"],
+    ["not-a-language", "anything at all"],
+  ];
+  for (const [lang, code] of samples) {
+    const joined = highlightCode(code, lang)
+      .map((s) => s.text)
+      .join("");
+    eq(`highlight(${lang}) preserves the bytes`, joined, code);
+  }
+}
+
 /* ------------------------------------------------------- every vault record */
 
-console.log("vault sweep");
+console.log("record sweep");
 
 /** Words the renderer is allowed to consume: markdown syntax itself. */
 const SYNTAX = /^[-*_>#`|.)(\[\]]+$/;
-/** Emphasis and code fences are markup, not letters — compare without them. */
-const bare = (s) => s.replace(/[`*]/g, "");
+/** Emphasis, code fences and strikethrough are markup, not letters — compare without. */
+const bare = (s) => s.replace(/[`*~]/g, "");
 
 /** Every word of `source` that `out` does not contain. */
 function lost(source, out) {
@@ -281,6 +357,17 @@ function sweep(file) {
   const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
   const missing = lost(body, bare(rendered(body)));
   check(`${name} loses nothing`, missing.length === 0, missing.slice(0, 6).join(" · "));
+
+  // Every code block in the record, re-joined from its highlight spans: colour may be
+  // wrong about a token, never about the bytes (lib/highlight.ts).
+  for (const b of parseBlocks(body)) {
+    if (b.kind === "code") {
+      const joined = highlightCode(b.text, b.lang)
+        .map((s) => s.text)
+        .join("");
+      check(`${name} highlights without loss`, joined === b.text, `lang=${b.lang}`);
+    }
+  }
 
   // The record page splits Resolution and Outcome into the parts their author labelled.
   // Splitting is a re-arrangement of the author's bytes and must lose none of them either.
@@ -306,16 +393,13 @@ function sweep(file) {
   }
 }
 
-if (!existsSync(vault)) {
-  console.error(`  no vault at ${vault} — fixtures only`);
+if (!existsSync(dataDir)) {
+  console.error(`  no project folder at ${dataDir} — fixtures only`);
 } else {
-  const projects = join(vault, "projects");
-  for (const slug of existsSync(projects) ? readdirSync(projects) : []) {
-    for (const kind of ["worklogs", "bugs"]) {
-      const dir = join(projects, slug, kind);
-      if (!existsSync(dir)) continue;
-      for (const f of readdirSync(dir).filter((f) => f.endsWith(".md"))) sweep(join(dir, f));
-    }
+  for (const kind of ["worklogs", "bugs", "notes"]) {
+    const dir = join(dataDir, kind);
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir).filter((f) => f.endsWith(".md"))) sweep(join(dir, f));
   }
 }
 

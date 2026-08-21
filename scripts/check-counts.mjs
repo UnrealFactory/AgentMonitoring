@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Hold every control on the two triage screens to the number printed on it.
+ * Hold every control on the three list screens — bugs, work, notes — to the number printed on it.
  *
  *   npm run check:counts
  *   node scripts/check-counts.mjs [--port 5173] [--url ORIGIN] [--project relay]
@@ -41,7 +41,7 @@ if (flag("--help") || flag("-h")) {
   node scripts/check-counts.mjs --project relay
 
 Options:
-  --project <slug>   only this project (default: every project in the vault)
+  --project <name>   only this project, by name or id (default: every readable project)
   --port <n>         dev-server port to boot on / check against (default 5173)
   --url <origin>     check an already-running server instead of booting one
   --verbose          print every control probed, not only the failures`);
@@ -60,8 +60,8 @@ const T = (key, ...args) => t(LOCALE, key, ...args);
 const log = (...m) => console.log("[check-counts]", ...m);
 
 const api = async (path) => {
-  const res = await fetch(`${ORIGIN}/vault-api${path}`);
-  if (!res.ok) throw new Error(`GET /vault-api${path} -> ${res.status}`);
+  const res = await fetch(`${ORIGIN}/project-api${path}`);
+  if (!res.ok) throw new Error(`GET /project-api${path} -> ${res.status}`);
   return res.json();
 };
 
@@ -266,11 +266,12 @@ try {
     log,
   }));
 
-  const projects = await api("/projects");
-  const wanted = WANT_PROJECT ? projects.filter((p) => p.slug === WANT_PROJECT) : projects;
+  const projectRows = await api("/projects");
+  const projects = projectRows.filter((r) => r.available && r.project).map((r) => r.project);
+  const wanted = WANT_PROJECT ? projects.filter((p) => p.name === WANT_PROJECT || p.id === WANT_PROJECT) : projects;
   if (!wanted.length) {
     throw new Error(
-      `no project '${WANT_PROJECT}' in this vault. Known slugs: ${projects.map((p) => p.slug).join(", ")}`,
+      `no project '${WANT_PROJECT}' on this list. Known projects: ${projects.map((p) => p.name).join(", ")}`,
     );
   }
 
@@ -284,8 +285,9 @@ try {
   log(`language: ${LOCALE}`);
 
   for (const p of wanted) {
-    const bugs = await api(`/projects/${p.slug}/bugs`);
-    const works = await api(`/projects/${p.slug}/worklogs`);
+    const bugs = await api(`/projects/${p.id}/bugs`);
+    const works = await api(`/projects/${p.id}/worklogs`);
+    const notes = await api(`/projects/${p.id}/notes`);
 
     /**
      * States chosen to make the filters interact: the default view, the dense one, one with
@@ -294,7 +296,7 @@ try {
      */
     const screens = [
       {
-        path: `/p/${p.slug}/bugs`,
+        path: `/p/${p.id}/bugs`,
         board: true,
         states: [
           { q: "", state: { tab: "unresolved" } },
@@ -328,7 +330,7 @@ try {
         ],
       },
       {
-        path: `/p/${p.slug}/work`,
+        path: `/p/${p.id}/work`,
         board: false,
         states: [
           { q: "", state: { status: "all" } },
@@ -339,6 +341,30 @@ try {
         controls: (page) => [
           CONTROLS.buttons(page, {
             key: "status",
+            selector: ".segmented .segment",
+            countSelector: ".segment-count",
+            activeClass: "is-active",
+            deflt: "all",
+          }),
+          CONTROLS.menu(page, { key: "agent", label: T("filter.byAgent"), deflt: "all" }),
+          CONTROLS.menu(page, { key: "tag", label: T("filter.byTag"), deflt: "all" }),
+        ],
+      },
+      /* The notes list — the third record kind, filtered on type instead of status. Same
+         claim as the two screens above: the number on the type tab, on every agent option
+         and on every tag option is the rows choosing it yields, in every filter state. */
+      {
+        path: `/p/${p.id}/notes`,
+        board: false,
+        states: [
+          { q: "", state: { type: "all" } },
+          { q: "?type=memory", state: { type: "memory" } },
+          { q: "?type=reference", state: { type: "reference" } },
+          { q: `?q=${encodeURIComponent(token(notes))}`, state: { type: "all", q: token(notes) } },
+        ],
+        controls: (page) => [
+          CONTROLS.buttons(page, {
+            key: "type",
             selector: ".segmented .segment",
             countSelector: ".segment-count",
             activeClass: "is-active",

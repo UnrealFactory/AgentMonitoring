@@ -16,24 +16,32 @@ const repoRoot = path.resolve(here, "..", "..");
 /** Exit codes agentmon documents. Kept here so error text can name the meaning. */
 export const EXIT_MEANING = {
   0: "ok",
-  1: "vault has problems",
+  1: "project has problems",
   2: "usage or timestamp rejected",
   3: "not found",
   4: "body rejected",
   5: "conflict",
-  6: "invalid vault",
+  6: "invalid project",
   7: "io error",
 };
 
 /**
- * --bin > $AGENTMON_BIN > <repo>/target/release/agentmon[.exe] > agentmon on PATH.
- * Nothing here ever discovers a vault; that is `--vault` only, on purpose.
+ * --bin > $AGENTMON_BIN > <root>/agentmon[.exe] > <repo>/target/{release,debug} >
+ * agentmon on PATH. Nothing here ever discovers a project; that is `--dir` only, on
+ * purpose.
+ *
+ * The bare `<root>` candidate is the installed desktop app: the bundle puts this server
+ * at `<install>/mcp/server.mjs` and the CLI at `<install>/agentmon.exe`
+ * (src-tauri/tauri.release.conf.json), so two levels up from lib/ *is* the folder the
+ * binary sits in. In a source checkout that path is `<repo>/agentmon.exe`, which does
+ * not exist, and the target/ candidates behind it do the work as before.
  */
 export function resolveBinary(explicit) {
   const exe = process.platform === "win32" ? "agentmon.exe" : "agentmon";
   const candidates = [
     explicit,
     process.env.AGENTMON_BIN,
+    path.join(repoRoot, exe),
     path.join(repoRoot, "target", "release", exe),
     path.join(repoRoot, "target", "debug", exe),
   ].filter(Boolean);
@@ -63,7 +71,7 @@ export function trimCliMessage(message, cap = 600) {
  * `stdin` is the prose for whichever --*-file - flag is in `args`.
  */
 export function runCli(cfg, args, stdin) {
-  const argv = ["--vault", cfg.vault, ...args];
+  const argv = ["--dir", cfg.dir, ...args];
   return new Promise((resolve) => {
     let child;
     try {
@@ -99,12 +107,13 @@ export function runCli(cfg, args, stdin) {
 
 /**
  * The server's identity is authoritative: a stray AGENTMON_* in the parent environment
- * must never redirect a write to another vault, project or agent. They are *deleted*
+ * must never redirect a write to another project or agent. They are *deleted*
  * rather than blanked — the CLI reads these as clap defaults, and an empty string is a
  * value, so `AGENTMON_PROJECT=""` reaches the CLI as the project named "".
  */
 function childEnv(cfg) {
-  const env = { ...process.env, AGENTMON_VAULT: cfg.vault };
+  const env = { ...process.env, AGENTMON_DIR: cfg.dir };
+  delete env.AGENTMON_VAULT;
   delete env.AGENTMON_PROJECT;
   delete env.AGENTMON_AGENT;
   return env;

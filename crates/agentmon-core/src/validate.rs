@@ -21,6 +21,10 @@ const MIN_SECTION: usize = 12;
 const MIN_OUTCOME: usize = 24;
 const MIN_REPORT: usize = 24;
 const MIN_RESOLUTION: usize = 24;
+const MIN_NOTE_BODY: usize = 12;
+/// A description is the line every list shows; longer than this and it is a paragraph
+/// that belongs in the body.
+const MAX_DESCRIPTION: usize = 200;
 
 /// Words that are never an acceptable whole answer.
 const PLACEHOLDERS: &[&str] = &[
@@ -43,9 +47,9 @@ A reader who disagrees with the change should still understand the reasoning.
 The approach: the design you chose, the tricky parts, anything a reviewer would
 otherwise have to reverse-engineer from the code."#;
 
-pub const WORK_EXAMPLE: &str = r#"agentmon work start -p agent-monitoring \
+pub const WORK_EXAMPLE: &str = r#"agentmon work start \
   --agent cli-builder \
-  --title "Implement the vault write path" \
+  --title "Implement the record write path" \
   --tags cli,rust \
   --body "$(cat <<'EOF'
 ## What
@@ -55,7 +59,7 @@ all appending to events.jsonl.
 
 ## Why
 
-Every record in the vault today was written by hand. Until the CLI can write, agents
+Every record in this project today was written by hand. Until the CLI can write, agents
 cannot log their own work, which is the entire point of the product.
 
 ## How
@@ -68,15 +72,16 @@ EOF
 pub const OUTCOME_TEMPLATE: &str = r#"What shipped (the concrete artifacts), what changed for the reader of this record,
 and how it was verified — the commands you ran and what they printed."#;
 
-pub const OUTCOME_EXAMPLE: &str = r#"agentmon work done WORK-0003 -p agent-monitoring \
+pub const OUTCOME_EXAMPLE: &str = r#"agentmon work done WORK-0003 \
   --agent cli-builder \
   --files crates/agentmon-core/src/write.rs,crates/agentmon-cli/src/main.rs \
   --outcome "$(cat <<'EOF'
-Shipped the full write path: init, project create, work start/update/done and the bug
-lifecycle, each appending one event to events.jsonl.
+Shipped the full write path: init, work start/update/done and the bug lifecycle, each
+appending one event to events.jsonl.
 
-Verified: cargo test --workspace (31 passed), agentmon doctor exits 0 on the live vault,
-and two concurrent `work start` runs produced WORK-0004 and WORK-0005 with no lost event.
+Verified: cargo test --workspace (31 passed), agentmon doctor exits 0 on the live
+project, and two concurrent `work start` runs produced WORK-0004 and WORK-0005 with no
+lost event.
 EOF
 )""#;
 
@@ -85,7 +90,7 @@ pub const BUG_TEMPLATE: &str = r#"## Report
 What you did (numbered repro steps), what you expected, what actually happened.
 Include the exact command, the error text, and where you saw it."#;
 
-pub const BUG_EXAMPLE: &str = r#"agentmon bug create -p agent-monitoring \
+pub const BUG_EXAMPLE: &str = r#"agentmon bug create \
   --agent cli-builder \
   --title "work done exits 0 but leaves status in_progress" \
   --severity high \
@@ -95,9 +100,9 @@ pub const BUG_EXAMPLE: &str = r#"agentmon bug create -p agent-monitoring \
 
 Repro:
 
-1. agentmon work start -p demo --agent a --title t --body "$(cat template)"
-2. agentmon work done WORK-0001 -p demo --agent a --outcome "shipped it, tests green"
-3. agentmon work view WORK-0001 -p demo
+1. agentmon work start --agent a --title t --body "$(cat template)"
+2. agentmon work done WORK-0001 --agent a --outcome "shipped it, tests green"
+3. agentmon work view WORK-0001
 
 Expected: status is done and the frontmatter has a finished timestamp.
 Actual: exit code is 0, but status is still in_progress and finished is null.
@@ -108,15 +113,15 @@ pub const RESOLUTION_TEMPLATE: &str =
     r#"What the fix was, why it works (the root cause, not just the symptom), and how you
 verified it — the command you ran and its result."#;
 
-pub const RESOLUTION_EXAMPLE: &str = r#"agentmon bug resolve BUG-0002 -p agent-monitoring \
+pub const RESOLUTION_EXAMPLE: &str = r#"agentmon bug resolve BUG-0002 \
   --agent cli-builder \
   --resolution "$(cat <<'EOF'
-Root cause: the Tauri shell never watched the vault, so the desktop app only re-read
-records when a route change re-ran the loader.
+Root cause: the Tauri shell never watched the project folder, so the desktop app only
+re-read records when a route change re-ran the loader.
 
-Fix: src-tauri/src/lib.rs now starts a notify recommended_watcher on <vault>/projects,
-debounces bursts for 250ms and emits `vault-changed` with the affected project slug —
-the event `subscribeVaultChanges()` in src/lib/api.ts already listens for.
+Fix: src-tauri/src/lib.rs now starts a notify recommended_watcher on each registered
+AgentMonitoring folder, debounces bursts for 250ms and emits `project-changed` with the
+project id — the event `subscribeProjectChanges()` in src/lib/api.ts already listens for.
 
 Verified: cargo check -p agentmonitoring is clean; with the app open, `agentmon work
 update ...` in another terminal refreshed the dashboard without navigation.
@@ -355,6 +360,66 @@ pub fn note(raw: &str, subject: &str, example: &str) -> Result<String> {
     Ok(text.to_string())
 }
 
+pub const NOTE_TEMPLATE: &str = r#"Free-form markdown — a note has no mandated sections. Write what a future agent
+(or the human) needs: the fact and why it matters, the handoff state and what to do
+first, the decision and what was rejected, or the link and what it is for."#;
+
+pub const NOTE_EXAMPLE: &str = r#"agentmon note add \
+  --agent cli-builder \
+  --type memory \
+  --title "Gate scripts must sandbox the registry" \
+  --description "Any script that runs agentmon init must set AGENTMON_REGISTRY_DIR to a scratch dir." \
+  --tags gates,registry \
+  --body "$(cat <<'EOF'
+`agentmon init` registers the new project in ~/.AgentMonitoring/registry.json, best
+effort. A gate script that inits a temp fixture therefore bookmarks that fixture in the
+real user registry unless it points AGENTMON_REGISTRY_DIR at a scratch directory first.
+
+Every repo gate does this now — check before adding a new one.
+EOF
+)""#;
+
+/// Validate a note body: free-form markdown, but it must actually say something.
+/// Unlike an outcome or a resolution, `##` headings are welcome — a note is a whole
+/// document, not text inside someone else's section.
+pub fn note_body(raw: &str) -> Result<String> {
+    check_prose(raw, "note body", MIN_NOTE_BODY, NOTE_TEMPLATE, NOTE_EXAMPLE)
+}
+
+/// Validate a note description: the one line every list shows, and the hook an agent
+/// scans to decide whether the body is worth opening.
+pub fn note_description(raw: &str) -> Result<String> {
+    let text = raw.trim();
+    let mut problems: Vec<String> = Vec::new();
+    if text.is_empty() {
+        problems.push("the description is empty".into());
+    } else if is_placeholder(text) {
+        problems.push(format!("the description says only {text:?} — write the real hook"));
+    } else if text.contains('\n') {
+        problems.push(
+            "the description spans multiple lines — keep it to one; detail goes in the body"
+                .into(),
+        );
+    } else if text.chars().count() > MAX_DESCRIPTION {
+        problems.push(format!(
+            "the description is {} characters; the limit is {MAX_DESCRIPTION} — it is a \
+             list line, not a paragraph",
+            text.chars().count()
+        ));
+    }
+    if problems.is_empty() {
+        Ok(text.to_string())
+    } else {
+        Err(reject(
+            "note description",
+            problems,
+            "One line: what this note knows and when to read it, e.g.\n\
+             \"Any script that runs agentmon init must set AGENTMON_REGISTRY_DIR.\"",
+            NOTE_EXAMPLE,
+        ))
+    }
+}
+
 fn check_prose(
     text: &str,
     subject: &str,
@@ -555,6 +620,28 @@ mod tests {
         .unwrap();
         assert_eq!(secs.len(), 2);
         assert_eq!(secs[1].title, "Environment");
+    }
+
+    #[test]
+    fn note_bodies_are_free_form_but_not_empty_or_placeholder() {
+        assert!(note_body("The registry env var must point at a scratch dir in gates.").is_ok());
+        assert!(
+            note_body("## State\n\nP13 list page done.\n\n## Next\n\nWire the detail page.").is_ok(),
+            "headings are allowed — a note is a whole document"
+        );
+        assert!(note_body("").is_err());
+        assert!(note_body("TODO").is_err());
+        let text = note_body("wip").unwrap_err().to_string();
+        assert!(text.contains("agentmon note add"), "example is printed: {text}");
+    }
+
+    #[test]
+    fn note_descriptions_are_one_real_line() {
+        assert!(note_description("Any gate running `agentmon init` must sandbox the registry.").is_ok());
+        assert!(note_description("").is_err());
+        assert!(note_description("n/a").is_err());
+        assert!(note_description("two\nlines").is_err());
+        assert!(note_description(&"long ".repeat(50)).is_err());
     }
 
     #[test]

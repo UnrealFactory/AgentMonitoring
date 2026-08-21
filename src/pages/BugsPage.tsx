@@ -20,7 +20,7 @@
  */
 import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { useProjectSlug, useVaultNonce } from "../AppContext";
+import { useProjectId, useDataNonce } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
 import { api, failureTitle, nothingToRetry, projectGone } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
@@ -102,7 +102,7 @@ function sortNote(groups: { status: BugStatus }[]): string {
 }
 
 export function BugsPage() {
-  const slug = useProjectSlug()!;
+  const projectId = useProjectId()!;
   const {
     data,
     error,
@@ -110,7 +110,7 @@ export function BugsPage() {
     status: httpStatus,
     loading,
     reload,
-  } = useAsync(() => api.listBugs(slug), [slug], useVaultNonce());
+  } = useAsync(() => api.listBugs(projectId), [projectId], useDataNonce());
   /* The project went out from under an open board — deleted in another window, or from this
      window's own sidebar. A board of a project that is not in the vault has nothing left to
      be a board of, so the screen becomes the one the app already draws for a stale project
@@ -177,7 +177,7 @@ export function BugsPage() {
    * `chrome` is the two avatars, the arrow and their gaps, measured: 62px.
    */
   /* The word for an empty assignee is measured with the names, because it is drawn in the
-     same column and it is the app's own vocabulary rather than a slug: "unassigned" is ten
+     same column and it is the app's own vocabulary rather than a projectId: "unassigned" is ten
      narrow characters, `담당자 없음` is five wide ones (see lib/columns.ts). */
   const locale = useLocale();
   const peopleWidth = useMemo(
@@ -290,7 +290,7 @@ export function BugsPage() {
   const clearFilters = useCallback(() => reset(["tab"]), [reset]);
 
   const clearQuery = useCallback(() => set("q", ""), [set]);
-  const href = useCallback((b: BugSummary) => `/p/${slug}/bugs/${b.id}`, [slug]);
+  const href = useCallback((b: BugSummary) => `/p/${projectId}/bugs/${b.id}`, [projectId]);
   const { cursor, setCursor, rowRefs } = useListKeyboard({
     items: flat,
     href,
@@ -524,7 +524,7 @@ export function BugsPage() {
         <Skeleton rows={6} />
       ) : flat.length === 0 ? (
         <BoardEmpty
-          slug={slug}
+          projectId={projectId}
           total={bugs.length}
           tab={tab}
           filtersActive={filtersActive}
@@ -561,11 +561,11 @@ export function BugsPage() {
                             rowRefs.current[i] = el;
                           }}
                           className={`work-row bug-row${cursor === i ? " is-cursor" : ""}`}
-                          to={`/p/${slug}/bugs/${b.id}`}
+                          to={`/p/${projectId}/bugs/${b.id}`}
                           onMouseEnter={() => setCursor(i)}
                           onFocus={() => setCursor(i)}
                           {...contextMenu(() =>
-                            recordMenu({ kind: "bug", id: b.id, title: b.title, slug })
+                            recordMenu({ kind: "bug", id: b.id, title: b.title, projectId })
                           )}
                         >
                           <span className="bug-row-sev">
@@ -646,7 +646,7 @@ function RowLabels({ bug }: { bug: BugSummary }) {
  * and the good one — a board with no open bugs left.
  */
 function BoardEmpty({
-  slug,
+  projectId,
   total,
   tab,
   filtersActive,
@@ -655,7 +655,7 @@ function BoardEmpty({
   onClear,
   onSwitchTab,
 }: {
-  slug: string;
+  projectId: string;
   total: number;
   tab: Tab;
   filtersActive: boolean;
@@ -683,7 +683,7 @@ function BoardEmpty({
           <>
             {t("bugs.empty.hint")}
             <code className="empty-code">
-              agentmon bug create -p {slug} --agent &lt;name&gt; --severity high --title &lt;title&gt;
+              agentmon bug create -p {projectId} --agent &lt;name&gt; --severity high --title &lt;title&gt;
             </code>
           </>
         }

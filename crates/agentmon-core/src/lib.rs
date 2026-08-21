@@ -1,12 +1,12 @@
-//! agentmon-core — the vault schema and the only place that knows how AgentMonitoring
+//! agentmon-core — the project schema and the only place that knows how AgentMonitoring
 //! records are stored on disk.
 //!
-//! The vault is plain files (see SPEC.md, "Vault schema (v1)"):
+//! One project = one `AgentMonitoring` folder inside a directory the human picked,
+//! typically a code repo root (see SPEC.md, "Storage (v2)"):
 //!
 //! ```text
-//! vault/
-//!   vault.json
-//!   projects/<slug>/
+//! <location>/                    # e.g. a code repo — commit the folder with it
+//!   AgentMonitoring/
 //!     project.json
 //!     events.jsonl
 //!     worklogs/WORK-0001.md      # YAML frontmatter + Markdown body
@@ -14,36 +14,50 @@
 //! ```
 //!
 //! Both consumers are thin wrappers over this crate: the `agentmon` CLI writes records,
-//! and the Tauri desktop app reads them. Parsing is deliberately lenient — unknown
-//! frontmatter keys and unknown body sections are preserved rather than rejected, so a
-//! newer writer never bricks an older reader.
+//! and the Tauri desktop app reads them (every registered project at once — the per-user
+//! list lives in [`registry`]). Parsing is deliberately lenient — unknown frontmatter
+//! keys and unknown body sections are preserved rather than rejected, so a newer writer
+//! never bricks an older reader.
 
 pub mod body;
+pub mod claude_md;
 pub mod doctor;
 pub mod error;
+pub mod feedback;
 pub mod fsx;
+pub mod mcp_json;
 pub mod model;
+pub mod registry;
+pub mod store;
 pub mod time;
 pub mod validate;
-pub mod vault;
 pub mod write;
 
+pub use claude_md::{parse_claude_md_lang, write_claude_md, ClaudeMdLang, ClaudeMdOutcome};
 pub use error::{BodyRejection, CoreError, Result};
+pub use mcp_json::{find_mcp_server, write_mcp_json, McpJsonOutcome};
+pub use feedback::{
+    add_feedback, delete_feedback, feedback_dir, list_feedback, parse_feedback_kind,
+    parse_feedback_status, set_feedback_status, view_feedback, NewFeedback,
+};
 pub use model::{
-    AgentActivity, Bug, BugComment, BugDetail, BugStatus, BugSummary, Event, Project, ProjectCounts,
-    ProjectStatus, ProjectStatusSnapshot, Section, Severity, VaultInfo, WorkStatus, WorkUpdate,
-    Worklog, WorklogDetail, WorklogSummary,
+    AgentActivity, Bug, BugComment, BugDetail, BugStatus, BugSummary, Event, FeedbackItem,
+    FeedbackKind, FeedbackStatus, Note, NoteDetail, NoteSummary, NoteType, Project, ProjectCounts,
+    ProjectStatusSnapshot, Section, Severity, WorkStatus, WorkUpdate, Worklog, WorklogDetail,
+    WorklogSummary,
 };
-pub use vault::{next_id, validate_id, validate_slug, Vault};
+pub use registry::{Registry, RegistryEntry};
+pub use store::{next_id, slugify_note_name, validate_id, validate_note_name, Store, DATA_DIR};
 pub use write::{
-    parse_bug_status, parse_project_status, parse_severity, parse_work_status, AbandonWork,
-    Deleted, FinishWork, NewBug, NewProject, StartWork, UpdateProject, Written,
+    data_dir_for, migrate, parse_bug_status, parse_note_type, parse_severity, parse_work_status,
+    AbandonWork, Deleted, FinishWork, NewBug, NewNote, NewProject, RemovedNote, StartWork,
+    UpdateNote, UpdateProject, Written,
 };
 
-/// Vault schema version this build reads and writes.
-pub const SCHEMA_VERSION: u32 = 1;
+/// Schema version this build reads and writes (`"version"` in project.json).
+pub const SCHEMA_VERSION: u32 = 2;
 
-/// The one timestamp format in the vault: UTC, second precision, ISO8601 with `Z`.
+/// The one timestamp format in a project: UTC, second precision, ISO8601 with `Z`.
 ///
 /// Every "last activity" comparison in the app is a string comparison on these, so the
 /// shape has to be identical everywhere — no sub-second digits on some records and not

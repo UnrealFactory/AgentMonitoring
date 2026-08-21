@@ -1,117 +1,75 @@
 /**
- * Projects, and the vault they live in.
+ * Projects — every AgentMonitoring folder this machine knows about.
  *
- * This is the screen that has to make the app's central claim true: the vault is a folder
- * of plain files, so it can be copied to another machine and opened there. That means three
+ * This is the screen that has to make the app's central claim true: a project's records
+ * are one folder of plain files living inside the repo they describe, so they travel with
+ * the code — commit the folder, clone the repo elsewhere, open it here. That means three
  * things have to be visible and workable here rather than documented elsewhere — which
- * vault is open and where it is, how to open a different one, and how to start a project in
- * the one you have.
+ * folders are on the list and where they are, how to open another one, and how to start a
+ * new project in a repo.
  *
  * Everything that writes goes through the same `agentmon-core` code the CLI writes with
  * (see src/lib/api.ts), so a project created here is indistinguishable from one an agent
  * created at a terminal, event log included.
  *
- * The projects are laid out as full-width rows, not as a card grid. A grid of
- * `auto-fill, minmax(330px, 1fr)` gave a vault with two projects three tracks: two cards in
- * the top-left and a dead one on the right, under a section rule that ran 400px past the
- * last card — while /work and /bugs, one click away, fill the same container edge to edge.
- * A vault screen that looks weaker than the list screens beside it is the wrong screen; the
- * row is the form this app already uses for "a list of things you can open".
+ * The projects are laid out as full-width rows, not as a card grid: the row is the form
+ * this app already uses for "a list of things you can open". An *unavailable* row — an
+ * unplugged drive, a moved folder — stays on the list, dimmed, with the name the registry
+ * last saw and a Remove action: a row that silently vanished would look exactly like a
+ * project that never existed.
  */
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useApp, useVaultNonce } from "../AppContext";
+import { useApp, useDataNonce } from "../AppContext";
 import { CommandLine, ErrorState, InlineCode, RichText, Skeleton, Tag } from "../components/ui";
 import { useContextMenu } from "../components/ContextMenu";
 import { useDeleteProject } from "../components/DeleteProject";
 import { recordKind, useProjectMenu, useRecordMenu, type RecordRef } from "../lib/menus";
 import { EventIcon } from "../components/EventIcon";
 import { useNow } from "../components/charts";
-import { api, vaultErrorMessage } from "../lib/api";
+import { api, projectErrorMessage } from "../lib/api";
 import { eventSummary, eventVerb, freshness, refHref, tone, verbAfterRef } from "../lib/dashboard";
 import { formatDate, formatDateTimeUtc, formatRelative } from "../lib/format";
 import { t } from "../lib/i18n";
 import { done, inProgress, unresolvedLabel, unresolvedMeans } from "../lib/words";
 import { useAsync } from "../lib/useAsync";
-import type { Project, VaultEvent } from "../lib/types";
-
-/**
- * A display name a human types, turned into the directory-safe id the vault uses.
- *
- * It can come out **empty**, and that is not a failure of this function: a slug is a
- * directory name in `projects/`, the vault format allows `[a-z0-9_-]` in it (the CLI rejects
- * anything else with `invalid id`), and a name written in Hangul — or Japanese, or Greek —
- * has nothing in it this may keep. `결제 화면 재작성`, which is this app's own Korean
- * placeholder for the name field, derives to `""`.
- *
- * The caller must therefore treat "" as *a name that needs a slug typed for it* and say so;
- * see {@link CreateProject}. It shipped as a dead button instead.
- */
-export function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64);
-}
-
-const SLUG_RE = /^[a-z0-9_-]{1,64}$/;
+import type { Project, ProjectRow as Row, VaultEvent } from "../lib/types";
 
 export function ProjectsPage() {
-  const { vault, projects, loading, error, reload, refresh, transport } = useApp();
+  const { rows, projects, loading, error, reload, refresh, transport } = useApp();
   const navigate = useNavigate();
   const now = useNow(60_000);
   const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  /* A vault that cannot be read is not an empty vault: the screen says which one it is,
-     and how to make one, because "no vault.json" is the state a fresh machine starts in.
-     This is also where the boot screen sends a failed vault resolution (App.tsx), so every
-     control that can end the failure has to be here — Try again for a vault that went away
-     and came back, Open vault folder… for one that is somewhere else, and Create a vault…
-     for a machine that has never had one. */
+  /* The list itself failing to load is not an empty list: the screen says so, with the
+     ways out — Try again, and (on the desktop) the buttons that change what is on the
+     list. Per-folder failures are not this; they are unavailable rows below. */
   if (error) {
     return (
       <div className="page">
         <header className="page-head">
           <div>
-            <h1 className="page-title">{t("vault.noneOpenTitle")}</h1>
-            <p className="page-sub">{t("vault.noneOpenSub")}</p>
+            <h1 className="page-title">{t("proj.title")}</h1>
+            <p className="page-sub">{t("proj.sub")}</p>
           </div>
         </header>
         <ErrorState
-          title={t("vault.readFailed")}
+          title={t("proj.readFailed")}
           message={error}
           onRetry={reload}
           action={
             transport === "tauri" ? (
-              <>
-                <OpenVaultButton
-                  onDone={refresh}
-                  onError={setActionError}
-                  label={t("vault.openFolder")}
-                />
-                <CreateVaultButton onDone={refresh} onError={setActionError} />
-              </>
+              <OpenProjectButton onDone={refresh} onError={setActionError} />
             ) : undefined
           }
         />
         {actionError && (
           <p className="form-error" role="alert">
-            <InlineCode text={vaultErrorMessage(actionError)} />
+            <InlineCode text={projectErrorMessage(actionError)} />
           </p>
         )}
-        {/* The directory the failure was about, taken out of the message two inches above:
-            this screen used to print "<vault dir>" as a placeholder in the init command
-            while the error beside it named the real path. And no "press New project" here —
-            there is no such button on this screen. */}
-        <Onboarding
-          dir={vaultDirFromError(error)}
-          opened={false}
-          canCreate={false}
-          transport={transport}
-        />
+        <Onboarding hasProjects={false} canCreate={false} transport={transport} />
       </div>
     );
   }
@@ -121,68 +79,88 @@ export function ProjectsPage() {
       <header className="page-head">
         <div>
           <h1 className="page-title">{t("proj.title")}</h1>
-          <p className="page-sub">{t("proj.sub")}</p>
+          <p className="page-sub">
+            <RichText text={t("proj.sub")} />
+          </p>
         </div>
         <div className="page-head-actions">
+          {transport === "tauri" && (
+            <OpenProjectButton
+              onDone={(project) => {
+                refresh();
+                if (project) navigate(`/p/${project.id}`);
+              }}
+              onError={setActionError}
+            />
+          )}
           <button className="button button-primary" onClick={() => setCreating((v) => !v)}>
             {t("proj.new")}
           </button>
         </div>
       </header>
 
-      <VaultBar
-        onSwitched={refresh}
-        onError={setActionError}
-        transport={transport}
-        vault={vault}
-        count={projects.length}
-      />
-
       {actionError && (
         <p className="form-error" role="alert">
-          <InlineCode text={vaultErrorMessage(actionError)} />
+          <InlineCode text={projectErrorMessage(actionError)} />
         </p>
       )}
 
       {creating && (
         <CreateProject
-          existing={projects}
+          transport={transport}
           onCancel={() => setCreating(false)}
-          onCreated={(slug) => {
+          onCreated={(id) => {
             setCreating(false);
             refresh();
             // Straight into the project that was just made: the next thing anybody does
             // with a new project is look at it.
-            navigate(`/p/${slug}`);
+            navigate(`/p/${id}`);
           }}
         />
       )}
 
-      {loading && projects.length === 0 ? (
+      {loading && rows.length === 0 ? (
         <Skeleton rows={3} />
-      ) : projects.length === 0 ? (
-        <Onboarding dir={vault?.path ?? null} opened canCreate transport={transport} />
+      ) : rows.length === 0 ? (
+        <Onboarding hasProjects={false} canCreate transport={transport} />
       ) : (
         <>
-          {/* One list, because a project is either in this vault or it is not.
-              There used to be a second section under it — Archived — with a show/hide
-              button and a status that made a project half-present: listed here, missing
-              from the switcher, still readable by its address. It is gone (P12): the
-              projects are the projects, and one you have stopped using is deleted from
-              the row's own menu rather than filed behind a disclosure. */}
           <section className="project-section">
             <header className="project-section-head">
               <h2 className="section-title">{t("proj.inVault")}</h2>
-              <span className="section-count tabular">{t("proj.count", projects.length)}</span>
+              <span className="section-count tabular">{t("proj.count", rows.length)}</span>
             </header>
             <ul className="project-rows">
-              {projects.map((p) => (
-                <ProjectRow key={p.slug} project={p} now={now} />
-              ))}
+              {rows.map((row) =>
+                row.available && row.project ? (
+                  <AvailableRow
+                    key={row.project.id}
+                    project={row.project}
+                    now={now}
+                    transport={transport}
+                    onError={setActionError}
+                    onChanged={refresh}
+                  />
+                ) : (
+                  <UnavailableRow
+                    key={row.path}
+                    row={row}
+                    transport={transport}
+                    onError={setActionError}
+                    onChanged={refresh}
+                  />
+                )
+              )}
             </ul>
           </section>
 
-          <VaultActivity projects={projects} now={now} />
+          {projects.length === 0 && rows.length > 0 ? null : (
+            <AllProjectsActivity projects={projects} now={now} />
+          )}
+          {/* A list with rows but nothing readable still deserves the how-to. */}
+          {projects.length === 0 && (
+            <Onboarding hasProjects={false} canCreate transport={transport} />
+          )}
         </>
       )}
     </div>
@@ -190,103 +168,32 @@ export function ProjectsPage() {
 }
 
 /* ==========================================================================
-   The vault bar
+   Opening an existing project
    ======================================================================= */
 
-/** Where the app got the vault it is showing, in words a human can act on. */
-const SOURCE_TEXT: Record<string, () => string> = {
-  "?vault=": () => t("vault.source.query"),
-  env: () => t("vault.source.env"),
-  flag: () => t("vault.source.flag"),
-  "cwd/vault": () => t("vault.source.cwdVault"),
-  cwd: () => t("vault.source.cwd"),
-  // The installed app launches from wherever the user clicked, so it also looks for a
-  // vault next to its own executable. That is a different sentence from every other row
-  // here — nobody opened it, nobody exported it — and it used to borrow "flag"'s.
-  "exe/vault": () => t("vault.source.exeVault"),
-};
-
-function VaultBar({
-  vault,
-  count,
-  transport,
-  onSwitched,
-  onError,
-}: {
-  vault: ReturnType<typeof useApp>["vault"];
-  count: number;
-  transport: "tauri" | "browser";
-  onSwitched: () => void;
-  onError: (message: string) => void;
-}) {
-  const source = vault?.source ? (SOURCE_TEXT[vault.source]?.() ?? vault.source) : null;
-  return (
-    <section className="vault-bar" aria-label={t("vault.bar")}>
-      <div className="vault-bar-main">
-        <span className="vault-bar-label">{t("vault.label")}</span>
-        <h2 className="vault-bar-name">{vault?.name ?? "—"}</h2>
-        <p className="vault-bar-path mono" title={vault?.path ?? ""}>
-          {vault?.path ?? t("vault.resolving")}
-        </p>
-        {/* Where that path came from. The app used to derive this from the environment
-            after the fact, so it said "cwd/vault" under ?vault= — the one place a human
-            could check which vault they were on was also the one place that could lie. */}
-        {source && <p className="vault-bar-source">{t("vault.openedFrom", source)}</p>}
-      </div>
-      <dl className="vault-bar-facts">
-        <div>
-          {/* One number, and the sidebar's is the same one. It used to read "Active
-              projects" with an "· 1 archived" aside beside it, because the two counters
-              counted different sets; with archiving gone they count the vault. */}
-          <dt>{t("vault.projects")}</dt>
-          <dd className="tabular">{count}</dd>
-        </div>
-        <div>
-          <dt>{t("vault.schema")}</dt>
-          <dd className="tabular">v{vault?.version ?? "—"}</dd>
-        </div>
-        <div>
-          <dt>{t("vault.created")}</dt>
-          <dd className="tabular">{formatDate(vault?.createdAt)}</dd>
-        </div>
-        <div>
-          <dt>{t("vault.readBy")}</dt>
-          <dd>{transport === "tauri" ? t("vault.readerDesktop") : t("vault.readerBrowser")}</dd>
-        </div>
-      </dl>
-      <div className="vault-bar-actions">
-        {transport === "tauri" ? (
-          <OpenVaultButton onDone={onSwitched} onError={onError} label={t("vault.openFolder")} />
-        ) : (
-          <span className="vault-bar-hint">
-            <RichText text={t("vault.browserHint")} />
-          </span>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function OpenVaultButton({
+/**
+ * The desktop's picker for a project that already exists somewhere on this machine — a
+ * repo cloned from another computer, a drive plugged back in. Registers it and shows it.
+ */
+function OpenProjectButton({
   onDone,
   onError,
-  label,
 }: {
-  onDone: () => void;
+  onDone: (project: Project | null) => void;
   onError: (message: string) => void;
-  label: string;
 }) {
   const [busy, setBusy] = useState(false);
   return (
     <button
       className="button"
       disabled={busy}
+      title={t("proj.openTip")}
       onClick={async () => {
         setBusy(true);
         try {
-          const info = await api.chooseVaultFolder();
+          const project = await api.openProject();
           // null is a dismissed dialog, which is not an event worth reporting.
-          if (info) onDone();
+          if (project) onDone(project);
         } catch (err) {
           onError(err instanceof Error ? err.message : String(err));
         } finally {
@@ -294,45 +201,7 @@ function OpenVaultButton({
         }
       }}
     >
-      {busy ? t("vault.opening") : label}
-    </button>
-  );
-}
-
-/**
- * `agentmon init`, for a window.
- *
- * The app is installed, there is no vault on the machine, and the error the resolver wrote
- * offers a flag, an environment variable and a command — three things a human looking at a
- * window cannot do. This makes the vault where they say, opens it, and leaves them on the
- * empty-vault screen with a New project button.
- */
-function CreateVaultButton({
-  onDone,
-  onError,
-}: {
-  onDone: () => void;
-  onError: (message: string) => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <button
-      className="button button-primary"
-      disabled={busy}
-      title={t("vault.createTip")}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          const info = await api.createVaultFolder();
-          if (info) onDone();
-        } catch (err) {
-          onError(err instanceof Error ? err.message : String(err));
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      {busy ? t("vault.creating") : t("vault.createVault")}
+      {busy ? t("proj.opening") : t("proj.openFolder")}
     </button>
   );
 }
@@ -341,11 +210,22 @@ function CreateVaultButton({
    One project
    ======================================================================= */
 
-function ProjectRow({ project: p, now }: { project: Project; now: number }) {
+function AvailableRow({
+  project: p,
+  now,
+  transport,
+  onError,
+  onChanged,
+}: {
+  project: Project;
+  now: number;
+  transport: "tauri" | "browser";
+  onError: (message: string) => void;
+  onChanged: () => void;
+}) {
   /* The row says "Last activity 3h ago" rather than "Active 3h ago": in this app `active`
-     was a project's *status*, and one word may not also mean "somebody wrote something
-     recently" (lib/words.ts). The status is gone; the sentence stays, because the
-     distinction it was drawn for is still true of the dot beside it. */
+     was once a project's *status*, and one word may not also mean "somebody wrote
+     something recently" (lib/words.ts). */
   const state = freshness(p.counts.lastActivity, now);
   const c = p.counts;
 
@@ -362,7 +242,7 @@ function ProjectRow({ project: p, now }: { project: Project; now: number }) {
       <article className="project-row" {...contextMenu(() => projectMenu(p))}>
         <div className="project-row-main">
           <div className="project-row-head">
-            <Link className="project-link" to={`/p/${p.slug}`}>
+            <Link className="project-link" to={`/p/${p.id}`}>
               <span
                 className={`sdot sdot-${state}`}
                 title={
@@ -381,7 +261,11 @@ function ProjectRow({ project: p, now }: { project: Project; now: number }) {
               />
               <span className="project-name">{p.name}</span>
             </Link>
-            <span className="project-slug mono">{p.slug}</span>
+            {/* The folder, where the slug used to be: the fact that tells two projects
+                with one name apart is where each one lives. */}
+            <span className="project-slug mono" title={p.path}>
+              {p.path}
+            </span>
             {p.tags.length > 0 && (
               <span className="tag-row">
                 {p.tags.map((t) => (
@@ -447,15 +331,16 @@ function ProjectRow({ project: p, now }: { project: Project; now: number }) {
               </>
             )}
           </span>
-          {/* The one place Delete is visible without a right-click.
-              The row's menu carries it too, and so does every other surface that names a
-              project — but this is the screen a reader comes to *to manage* projects, and
-              an action that exists only behind a gesture is an action half the readers of
-              this app will never find. Muted until it is pointed at, because a red word on
-              every row is a screen shouting about the one thing it hopes nobody does; and
-              it opens the same dialog the menu opens, so there is one confirmation, in one
-              place, with one set of words. */}
+          {/* The two ways off this list, side by side and nothing alike: Remove keeps every
+              file and can be undone by opening the folder again, Delete is the app's one
+              destructive act and opens the dialog that says so. Visible here without a
+              right-click, because this is the screen a reader comes to *to manage*
+              projects, and an action that exists only behind a gesture is an action half
+              the readers of this app will never find. */}
           <span className="project-actions">
+            {transport === "tauri" && (
+              <RemoveButton path={p.path} onError={onError} onChanged={onChanged} />
+            )}
             <button
               className="link-button is-danger"
               onClick={() => requestDelete(p)}
@@ -470,26 +355,105 @@ function ProjectRow({ project: p, now }: { project: Project; now: number }) {
   );
 }
 
+/**
+ * A registered path whose folder cannot be read right now — an unplugged drive, a moved
+ * folder, a repo whose AgentMonitoring folder was deleted by hand. The row stays, dimmed,
+ * so the reader can see *what* is missing; Remove is the way to say it is gone for good.
+ */
+function UnavailableRow({
+  row,
+  transport,
+  onError,
+  onChanged,
+}: {
+  row: Row;
+  transport: "tauri" | "browser";
+  onError: (message: string) => void;
+  onChanged: () => void;
+}) {
+  return (
+    <li>
+      <article className="project-row is-unavailable" title={t("proj.unavailableHint")}>
+        <div className="project-row-main">
+          <div className="project-row-head">
+            <span className="project-link">
+              <span className="sdot sdot-stale" role="img" aria-label={t("proj.unavailable")} />
+              <span className="project-name">{row.name ?? t("proj.unavailable")}</span>
+            </span>
+            <span className="project-slug mono" title={row.path}>
+              {row.path}
+            </span>
+          </div>
+          <p className="project-desc">
+            <span className="project-desc-none">
+              {row.error ? projectErrorMessage(row.error) : t("proj.unavailableHint")}
+            </span>
+          </p>
+        </div>
+        <div className="project-row-end">
+          <span className="project-actions">
+            {transport === "tauri" && (
+              <RemoveButton path={row.path} onError={onError} onChanged={onChanged} />
+            )}
+          </span>
+        </div>
+      </article>
+    </li>
+  );
+}
+
+function RemoveButton({
+  path,
+  onError,
+  onChanged,
+}: {
+  path: string;
+  onError: (message: string) => void;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      className="link-button"
+      disabled={busy}
+      title={t("proj.removeHint")}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await api.removeProject(path);
+          onChanged();
+        } catch (err) {
+          onError(err instanceof Error ? err.message : String(err));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {t("proj.remove")}
+    </button>
+  );
+}
+
 /* ==========================================================================
-   The vault, as one timeline
+   Every project, as one timeline
    ======================================================================= */
 
 /**
- * Every project's events, merged.
+ * Every readable project's events, merged.
  *
- * The per-project dashboards answer "what is happening here"; this screen is the only place
- * that can answer "what is happening in this vault at all" — which is the question somebody
- * arriving at the app with two projects actually has. It is also what makes this a screen
- * rather than a menu: the same real records, read across the folder instead of inside one.
+ * The per-project dashboards answer "what is happening here"; this screen is the only
+ * place that can answer "what is happening at all" — which is the question somebody
+ * arriving at the app with two projects actually has. Bounded per project (SPEC v2,
+ * performance): the merge reads a tail of each feed, never a whole history.
  */
-function VaultActivity({ projects, now }: { projects: Project[]; now: number }) {
-  const nonce = useVaultNonce();
-  const key = projects.map((p) => p.slug).join(",");
+function AllProjectsActivity({ projects, now }: { projects: Project[]; now: number }) {
+  const nonce = useDataNonce();
+  const key = projects.map((p) => p.id).join(",");
   const feed = useAsync(
     async () => {
       const per = await Promise.all(
         projects.map(async (p) =>
-          (await api.listEvents(p.slug, 12)).map((event) => ({ event, project: p }))
+          (await api.listEvents(p.id, 12)).map((event) => ({ event, project: p }))
         )
       );
       return per
@@ -521,8 +485,8 @@ function VaultActivity({ projects, now }: { projects: Project[]; now: number }) 
       ) : (
         <ol className="vault-feed">
           {feed.data.map(({ event, project }, i) => (
-            <VaultFeedRow
-              key={`${project.slug}-${event.ts}-${event.ref ?? ""}-${i}`}
+            <FeedRow
+              key={`${project.id}-${event.ts}-${event.ref ?? ""}-${i}`}
               event={event}
               project={project}
               now={now}
@@ -535,13 +499,8 @@ function VaultActivity({ projects, now }: { projects: Project[]; now: number }) 
 }
 
 /**
- * One line of that timeline — and the one row in the app the right button used to miss.
- *
- * These are the dashboard's feed rows read across the folder instead of inside one: same
- * class, same layout, same `refHref` destination. For two rounds they were also the only
- * record rows in the product with no menu on them, which is invisible rather than annoying —
- * the document-level suppressor eats the right-click either way, so the gesture a reader
- * learned one screen over just stops working here, with nothing on screen to say why.
+ * One line of that timeline — the dashboard's feed rows read across every project instead
+ * of inside one: same class, same layout, same `refHref` destination.
  *
  * The menu is about **what the row points at**, which is the rule everywhere else: a line
  * about a record opens that record's menu, and a line about the project itself — created,
@@ -551,7 +510,7 @@ function VaultActivity({ projects, now }: { projects: Project[]; now: number }) 
  * record menu it opens is the only one in the app whose Copy link can name a project other
  * than the one the sidebar is standing in.
  */
-function VaultFeedRow({
+function FeedRow({
   event,
   project,
   now,
@@ -560,14 +519,14 @@ function VaultFeedRow({
   project: Project;
   now: number;
 }) {
-  const recordHref = refHref(project.slug, event.ref);
-  const href = recordHref ?? `/p/${project.slug}`;
+  const recordHref = refHref(project.id, event.ref);
+  const href = recordHref ?? `/p/${project.id}`;
   /* No title: this feed reads events, and an event line carries a summary, not a title.
      Copy title reads the record when it is clicked (src/lib/menus.ts) rather than this
      screen reading every project's records in case somebody right-clicks one row. */
   const record: RecordRef | null =
     recordHref && event.ref
-      ? { kind: recordKind(event.ref), id: event.ref, slug: project.slug }
+      ? { kind: recordKind(event.ref), id: event.ref, projectId: project.id }
       : null;
   const contextMenu = useContextMenu();
   const recordMenu = useRecordMenu();
@@ -617,44 +576,43 @@ function VaultFeedRow({
    ======================================================================= */
 
 function CreateProject({
-  existing,
+  transport,
   onCancel,
   onCreated,
 }: {
-  existing: Project[];
+  transport: "tauri" | "browser";
   onCancel: () => void;
-  onCreated: (slug: string) => void;
+  onCreated: (id: string) => void;
 }) {
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugEdited, setSlugEdited] = useState(false);
+  const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
+  const [claudeMd, setClaudeMd] = useState<"" | "ko" | "en">("");
+  /* On by default: the app is the one party that knows where its bundled mcp/server.mjs
+     lives, so registering it here is the difference between tools that are simply there
+     and a CLAUDE.md that assigns the agent homework. */
+  const [mcpJson, setMcpJson] = useState(true);
+  const [mcpAgent, setMcpAgent] = useState("claude");
   const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const effectiveSlug = slugEdited ? slug : slugify(name);
-  const taken = existing.some((p) => p.slug === effectiveSlug);
-  const slugOk = SLUG_RE.test(effectiveSlug);
   const named = name.trim().length > 0;
-  const ready = named && slugOk && !taken;
-  /**
-   * A name that cannot become a slug — the state the form used to answer with silence.
-   *
-   * `slugify` keeps `[a-z0-9]` and nothing else, so every Hangul name derives to "": type
-   * this dictionary's own Korean example, `결제 화면 재작성`, and the slug box stays empty,
-   * 프로젝트 만들기 is disabled, and the hint under the box went on reading the neutral
-   * "projects/ 아래의 디렉터리 이름입니다" — the branch that says why is `effectiveSlug &&
-   * !slugOk`, and "" is falsy, so it never fired. English typed the same name and was ready
-   * in the same breath. The reader this app defaults to Korean for was the only one who had
-   * to already know the rule before the button would work (P9 rounds 7 and 8 critics).
-   *
-   * The constraint itself is right — a slug is a directory name and the CLI rejects `결제`
-   * with `invalid id` — so the fix is the sentence, not the rule: the hint states it, names
-   * the box to type in, and the button stays disabled and explained rather than dead. The
-   * moment a slug is typed by hand the form is ready, whatever language the name is in.
-   */
-  const slugNeeded = named && !effectiveSlug;
+  const located = location.trim().length > 0;
+  const ready = named && located;
+
+  const pick = async () => {
+    setPicking(true);
+    try {
+      const picked = await api.pickProjectLocation();
+      if (picked) setLocation(picked);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPicking(false);
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -663,15 +621,18 @@ function CreateProject({
     setError(null);
     try {
       const project = await api.createProject({
-        slug: effectiveSlug,
+        location: location.trim(),
         name: name.trim(),
         description: description.trim(),
         tags: tags
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean),
+        claudeMd: claudeMd || undefined,
+        mcpJson,
+        mcpAgent: mcpJson ? mcpAgent.trim() || undefined : undefined,
       });
-      onCreated(project.slug);
+      onCreated(project.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setBusy(false);
@@ -683,8 +644,8 @@ function CreateProject({
       <div className="create-head">
         <h2 className="section-title">{t("proj.newTitle")}</h2>
         <p className="create-sub">
-          <RichText text={t("proj.form.writes", effectiveSlug || "<slug>")} />{" "}
-          <code>agentmon project create</code> {t("proj.form.writesTail")}
+          <RichText text={t("proj.form.writes", location.trim() || "<location>")} />{" "}
+          <code>agentmon init</code> {t("proj.form.writesTail")}
         </p>
       </div>
 
@@ -700,31 +661,26 @@ function CreateProject({
           />
         </label>
         <label className="field">
-          <span className="field-label">{t("proj.form.slug")}</span>
-          <input
-            className="input mono"
-            value={effectiveSlug}
-            placeholder={t("proj.form.slugPlaceholder")}
-            /* Typed here, the slug is taken as typed and at once — `slugEdited` stops the
-               name from deriving over it — so a Korean name plus `gyeolje` is ready before
-               the reader lifts a finger. That path always worked; nothing on screen said it
-               was there. */
-            aria-invalid={taken || slugNeeded || (!!effectiveSlug && !slugOk) || undefined}
-            onChange={(e) => {
-              setSlugEdited(true);
-              setSlug(e.target.value);
-            }}
-          />
-          {/* Four states, one line, and the empty one is a state rather than the absence of
-              one: taken, unusable, missing-and-underivable, and the plain rule. */}
-          <span className={`field-hint${taken || slugNeeded || (effectiveSlug && !slugOk) ? " is-blocking" : ""}`}>
-            {taken
-              ? t("proj.form.slugTaken")
-              : effectiveSlug && !slugOk
-                ? t("proj.form.slugBad")
-                : slugNeeded
-                  ? t("proj.form.slugNeeded")
-                  : t("proj.form.slugHint")}
+          <span className="field-label">{t("proj.form.location")}</span>
+          {/* The one field this redesign exists for. On the desktop the picker fills it
+              (and typing a path by hand still works); in browser mode there is no native
+              dialog, so the path is typed. */}
+          <span className="field-with-action">
+            <input
+              className="input mono"
+              value={location}
+              placeholder={t("proj.form.locationPlaceholder")}
+              aria-invalid={!located && named ? true : undefined}
+              onChange={(e) => setLocation(e.target.value)}
+            />
+            {transport === "tauri" && (
+              <button className="button" type="button" disabled={picking} onClick={pick}>
+                {t("proj.form.browse")}
+              </button>
+            )}
+          </span>
+          <span className={`field-hint${named && !located ? " is-blocking" : ""}`}>
+            {named && !located ? t("proj.form.locationNeeded") : t("proj.form.locationHint")}
           </span>
         </label>
         <label className="field field-wide">
@@ -745,11 +701,72 @@ function CreateProject({
             onChange={(e) => setTags(e.target.value)}
           />
         </label>
+        <div className="field field-wide claude-md-field">
+          <span className="field-label" id="claude-md-label">
+            {t("proj.form.claudeMd")}
+          </span>
+          {/* Each language names itself in its own language, like the locale toggle: the
+              label tells you what the generated file will read like. */}
+          <div
+            className="segmented claude-md-choice"
+            role="radiogroup"
+            aria-labelledby="claude-md-label"
+          >
+            {(["", "ko", "en"] as const).map((v) => (
+              <button
+                key={v || "none"}
+                type="button"
+                role="radio"
+                aria-checked={claudeMd === v}
+                className={`segment${claudeMd === v ? " is-active" : ""}`}
+                onClick={() => setClaudeMd(v)}
+              >
+                {v === "" ? t("proj.form.claudeMdNone") : v === "ko" ? "한국어" : "English"}
+              </button>
+            ))}
+          </div>
+          <span className="field-hint">{t("proj.form.claudeMdHint")}</span>
+        </div>
+        <div className="field field-wide claude-md-field">
+          <span className="field-label" id="mcp-json-label">
+            {t("proj.form.mcpJson")}
+          </span>
+          <div className="mcp-json-row">
+            <div
+              className="segmented claude-md-choice"
+              role="radiogroup"
+              aria-labelledby="mcp-json-label"
+            >
+              {([true, false] as const).map((v) => (
+                <button
+                  key={String(v)}
+                  type="button"
+                  role="radio"
+                  aria-checked={mcpJson === v}
+                  className={`segment${mcpJson === v ? " is-active" : ""}`}
+                  onClick={() => setMcpJson(v)}
+                >
+                  {v ? t("proj.form.mcpJsonOn") : t("proj.form.mcpJsonOff")}
+                </button>
+              ))}
+            </div>
+            {mcpJson && (
+              <input
+                className="input mcp-agent-input"
+                value={mcpAgent}
+                aria-label={t("proj.form.mcpAgent")}
+                placeholder="claude"
+                onChange={(e) => setMcpAgent(e.target.value)}
+              />
+            )}
+          </div>
+          <span className="field-hint">{t("proj.form.mcpJsonHint")}</span>
+        </div>
       </div>
 
       {error && (
         <p className="form-error" role="alert">
-          <InlineCode text={vaultErrorMessage(error)} />
+          <InlineCode text={projectErrorMessage(error)} />
         </p>
       )}
 
@@ -766,53 +783,28 @@ function CreateProject({
 }
 
 /* ==========================================================================
-   Empty vault
+   Onboarding
    ======================================================================= */
-
-/**
- * The directory a failed vault read was about, read out of the message the backend wrote.
- *
- * Every one of those messages ends in the exact `agentmon init --vault "<dir>"` for the
- * directory it could not open, because it is written for somebody who can act on it. That
- * makes the path recoverable here, so the onboarding below can print the command for the
- * real directory instead of a `<vault dir>` placeholder under an error that names it.
- */
-function vaultDirFromError(message: string): string | null {
-  const quoted = /--vault "([^"]+)"/.exec(message)?.[1];
-  if (quoted) return quoted;
-  /* The other shape, and the one an installed app hits first: nothing was passed at all, so
-     the resolver reports where it looked — "no vault found at C:\…\vault: looked for
-     vault.json in C:\…\vault and C:\…". The first path is the directory it would have used,
-     which is the one to offer to create. */
-  return /no vault found at (.+?): looked for/.exec(message)?.[1] ?? null;
-}
 
 /** A path with a space in it is one argument only if it is quoted. */
 const shellArg = (path: string): string => (/\s/.test(path) ? `"${path}"` : path);
 
 /**
- * The first screen of a vault nobody has written to yet.
+ * The first screen of a machine with nothing on the list yet.
  *
- * Not a shrug and an icon: the three commands that take this vault from empty to a project
- * with a record in it, in the order they are run, with the real flags. An agent reading the
+ * Not a shrug and an icon: the commands that take a repo from bare to a project with a
+ * record in it, in the order they are run, with the real flags. An agent reading the
  * manual and a human reading this screen should be typing the same thing.
- *
- * `opened` is whether there is a vault at all (an empty one, or none); `dir` is the best
- * known directory for the command lines either way; `canCreate` is whether the screen this
- * is on actually carries the New project button it would otherwise point at.
  */
 function Onboarding({
-  dir: known,
-  opened,
+  hasProjects,
   canCreate,
   transport,
 }: {
-  dir: string | null;
-  opened: boolean;
+  hasProjects: boolean;
   canCreate: boolean;
   transport: "tauri" | "browser";
 }) {
-  const dir = known ?? "<vault dir>";
   /* The installed app ships the CLI beside itself but not on PATH, so a line beginning
      `agentmon` is not a line the reader can run. When the app knows where its binary is,
      the commands name it; in browser mode and in dev builds the bare name is right. */
@@ -825,27 +817,16 @@ function Onboarding({
   return (
     <section className="onboarding">
       <h2 className="onboarding-title">
-        {opened ? t("onboard.titleEmpty") : t("onboard.titleNone")}
+        {hasProjects ? t("onboard.titleEmpty") : t("onboard.titleNone")}
       </h2>
       <p className="onboarding-sub">
         <RichText text={t("onboard.sub")} />
       </p>
       <ol className="onboarding-steps">
-        {!opened && (
-          <li>
-            <p className="onboarding-step">{t("onboard.stepVault")}</p>
-            <CommandLine text={`${agentmon} init --vault "${dir}" --name "My vault"`} />
-            {transport === "tauri" && (
-              <p className="onboarding-note">
-                <RichText text={t("onboard.noteCreateVault")} />
-              </p>
-            )}
-          </li>
-        )}
         <li>
           <p className="onboarding-step">{t("onboard.stepProject")}</p>
           <CommandLine
-            text={`${agentmon} project create checkout-rewrite --name "Checkout rewrite" --description "Replace the legacy checkout flow."`}
+            text={`cd /your/repo && ${agentmon} init --name "Checkout rewrite" --description "Replace the legacy checkout flow."`}
           />
           {canCreate && (
             <p className="onboarding-note">
@@ -856,7 +837,7 @@ function Onboarding({
         <li>
           <p className="onboarding-step">{t("onboard.stepWork")}</p>
           <CommandLine
-            text={`${agentmon} work start -p checkout-rewrite --agent your-agent --title "Port the cart summary" --body-file note.md`}
+            text={`${agentmon} work start --agent your-agent --title "Port the cart summary" --body-file note.md`}
           />
           <p className="onboarding-note">
             <RichText text={t("onboard.noteBody")} />

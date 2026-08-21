@@ -8,12 +8,14 @@
  * those records — an agent writing "see BUG-0004" is making a cross-reference, and a
  * reader should be able to follow it. Ids inside code spans stay literal.
  */
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useContextMenu } from "../components/ContextMenu";
+import { api } from "./api";
+import { highlightCode } from "./highlight";
 import { t } from "./i18n";
 import { recordKind, useRecordMenu } from "./menus";
-import { parseBlocks, parseInline, type Inline } from "./markdown-parse";
+import { parseBlocks, parseInline, type CalloutTone, type Inline } from "./markdown-parse";
 
 /** Resolves a record id to a route, or null when we are not inside a project. */
 type RefLinker = ((id: string) => string) | null;
@@ -41,10 +43,18 @@ interface Opts {
   figures?: boolean;
   /** The right button, for the chips. Null outside a project, where they are not links. */
   chipMenu?: ChipMenu | null;
+  /** Whose folder `![alt](assets/x.svg)` reads from. Null outside a project. */
+  projectId?: string | null;
 }
 
-export function recordPath(slug: string, id: string): string {
-  return id.toUpperCase().startsWith("BUG") ? `/p/${slug}/bugs/${id}` : `/p/${slug}/work/${id}`;
+export function recordPath(projectId: string, id: string): string {
+  const upper = id.toUpperCase();
+  if (upper.startsWith("BUG")) return `/p/${projectId}/bugs/${id}`;
+  if (upper.startsWith("WORK")) return `/p/${projectId}/work/${id}`;
+  // Anything else is a note's kebab name — the third shape a ref can take. Prose chips
+  // never carry one (the ref regex matches WORK/BUG ids only, deliberately: kebab words in
+  // sentences would false-positive constantly); this branch serves the Related rows.
+  return `/p/${projectId}/notes/${id}`;
 }
 
 /** A number, with the unit an agent writes against it: `3`, `11ms`, `2,900`, `30s`. */
@@ -124,6 +134,18 @@ function renderInline(nodes: Inline[], keyPrefix: string, opts: Opts): ReactNode
         return <strong key={key}>{renderInline(node.children, key, opts)}</strong>;
       case "em":
         return <em key={key}>{renderInline(node.children, key, opts)}</em>;
+      case "del":
+        return <del key={key}>{renderInline(node.children, key, opts)}</del>;
+      case "image":
+        return (
+          <RecordImage
+            key={key}
+            projectId={opts.projectId ?? null}
+            src={node.src}
+            alt={node.alt}
+            inline
+          />
+        );
       case "link": {
         // Only web links are followed; anything else keeps its text and loses its href.
         const safe = /^(https?:|mailto:)/i.test(node.href);
@@ -143,8 +165,8 @@ function renderInline(nodes: Inline[], keyPrefix: string, opts: Opts): ReactNode
 
 /** The linker for the project in the current route, or null outside a project. */
 function useRefLinker(): RefLinker {
-  const slug = useParams<{ project: string }>().project;
-  return slug ? (id) => recordPath(slug, id) : null;
+  const projectId = useParams<{ project: string }>().project;
+  return projectId ? (id) => recordPath(projectId, id) : null;
 }
 
 /**
@@ -157,11 +179,11 @@ function useRefLinker(): RefLinker {
  * the factory is built once here and handed down through the render options.
  */
 function useChipMenu(): ChipMenu | null {
-  const slug = useParams<{ project: string }>().project;
+  const projectId = useParams<{ project: string }>().project;
   const contextMenu = useContextMenu();
   const recordMenu = useRecordMenu();
-  if (!slug) return null;
-  return (id, title) => contextMenu(() => recordMenu({ kind: recordKind(id), id, title, slug }));
+  if (!projectId) return null;
+  return (id, title) => contextMenu(() => recordMenu({ kind: recordKind(id), id, title, projectId }));
 }
 
 /**
@@ -172,7 +194,10 @@ export function InlineMarkdown({ source }: { source: string }) {
   const link = useRefLinker();
   const titles = useContext(RecordTitles);
   const chipMenu = useChipMenu();
-  return <>{renderInline(parseInline(source ?? ""), "il", { link, titles, chipMenu })}</>;
+  const projectId = useParams<{ project: string }>().project ?? null;
+  return (
+    <>{renderInline(parseInline(source ?? ""), "il", { link, titles, chipMenu, projectId })}</>
+  );
 }
 
 export function Markdown({
@@ -190,7 +215,8 @@ export function Markdown({
   const link = useRefLinker();
   const titles = useContext(RecordTitles);
   const chipMenu = useChipMenu();
-  const opts: Opts = { link, titles, figures, chipMenu };
+  const projectId = useParams<{ project: string }>().project ?? null;
+  const opts: Opts = { link, titles, figures, chipMenu, projectId };
   const blocks = parseBlocks(source ?? "");
   return (
     <div className={className ? `prose ${className}` : "prose"}>
@@ -205,12 +231,53 @@ export function Markdown({
             return (
               <pre key={key} data-lang={block.lang || undefined}>
                 {block.lang && <span className="code-lang">{block.lang}</span>}
-                <code>{block.text}</code>
+                <code>
+                  {/* Four token colours, hand-rolled (lib/highlight.ts). The spans
+                      concatenate to exactly the source — colour may be wrong about a
+                      token, never about the bytes. */}
+                  {highlightCode(block.text, block.lang).map((s, j) =>
+                    s.tone ? (
+                      <span key={j} className={`tok-${s.tone}`}>
+                        {s.text}
+                      </span>
+                    ) : (
+                      s.text
+                    )
+                  )}
+                </code>
               </pre>
             );
           case "list": {
             const items = block.items.map((item, j) => (
-              <li key={`${key}-${j}`}>{renderInline(parseInline(item), `${key}-${j}`, opts)}</li>
+              <li key={`${key}-${j}`} className={item.task ? `task-item is-${item.task}` : undefined}>
+                {/* `- [x]` draws its state as a box. Decorative to a screen reader — the
+                    words of the item carry the meaning, exactly as they do in the file. */}
+                {item.task && (
+                  <span className="task-box" aria-hidden="true">
+                    {item.task === "done" && (
+                      <svg viewBox="0 0 10 10" focusable="false">
+                        <path
+                          d="M2 5.4 L4.1 7.4 L8 3"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </span>
+                )}
+                {/* One span, not bare inline nodes: the task row lays out as flex (box
+                    beside words), and unwrapped siblings would each become a flex item. */}
+                {item.task ? (
+                  <span className="task-text">
+                    {renderInline(parseInline(item.text), `${key}-${j}`, opts)}
+                  </span>
+                ) : (
+                  renderInline(parseInline(item.text), `${key}-${j}`, opts)
+                )}
+              </li>
             ));
             // start={N} rather than a counted list: the author's numbers are data.
             return block.ordered ? (
@@ -224,6 +291,29 @@ export function Markdown({
           case "quote":
             return (
               <blockquote key={key}>{renderInline(parseInline(block.text), key, opts)}</blockquote>
+            );
+          case "callout":
+            return (
+              <aside key={key} className={`prose-callout is-${block.tone}`}>
+                <span className="callout-title">
+                  <CalloutIcon tone={block.tone} />
+                  {CALLOUT_LABEL[block.tone]()}
+                </span>
+                {block.text && (
+                  <p className="callout-body">
+                    {renderInline(parseInline(block.text), key, opts)}
+                  </p>
+                )}
+              </aside>
+            );
+          case "figure":
+            return (
+              <RecordImage
+                key={key}
+                projectId={projectId}
+                src={block.src}
+                alt={block.alt}
+              />
             );
           case "rule":
             return <hr key={key} />;
@@ -258,5 +348,143 @@ export function Markdown({
         }
       })}
     </div>
+  );
+}
+
+/* ==========================================================================
+   Images a body references — and the two things an image src may not be
+   ======================================================================= */
+
+/** Callout labels, flat keys so the dictionary types them like every other string. */
+const CALLOUT_LABEL: Record<CalloutTone, () => string> = {
+  note: () => t("md.calloutNote"),
+  tip: () => t("md.calloutTip"),
+  important: () => t("md.calloutImportant"),
+  warning: () => t("md.calloutWarning"),
+  caution: () => t("md.calloutCaution"),
+};
+
+function CalloutIcon({ tone }: { tone: CalloutTone }) {
+  const path = {
+    note: "M8 7.2 v4 M8 4.6 v0.6", // i
+    tip: "M8 3.2 a3.1 3.1 0 0 1 1.6 5.8 l-0.3 1.6 h-2.6 l-0.3 -1.6 A3.1 3.1 0 0 1 8 3.2 Z M6.9 12.4 h2.2", // bulb
+    important: "M8 4 v5 M8 11.2 v0.6", // ! (in a circle below)
+    warning: "M8 2.6 L14.2 13 H1.8 Z M8 6.4 v3 M8 10.8 v0.4", // triangle
+    caution: "M5.4 2.4 h5.2 L14 5.8 v4.4 L10.6 13.6 H5.4 L2 10.2 V5.8 Z M8 5.4 v3.4 M8 10.6 v0.4", // octagon
+  }[tone];
+  const circled = tone === "note" || tone === "important";
+  return (
+    <svg className="callout-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      {circled && <circle cx="8" cy="8" r="5.8" fill="none" stroke="currentColor" strokeWidth="1.4" />}
+      <path
+        d={path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * `![alt](src)`, resolved and drawn — or refused out loud.
+ *
+ * Three cases, by what the src is:
+ *  * a **relative path** — a file inside this project's AgentMonitoring folder, fetched
+ *    through {@link api.recordAssetSrc} (agentmon-core's path lock) and shown in an
+ *    `<img>`, where even an SVG executes nothing. This is the supported, documented case.
+ *  * an **http(s) URL** — never fetched. This app loads nothing from the network at
+ *    runtime (SPEC), and an image tag is also a tracking pixel; the reference degrades to
+ *    a link, so nothing the author wrote is lost.
+ *  * anything else (`data:`, a drive letter, …) — the source text, kept as code.
+ *
+ * A file that cannot be read is a visible refusal, not a blank: a missing diagram is a
+ * mis-citation the reader deserves to see, exactly like a stale record chip. The backend's
+ * own sentence rides in the tooltip; browser mode's `<img>` error has no sentence, so the
+ * box speaks for it.
+ */
+function RecordImage({
+  projectId,
+  src,
+  alt,
+  inline = false,
+}: {
+  projectId: string | null;
+  src: string;
+  alt: string;
+  inline?: boolean;
+}) {
+  const external = /^https?:/i.test(src);
+  const relative = !external && !src.includes(":");
+  const [state, setState] = useState<{ url?: string; error?: string }>({});
+
+  useEffect(() => {
+    if (!projectId || !relative) return;
+    let dead = false;
+    let revoke = () => {};
+    void api
+      .recordAssetSrc(projectId, src)
+      .then((asset) => {
+        if (dead) {
+          asset.revoke();
+          return;
+        }
+        revoke = asset.revoke;
+        setState({ url: asset.url });
+      })
+      .catch((err: unknown) => {
+        if (!dead) setState({ error: err instanceof Error ? err.message : String(err) });
+      });
+    return () => {
+      dead = true;
+      revoke();
+      setState({});
+    };
+  }, [projectId, src, relative]);
+
+  if (external) {
+    const link = (
+      <a href={src} target="_blank" rel="noreferrer noopener">
+        {alt || src}
+      </a>
+    );
+    return inline ? link : <p>{link}</p>;
+  }
+  if (!relative || !projectId) {
+    // No folder to read from (the projects screen), or a src shape the backends would
+    // refuse anyway: keep the author's bytes on screen instead of a dead tag.
+    const literal = <code>{`![${alt}](${src})`}</code>;
+    return inline ? literal : <p>{literal}</p>;
+  }
+
+  if (state.error) {
+    const broken = (
+      <span className="prose-img-broken" title={state.error}>
+        {t("md.imageFailed")} <code>{src}</code>
+      </span>
+    );
+    return inline ? broken : <p>{broken}</p>;
+  }
+  // Still loading: nothing for a beat. A spinner that flashes on every local read would
+  // be more motion than information.
+  if (!state.url) return null;
+
+  const img = (
+    <img
+      className={inline ? "prose-img-inline" : "prose-img"}
+      src={state.url}
+      alt={alt}
+      loading="lazy"
+      onError={() => setState({ error: t("md.imageFailed") })}
+    />
+  );
+  if (inline) return img;
+  return (
+    <figure className="prose-figure">
+      {img}
+      {alt && <figcaption>{alt}</figcaption>}
+    </figure>
   );
 }

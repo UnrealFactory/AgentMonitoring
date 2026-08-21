@@ -5,7 +5,7 @@
  *   npm run screenshot
  *
  * Boots the Vite dev server itself (browser mode, so no Tauri build is needed), waits for
- * the vault API to actually answer, discovers which records exist instead of hard-coding
+ * the project API to actually answer, discovers which records exist instead of hard-coding
  * ids, and waits for a content selector on each screen before shooting. There is not a
  * single fixed sleep in here: on a slow machine the script waits longer, it does not
  * photograph a half-painted page.
@@ -14,7 +14,7 @@
  *   --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
  *   --only a,b       $SHOT_ONLY     comma list of screen keys, e.g. dashboard,bug-detail
  *   --out <dir>      $SHOT_OUT      where the PNGs go (default progress/shots)
- *   --project <slug> $SHOT_PROJECT  which project to shoot (default: the richest one)
+ *   --project <name> $SHOT_PROJECT  which project to shoot, by name or id (default: the richest one)
  *   --record <ids>   $SHOT_RECORD   WORK-/BUG- ids the detail screens should open
  *   --keep-server    leave the dev server running afterwards
  *   --url <origin>   shoot against an already-running server (implies --keep-server)
@@ -63,16 +63,18 @@ Options (flag, or environment variable):
   --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
   --width <n>      $SHOT_WIDTH    viewport width (default 1600; the shell is judged at 1152 too)
   --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail,
-                                  projects, palette, palette-vault, menu-project, menu-record,
-                                  menu-dashboard, menu-switcher, menu-vault-feed
+                                  notes-list, note-detail, projects, palette, palette-vault,
+                                  menu-project, menu-record, menu-dashboard, menu-switcher,
+                                  menu-vault-feed
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
   --locale <ko|en> $SHOT_LOCALE   language to photograph the app in (default ko)
-  --project <slug> $SHOT_PROJECT  project to shoot (default: the one with the most records)
+  --project <name> $SHOT_PROJECT  project to shoot, by name or id (default: the one with the most records)
   --suffix <s>     $SHOT_SUFFIX   append to every file name, so a second project's screens
                                   sit beside the first: --project relay --suffix -relay
   --record <ids>   $SHOT_RECORD   record ids for the detail screens, e.g. WORK-0009 or
-                                  WORK-0009,BUG-0004 (default: a finished work log and a
-                                  resolved bug, so Outcome and Resolution are on screen)
+                                  WORK-0009,BUG-0004,some-note-name (default: a finished
+                                  work log, a resolved bug and the note with the most refs,
+                                  so Outcome, Resolution and Related are on screen)
   --url <origin>                  shoot an already-running server (implies --keep-server)
   --keep-server                   leave the dev server running afterwards
 
@@ -101,7 +103,7 @@ const shotsDir = outArg
   : join(root, "progress", "shots");
 const KEEP = flag("--keep-server") || args.includes("--url");
 const WANT_PROJECT = (value("--project", process.env.SHOT_PROJECT) || "").trim();
-/* The canonical set is shot for every project in the vault, and two projects cannot both
+/* The canonical set is shot for every project on the list, and two projects cannot both
    be "dashboard.png". A suffix keeps them in one directory, in one alphabetical list, on
    the progress page. */
 const SUFFIX = (value("--suffix", process.env.SHOT_SUFFIX) || "").trim();
@@ -127,14 +129,14 @@ const FULL_PAGE_CSS = `
   .app { height: auto; min-height: 100vh; }
   .main, .sidebar { overflow: visible; }
   .sidebar-foot { margin-top: var(--space-6); }
-  .detail-side { position: static; }
+  .detail-side, .detail-side .side-card { position: static; }
 `;
 
 const log = (...m) => console.log("[screenshot]", ...m);
 
 const api = async (path) => {
-  const res = await fetch(`${ORIGIN}/vault-api${path}`);
-  if (!res.ok) throw new Error(`GET /vault-api${path} -> ${res.status} ${await res.text()}`);
+  const res = await fetch(`${ORIGIN}/project-api${path}`);
+  if (!res.ok) throw new Error(`GET /project-api${path} -> ${res.status} ${await res.text()}`);
   return res.json();
 };
 
@@ -185,18 +187,19 @@ try {
     log,
   });
   server = started.server;
-  log(`vault: ${started.vault.name} (${started.vault.path})`);
 
-  const projects = await api("/projects");
-  if (!projects.length) throw new Error("the vault has no projects — nothing to screenshot");
+  const rows = await api("/projects");
+  const projects = rows.filter((r) => r.available && r.project).map((r) => r.project);
+  if (!projects.length) throw new Error("no readable projects — nothing to screenshot");
+  log(`projects: ${projects.map((p) => p.name).join(", ")}`);
 
   let project;
   if (WANT_PROJECT) {
-    project = projects.find((p) => p.slug === WANT_PROJECT);
+    project = projects.find((p) => p.name === WANT_PROJECT || p.id === WANT_PROJECT);
     if (!project) {
       throw new Error(
-        `no project '${WANT_PROJECT}' in this vault (--project/$SHOT_PROJECT). ` +
-          `Known slugs: ${projects.map((p) => p.slug).join(", ")}`,
+        `no project '${WANT_PROJECT}' on this list (--project/$SHOT_PROJECT). ` +
+          `Known projects: ${projects.map((p) => p.name).join(", ")}`,
       );
     }
   } else {
@@ -205,15 +208,16 @@ try {
     project = [...projects].sort(
       (a, b) =>
         b.counts.workTotal + b.counts.bugsTotal - (a.counts.workTotal + a.counts.bugsTotal) ||
-        a.slug.localeCompare(b.slug),
+        a.name.localeCompare(b.name),
     )[0];
   }
-  const slug = project.slug;
+  const slug = project.id;
 
   const works = await api(`/projects/${slug}/worklogs`);
   const bugs = await api(`/projects/${slug}/bugs`);
-  if (!works.length) throw new Error(`project '${slug}' has no worklogs — nothing to screenshot`);
-  if (!bugs.length) throw new Error(`project '${slug}' has no bugs — nothing to screenshot`);
+  const notes = await api(`/projects/${slug}/notes`);
+  if (!works.length) throw new Error(`project '${project.name}' has no worklogs — nothing to screenshot`);
+  if (!bugs.length) throw new Error(`project '${project.name}' has no bugs — nothing to screenshot`);
 
   /** `--record WORK-0009,BUG-0004` pins what the detail screens open; each id must exist. */
   const pick = (ids, prefix) => {
@@ -222,21 +226,24 @@ try {
     const found = (prefix === "WORK" ? works : bugs).find((r) => r.id === wanted);
     if (!found) {
       throw new Error(
-        `no ${wanted} in project '${slug}' (--record/$SHOT_RECORD). ` +
+        `no ${wanted} in project '${project.name}' (--record/$SHOT_RECORD). ` +
           `Known ids: ${(prefix === "WORK" ? works : bugs).map((r) => r.id).join(", ")}`,
       );
     }
     return found;
   };
-  const unknownPrefix = WANT_RECORDS.filter((id) => !/^(WORK|BUG)-\d+$/.test(id));
+  /* A note's id is its kebab name — the third shape --record accepts. */
+  const unknownPrefix = WANT_RECORDS.filter(
+    (id) => !/^(WORK|BUG)-\d+$/.test(id) && !/^[A-Z0-9][A-Z0-9-]{1,63}$/.test(id),
+  );
   if (unknownPrefix.length) {
     throw new Error(
-      `--record/$SHOT_RECORD wants ids like WORK-0009 or BUG-0004, got ${unknownPrefix.join(", ")}`,
+      `--record/$SHOT_RECORD wants ids like WORK-0009, BUG-0004 or a note's kebab name, got ${unknownPrefix.join(", ")}`,
     );
   }
 
   // Prefer records that exercise the full page: a finished work log has an Outcome,
-  // a resolved bug has a Resolution.
+  // a resolved bug has a Resolution, and the best note is the most wired-in one.
   const work =
     pick(WANT_RECORDS, "WORK") ??
     works.find((w) => w.status === "done" && w.updateCount > 0) ??
@@ -247,7 +254,25 @@ try {
     bugs.find((b) => (b.status === "resolved" || b.status === "closed") && b.commentCount > 0) ??
     bugs.find((b) => b.status === "resolved" || b.status === "closed") ??
     bugs[0];
-  log(`project: ${slug} · work-detail: ${work.id} · bug-detail: ${bug.id} · language: ${LOCALE}`);
+  const wantNote = WANT_RECORDS.map((id) => id.toLowerCase()).find((id) =>
+    notes.some((n) => n.name === id),
+  );
+  const missedNote = WANT_RECORDS.filter(
+    (id) => !/^(WORK|BUG)-\d+$/.test(id) && !notes.some((n) => n.name === id.toLowerCase()),
+  );
+  if (missedNote.length) {
+    throw new Error(
+      `no note ${missedNote.join(", ")} in project '${project.name}' (--record/$SHOT_RECORD). ` +
+        `Known names: ${notes.map((n) => n.name).join(", ") || "(none)"}`,
+    );
+  }
+  const note = wantNote
+    ? notes.find((n) => n.name === wantNote)
+    : [...notes].sort((a, b) => b.refs.length - a.refs.length)[0] ?? null;
+  log(
+    `project: ${project.name} · work-detail: ${work.id} · bug-detail: ${bug.id} · ` +
+      `note-detail: ${note?.name ?? "(no notes)"} · language: ${LOCALE}`,
+  );
 
   const all = [
     { name: "dashboard", path: `/p/${slug}`, waitFor: ".now-strip .now-hero-value" },
@@ -279,6 +304,19 @@ try {
       },
     },
     { name: "bug-detail", path: `/p/${slug}/bugs/${bug.id}`, waitFor: ".record-title", full: true },
+    /* The notes screens exist only when the project has notes; a project without any is
+       legal, so the two keys are skipped with a line in the log rather than failed. */
+    ...(notes.length
+      ? [
+          { name: "notes-list", path: `/p/${slug}/notes`, waitFor: ".note-rows .note-row" },
+          {
+            name: "note-detail",
+            path: `/p/${slug}/notes/${note.name}`,
+            waitFor: ".record-title",
+            full: true,
+          },
+        ]
+      : []),
     { name: "projects", path: "/projects", waitFor: ".project-row" },
     {
       // The command palette is a screen like any other — it is what Ctrl+K opens — so it
@@ -376,6 +414,7 @@ try {
     },
   ];
 
+  if (!notes.length) log("no notes in this project — notes-list and note-detail are skipped");
   const unknown = ONLY.filter((k) => !all.some((s) => s.name === k));
   if (unknown.length) {
     throw new Error(
@@ -420,7 +459,7 @@ try {
   else if (server) log(`dev server left running on ${ORIGIN} (--keep-server)`);
 }
 
-// One tick for libuv to finish closing the sockets the vault-api fetches left behind:
+// One tick for libuv to finish closing the sockets the project-api fetches left behind:
 // exiting in the middle of that abandons the process with a UV assertion on Windows,
 // which looks like a crash to whoever is reading the log.
 await new Promise((r) => setTimeout(r, 60));

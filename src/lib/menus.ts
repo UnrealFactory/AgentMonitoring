@@ -38,16 +38,17 @@
  */
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useApp } from "../AppContext";
 import { useCopy, type MenuItem, type MenuSpec } from "../components/ContextMenu";
 import { useDeleteProject } from "../components/DeleteProject";
-import { api } from "./api";
+import { api, isTauri } from "./api";
 import { t } from "./i18n";
-import { unresolvedCount, workLogs } from "./words";
+import { noteCount, unresolvedCount, workLogs } from "./words";
 import type { Project } from "./types";
 
 /** A record, as much of it as a menu needs. */
 export interface RecordRef {
-  kind: "work" | "bug";
+  kind: "work" | "bug" | "note";
   id: string;
   /**
    * The record's title — omitted by the surfaces that never read one (an event feed carries
@@ -55,8 +56,8 @@ export interface RecordRef {
    * reads it from the vault when it is clicked, so the item is in every copy of this menu.
    */
   title?: string;
-  /** The project the record lives in — ids are per-project by SPEC. */
-  slug: string;
+  /** The id of the project the record lives in — record ids are per-project by SPEC. */
+  projectId: string;
   /** True on the record's own page: there is no "Open" for the thing already open. */
   here?: boolean;
 }
@@ -65,10 +66,14 @@ export interface RecordRef {
  * Which kind an id names.
  *
  * The vault's ids carry it (`WORK-0021`, `BUG-0004`), which is what lets a feed row and a
- * chip in a sentence open a menu about a record neither of them has loaded.
+ * chip in a sentence open a menu about a record neither of them has loaded. Anything that
+ * is not a work log's or a bug's id is a note's name — the third shape an event's ref can
+ * take, and note names are validated at write time so they can never wear the other two.
  */
-export const recordKind = (id: string): RecordRef["kind"] =>
-  id.toUpperCase().startsWith("BUG") ? "bug" : "work";
+export const recordKind = (id: string): RecordRef["kind"] => {
+  const upper = id.toUpperCase();
+  return upper.startsWith("BUG") ? "bug" : upper.startsWith("WORK") ? "work" : "note";
+};
 
 /**
  * The app route for a record.
@@ -78,8 +83,8 @@ export const recordKind = (id: string): RecordRef["kind"] =>
  * the origin is an internal `tauri://` address that means nothing to anybody. The route is
  * the address of the record inside this app, and it stays true in both.
  */
-export const recordRoute = (r: Pick<RecordRef, "kind" | "id" | "slug">): string =>
-  `/p/${r.slug}/${r.kind === "work" ? "work" : "bugs"}/${r.id}`;
+export const recordRoute = (r: Pick<RecordRef, "kind" | "id" | "projectId">): string =>
+  `/p/${r.projectId}/${r.kind === "work" ? "work" : r.kind === "bug" ? "bugs" : "notes"}/${r.id}`;
 
 /**
  * The title of a record the screen showing it never read, read now.
@@ -90,7 +95,11 @@ export const recordRoute = (r: Pick<RecordRef, "kind" | "id" | "slug">): string 
  */
 const readTitle = async (r: RecordRef): Promise<string> => {
   const record =
-    r.kind === "bug" ? await api.getBug(r.slug, r.id) : await api.getWorklog(r.slug, r.id);
+    r.kind === "bug"
+      ? await api.getBug(r.projectId, r.id)
+      : r.kind === "note"
+        ? await api.getNote(r.projectId, r.id)
+        : await api.getWorklog(r.projectId, r.id);
   return record.title;
 };
 
@@ -142,6 +151,7 @@ export function useProjectMenu() {
   const navigate = useNavigate();
   const copy = useCopy();
   const requestDelete = useDeleteProject();
+  const { refresh } = useApp();
 
   return useCallback(
     (p: Project): MenuSpec => ({
@@ -151,37 +161,59 @@ export function useProjectMenu() {
           id: "open",
           label: t("menu.open"),
           hint: t("menu.openHint"),
-          run: () => navigate(`/p/${p.slug}`),
+          run: () => navigate(`/p/${p.id}`),
         },
         {
           id: "work",
           label: t("nav.work"),
           hint: workLogs(p.counts.workTotal),
-          run: () => navigate(`/p/${p.slug}/work`),
+          run: () => navigate(`/p/${p.id}/work`),
         },
         {
           id: "bugs",
           label: t("nav.bugs"),
           hint: unresolvedCount(p.counts.bugsOpen),
-          run: () => navigate(`/p/${p.slug}/bugs`),
+          run: () => navigate(`/p/${p.id}/bugs`),
         },
         {
-          id: "copy-slug",
-          label: t("menu.copySlug"),
-          hint: p.slug,
-          separator: true,
-          run: () => copy(p.slug, p.slug),
+          id: "notes",
+          label: t("nav.notes"),
+          hint: noteCount(p.counts.notesTotal),
+          run: () => navigate(`/p/${p.id}/notes`),
         },
+        {
+          id: "copy-path",
+          label: t("menu.copyPath"),
+          hint: p.path,
+          separator: true,
+          run: () => copy(p.path, p.path),
+        },
+        /* The undoable way off the list, above the destructive one and nothing like it:
+           removing unregisters the path and touches no files. Desktop only — browser
+           mode serves a fixed set of folders and has no list to remove from. */
+        ...(isTauri()
+          ? [
+              {
+                id: "remove",
+                label: t("proj.remove"),
+                hint: t("proj.removeHint"),
+                separator: true,
+                run: () => {
+                  void api.removeProject(p.path).then(refresh);
+                },
+              } as MenuItem,
+            ]
+          : []),
         {
           id: "delete",
           label: t("menu.delete"),
           hint: t("menu.deleteHint"),
-          separator: true,
+          separator: !isTauri(),
           danger: true,
           run: () => requestDelete(p),
         },
       ],
     }),
-    [navigate, copy, requestDelete]
+    [navigate, copy, requestDelete, refresh]
   );
 }

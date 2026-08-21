@@ -194,9 +194,12 @@ try {
     log,
   }));
 
-  const projects = await (await fetch(`${ORIGIN}/vault-api/projects`)).json();
-  const slug = projects.find((p) => p.slug === "relay")?.slug ?? projects[0].slug;
-  const someWork = (await (await fetch(`${ORIGIN}/vault-api/projects/${slug}/worklogs`)).json())[0];
+  const mainRows = await (await fetch(`${ORIGIN}/project-api/projects`)).json();
+  const projects = mainRows.filter((r) => r.available && r.project).map((r) => r.project);
+  const slug = projects[0].id;
+  const someWork = (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/worklogs`)).json())[0];
+  /* A note is addressed by its kebab name — the third shape a record id takes. */
+  const someNote = (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/notes`)).json())[0];
 
   browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, colorScheme: "dark" });
@@ -206,6 +209,8 @@ try {
   const screens = [
     { name: "bug board", url: `${ORIGIN}/p/${slug}/bugs?tab=all` },
     { name: "work detail", url: `${ORIGIN}/p/${slug}/work/${someWork.id}` },
+    { name: "notes list", url: `${ORIGIN}/p/${slug}/notes` },
+    { name: "note detail", url: `${ORIGIN}/p/${slug}/notes/${someNote.name}` },
     { name: "projects", url: `${ORIGIN}/projects` },
   ];
 
@@ -362,6 +367,7 @@ try {
     { path: `/p/${slug}`, page: T("nav.dashboard"), location: 1 },
     { path: `/p/${slug}/work`, page: T("nav.work"), location: 1 },
     { path: `/p/${slug}/bugs`, page: T("nav.bugs"), location: 1 },
+    { path: `/p/${slug}/notes`, page: T("nav.notes"), location: 1 },
   ];
   for (const e of expected) {
     await page.goto(`${ORIGIN}${e.path}`, { waitUntil: "domcontentloaded" });
@@ -603,7 +609,7 @@ try {
   check(
     "the breadcrumb at the head of a record opens its project's menu",
     (await page.getAttribute(".ctx-menu", "aria-label")) === crumbName &&
-      same(await menuItems(page), ["open", "work", "bugs", "copy-slug", "delete"]),
+      same(await menuItems(page), ["open", "work", "bugs", "notes", "copy-path", "delete"]),
     `label ${await page.getAttribute(".ctx-menu", "aria-label")} vs ${crumbName}, items ${JSON.stringify(await menuItems(page))}`,
   );
   await page.keyboard.press("Escape");
@@ -713,7 +719,7 @@ try {
   await page.waitForSelector(".toast", { state: "visible", timeout: 5_000 });
   const feedTitle = await page.evaluate(() => navigator.clipboard.readText());
   const realTitle = await (
-    await fetch(`${ORIGIN}/vault-api/projects/${slug}/${feedId.startsWith("BUG") ? "bugs" : "worklogs"}/${feedId}`)
+    await fetch(`${ORIGIN}/project-api/projects/${slug}/${feedId.startsWith("BUG") ? "bugs" : "worklogs"}/${feedId}`)
   ).json();
   check(
     "Copy title on a feed row copies the record's title, which the feed line does not print",
@@ -751,8 +757,8 @@ try {
     `label ${await page.getAttribute(".ctx-menu", "aria-label")}, card ${switcherName}`,
   );
   check(
-    "…the same five items the small copy of that project below it opens",
-    same(await menuItems(page), ["open", "work", "bugs", "copy-slug", "delete"]),
+    "…the same six items the small copy of that project below it opens",
+    same(await menuItems(page), ["open", "work", "bugs", "notes", "copy-path", "delete"]),
     JSON.stringify(await menuItems(page)),
   );
   check(
@@ -833,7 +839,7 @@ try {
   check(
     "…and Copy link carries the row's own project, which this screen's URL does not name",
     (await page.locator('.ctx-item[data-item="copy-link"] .ctx-hint').textContent()) === feedHref &&
-      projects.find((p) => p.slug === feedSlug)?.name === feedProjectName,
+      projects.find((p) => p.id === feedSlug)?.name === feedProjectName,
     `hint ${await page.locator('.ctx-item[data-item="copy-link"] .ctx-hint').textContent()}, href ${feedHref}, row names ${feedProjectName}`,
   );
   // The item this screen cannot answer from what it read: the feed loads events, which
@@ -843,7 +849,7 @@ try {
   const feedCopied = await page.evaluate(() => navigator.clipboard.readText());
   const feedRecord = await (
     await fetch(
-      `${ORIGIN}/vault-api/projects/${feedSlug}/${feedRef.startsWith("BUG") ? "bugs" : "worklogs"}/${feedRef}`,
+      `${ORIGIN}/project-api/projects/${feedSlug}/${feedRef.startsWith("BUG") ? "bugs" : "worklogs"}/${feedRef}`,
     )
   ).json();
   check(
@@ -908,24 +914,33 @@ try {
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  // The same claim in the vault shape that broke it: more projects than the sidebar lists.
-  log("--- a 12-project vault");
+  // The same claim in the roster shape that broke it: more projects than the sidebar lists.
+  log("--- 13 registered projects");
   const many = mkdtempSync(join(tmpdir(), "agentmon-many-"));
   temps.push(many);
-  const manyVault = join(many, "vault");
-  mkdirSync(manyVault, { recursive: true });
-  cpSync(join(repoRoot, "vault"), manyVault, { recursive: true });
   const bin = join(repoRoot, "target", "release", process.platform === "win32" ? "agentmon.exe" : "agentmon");
-  for (let i = 1; i <= 10; i += 1) {
+  const scratchEnv = { ...process.env, AGENTMON_REGISTRY_DIR: join(many, ".registry") };
+  /** Where each scratch project's records live: <many>/<slug>/AgentMonitoring. */
+  const locOf = (s) => join(many, s);
+  const dataOf = (s) => join(locOf(s), "AgentMonitoring");
+  cpSync(join(repoRoot, "AgentMonitoring"), dataOf("agent-monitoring"), { recursive: true });
+  const manyDirs = [dataOf("agent-monitoring")];
+  /* 12 scratch projects: 1–10 as before, 11 for the notes list parked under a delete and
+     12 for the note record parked under one — each probe destroys its own project, so the
+     third record kind gets its own two rather than re-using a survivor. */
+  for (let i = 1; i <= 12; i += 1) {
     execFileSync(bin, [
-      "--vault", manyVault, "--json",
-      "project", "create", `scratch-${i}`,
+      "--dir", locOf(`scratch-${i}`), "--json",
+      "init",
       "--name", `Scratch project ${i}`,
       "--description", "A scratch project, created by scripts/check-keys.mjs to fill the sidebar.",
       "--agent", "check-keys",
-    ]);
+    ], { env: scratchEnv });
+    manyDirs.push(dataOf(`scratch-${i}`));
   }
-  manyServer = startServer(MANY_PORT, { env: { AGENTMON_VAULT: manyVault } });
+  manyServer = startServer(MANY_PORT, {
+    env: { AGENTMON_DIRS: manyDirs.join(";"), AGENTMON_REGISTRY_DIR: join(many, ".registry") },
+  });
   const manyOrigin = `http://localhost:${MANY_PORT}`;
   await waitForServer(manyServer, manyOrigin);
   const wide = await browser.newPage({ viewport: { width: 1600, height: 1000 }, colorScheme: "dark" });
@@ -935,7 +950,7 @@ try {
   const navRows = await wide.locator(".nav-sub").count();
   const overflow = await wide.locator(".nav-more").count();
   check(
-    "the sidebar overflows to a '<N> more…' row with 12 projects",
+    "the sidebar overflows to a '<N> more…' row with 13 projects",
     overflow === 1 && navRows === 9,
     `${navRows} sub rows, ${overflow} overflow rows`,
   );
@@ -950,7 +965,7 @@ try {
     (await wide.locator(".nav-more.active").count()) === 0,
   );
 
-  /* The vault feed's *other* kind of row, in the vault shape that guarantees one: ten
+  /* The feed's *other* kind of row, in the roster shape that guarantees one: ten
      projects created a moment ago, so the newest events here are about projects and not
      about records. Those lines link to the project, so they open the project's menu — the
      rule is a menu about whatever the row points at, and no row in that list is dead. */
@@ -962,7 +977,7 @@ try {
   check(
     "a vault-feed row about the project itself opens the project menu",
     (await wide.getAttribute(".ctx-menu", "aria-label")) === evName &&
-      same(await menuItems(wide), ["open", "work", "bugs", "copy-slug", "delete"]),
+      same(await menuItems(wide), ["open", "work", "bugs", "notes", "copy-path", "delete"]),
     `label ${await wide.getAttribute(".ctx-menu", "aria-label")} vs ${evName}, items ${JSON.stringify(await menuItems(wide))}`,
   );
   await wide.keyboard.press("Escape");
@@ -976,8 +991,13 @@ try {
      dialog that deletes on esc has already cost somebody their records by the time the
      happy path passes. */
   log("--- delete, and the four ways out of it");
-  const manyProjects = async () => (await (await fetch(`${manyOrigin}/vault-api/projects`)).json());
-  const exists = async (s) => (await manyProjects()).some((p) => p.slug === s);
+  const manyRows = async () => (await (await fetch(`${manyOrigin}/project-api/projects`)).json());
+  const manyProjects = async () =>
+    (await manyRows()).filter((r) => r.available && r.project).map((r) => r.project);
+  /** Scratch projects are identified by name — v2 has no slug. */
+  const nameOf = (s) => (s === "agent-monitoring" ? "AgentMonitoring" : `Scratch project ${s.slice("scratch-".length)}`);
+  const exists = async (s) => (await manyProjects()).some((p) => p.name === nameOf(s));
+  const idOf = async (s) => (await manyProjects()).find((p) => p.name === nameOf(s))?.id;
   const goneFromVault = async (s, ms = 10_000) => {
     const deadline = Date.now() + ms;
     while (Date.now() < deadline) {
@@ -1009,7 +1029,7 @@ try {
   };
 
   const victim = "scratch-9";
-  const victimName = (await manyProjects()).find((p) => p.slug === victim)?.name;
+  const victimName = nameOf(victim);
   await wide.goto(`${manyOrigin}/projects`, { waitUntil: "domcontentloaded" });
   await ready(wide);
 
@@ -1047,15 +1067,15 @@ try {
   check("esc closes it", !(await wide.locator(".modal").count()));
   check("…and deletes nothing", await exists(victim));
 
-  // The wrong slug, and a near miss.
+  // The wrong name, and a near miss.
   await openDialogFromRow(wide, victimName);
-  await wide.locator(".modal .input").fill("scratch");
-  check("a slug that is only a prefix does not arm the button", !(await armed(wide)));
-  await wide.locator(".modal .input").fill(`${victim}x`);
+  await wide.locator(".modal .input").fill("Scratch project");
+  check("a name that is only a prefix does not arm the button", !(await armed(wide)));
+  await wide.locator(".modal .input").fill(`${victimName}x`);
   check("…nor one with a character too many", !(await armed(wide)));
   await wide.keyboard.press("Enter");
   await wide.waitForTimeout(400);
-  check("…and ↵ on a wrong slug deletes nothing", await exists(victim));
+  check("…and ↵ on a wrong name deletes nothing", await exists(victim));
   // The scrim.
   await wide.locator(".modal-scrim").click({ position: { x: 8, y: 8 } });
   check("a click on the scrim closes it", !(await wide.locator(".modal").count()));
@@ -1083,7 +1103,7 @@ try {
      be on disk at the end of all three. */
   log("--- the dialog owns the window");
   const owned = "scratch-7";
-  const ownedName = (await manyProjects()).find((p) => p.slug === owned)?.name;
+  const ownedName = nameOf(owned);
   /* In-app history, so Alt+Left is a route change inside the running app rather than a
      document load — which is the case that keeps the dialog mounted, and the reported one. */
   await wide.locator(".nav-sub").first().click();
@@ -1094,7 +1114,7 @@ try {
   check("the gate has in-app history to go back to", backTo);
 
   await openDialogFromRow(wide, ownedName);
-  await wide.locator(".modal .input").fill(owned);
+  await wide.locator(".modal .input").fill(ownedName);
   check("the dialog is armed before the keys that used to move the page", await armed(wide));
   const heldUrl = wide.url();
   await wide.keyboard.press("Alt+ArrowLeft");
@@ -1137,7 +1157,7 @@ try {
     const b = code.getBoundingClientRect();
     return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) };
   });
-  check("the dialog prints the slug it is asking for, in its warning", !!onSlug);
+  check("the dialog prints the folder it is about, in its warning", !!onSlug);
   await wide.mouse.click(onSlug.x, onSlug.y, { button: "right" });
   await wide.waitForTimeout(400);
   check(
@@ -1150,10 +1170,10 @@ try {
      <body> — and the box this dialog exists to have typed into must still get the typing. */
   await wide.locator(".modal .input").fill("");
   await wide.evaluate(() => document.activeElement?.blur?.());
-  await wide.keyboard.type(owned);
+  await wide.keyboard.type(ownedName);
   check(
     "typing with the focus dropped goes into the confirm box",
-    (await wide.locator(".modal .input").inputValue()) === owned && (await armed(wide)),
+    (await wide.locator(".modal .input").inputValue()) === ownedName && (await armed(wide)),
     `box reads ${JSON.stringify(await wide.locator(".modal .input").inputValue())}`,
   );
   // One esc, on the layer the reader is looking at, and nothing was deleted by any of it.
@@ -1161,7 +1181,7 @@ try {
   await wide.waitForTimeout(300);
   check("one esc closes the dialog", !(await wide.locator(".modal").count()));
   check("…with no modal lock left behind", (await wide.getAttribute("html", "data-modal")) === null);
-  check(`…and ${owned} is still in the vault after all of it`, await exists(owned));
+  check(`…and ${owned} is still on the disk after all of it`, await exists(owned));
 
   /* The other half of every stand-down in this app: it must not be a mute. With nothing
      open, the same Alt+Left is the Back gesture the desktop shell added it for. */
@@ -1194,10 +1214,10 @@ try {
     ((await wide.locator(".modal-facts dd").textContent()) ?? "").includes("·"),
     await wide.locator(".modal-facts dd").textContent(),
   );
-  await wide.locator(".modal .input").fill(victim);
-  check("typing the slug exactly arms the button", await armed(wide));
+  await wide.locator(".modal .input").fill(victimName);
+  check("typing the name exactly arms the button", await armed(wide));
   await wide.locator(".modal .button-danger").click();
-  check(`${victim} is gone from the vault`, await goneFromVault(victim));
+  check(`${victim} is gone from the disk`, await goneFromVault(victim));
   await wide.waitForSelector(".toast", { state: "visible", timeout: 10_000 });
   check(
     "…and one line says so, naming the project",
@@ -1241,19 +1261,27 @@ try {
   /** Give a scratch project something to have on screen: an empty list losing nothing proves nothing. */
   const stock = (slug) => {
     execFileSync(bin, [
-      "--vault", manyVault, "--json", "work", "start", "-p", slug, "--agent", "check-keys",
+      "--dir", locOf(slug), "--json", "work", "start", "--agent", "check-keys",
       "--title", "Work that is on the screen when the folder leaves the disk",
       "--body",
       "## What\nA work log, written by scripts/check-keys.mjs.\n\n" +
         "## Why\nSo a window parked on this project's work list has a row to lose.\n\n" +
-        "## How\nThe CLI, into a scratch vault in a temp directory.",
-    ]);
+        "## How\nThe CLI, into a scratch folder in a temp directory.",
+    ], { env: scratchEnv });
     execFileSync(bin, [
-      "--vault", manyVault, "--json", "bug", "create", "-p", slug, "--agent", "check-keys",
+      "--dir", locOf(slug), "--json", "bug", "create", "--agent", "check-keys",
       "--severity", "high",
       "--title", "A bug that is on the board when the folder leaves the disk",
       "--body", "Filed by scripts/check-keys.mjs so a parked bug board has a row to lose.",
-    ]);
+    ], { env: scratchEnv });
+    execFileSync(bin, [
+      "--dir", locOf(slug), "--json", "note", "add", "--agent", "check-keys",
+      "--type", "handoff",
+      "--name", "note-on-screen-when-the-folder-leaves",
+      "--title", "A note that is on the screen when the folder leaves the disk",
+      "--description", "Left by scripts/check-keys.mjs so a parked notes screen has a row to lose.",
+      "--body", "A parked note page keeps this copy under the bar that says the note is gone.",
+    ], { env: scratchEnv });
   };
 
   /* Each case: where the window parks, and what proves it was full before the delete. The
@@ -1262,16 +1290,18 @@ try {
     { slug: "scratch-1", path: "/work", screen: "the work list", full: ".work-row" },
     { slug: "scratch-2", path: "/bugs", screen: "the bug board", full: ".bug-row" },
     { slug: "scratch-3", path: "", screen: "the dashboard", full: ".live-flag" },
+    { slug: "scratch-11", path: "/notes", screen: "the notes list", full: ".note-row" },
   ];
 
   for (const { slug, path, screen, full } of parkedCases) {
     stock(slug);
-    const name = (await manyProjects()).find((p) => p.slug === slug)?.name;
+    const name = nameOf(slug);
+    const pid = await idOf(slug);
     const parked = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
     await useLocale(parked, LOCALE);
     let parkedLoads = 0;
     parked.on("load", () => (parkedLoads += 1));
-    await parked.goto(`${manyOrigin}/p/${slug}${path}`, { waitUntil: "domcontentloaded" });
+    await parked.goto(`${manyOrigin}/p/${pid}${path}`, { waitUntil: "domcontentloaded" });
     await ready(parked);
     parkedLoads = 0;
     const parkedUrl = parked.url();
@@ -1284,9 +1314,9 @@ try {
     await wide.goto(`${manyOrigin}/projects`, { waitUntil: "domcontentloaded" });
     await ready(wide);
     await openDialogFromRow(wide, name);
-    await wide.locator(".modal .input").fill(slug);
+    await wide.locator(".modal .input").fill(name);
     await wide.locator(".modal .button-danger").click();
-    check(`${slug} is gone from the vault`, await goneFromVault(slug));
+    check(`${slug} is gone from the disk`, await goneFromVault(slug));
 
     /* The whole point: the parked window finds out on its own, from the same poll that
        updates its sidebar, and says the one true thing about the address it is on. */
@@ -1294,7 +1324,7 @@ try {
     check(
       `…and ${screen} lands on the app's no-such-project screen without being told`,
       ((await parked.locator(".error-title").textContent()) ?? "").trim() ===
-        T("vault.noProject", slug),
+        T("proj.notRegistered", pid),
       `title reads "${await parked.locator(".error-title").textContent()}"`,
     );
     check(
@@ -1354,42 +1384,50 @@ try {
   const recordCases = [
     { slug: "scratch-5", screen: "the work log", kind: "worklogs", at: "/work", out: T("wd.workList") },
     { slug: "scratch-6", screen: "the bug", kind: "bugs", at: "/bugs", out: T("bd.bugBoard") },
+    /* The third record kind. A note is the one record an agent *can* remove, but the claim
+       under test here is the same one as its two siblings': the whole project going away
+       under an open page keeps the reader's copy, with no retry, and the way out is the
+       notes list. Its identity is its kebab name, which is why `rid` below reads both. */
+    { slug: "scratch-12", screen: "the note", kind: "notes", at: "/notes", out: T("nd.notesList") },
   ];
 
   for (const { slug, screen, kind, at, out } of recordCases) {
     stock(slug);
-    const name = (await manyProjects()).find((p) => p.slug === slug)?.name;
+    const name = nameOf(slug);
+    const pid = await idOf(slug);
     const record = (
-      await (await fetch(`${manyOrigin}/vault-api/projects/${slug}/${kind}`)).json()
+      await (await fetch(`${manyOrigin}/project-api/projects/${pid}/${kind}`)).json()
     )[0];
+    /* A work log and a bug carry `id`; a note's id is its kebab `name`. */
+    const rid = record.id ?? record.name;
     const parked = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
     await useLocale(parked, LOCALE);
     let parkedLoads = 0;
     parked.on("load", () => (parkedLoads += 1));
-    await parked.goto(`${manyOrigin}/p/${slug}${at}/${record.id}`, { waitUntil: "domcontentloaded" });
+    await parked.goto(`${manyOrigin}/p/${pid}${at}/${rid}`, { waitUntil: "domcontentloaded" });
     await ready(parked);
     parkedLoads = 0;
     const parkedUrl = parked.url();
     const sectionsBefore = await parked.locator(".record-section").count();
     const titleBefore = ((await parked.locator(".record-title").textContent()) ?? "").trim();
     check(
-      `${screen} ${record.id}, parked inside ${slug}, is on screen in full before the delete`,
-      sectionsBefore > 0 && titleBefore.includes(record.title) && titleBefore.includes(record.id),
+      `${screen} ${rid}, parked inside ${slug}, is on screen in full before the delete`,
+      sectionsBefore > 0 && titleBefore.includes(record.title) && titleBefore.includes(rid),
       `${sectionsBefore} sections, title "${titleBefore}"`,
     );
 
     await wide.goto(`${manyOrigin}/projects`, { waitUntil: "domcontentloaded" });
     await ready(wide);
     await openDialogFromRow(wide, name);
-    await wide.locator(".modal .input").fill(slug);
+    await wide.locator(".modal .input").fill(name);
     await wide.locator(".modal .button-danger").click();
-    check(`${slug} is gone from the vault`, await goneFromVault(slug));
+    check(`${slug} is gone from the disk`, await goneFromVault(slug));
 
     await parked.waitForSelector(".vault-alert-inline", { state: "visible", timeout: 25_000 });
     check(
       `…and ${screen} says so over the copy it kept, without being told`,
       ((await parked.locator(".vault-alert-inline strong").textContent()) ?? "").trim() ===
-        T("rec.staleGone", record.id),
+        T("rec.staleGone", rid),
       `bar reads "${await parked.locator(".vault-alert-inline").textContent()}"`,
     );
     check(
@@ -1426,7 +1464,7 @@ try {
     check(
       "…which, when the reader takes it, lands on the app's no-such-project screen",
       ((await parked.locator(".error-title").textContent()) ?? "").trim() ===
-        T("vault.noProject", slug),
+        T("proj.notRegistered", pid),
       `title reads "${await parked.locator(".error-title").textContent()}"`,
     );
     await parked.close();
@@ -1440,14 +1478,15 @@ try {
   log("--- a record that could not be re-read is not a record that is gone");
   const unread = "scratch-10";
   stock(unread);
+  const unreadId = await idOf(unread);
   const unreadRec = (
-    await (await fetch(`${manyOrigin}/vault-api/projects/${unread}/worklogs`)).json()
+    await (await fetch(`${manyOrigin}/project-api/projects/${unreadId}/worklogs`)).json()
   )[0];
-  const recPath = join(manyVault, "projects", unread, "worklogs", `${unreadRec.id}.md`);
+  const recPath = join(dataOf(unread), "worklogs", `${unreadRec.id}.md`);
   const recBytes = readFileSync(recPath);
   const shaken = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
   await useLocale(shaken, LOCALE);
-  await shaken.goto(`${manyOrigin}/p/${unread}/work/${unreadRec.id}`, { waitUntil: "domcontentloaded" });
+  await shaken.goto(`${manyOrigin}/p/${unreadId}/work/${unreadRec.id}`, { waitUntil: "domcontentloaded" });
   await ready(shaken);
   const shakenSections = await shaken.locator(".record-section").count();
   writeFileSync(recPath, "This file lost its frontmatter while somebody was reading it.\n");
@@ -1489,24 +1528,25 @@ try {
      somebody is reading with an error card every time a dev server restarts. Here the whole
      vault directory goes away under a parked work list — the shell says so in its one line,
      and the rows stay exactly where they were. */
-  log("--- a vault that goes quiet is not a project that was deleted");
+  log("--- a folder that goes quiet is not a project that was deleted");
   const survivor = "scratch-4";
   stock(survivor);
+  const survivorId = await idOf(survivor);
   const held = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
   await useLocale(held, LOCALE);
-  await held.goto(`${manyOrigin}/p/${survivor}/work`, { waitUntil: "domcontentloaded" });
+  await held.goto(`${manyOrigin}/p/${survivorId}/work`, { waitUntil: "domcontentloaded" });
   await ready(held);
   const heldRows = await held.locator(".work-row").count();
-  check(`a work list parked on ${survivor} has rows before the vault goes away`, heldRows > 0);
+  check(`a work list parked on ${survivor} has rows before the folder goes away`, heldRows > 0);
 
   /* A record of the same project, parked beside it: the screen that keeps a copy is the one
      with the most to lose from "the vault blinked" being read as "this was deleted". */
   const heldRec = (
-    await (await fetch(`${manyOrigin}/vault-api/projects/${survivor}/worklogs`)).json()
+    await (await fetch(`${manyOrigin}/project-api/projects/${survivorId}/worklogs`)).json()
   )[0];
   const heldRecord = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
   await useLocale(heldRecord, LOCALE);
-  await heldRecord.goto(`${manyOrigin}/p/${survivor}/work/${heldRec.id}`, { waitUntil: "domcontentloaded" });
+  await heldRecord.goto(`${manyOrigin}/p/${survivorId}/work/${heldRec.id}`, { waitUntil: "domcontentloaded" });
   await ready(heldRecord);
   const heldSections = await heldRecord.locator(".record-section").count();
   check(`…and ${heldRec.id} is open beside it, in full`, heldSections > 0);
@@ -1527,25 +1567,27 @@ try {
     }
   };
 
-  const away = `${manyVault}-away`;
-  await moveDir(manyVault, away);
+  /* v2: one folder going away is that folder's business — the app's list keeps serving
+     the other eleven, so there is no shell-wide banner to wait for. What must hold is the
+     conservative half: the parked screens keep what they had, with no error card, because
+     "cannot read the folder right now" is not "this project was deleted". */
+  const survivorData = dataOf(survivor);
+  const away = `${survivorData}-away`;
+  await moveDir(survivorData, away);
   try {
-    await held.waitForSelector(".vault-alert-wrap .vault-alert", { state: "visible", timeout: 40_000 });
-    check("a vault that stops answering raises the shell's one line", true);
+    await held.waitForTimeout(6_000);
     check(
-      "…and the screen keeps every row it had",
+      "a folder that stops answering leaves the parked list every row it had",
       (await held.locator(".work-row").count()) === heldRows,
       `${await held.locator(".work-row").count()} rows, was ${heldRows}`,
     );
     check(
-      "…rather than the screen for a project that is not in this vault",
+      "…rather than the screen for a project that is not on this machine",
       (await held.locator(".error-state").count()) === 0,
       `error title "${await held.locator(".error-title").textContent().catch(() => "")}"`,
     );
-    await heldRecord.waitForSelector(".vault-alert-wrap .vault-alert", { state: "visible", timeout: 40_000 });
-    check("…and the record open beside it hears the same one line", true);
     check(
-      "…keeps every word it had, with no error card",
+      "…and the record open beside it keeps every word, with no error card",
       (await heldRecord.locator(".record-section").count()) === heldSections &&
         (await heldRecord.locator(".error-state").count()) === 0,
       `${await heldRecord.locator(".record-section").count()} sections, was ${heldSections}`,
@@ -1558,18 +1600,16 @@ try {
       `inline bar reads "${await heldRecord.locator(".vault-alert-inline").textContent().catch(() => "")}"`,
     );
   } finally {
-    await moveDir(away, manyVault);
+    await moveDir(away, survivorData);
   }
-  await held.waitForSelector(".vault-alert-wrap", { state: "detached", timeout: 60_000 });
-  check("…and the line goes away when the vault comes back", true);
+  await held.waitForTimeout(4_000);
   check(
-    "…with the rows still there and still no error card",
+    "…and when the folder comes back the rows are still there with no error card",
     (await held.locator(".work-row").count()) === heldRows &&
       (await held.locator(".error-state").count()) === 0,
   );
-  await heldRecord.waitForSelector(".vault-alert-wrap", { state: "detached", timeout: 60_000 });
   check(
-    "…and the record beside it comes back the same way, whole",
+    "…and the record beside it is whole",
     (await heldRecord.locator(".record-section").count()) === heldSections &&
       (await heldRecord.locator(".error-state").count()) === 0,
   );
@@ -1580,8 +1620,9 @@ try {
      read would answer with "this vault has no project called …" — an error card in place of
      the thing they just asked for. */
   const inside = "scratch-8";
-  const insideName = (await manyProjects()).find((p) => p.slug === inside)?.name;
-  await wide.goto(`${manyOrigin}/p/${inside}/work`, { waitUntil: "domcontentloaded" });
+  const insideName = nameOf(inside);
+  const insideId = await idOf(inside);
+  await wide.goto(`${manyOrigin}/p/${insideId}/work`, { waitUntil: "domcontentloaded" });
   await ready(wide);
   await wide.locator(".switcher-button").click({ button: "right", position: { x: 60, y: 20 } });
   await wide.waitForSelector(".ctx-menu", { state: "visible", timeout: 5_000 });
@@ -1589,12 +1630,12 @@ try {
   await wide.waitForSelector(".modal.is-danger", { state: "visible", timeout: 5_000 });
   check(
     "the switcher's own menu opens the same dialog, about the project it names",
-    ((await wide.locator(".modal-project-slug").textContent()) ?? "").trim() === inside,
+    ((await wide.locator(".modal-project-slug").textContent()) ?? "").includes(inside),
     await wide.locator(".modal-project-slug").textContent(),
   );
-  await wide.locator(".modal .input").fill(inside);
+  await wide.locator(".modal .input").fill(insideName);
   await wide.locator(".modal .button-danger").click();
-  check(`${inside} is gone from the vault`, await goneFromVault(inside));
+  check(`${inside} is gone from the disk`, await goneFromVault(inside));
   await wide.waitForURL(`${manyOrigin}/projects`, { timeout: 10_000 });
   await ready(wide);
   check("…and the reader who was standing in it is moved to /projects", true);

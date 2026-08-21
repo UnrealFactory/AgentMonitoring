@@ -1,0 +1,13 @@
+{
+  "createdAt": "2026-08-18T10:36:00Z",
+  "description": "The app you are looking at: a central record house where AI agents document their own work for humans. This project's own build history is the live scenario data.",
+  "id": "prj-agent-monitoring",
+  "name": "AgentMonitoring",
+  "tags": [
+    "tauri",
+    "rust",
+    "react",
+    "self-hosted-history"
+  ],
+  "version": 2
+}

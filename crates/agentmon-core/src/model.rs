@@ -1,8 +1,8 @@
-//! Vault record types (schema v1).
+//! Project record types (schema v2).
 //!
 //! Two naming worlds meet here:
 //!   * on disk, YAML frontmatter uses the exact keys from SPEC.md (`resolved_by`);
-//!   * over the wire (Tauri `invoke` / `/vault-api`), everything is camelCase JSON.
+//!   * over the wire (Tauri `invoke` / `/project-api`), everything is camelCase JSON.
 //!
 //! Deserialization accepts both spellings, serialization emits camelCase, and the
 //! `to_frontmatter` helpers emit spec-exact YAML so the CLI can round-trip files.
@@ -10,46 +10,22 @@
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
-// vault.json
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultInfo {
-    pub version: u32,
-    pub name: String,
-    #[serde(default)]
-    pub created_at: Option<String>,
-    /// Absolute path of the vault on this machine (filled in by the reader, not stored).
-    #[serde(default)]
-    pub path: String,
-    /// How the vault directory was resolved: `flag`, `env`, `config` or `cwd`.
-    #[serde(default)]
-    pub source: String,
-}
-
-// ---------------------------------------------------------------------------
 // project.json
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProjectStatus {
-    #[default]
-    Active,
-    Archived,
+fn v1() -> u32 {
+    1 // a project.json without a version key predates the key: schema v1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
+    #[serde(default = "v1")]
+    pub version: u32,
     pub id: String,
-    pub slug: String,
     pub name: String,
     #[serde(default)]
     pub description: String,
-    #[serde(default)]
-    pub status: ProjectStatus,
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default)]
@@ -57,6 +33,13 @@ pub struct Project {
     /// Counts filled in by the reader so list screens do not need N extra round trips.
     #[serde(default, skip_deserializing)]
     pub counts: ProjectCounts,
+    /// Absolute path of the AgentMonitoring folder on this machine (filled in by the
+    /// reader, never stored — the folder must stay movable).
+    #[serde(default, skip_deserializing)]
+    pub path: String,
+    /// How the folder was resolved: `flag`, `env`, `walk`, `registry`.
+    #[serde(default, skip_deserializing)]
+    pub source: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -67,6 +50,8 @@ pub struct ProjectCounts {
     pub work_done: usize,
     pub bugs_total: usize,
     pub bugs_open: usize,
+    #[serde(default)]
+    pub notes_total: usize,
     pub events: usize,
     #[serde(default)]
     pub last_activity: Option<String>,
@@ -168,6 +153,102 @@ pub struct WorklogDetail {
     #[serde(default)]
     pub extra_sections: Vec<Section>,
     /// The untouched markdown body, for "view raw".
+    pub body: String,
+    pub last_activity: String,
+}
+
+// ---------------------------------------------------------------------------
+// notes/<name>.md
+// ---------------------------------------------------------------------------
+
+/// What a note is *for*. Work logs and bugs are history — they record what happened and
+/// are never taken back. A note is **knowledge**: the thing an agent wishes the previous
+/// agent had told it. The type is the reader's first filter, so the set is small and
+/// each member answers a different question.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NoteType {
+    /// A durable fact about this project a future agent needs: a gotcha, a convention,
+    /// an invariant that is not obvious from the code.
+    Memory,
+    /// State passed to whoever works next: what is done, what is mid-flight, what to do
+    /// first. Updated in place as sessions hand over.
+    Handoff,
+    /// A choice and its reasoning: what was decided, what was rejected, and why — so the
+    /// question does not get relitigated from scratch.
+    Decision,
+    /// A pointer to something outside the project: a URL, a dashboard, a spec, a ticket.
+    Reference,
+}
+
+impl NoteType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NoteType::Memory => "memory",
+            NoteType::Handoff => "handoff",
+            NoteType::Decision => "decision",
+            NoteType::Reference => "reference",
+        }
+    }
+
+    pub const ALL: [NoteType; 4] = [
+        NoteType::Memory,
+        NoteType::Handoff,
+        NoteType::Decision,
+        NoteType::Reference,
+    ];
+}
+
+/// Note frontmatter exactly as stored. The `name` is the identity: kebab-case, unique in
+/// the project, and the file name (`notes/<name>.md`) — there is no NOTE-NNNN sequence,
+/// because a note is looked up by what it is about, not by when it was written.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Note {
+    pub name: String,
+    pub title: String,
+    #[serde(rename = "type")]
+    pub note_type: NoteType,
+    /// One line, shown in every list: the hook an agent scans to decide whether the body
+    /// is worth reading. The note's whole recall path runs through this sentence.
+    pub description: String,
+    /// Who created the note. The frontmatter keeps the author even as others rewrite.
+    pub agent: String,
+    /// Who last rewrote it — the agent whose words the current body is. `None` until the
+    /// first update. A note is shared and mutable, so the screens showing one agent next
+    /// to a body must show *this* one; the full edit trail is the event log's.
+    #[serde(default, alias = "updated_by")]
+    pub updated_by: Option<String>,
+    pub created: String,
+    pub updated: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Related records and notes: WORK-NNNN, BUG-NNNN, or another note's name.
+    #[serde(default)]
+    pub refs: Vec<String>,
+}
+
+/// A note as the list screens need it: frontmatter + cheap derived fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteSummary {
+    #[serde(flatten)]
+    pub meta: Note,
+    /// First paragraph of the body, for previews where the description is already shown.
+    pub excerpt: String,
+    /// Description + body flattened, so search reaches the whole note.
+    #[serde(default)]
+    pub search_text: String,
+    pub last_activity: String,
+}
+
+/// A note with its whole body. The body is free-form markdown on purpose: unlike a work
+/// log, a note has no mandated sections — its shape is whatever the knowledge needs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteDetail {
+    #[serde(flatten)]
+    pub meta: Note,
     pub body: String,
     pub last_activity: String,
 }
@@ -299,6 +380,9 @@ pub struct ProjectStatusSnapshot {
     pub project: Project,
     pub active_work: Vec<WorklogSummary>,
     pub open_bugs: Vec<BugSummary>,
+    /// Most recently updated notes — the knowledge a newly arriving agent reads first.
+    #[serde(default)]
+    pub recent_notes: Vec<NoteSummary>,
     pub recent_events: Vec<Event>,
     pub agents: Vec<AgentActivity>,
 }
@@ -311,6 +395,8 @@ pub struct AgentActivity {
     pub done: usize,
     pub bugs_reported: usize,
     pub bugs_resolved: usize,
+    #[serde(default)]
+    pub notes: usize,
     pub last_activity: String,
 }
 
@@ -368,6 +454,29 @@ impl Worklog {
     }
 }
 
+impl Note {
+    pub fn to_frontmatter(&self) -> String {
+        format!(
+            "name: {}\ntitle: {}\ntype: {}\ndescription: {}\nagent: {}\nupdated_by: {}\ncreated: {}\nupdated: {}\ntags: {}\nrefs: {}\n",
+            yaml_scalar(&self.name),
+            yaml_scalar(&self.title),
+            self.note_type.as_str(),
+            yaml_scalar(&self.description),
+            yaml_scalar(&self.agent),
+            yaml_opt(&self.updated_by),
+            yaml_scalar(&self.created),
+            yaml_scalar(&self.updated),
+            yaml_list(&self.tags),
+            yaml_list(&self.refs),
+        )
+    }
+
+    /// The agent whose words the current body is: the last rewriter, else the author.
+    pub fn current_agent(&self) -> &str {
+        self.updated_by.as_deref().unwrap_or(&self.agent)
+    }
+}
+
 impl Bug {
     pub fn to_frontmatter(&self) -> String {
         format!(
@@ -384,6 +493,85 @@ impl Bug {
             yaml_opt(&self.resolved),
             yaml_opt(&self.resolved_by),
             yaml_list(&self.refs),
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// app feedback — ~/.AgentMonitoring/feedback/FB-NNNN.md (machine-level, no project)
+// ---------------------------------------------------------------------------
+
+/// What a feedback item is about: a defect in this app, or a wish for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedbackKind {
+    Bug,
+    Idea,
+}
+
+impl FeedbackKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FeedbackKind::Bug => "bug",
+            FeedbackKind::Idea => "idea",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedbackStatus {
+    Open,
+    Done,
+}
+
+impl FeedbackStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FeedbackStatus::Open => "open",
+            FeedbackStatus::Done => "done",
+        }
+    }
+}
+
+/// A bug report or feature wish **about the AgentMonitoring app itself**, filed by an
+/// agent that was using it. Machine-level like the registry — it belongs to no project,
+/// so it lives beside `registry.json`, not inside any repo (see `feedback.rs`).
+///
+/// The whole item is one struct: the body is short prose, not sectioned, and the app's
+/// board wants it in the same payload as the metadata. `body` never appears in the YAML
+/// frontmatter — it is the markdown after the fence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedbackItem {
+    pub id: String,
+    pub title: String,
+    /// Spec key `type`, wire key `type` — one key everywhere, like a note's.
+    #[serde(rename = "type")]
+    pub kind: FeedbackKind,
+    pub agent: String,
+    pub status: FeedbackStatus,
+    pub created: String,
+    /// When the human marked it handled; cleared by reopen.
+    #[serde(default)]
+    pub done: Option<String>,
+    /// Markdown after the frontmatter fence; may be empty — a good title can be the
+    /// whole report, and friction here would cost real feedback.
+    #[serde(default)]
+    pub body: String,
+}
+
+impl FeedbackItem {
+    pub fn to_frontmatter(&self) -> String {
+        format!(
+            "id: {}\ntitle: {}\ntype: {}\nagent: {}\nstatus: {}\ncreated: {}\ndone: {}\n",
+            yaml_scalar(&self.id),
+            yaml_scalar(&self.title),
+            self.kind.as_str(),
+            yaml_scalar(&self.agent),
+            self.status.as_str(),
+            yaml_scalar(&self.created),
+            yaml_opt(&self.done),
         )
     }
 }
@@ -413,6 +601,35 @@ mod tests {
         assert_eq!(back.status, WorkStatus::InProgress);
         assert_eq!(back.tags, w.tags);
         assert!(back.finished.is_none());
+    }
+
+    #[test]
+    fn note_frontmatter_round_trips_with_type_as_the_key() {
+        let n = Note {
+            name: "registry-gate-gotcha".into(),
+            title: "Gate scripts must sandbox the registry".into(),
+            note_type: NoteType::Memory,
+            description: "Any script that runs `agentmon init` must set AGENTMON_REGISTRY_DIR.".into(),
+            agent: "gate-builder".into(),
+            updated_by: Some("second-editor".into()),
+            created: "2026-08-20T09:00:00Z".into(),
+            updated: "2026-08-20T09:00:00Z".into(),
+            tags: vec!["gates".into()],
+            refs: vec!["WORK-0035".into()],
+        };
+        let yaml = n.to_frontmatter();
+        assert!(yaml.contains("type: memory"), "{yaml}");
+        assert!(yaml.contains("updated_by: second-editor"), "{yaml}");
+        let back: Note = serde_yaml::from_str(&yaml).expect("frontmatter parses back");
+        assert_eq!(back.name, n.name);
+        assert_eq!(back.note_type, NoteType::Memory);
+        assert_eq!(back.refs, n.refs);
+        assert_eq!(back.current_agent(), "second-editor");
+        // …and the wire shape uses "type" too, so the frontend filters on one key.
+        let json = serde_json::to_value(&back).unwrap();
+        assert_eq!(json["type"], "memory");
+        assert!(json.get("noteType").is_none());
+        assert_eq!(json["updatedBy"], "second-editor", "wire is camelCase, disk is spec-exact");
     }
 
     #[test]

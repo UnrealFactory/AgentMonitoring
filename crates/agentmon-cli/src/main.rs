@@ -2,9 +2,9 @@
 //!
 //! Design rules, because the reader of this file is usually about to add a command:
 //!
-//! * **This file is a wrapper.** Every rule about the vault (what a valid body is, which
-//!   state transitions are legal, how ids are allocated) lives in `agentmon-core`. Here
-//!   we parse arguments, choose an exit code, and print.
+//! * **This file is a wrapper.** Every rule about the project data (what a valid body is,
+//!   which state transitions are legal, how ids are allocated) lives in `agentmon-core`.
+//!   Here we parse arguments, choose an exit code, and print.
 //! * **Exit codes are a contract.** Agents branch on them; see [`exit`] below and the
 //!   table in docs/AGENT_MANUAL.md. Never reuse one for a new meaning.
 //! * **`--json` means all output is JSON**, including errors, so a scripted caller never
@@ -17,35 +17,35 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use agentmon_core::{
-    doctor, validate, AbandonWork, CoreError, FinishWork, NewBug, NewProject, Severity, StartWork,
-    UpdateProject, Vault, WorkStatus,
+    doctor, validate, AbandonWork, CoreError, FinishWork, NewBug, NewNote, NewProject, NoteType,
+    Registry, Severity, StartWork, Store, UpdateNote, UpdateProject, WorkStatus,
 };
 use clap::{Args, CommandFactory, Parser, Subcommand};
 
 /// Exit codes. Stable across releases; documented in docs/AGENT_MANUAL.md.
 mod exit {
-    /// The vault has problems (`doctor`), or the command failed for a reason with no
+    /// The project has problems (`doctor`), or the command failed for a reason with no
     /// more specific code.
     pub const PROBLEMS: u8 = 1;
     /// Bad usage: unknown flag, missing argument, unparseable value. (clap uses this too.)
     pub const USAGE: u8 = 2;
-    /// The vault, project or record does not exist.
+    /// The project or record does not exist.
     pub const NOT_FOUND: u8 = 3;
     /// The record body is missing required sections or says nothing.
     pub const INVALID_BODY: u8 = 4;
     /// The mutation is not legal in the record's current state (already done, already
     /// claimed, already exists), or another process holds the write lock.
     pub const CONFLICT: u8 = 5;
-    /// The vault is there but corrupt: unparseable frontmatter, bad vault.json.
-    pub const INVALID_VAULT: u8 = 6;
+    /// The project is there but corrupt: unparseable frontmatter, bad project.json.
+    pub const INVALID_PROJECT: u8 = 6;
     /// Filesystem failure: permissions, disk, a path that vanished mid-write.
     pub const IO: u8 = 7;
 }
 
 const ROOT_AFTER_HELP: &str = "\
 EXAMPLES
-  agentmon work start -p agent-monitoring --agent cli-builder \\
-      --title \"Wire the vault watcher into the desktop app\" \\
+  agentmon work start --agent cli-builder \\
+      --title \"Wire the change watcher into the desktop app\" \\
       --body \"$(cat <<'EOF'
   ## What
   ...
@@ -55,31 +55,37 @@ EXAMPLES
   ...
   EOF
   )\"
-  agentmon work done WORK-0003 -p agent-monitoring --agent cli-builder --outcome \"...\"
-  agentmon bug list -p agent-monitoring --status open
-  agentmon status -p agent-monitoring
+  agentmon work done WORK-0003 --agent cli-builder --outcome \"...\"
+  agentmon bug list --status open
+  agentmon note list                    # what previous agents left for you — read first
+  agentmon note add --agent cli-builder --type memory \\
+      --title \"...\" --description \"...\" --body \"...\"
+  agentmon status
   agentmon doctor
+  agentmon app-feedback add --agent <you> --type idea \\
+      --title \"...\"                     # a bug/wish about this app itself, any directory
 
 ALREADY FINISHED THE WORK?
   Record it after the fact — every mutation takes the time it really happened:
-  agentmon work start -p <proj> --agent <you> --title \"...\" --body \"...\" \\
+  agentmon work start --agent <you> --title \"...\" --body \"...\" \\
       --started-at 2026-08-18T09:12:00Z
-  agentmon work done WORK-0007 -p <proj> --agent <you> --outcome \"...\" \\
+  agentmon work done WORK-0007 --agent <you> --outcome \"...\" \\
       --finished-at 2026-08-18T11:30:00Z
   Also: --created-at on `bug create`, --at on work update/abandon and bug claim/comment/resolve.
 
-VAULT RESOLUTION
-  --vault <dir>  >  $AGENTMON_VAULT  >  ./vault (when it contains vault.json)
+PROJECT RESOLUTION (git-style)
+  --dir <folder>  >  $AGENTMON_DIR  >  the nearest AgentMonitoring/ folder, searching
+  upward from the current directory. Inside a repo that has one, no flags are needed.
 
 DEFAULTS FROM THE ENVIRONMENT
-  $AGENTMON_AGENT    supplies --agent    $AGENTMON_PROJECT  supplies --project
+  $AGENTMON_AGENT supplies --agent.
 
 GLOBAL FLAGS
-  --vault <dir> and --json work anywhere on the line, before or after the subcommand.
+  --dir <folder> and --json work anywhere on the line, before or after the subcommand.
 
 EXIT CODES
-  0 ok   1 vault has problems   2 usage   3 not found
-  4 body rejected   5 conflict   6 invalid vault   7 io error
+  0 ok   1 project has problems   2 usage   3 not found
+  4 body rejected   5 conflict   6 invalid project   7 io error
 
 Full manual: docs/AGENT_MANUAL.md";
 
@@ -87,25 +93,30 @@ Full manual: docs/AGENT_MANUAL.md";
 #[command(
     name = "agentmon",
     version,
-    about = "Record agent work in a plain-file vault that humans read in the AgentMonitoring app.",
-    long_about = "agentmon writes work logs, bug reports and events into a vault directory of \
-plain files. The AgentMonitoring desktop app reads the same directory.\n\n\
+    about = "Record agent work in a plain-file AgentMonitoring folder that humans read in the app.",
+    long_about = "agentmon writes work logs, bug reports and events into an `AgentMonitoring` \
+folder that lives inside the project it describes — the way `.git` lives inside a repo. The \
+AgentMonitoring desktop app reads every such folder the human has registered.\n\n\
 Work logs answer three questions — ## What, ## Why, ## How — and gain an ## Outcome when they \
 finish. Bugs carry a ## Report, a comment thread and a ## Resolution. The CLI enforces that \
-shape, because a record nobody can reconstruct the work from is worse than no record.",
+shape, because a record nobody can reconstruct the work from is worse than no record.\n\n\
+Notes are the third kind: shared agent knowledge (memory, handoff, decision, reference) that \
+can be rewritten and removed as the truth changes — `agentmon note list` is where a session \
+starts.",
     after_help = ROOT_AFTER_HELP,
     propagate_version = true,
     disable_help_subcommand = false
 )]
 struct Cli {
-    /// Vault directory (overrides $AGENTMON_VAULT and ./vault).
-    #[arg(long, global = true, value_name = "DIR")]
-    vault: Option<PathBuf>,
+    /// Project folder: the AgentMonitoring directory, or any folder containing one.
+    /// Overrides $AGENTMON_DIR and the upward search from the current directory.
+    #[arg(long, global = true, value_name = "FOLDER")]
+    dir: Option<PathBuf>,
 
     /// Print the result as JSON; on failure prints {"ok":false,"error":{...}}.
     ///
-    /// Global, so `agentmon --json work list -p x` and `agentmon work list -p x --json`
-    /// are the same command — agents write it both ways.
+    /// Global, so `agentmon --json work list` and `agentmon work list --json` are the
+    /// same command — agents write it both ways.
     #[arg(long, global = true)]
     json: bool,
 
@@ -115,51 +126,13 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Create a new vault (a directory of plain files).
-    #[command(after_help = "EXAMPLES\n  agentmon init --name \"AgentMonitoring\"\n  \
-        agentmon init --vault /srv/records --name \"Team records\"")]
+    /// Create a project: an AgentMonitoring folder inside the current directory (or --dir).
+    #[command(after_help = "EXAMPLES\n  agentmon init --name \"Checkout rewrite\" \\\n    \
+        --description \"Replace the legacy checkout flow.\" --tags frontend,payments\n  \
+        agentmon init --dir /c/Code/MyApp --name \"MyApp\"\n\n  The folder created is \
+        <location>/AgentMonitoring — commit it with the repo and the history travels with \
+        the code. Refuses (exit 5) if that folder already holds a project.")]
     Init {
-        /// Human-readable vault name, shown in the app.
-        #[arg(long, value_name = "NAME", default_value = "AgentMonitoring vault")]
-        name: String,
-    },
-    /// Create and list projects.
-    #[command(subcommand)]
-    Project(ProjectCmd),
-    /// Record what you are doing, progress on it, and how it ended.
-    #[command(subcommand)]
-    Work(WorkCmd),
-    /// File, claim, discuss and resolve bugs.
-    #[command(subcommand)]
-    Bug(BugCmd),
-    /// Snapshot of a project: active work, open bugs, recent events.
-    #[command(after_help = "EXAMPLES\n  agentmon status -p agent-monitoring\n  \
-        agentmon status -p agent-monitoring --json")]
-    Status {
-        /// Project slug.
-        #[arg(short, long, value_name = "SLUG", env = "AGENTMON_PROJECT")]
-        project: String,
-    },
-    /// Validate vault integrity. Exits 1 when something is wrong.
-    #[command(after_help = "EXAMPLES\n  agentmon doctor\n  agentmon doctor --strict --json\n\n\
-        Errors mean the app will show something wrong or untrue. Warnings mean the vault is \
-        readable but something is off. --strict makes warnings fail too.")]
-    Doctor {
-        /// Treat warnings as failures.
-        #[arg(long)]
-        strict: bool,
-    },
-}
-
-#[derive(Subcommand, Debug)]
-enum ProjectCmd {
-    /// Create a project (a slug directory with worklogs, bugs and an event log).
-    #[command(after_help = "EXAMPLE\n  agentmon project create checkout-rewrite \\\n    \
-        --name \"Checkout rewrite\" \\\n    --description \"Replace the legacy checkout flow.\" \\\n    \
-        --tags frontend,payments")]
-    Create {
-        /// Directory-safe id: lowercase letters, digits, '-' or '_'.
-        slug: String,
         /// Display name shown in the app.
         #[arg(long)]
         name: String,
@@ -175,15 +148,80 @@ enum ProjectCmd {
         /// When the project was created (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
+        /// Also write agent instructions to <location>/CLAUDE.md, pointing coding
+        /// agents at these records. Appends if the file exists; skips if the section
+        /// is already there.
+        #[arg(long, value_name = "ko|en")]
+        claude_md: Option<String>,
+        /// Also write <location>/.mcp.json registering the agentmon MCP server, so
+        /// project-scope clients (Claude Code reads the file on its own) have the tools
+        /// from their first session. Only the `agentmon` entry is added or replaced;
+        /// other servers in an existing file are kept.
+        #[arg(long)]
+        mcp_json: bool,
+        /// Default agent handle inside that registration; any call can override it
+        /// per record.
+        #[arg(long, value_name = "handle", default_value = "claude", requires = "mcp_json")]
+        mcp_agent: String,
     },
-    /// Change a project's name, description or tags.
-    #[command(after_help = "EXAMPLE\n  agentmon project update checkout-rewrite \\\n    \
+    /// View or update this project's metadata; list registered projects.
+    #[command(subcommand)]
+    Project(ProjectCmd),
+    /// Record what you are doing, progress on it, and how it ended.
+    #[command(subcommand)]
+    Work(WorkCmd),
+    /// File, claim, discuss and resolve bugs.
+    #[command(subcommand)]
+    Bug(BugCmd),
+    /// Shared agent notes: memory, handoffs, decisions, references. Read them first.
+    #[command(subcommand)]
+    Note(NoteCmd),
+    /// Bugs and wishes about the AgentMonitoring app itself. Machine-level: works from
+    /// any directory, belongs to no project, and --dir does not apply.
+    #[command(subcommand)]
+    AppFeedback(AppFeedbackCmd),
+    /// Snapshot of this project: active work, open bugs, recent events.
+    #[command(after_help = "EXAMPLES\n  agentmon status\n  agentmon status --json")]
+    Status,
+    /// Validate project integrity. Exits 1 when something is wrong.
+    #[command(after_help = "EXAMPLES\n  agentmon doctor\n  agentmon doctor --strict --json\n\n\
+        Errors mean the app will show something wrong or untrue. Warnings mean the project is \
+        readable but something is off. --strict makes warnings fail too.")]
+    Doctor {
+        /// Treat warnings as failures.
+        #[arg(long)]
+        strict: bool,
+    },
+    /// Copy one project out of a v1 vault into <folder>/AgentMonitoring (schema v2).
+    #[command(after_help = "EXAMPLE\n  agentmon migrate --from /c/old/vault \\\n    \
+        --project agent-monitoring --to /c/Code/AgentMonitoring\n\n  Records, events and \
+        timestamps are copied byte-for-byte; only project.json is rewritten to v2. The vault \
+        is left untouched — delete it yourself once `agentmon doctor` passes on the new \
+        folder. Refuses (exit 5) if the target already holds a project.")]
+    Migrate {
+        /// The v1 vault directory (the folder holding vault.json).
+        #[arg(long, value_name = "VAULT")]
+        from: PathBuf,
+        /// The project slug inside the vault (its folder name under projects/).
+        #[arg(long, value_name = "SLUG")]
+        project: String,
+        /// Where the AgentMonitoring folder goes (typically the code repo root).
+        #[arg(long, value_name = "FOLDER")]
+        to: PathBuf,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ProjectCmd {
+    /// Show this project's metadata and counts.
+    #[command(after_help = "EXAMPLES\n  agentmon project view\n  agentmon project view --json")]
+    View,
+    /// Change this project's name, description or tags.
+    #[command(after_help = "EXAMPLE\n  agentmon project update \\\n    \
         --description \"Replace the legacy checkout with the new payment provider.\" \\\n    \
         --tags frontend,payments,q3\n\n  Only the flags you pass change; --tags replaces the \
         whole list. Logs a project_updated event, which hand-editing project.json does not.")]
     Update {
-        /// The project slug (the directory name under projects/).
-        slug: String,
         /// New display name.
         #[arg(long)]
         name: Option<String>,
@@ -193,10 +231,6 @@ enum ProjectCmd {
         /// Replacement tag list, comma-separated.
         #[arg(long, value_delimiter = ',')]
         tags: Option<Vec<String>>,
-        /// active | archived. The v1 schema field, kept for compatibility — the app ignores
-        /// it and lists every project. It hides nothing and deletes nothing.
-        #[arg(long, value_name = "STATE")]
-        status: Option<String>,
         /// Agent recorded as the actor of the project_updated event.
         #[arg(long, env = "AGENTMON_AGENT", default_value = "agentmon")]
         agent: String,
@@ -204,16 +238,74 @@ enum ProjectCmd {
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
     },
-    /// List projects in the vault.
-    #[command(after_help = "EXAMPLE\n  agentmon project list")]
+    /// List the projects registered on this machine (~/.AgentMonitoring/registry.json).
+    #[command(after_help = "EXAMPLE\n  agentmon project list\n\n  The registry is the app's \
+        bookmark list — machine-local, updated when a project is created here or opened in \
+        the app. An empty list does not mean no projects exist; it means none are registered.")]
     List,
+    /// Write (or refresh) this project's `.mcp.json`, registering the agentmon MCP
+    /// server for project-scope clients — what `init --mcp-json` does, for a project
+    /// that already exists. Only the `agentmon` entry is touched.
+    #[command(name = "mcp-json", after_help = "EXAMPLE\n  agentmon project mcp-json\n\n  \
+        Points the file at the mcp/server.mjs found near this binary (the installed app, \
+        or this checkout), with absolute paths — re-run it on the machine the repo moves to.")]
+    McpJson {
+        /// Default agent handle inside the registration; any call can override it.
+        #[arg(long, value_name = "handle", default_value = "claude")]
+        agent: String,
+    },
 }
 
-#[derive(Args, Debug)]
-struct ProjectArg {
-    /// Project slug (e.g. agent-monitoring). Defaults to $AGENTMON_PROJECT.
-    #[arg(short, long, value_name = "SLUG", env = "AGENTMON_PROJECT")]
-    project: String,
+#[derive(Subcommand, Debug)]
+enum AppFeedbackCmd {
+    /// File a bug or a wish about this app — not about the project you are working in.
+    #[command(after_help = "EXAMPLES\n  agentmon app-feedback add --agent my-agent --type bug \\\n    \
+        --title \"status counts an abandoned log as in progress\" \\\n    \
+        --body \"Repro: abandon a log, run status — the in-progress count still includes it.\"\n  \
+        agentmon app-feedback add --agent my-agent --type idea \\\n    --title \"note list should filter by tag\"\n\n  \
+        --body is optional: a specific title can carry a whole wish. The human reads these \
+        on the app's App feedback board.")]
+    Add {
+        /// bug (something is wrong) or idea (something is missing).
+        #[arg(long, value_name = "bug|idea")]
+        r#type: String,
+        /// One specific line.
+        #[arg(long)]
+        title: String,
+        /// Free prose — repro for a bug, the situation that made you wish for an idea.
+        #[arg(long)]
+        body: Option<String>,
+        #[command(flatten)]
+        agent: AgentArg,
+        /// When it was noticed (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
+    },
+    /// Every item, open first, newest first.
+    #[command(after_help = "EXAMPLES\n  agentmon app-feedback list\n  \
+        agentmon app-feedback list --status open --type bug --json")]
+    List {
+        /// open | done
+        #[arg(long)]
+        status: Option<String>,
+        /// bug | idea
+        #[arg(long)]
+        r#type: Option<String>,
+    },
+    /// One item, body included.
+    #[command(after_help = "EXAMPLE\n  agentmon app-feedback view FB-0001")]
+    View { id: String },
+    /// Mark an item handled — after really handling it.
+    #[command(after_help = "EXAMPLE\n  agentmon app-feedback done FB-0001")]
+    Done { id: String },
+    /// Put a done item back on the board.
+    #[command(after_help = "EXAMPLE\n  agentmon app-feedback reopen FB-0001")]
+    Reopen { id: String },
+    /// Delete a done item for good. Refused while it is open: mark it done first, so a
+    /// complaint can never vanish unread.
+    #[command(after_help = "EXAMPLE\n  agentmon app-feedback done FB-0001\n  \
+        agentmon app-feedback delete FB-0001")]
+    Delete { id: String },
 }
 
 #[derive(Args, Debug)]
@@ -232,22 +324,22 @@ BODY CONTRACT
   ## How    the approach, and the parts a reviewer would otherwise reverse-engineer
 
 EXAMPLE (Git Bash)
-  agentmon work start -p agent-monitoring --agent cli-builder \\
-    --title \"Wire the vault watcher into the desktop app\" \\
+  agentmon work start --agent cli-builder \\
+    --title \"Wire the change watcher into the desktop app\" \\
     --tags tauri,live-updates --refs BUG-0002 \\
     --body \"$(cat <<'EOF'
   ## What
 
-  Start a notify watcher in the Tauri shell and emit vault-changed.
+  Start a notify watcher in the Tauri shell and emit project-changed.
 
   ## Why
 
-  The desktop app shows whatever the vault held when a screen opened, so browser mode
+  The desktop app shows whatever the project held when a screen opened, so browser mode
   looks more live than the product.
 
   ## How
 
-  recommended_watcher on <vault>/projects, 250ms debounce, slug in the payload.
+  recommended_watcher on each registered AgentMonitoring folder, 250ms debounce.
   EOF
   )\"
 
@@ -269,8 +361,6 @@ enum WorkCmd {
     /// Start a work log. The body must contain ## What, ## Why and ## How.
     #[command(after_help = WORK_START_HELP)]
     Start {
-        #[command(flatten)]
-        project: ProjectArg,
         #[command(flatten)]
         agent: AgentArg,
         /// One line, shown in every list. Be specific.
@@ -296,7 +386,7 @@ enum WorkCmd {
         finished_at: Option<String>,
     },
     /// Append a timestamped note to a work log — a progress note, or a later correction.
-    #[command(after_help = "EXAMPLE\n  agentmon work update WORK-0003 -p agent-monitoring \\\n    \
+    #[command(after_help = "EXAMPLE\n  agentmon work update WORK-0003 \\\n    \
         --agent cli-builder \\\n    --message \"Debounce is in: one save produced four notify \
         events, now one reload.\"\n\n  Notes are append-only and timestamped; they are the \
         story of the work, so write what changed and what you learned, not \"progress\".\n\n\
@@ -305,13 +395,11 @@ enum WorkCmd {
         changes — the note lands at the end of the timeline, dated at or after the close — so \
         this is how a record that turns out to state something false gets corrected inside \
         itself. Open the note with \"Correction:\" and the record page marks it and says so at \
-        the top:\n\n  agentmon work update WORK-0011 -p agent-monitoring --agent p6-curator \\\n    \
+        the top:\n\n  agentmon work update WORK-0011 --agent p6-curator \\\n    \
         --message \"Correction: relay has four agents, not ten (BUG-0017).\"")]
     Update {
         /// WORK-NNNN.
         id: String,
-        #[command(flatten)]
-        project: ProjectArg,
         #[command(flatten)]
         agent: AgentArg,
         /// The progress note: what changed, what you learned, what is next.
@@ -325,7 +413,7 @@ enum WorkCmd {
         at: Option<String>,
     },
     /// Stop a work log that will not be finished (status abandoned, with the reason).
-    #[command(after_help = "EXAMPLE\n  agentmon work abandon WORK-0003 -p agent-monitoring \\\n    \
+    #[command(after_help = "EXAMPLE\n  agentmon work abandon WORK-0003 \\\n    \
         --agent cli-builder \\\n    --reason \"Superseded by WORK-0009, which solves the same \
         problem in agentmon-core; nothing from this branch was kept.\"\n\n  Use it when work \
         stops for good: leaving it in_progress shows an agent still working on something \
@@ -334,8 +422,6 @@ enum WorkCmd {
     Abandon {
         /// WORK-NNNN.
         id: String,
-        #[command(flatten)]
-        project: ProjectArg,
         #[command(flatten)]
         agent: AgentArg,
         /// Why it stopped, and what a reader should look at instead.
@@ -349,7 +435,7 @@ enum WorkCmd {
         at: Option<String>,
     },
     /// Close a work log with an outcome (what shipped, what changed, how it was verified).
-    #[command(after_help = "EXAMPLE\n  agentmon work done WORK-0003 -p agent-monitoring \\\n    \
+    #[command(after_help = "EXAMPLE\n  agentmon work done WORK-0003 \\\n    \
         --agent cli-builder \\\n    --files src-tauri/src/lib.rs,src-tauri/Cargo.toml \\\n    \
         --outcome \"Shipped the debounced watcher; cargo check -p agentmonitoring clean and the \
         dashboard refreshes within ~300ms of a CLI write.\"\n\n  The outcome is what a human \
@@ -360,8 +446,6 @@ enum WorkCmd {
     Done {
         /// WORK-NNNN.
         id: String,
-        #[command(flatten)]
-        project: ProjectArg,
         #[command(flatten)]
         agent: AgentArg,
         /// What shipped, what changed, how it was verified.
@@ -384,12 +468,10 @@ enum WorkCmd {
         started_at: Option<String>,
     },
     /// List work logs.
-    #[command(after_help = "EXAMPLES\n  agentmon work list -p agent-monitoring\n  \
-        agentmon work list -p agent-monitoring --status in_progress\n  \
-        agentmon work list -p agent-monitoring --agent cli-builder --json")]
+    #[command(after_help = "EXAMPLES\n  agentmon work list\n  \
+        agentmon work list --status in_progress\n  \
+        agentmon work list --agent cli-builder --json")]
     List {
-        #[command(flatten)]
-        project: ProjectArg,
         /// in_progress | done | abandoned
         #[arg(long)]
         status: Option<String>,
@@ -401,13 +483,11 @@ enum WorkCmd {
         tag: Option<String>,
     },
     /// Show one work log.
-    #[command(after_help = "EXAMPLES\n  agentmon work view WORK-0003 -p agent-monitoring\n  \
-        agentmon work view WORK-0003 -p agent-monitoring --json")]
+    #[command(after_help = "EXAMPLES\n  agentmon work view WORK-0003\n  \
+        agentmon work view WORK-0003 --json")]
     View {
         /// WORK-NNNN.
         id: String,
-        #[command(flatten)]
-        project: ProjectArg,
     },
 }
 
@@ -416,7 +496,7 @@ BODY CONTRACT
   Plain prose becomes the ## Report section. Write repro steps, expected, actual.
 
 EXAMPLE (Git Bash)
-  agentmon bug create -p agent-monitoring --agent cli-builder \\
+  agentmon bug create --agent cli-builder \\
     --title \"work done exits 0 but leaves status in_progress\" \\
     --severity high --labels cli,data-loss \\
     --body \"$(cat <<'EOF'
@@ -424,9 +504,9 @@ EXAMPLE (Git Bash)
 
   Repro:
 
-  1. agentmon work start -p demo --agent a --title t --body \"\\$(cat body.md)\"
-  2. agentmon work done WORK-0001 -p demo --agent a --outcome \"shipped it, tests green\"
-  3. agentmon work view WORK-0001 -p demo
+  1. agentmon work start --agent a --title t --body \"\\$(cat body.md)\"
+  2. agentmon work done WORK-0001 --agent a --outcome \"shipped it, tests green\"
+  3. agentmon work view WORK-0001
 
   Expected: status done, finished set.
   Actual: exit 0, but status is still in_progress and finished is null.
@@ -444,8 +524,6 @@ enum BugCmd {
     /// File a bug.
     #[command(after_help = BUG_CREATE_HELP)]
     Create {
-        #[command(flatten)]
-        project: ProjectArg,
         #[command(flatten)]
         agent: AgentArg,
         #[arg(long)]
@@ -470,14 +548,11 @@ enum BugCmd {
         created_at: Option<String>,
     },
     /// Take ownership of a bug (sets assignee and status in_progress).
-    #[command(after_help = "EXAMPLE\n  agentmon bug claim BUG-0002 -p agent-monitoring \
-        --agent cli-builder\n\n  Claiming a bug someone else holds is refused — comment on it \
-        instead.")]
+    #[command(after_help = "EXAMPLE\n  agentmon bug claim BUG-0002 --agent cli-builder\n\n  \
+        Claiming a bug someone else holds is refused — comment on it instead.")]
     Claim {
         /// BUG-NNNN.
         id: String,
-        #[command(flatten)]
-        project: ProjectArg,
         #[command(flatten)]
         agent: AgentArg,
         /// When it was claimed (UTC ISO8601). Defaults to now.
@@ -485,14 +560,12 @@ enum BugCmd {
         at: Option<String>,
     },
     /// Add a comment to a bug's thread.
-    #[command(after_help = "EXAMPLE\n  agentmon bug comment BUG-0002 -p agent-monitoring \\\n    \
+    #[command(after_help = "EXAMPLE\n  agentmon bug comment BUG-0002 \\\n    \
         --agent cli-builder \\\n    --message \"Root cause: setup() never started a watcher, so \
-        vault-changed was never emitted.\"")]
+        project-changed was never emitted.\"")]
     Comment {
         /// BUG-NNNN.
         id: String,
-        #[command(flatten)]
-        project: ProjectArg,
         #[command(flatten)]
         agent: AgentArg,
         /// What you found, what you tried, what it means for the fix.
@@ -506,16 +579,15 @@ enum BugCmd {
         at: Option<String>,
     },
     /// Resolve a bug with a written resolution.
-    #[command(after_help = "EXAMPLE\n  agentmon bug resolve BUG-0002 -p agent-monitoring \\\n    \
+    #[command(after_help = "EXAMPLE\n  agentmon bug resolve BUG-0002 \\\n    \
         --agent cli-builder \\\n    --resolution \"Root cause: no watcher was ever started. Fix: \
-        setup() spawns a debounced notify watcher that emits vault-changed. Verified: cargo check \
-        -p agentmonitoring clean; dashboard refreshed on a CLI write.\"\n\n  Say the root cause, \
-        the fix, and the verification. Resolving a bug you did not claim assigns it to you.")]
+        setup() spawns a debounced notify watcher that emits project-changed. Verified: cargo \
+        check -p agentmonitoring clean; dashboard refreshed on a CLI write.\"\n\n  Say the root \
+        cause, the fix, and the verification. Resolving a bug you did not claim assigns it to \
+        you.")]
     Resolve {
         /// BUG-NNNN.
         id: String,
-        #[command(flatten)]
-        project: ProjectArg,
         #[command(flatten)]
         agent: AgentArg,
         /// Root cause, the fix, and how it was verified.
@@ -529,12 +601,10 @@ enum BugCmd {
         at: Option<String>,
     },
     /// List bugs.
-    #[command(after_help = "EXAMPLES\n  agentmon bug list -p agent-monitoring --status open\n  \
-        agentmon bug list -p agent-monitoring --severity high --json\n  \
-        agentmon bug list -p agent-monitoring --label tauri")]
+    #[command(after_help = "EXAMPLES\n  agentmon bug list --status open\n  \
+        agentmon bug list --severity high --json\n  \
+        agentmon bug list --label tauri")]
     List {
-        #[command(flatten)]
-        project: ProjectArg,
         /// open | in_progress | resolved | closed
         #[arg(long)]
         status: Option<String>,
@@ -549,13 +619,162 @@ enum BugCmd {
         assignee: Option<String>,
     },
     /// Show one bug with its comment thread.
-    #[command(after_help = "EXAMPLES\n  agentmon bug view BUG-0002 -p agent-monitoring\n  \
-        agentmon bug view BUG-0002 -p agent-monitoring --json")]
+    #[command(after_help = "EXAMPLES\n  agentmon bug view BUG-0002\n  \
+        agentmon bug view BUG-0002 --json")]
     View {
         /// BUG-NNNN.
         id: String,
+    },
+}
+
+const NOTE_ADD_HELP: &str = "\
+WHAT A NOTE IS
+  A work log is history; a note is knowledge — the thing you wish the previous agent
+  had told you. One fact, one file: before adding, run `agentmon note list` and update
+  an existing note instead of writing a near-duplicate.
+
+TYPES (pick the question your note answers)
+  memory     a durable fact or gotcha about this project (\"gate scripts must sandbox
+             the registry\")
+  handoff    state for whoever works next: done, mid-flight, do-this-first
+  decision   a choice and its reasoning, so it is not relitigated from scratch
+  reference  a pointer to something outside the project: a URL, a dashboard, a spec
+
+EXAMPLE (Git Bash)
+  agentmon note add --agent cli-builder \\
+    --type memory \\
+    --title \"Gate scripts must sandbox the registry\" \\
+    --description \"Any script that runs agentmon init must set AGENTMON_REGISTRY_DIR.\" \\
+    --tags gates,registry --refs WORK-0035 \\
+    --body \"$(cat <<'EOF'
+  agentmon init registers the new project in ~/.AgentMonitoring/registry.json, best
+  effort. A gate script that inits a temp fixture therefore bookmarks that fixture in
+  the real user registry unless it points AGENTMON_REGISTRY_DIR at a scratch dir first.
+  EOF
+  )\"
+
+NAMES
+  The note's identity is its kebab-case name (also the file: notes/<name>.md). It is
+  derived from the title — the example above becomes gate-scripts-must-sandbox-the-registry
+  — or passed explicitly with --name. Non-ascii titles need an explicit --name.
+
+  The body is free-form markdown: sections, lists and code fences are all yours.
+  Refused (exit 5): a name that already exists — update that note instead.";
+
+#[derive(Subcommand, Debug)]
+enum NoteCmd {
+    /// Add a note. Refuses a name that already exists — update that note instead.
+    #[command(visible_alias = "create", after_help = NOTE_ADD_HELP)]
+    Add {
         #[command(flatten)]
-        project: ProjectArg,
+        agent: AgentArg,
+        /// One line, shown in every list. Be specific.
+        #[arg(long)]
+        title: String,
+        /// memory | handoff | decision | reference
+        #[arg(long = "type", value_name = "TYPE")]
+        note_type: String,
+        /// One line: what this note knows and when to read it. Lists show it.
+        #[arg(long)]
+        description: String,
+        /// Kebab-case identity (and file name). Defaults to a slug of the title.
+        #[arg(long)]
+        name: Option<String>,
+        /// Free-form markdown body — the knowledge itself.
+        #[arg(long, conflicts_with = "body_file")]
+        body: Option<String>,
+        /// Read the body from a file ('-' reads stdin).
+        #[arg(long, value_name = "FILE")]
+        body_file: Option<PathBuf>,
+        /// Comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        tags: Vec<String>,
+        /// Related records and notes, comma-separated: WORK-0001,BUG-0002,other-note.
+        #[arg(long, value_delimiter = ',')]
+        refs: Vec<String>,
+        /// When the note was written (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
+    },
+    /// Rewrite parts of a note: any metadata flag, and/or the whole body.
+    #[command(after_help = "EXAMPLES\n  agentmon note update handoff-p13 --agent ui-builder \\\n    \
+        --body-file handoff.md\n  agentmon note update registry-gate-gotcha --agent cli-builder \\\n    \
+        --description \"Every gate must set AGENTMON_REGISTRY_DIR; check-live now does too.\"\n\n  \
+        Only the flags you pass change. --body REPLACES the body — a note holds what is \
+        currently true, not a diary (history belongs in work logs). --tags and --refs \
+        replace their lists. The event log keeps who changed what and when.")]
+    Update {
+        /// The note's name (see `agentmon note list`).
+        name: String,
+        #[command(flatten)]
+        agent: AgentArg,
+        /// New one-line title.
+        #[arg(long)]
+        title: Option<String>,
+        /// memory | handoff | decision | reference
+        #[arg(long = "type", value_name = "TYPE")]
+        note_type: Option<String>,
+        /// New one-line description.
+        #[arg(long)]
+        description: Option<String>,
+        /// Replacement tag list, comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        tags: Option<Vec<String>>,
+        /// Replacement refs list, comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        refs: Option<Vec<String>>,
+        /// Replacement markdown body.
+        #[arg(long, conflicts_with = "body_file")]
+        body: Option<String>,
+        /// Read the replacement body from a file ('-' reads stdin).
+        #[arg(long, value_name = "FILE")]
+        body_file: Option<PathBuf>,
+        /// When the change happened (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
+    },
+    /// Remove a note that is wrong or fully absorbed. The event log keeps the removal.
+    #[command(visible_alias = "rm", after_help = "EXAMPLE\n  \
+        agentmon note remove handoff-p12 --agent p13-builder\n\n  \
+        Remove a note when keeping it would mislead: it is wrong, superseded, or a \
+        handoff that has been fully absorbed. The note_removed event stays on the feed — \
+        who removed it, when, and what it was called.\n\n  This is for notes only. Work \
+        logs and bugs are history and have no remove command, anywhere.")]
+    Remove {
+        /// The note's name.
+        name: String,
+        #[command(flatten)]
+        agent: AgentArg,
+        /// When it was removed (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
+    },
+    /// List notes: names, types and the one-line descriptions. Start every session here.
+    #[command(after_help = "EXAMPLES\n  agentmon note list\n  \
+        agentmon note list --type handoff\n  \
+        agentmon note list --search registry --json\n\n  \
+        The list is the index: scan the descriptions, then `agentmon note view <name>` \
+        the ones that matter for your task.")]
+    List {
+        /// memory | handoff | decision | reference
+        #[arg(long = "type", value_name = "TYPE")]
+        note_type: Option<String>,
+        /// Only notes carrying this tag.
+        #[arg(long)]
+        tag: Option<String>,
+        /// Only notes written by this agent.
+        #[arg(long)]
+        agent: Option<String>,
+        /// Case-insensitive match on name, title, description, tags and body.
+        #[arg(long, value_name = "TEXT")]
+        search: Option<String>,
+    },
+    /// Show one note in full.
+    #[command(after_help = "EXAMPLES\n  agentmon note view registry-gate-gotcha\n  \
+        agentmon note view handoff-p13 --json")]
+    View {
+        /// The note's name.
+        name: String,
     },
 }
 
@@ -591,12 +810,12 @@ struct CliError {
 impl From<CoreError> for CliError {
     fn from(e: CoreError) -> Self {
         let code = match &e {
-            CoreError::VaultNotFound { .. }
-            | CoreError::ProjectNotFound { .. }
-            | CoreError::RecordNotFound { .. } => exit::NOT_FOUND,
+            CoreError::ProjectDirNotFound { .. } | CoreError::RecordNotFound { .. } => {
+                exit::NOT_FOUND
+            }
             CoreError::InvalidBody(_) => exit::INVALID_BODY,
             CoreError::Conflict { .. } | CoreError::Locked { .. } => exit::CONFLICT,
-            CoreError::Malformed { .. } => exit::INVALID_VAULT,
+            CoreError::Malformed { .. } => exit::INVALID_PROJECT,
             CoreError::Io { .. } => exit::IO,
             CoreError::InvalidId { .. } | CoreError::InvalidValue { .. } => exit::USAGE,
         };
@@ -612,118 +831,218 @@ type CliResult = std::result::Result<(), CliError>;
 
 fn run(cli: &Cli) -> CliResult {
     match &cli.command {
-        Command::Init { name } => cmd_init(cli, name, cli.json),
+        Command::Init {
+            name,
+            description,
+            tags,
+            agent,
+            at,
+            claude_md,
+            mcp_json,
+            mcp_agent,
+        } => cmd_init(
+            cli,
+            name,
+            description.as_deref(),
+            tags,
+            agent,
+            at.as_deref(),
+            claude_md.as_deref(),
+            *mcp_json,
+            mcp_agent,
+        ),
         Command::Project(cmd) => run_project(cli, cmd),
         Command::Work(cmd) => run_work(cli, cmd),
         Command::Bug(cmd) => run_bug(cli, cmd),
-        Command::Status { project } => cmd_status(cli, project, cli.json),
+        Command::Note(cmd) => run_note(cli, cmd),
+        Command::AppFeedback(cmd) => run_app_feedback(cli, cmd),
+        Command::Status => cmd_status(cli, cli.json),
         Command::Doctor { strict } => cmd_doctor(cli, *strict, cli.json),
+        Command::Migrate { from, project, to } => cmd_migrate(cli, from, project, to),
     }
 }
 
+/// Register a store in `~/.AgentMonitoring/registry.json`, best effort.
+///
+/// A failure here never fails the command that triggered it: the registry is the app's
+/// bookmark list, and headless machines (CI, containers) legitimately have none.
+fn register(store: &Store) -> bool {
+    let name = store.project().ok().map(|p| p.name);
+    let mut reg = Registry::load();
+    reg.add(store.root(), name.as_deref());
+    reg.save().is_ok()
+}
+
 // ---------------------------------------------------------------------------
-// init / project
+// init / project / migrate
 // ---------------------------------------------------------------------------
 
-fn cmd_init(cli: &Cli, name: &str, json: bool) -> CliResult {
-    // `init` is the one command that must not resolve an existing vault.
-    let target = cli
-        .vault
+fn cmd_init(
+    cli: &Cli,
+    name: &str,
+    description: Option<&str>,
+    tags: &[String],
+    agent: &str,
+    at: Option<&str>,
+    claude_md: Option<&str>,
+    mcp_json: bool,
+    mcp_agent: &str,
+) -> CliResult {
+    // Parsed before anything is written: a typo in --claude-md must not leave behind a
+    // project that a corrected re-run then refuses to create.
+    let claude_md = claude_md.map(agentmon_core::parse_claude_md_lang).transpose()?;
+    // `init` is the one command that must not resolve an existing project: the location
+    // is --dir, $AGENTMON_DIR or the current directory, taken literally.
+    let location = cli
+        .dir
         .clone()
-        .or_else(|| std::env::var_os("AGENTMON_VAULT").map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from("vault"));
-    let vault = Vault::init(&target, name)?;
-    let info = vault.info()?;
-    if json {
-        print_json(&info)?;
+        .or_else(|| std::env::var_os("AGENTMON_DIR").map(PathBuf::from))
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let store = Store::init(
+        &location,
+        &NewProject {
+            name: name.to_string(),
+            description: description.unwrap_or_default().to_string(),
+            tags: tags.to_vec(),
+            actor: agent.to_string(),
+            at: at.map(str::to_string),
+        },
+    )?;
+    let registered = register(&store);
+    let claude = claude_md
+        .map(|lang| agentmon_core::write_claude_md(store.location(), lang))
+        .transpose()?;
+    let mcp = if mcp_json {
+        // The server ships beside this binary (installed app) or at <repo>/mcp (source
+        // checkout); pointing .mcp.json at a path that is not there helps nobody.
+        let server = agentmon_core::find_mcp_server().ok_or_else(|| CliError {
+            code: exit::NOT_FOUND,
+            kind: "not_found",
+            message: "the project was created, but .mcp.json was not: no mcp/server.mjs \
+                      found near this agentmon binary — write the file by hand instead \
+                      (see docs/MCP.md)"
+                .to_string(),
+        })?;
+        Some(agentmon_core::write_mcp_json(
+            store.location(),
+            &server,
+            Some(mcp_agent),
+        )?)
     } else {
-        println!("Created vault \"{}\" at {}", info.name, info.path);
-        println!();
-        println!("Next:");
-        println!(
-            "  agentmon project create <slug> --name \"<name>\"   # e.g. checkout-rewrite"
-        );
-        println!("  agentmon project list");
-        if cli.vault.is_none() && std::env::var_os("AGENTMON_VAULT").is_none() {
-            println!();
-            println!(
-                "This vault is ./vault, so agentmon finds it automatically from this directory."
-            );
-            println!(
-                "From anywhere else, pass --vault {} or export AGENTMON_VAULT={}",
-                info.path, info.path
-            );
+        None
+    };
+    let project = store.project()?;
+    if cli.json {
+        return print_json(&project);
+    }
+    println!("Created project \"{}\"", project.name);
+    println!("  {}", store.root().display());
+    if registered {
+        println!("  registered in the app's project list");
+    }
+    if let Some((path, outcome)) = claude {
+        use agentmon_core::ClaudeMdOutcome as O;
+        match outcome {
+            O::Created => println!("  wrote {}", path.display()),
+            O::Appended => println!("  appended the agent instructions to {}", path.display()),
+            O::AlreadyPresent => {
+                println!("  {} already carries the agent instructions", path.display())
+            }
         }
     }
+    if let Some((path, outcome)) = mcp {
+        use agentmon_core::McpJsonOutcome as O;
+        match outcome {
+            O::Created => println!("  wrote {} (MCP server registered)", path.display()),
+            O::Updated => println!("  added the agentmon server to {}", path.display()),
+            O::AlreadyPresent => {
+                println!("  {} already registers the agentmon server", path.display())
+            }
+        }
+    }
+    println!();
+    println!("Next:");
+    println!("  agentmon work start --agent <you> --title \"<title>\" --body \"...\"");
+    println!();
+    println!(
+        "Commands run from inside {} find this project automatically (like git).",
+        store.location().display()
+    );
+    Ok(())
+}
+
+fn cmd_migrate(cli: &Cli, from: &Path, slug: &str, to: &Path) -> CliResult {
+    let store = agentmon_core::migrate(from, slug, to)?;
+    let registered = register(&store);
+    let project = store.project()?;
+    if cli.json {
+        return print_json(&project);
+    }
+    println!(
+        "Migrated \"{}\" ({} work logs, {} bugs, {} events)",
+        project.name, project.counts.work_total, project.counts.bugs_total, project.counts.events
+    );
+    println!("  {}", store.root().display());
+    if registered {
+        println!("  registered in the app's project list");
+    }
+    println!();
+    println!("Next:");
+    println!("  agentmon doctor --dir {}", store.root().display());
+    println!("  …then delete the old vault folder yourself. It was not modified.");
     Ok(())
 }
 
 fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
     match cmd {
-        ProjectCmd::Create {
-            slug,
+        ProjectCmd::View => {
+            let store = open(cli)?;
+            let p = store.project()?;
+            if cli.json {
+                return print_json(&p);
+            }
+            println!("{}", p.name);
+            if !p.description.is_empty() {
+                println!("{}", p.description);
+            }
+            if !p.tags.is_empty() {
+                println!("tags: {}", p.tags.join(", "));
+            }
+            println!("{}", p.path);
+            println!(
+                "work {} ({} in progress) · bugs {} ({} open) · {} events · last activity {}",
+                p.counts.work_total,
+                p.counts.work_in_progress,
+                p.counts.bugs_total,
+                p.counts.bugs_open,
+                p.counts.events,
+                p.counts.last_activity.as_deref().unwrap_or("—")
+            );
+            Ok(())
+        }
+        ProjectCmd::Update {
             name,
             description,
             tags,
             agent,
             at,
         } => {
-            let vault = open(cli)?;
-            let written = vault.create_project(&NewProject {
-                slug: slug.clone(),
+            let store = open(cli)?;
+            let written = store.update_project(&UpdateProject {
                 name: name.clone(),
-                description: description.clone().unwrap_or_default(),
+                description: description.clone(),
                 tags: tags.clone(),
                 actor: agent.clone(),
                 at: at.clone(),
             })?;
-            if cli.json {
-                print_json(&written)?;
-            } else {
-                println!("Created project {} ({})", written.record.name, written.id);
-                println!("  {}", written.path);
-                println!();
-                println!("Next:");
-                println!(
-                    "  agentmon work start -p {} --agent <you> --title \"<title>\" --body \"...\"",
-                    written.id
-                );
-            }
-            Ok(())
-        }
-        ProjectCmd::Update {
-            slug,
-            name,
-            description,
-            tags,
-            status,
-            agent,
-            at,
-        } => {
-            let vault = open(cli)?;
-            let status = status
-                .as_deref()
-                .map(agentmon_core::parse_project_status)
-                .transpose()?;
-            let written = vault.update_project(
-                slug,
-                &UpdateProject {
-                    name: name.clone(),
-                    description: description.clone(),
-                    tags: tags.clone(),
-                    status,
-                    actor: agent.clone(),
-                    at: at.clone(),
-                },
-            )?;
+            // Keep the registry's cached display name in step with the rename.
+            register(&store);
             if cli.json {
                 return print_json(&written);
             }
             let p = &written.record;
-            println!("Updated project {} ({})", p.name, p.slug);
-            if p.status == agentmon_core::ProjectStatus::Archived {
-                println!("  status: archived — a v1 field; the app lists this project anyway");
-            }
+            println!("Updated project {}", p.name);
             if !p.description.is_empty() {
                 println!("  {}", clip(&p.description, 100));
             }
@@ -733,46 +1052,96 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
             println!("  {}", written.path);
             Ok(())
         }
-        ProjectCmd::List => {
-            let vault = open(cli)?;
-            let projects = vault.projects()?;
+        ProjectCmd::McpJson { agent } => {
+            let store = open(cli)?;
+            let server = agentmon_core::find_mcp_server().ok_or_else(|| CliError {
+                code: exit::NOT_FOUND,
+                kind: "not_found",
+                message: "no mcp/server.mjs found near this agentmon binary — write the \
+                          file by hand instead (see docs/MCP.md)"
+                    .to_string(),
+            })?;
+            let (path, outcome) =
+                agentmon_core::write_mcp_json(store.location(), &server, Some(agent))?;
             if cli.json {
-                return print_json(&projects);
+                use agentmon_core::McpJsonOutcome as O;
+                return print_json(&serde_json::json!({
+                    "ok": true,
+                    "path": path.display().to_string(),
+                    "outcome": match outcome {
+                        O::Created => "created",
+                        O::Updated => "updated",
+                        O::AlreadyPresent => "already_present",
+                    },
+                }));
             }
-            if projects.is_empty() {
-                println!("No projects yet in {}.", vault.root().display());
+            use agentmon_core::McpJsonOutcome as O;
+            match outcome {
+                O::Created => println!("Wrote {} (MCP server registered)", path.display()),
+                O::Updated => println!("Added the agentmon server to {}", path.display()),
+                O::AlreadyPresent => {
+                    println!("{} already registers the agentmon server", path.display())
+                }
+            }
+            println!("  server: {}", server.display());
+            Ok(())
+        }
+        ProjectCmd::List => {
+            let reg = Registry::load();
+            #[derive(serde::Serialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Row {
+                path: String,
+                available: bool,
+                name: Option<String>,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                error: Option<String>,
+            }
+            let rows: Vec<Row> = reg
+                .projects
+                .iter()
+                .map(|e| match Store::open(&e.path) {
+                    Ok(store) => match store.project() {
+                        Ok(p) => Row {
+                            path: e.path.display().to_string(),
+                            available: true,
+                            name: Some(p.name),
+                            error: None,
+                        },
+                        Err(err) => Row {
+                            path: e.path.display().to_string(),
+                            available: false,
+                            name: e.name.clone(),
+                            error: Some(err.to_string()),
+                        },
+                    },
+                    Err(err) => Row {
+                        path: e.path.display().to_string(),
+                        available: false,
+                        name: e.name.clone(),
+                        error: Some(err.to_string()),
+                    },
+                })
+                .collect();
+            if cli.json {
+                return print_json(&rows);
+            }
+            if rows.is_empty() {
+                println!("No projects registered on this machine.");
                 println!();
                 println!("Create one:");
-                println!("  agentmon project create <slug> --name \"<name>\"");
+                println!("  agentmon init --name \"<name>\"           # in the repo it belongs to");
+                println!();
+                println!("Or open an existing folder once in the AgentMonitoring app.");
                 return Ok(());
             }
-            // Print the vault first: "which vault did that write go to" is the question
-            // behind most confused bug reports, and this is the cheapest place to answer it.
-            println!("{}\n", vault.root().display());
-            let w = projects.iter().map(|p| p.slug.len()).max().unwrap_or(4).max(4);
-            println!(
-                "{:<w$}  {:<30} {:>6} {:>6} {:>9}  LAST ACTIVITY",
-                "SLUG",
-                "NAME",
-                "WORK",
-                "BUGS",
-                "STATUS",
-                w = w
-            );
-            for p in projects {
-                println!(
-                    "{:<w$}  {:<30} {:>6} {:>6} {:>9}  {}",
-                    p.slug,
-                    clip(&p.name, 30),
-                    p.counts.work_total,
-                    p.counts.bugs_open,
-                    match p.status {
-                        agentmon_core::ProjectStatus::Active => "active",
-                        agentmon_core::ProjectStatus::Archived => "archived",
-                    },
-                    p.counts.last_activity.as_deref().unwrap_or("—"),
-                    w = w
-                );
+            for r in &rows {
+                let name = r.name.as_deref().unwrap_or("—");
+                if r.available {
+                    println!("{:<30} {}", clip(name, 30), r.path);
+                } else {
+                    println!("{:<30} {}  (unavailable)", clip(name, 30), r.path);
+                }
             }
             Ok(())
         }
@@ -786,7 +1155,6 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
 fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
     match cmd {
         WorkCmd::Start {
-            project,
             agent,
             title,
             tags,
@@ -810,18 +1178,15 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                     example: validate::WORK_EXAMPLE,
                 },
             )?;
-            let vault = open(cli)?;
-            let w = vault.start_work(
-                &project.project,
-                &StartWork {
-                    agent: agent.agent.clone(),
-                    title: title.clone(),
-                    tags: tags.clone(),
-                    refs: refs.clone(),
-                    body,
-                    started_at: started_at.clone(),
-                },
-            )?;
+            let store = open(cli)?;
+            let w = store.start_work(&StartWork {
+                agent: agent.agent.clone(),
+                title: title.clone(),
+                tags: tags.clone(),
+                refs: refs.clone(),
+                body,
+                started_at: started_at.clone(),
+            })?;
             if cli.json {
                 return print_json(&w);
             }
@@ -830,18 +1195,17 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             println!();
             println!("Next:");
             println!(
-                "  agentmon work update {} -p {} --agent {} --message \"<what changed>\"",
-                w.id, project.project, agent.agent
+                "  agentmon work update {} --agent {} --message \"<what changed>\"",
+                w.id, agent.agent
             );
             println!(
-                "  agentmon work done   {} -p {} --agent {} --outcome \"<what shipped, how verified>\"",
-                w.id, project.project, agent.agent
+                "  agentmon work done   {} --agent {} --outcome \"<what shipped, how verified>\"",
+                w.id, agent.agent
             );
             Ok(())
         }
         WorkCmd::Update {
             id,
-            project,
             agent,
             message,
             body_file,
@@ -856,14 +1220,13 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                     file_flag: "--body-file (or --message-file)",
                     template: "A sentence or two: what changed since the last note, what you \
                                learned, what you are doing next.",
-                    example: "agentmon work update WORK-0003 -p agent-monitoring \\\n  \
+                    example: "agentmon work update WORK-0003 \\\n  \
                               --agent cli-builder \\\n  --message \"Debounce is in: one save \
                               produced four notify events, now one reload.\"",
                 },
             )?;
-            let vault = open(cli)?;
-            let w =
-                vault.update_work(&project.project, id, &agent.agent, &message, at.as_deref())?;
+            let store = open(cli)?;
+            let w = store.update_work(id, &agent.agent, &message, at.as_deref())?;
             if cli.json {
                 return print_json(&w);
             }
@@ -888,7 +1251,6 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
         }
         WorkCmd::Abandon {
             id,
-            project,
             agent,
             reason,
             reason_file,
@@ -903,15 +1265,14 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                     file_flag: "--reason-file",
                     template: "One or two sentences: why this stopped, and what a reader \
                                should look at instead.",
-                    example: "agentmon work abandon WORK-0003 -p agent-monitoring \\\n  \
+                    example: "agentmon work abandon WORK-0003 \\\n  \
                               --agent cli-builder \\\n  --reason \"Superseded by WORK-0009, \
                               which solves the same problem in agentmon-core; nothing from \
                               this branch was kept.\"",
                 },
             )?;
-            let vault = open(cli)?;
-            let w = vault.abandon_work(
-                &project.project,
+            let store = open(cli)?;
+            let w = store.abandon_work(
                 id,
                 &AbandonWork {
                     agent: agent.agent.clone(),
@@ -933,7 +1294,6 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
         }
         WorkCmd::Done {
             id,
-            project,
             agent,
             outcome,
             outcome_file,
@@ -953,9 +1313,8 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                     example: validate::OUTCOME_EXAMPLE,
                 },
             )?;
-            let vault = open(cli)?;
-            let w = vault.finish_work(
-                &project.project,
+            let store = open(cli)?;
+            let w = store.finish_work(
                 id,
                 &FinishWork {
                     agent: agent.agent.clone(),
@@ -981,14 +1340,9 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             println!("  {}", w.path);
             Ok(())
         }
-        WorkCmd::List {
-            project,
-            status,
-            agent,
-            tag,
-        } => {
-            let vault = open(cli)?;
-            let mut works = vault.worklogs(&project.project)?;
+        WorkCmd::List { status, agent, tag } => {
+            let store = open(cli)?;
+            let mut works = store.worklogs()?;
             if let Some(s) = status {
                 let want = agentmon_core::parse_work_status(s)?;
                 works.retain(|w| w.meta.status == want);
@@ -1003,14 +1357,8 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                 return print_json(&works);
             }
             if works.is_empty() {
-                println!(
-                    "No work logs match in project '{}'. Start one:",
-                    project.project
-                );
-                println!(
-                    "  agentmon work start -p {} --agent <you> --title \"<title>\" --body \"...\"",
-                    project.project
-                );
+                println!("No work logs match in {}. Start one:", store.root().display());
+                println!("  agentmon work start --agent <you> --title \"<title>\" --body \"...\"");
                 return Ok(());
             }
             println!(
@@ -1034,9 +1382,9 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             println!("\n{} work log(s), {} in progress", works.len(), open_n);
             Ok(())
         }
-        WorkCmd::View { id, project } => {
-            let vault = open(cli)?;
-            let w = vault.worklog(&project.project, id)?;
+        WorkCmd::View { id } => {
+            let store = open(cli)?;
+            let w = store.worklog(id)?;
             if cli.json {
                 return print_json(&w);
             }
@@ -1074,7 +1422,6 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
 fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
     match cmd {
         BugCmd::Create {
-            project,
             agent,
             title,
             severity,
@@ -1096,19 +1443,16 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                     example: validate::BUG_EXAMPLE,
                 },
             )?;
-            let vault = open(cli)?;
-            let b = vault.create_bug(
-                &project.project,
-                &NewBug {
-                    agent: agent.agent.clone(),
-                    title: title.clone(),
-                    severity,
-                    labels: labels.clone(),
-                    refs: refs.clone(),
-                    body,
-                    created_at: created_at.clone(),
-                },
-            )?;
+            let store = open(cli)?;
+            let b = store.create_bug(&NewBug {
+                agent: agent.agent.clone(),
+                title: title.clone(),
+                severity,
+                labels: labels.clone(),
+                refs: refs.clone(),
+                body,
+                created_at: created_at.clone(),
+            })?;
             if cli.json {
                 return print_json(&b);
             }
@@ -1121,20 +1465,12 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             println!("  {}", b.path);
             println!();
             println!("Next:");
-            println!(
-                "  agentmon bug claim {} -p {} --agent {}",
-                b.id, project.project, agent.agent
-            );
+            println!("  agentmon bug claim {} --agent {}", b.id, agent.agent);
             Ok(())
         }
-        BugCmd::Claim {
-            id,
-            project,
-            agent,
-            at,
-        } => {
-            let vault = open(cli)?;
-            let b = vault.claim_bug(&project.project, id, &agent.agent, at.as_deref())?;
+        BugCmd::Claim { id, agent, at } => {
+            let store = open(cli)?;
+            let b = store.claim_bug(id, &agent.agent, at.as_deref())?;
             if cli.json {
                 return print_json(&b);
             }
@@ -1148,18 +1484,17 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             println!();
             println!("Next:");
             println!(
-                "  agentmon bug comment {} -p {} --agent {} --message \"<root cause>\"",
-                b.id, project.project, agent.agent
+                "  agentmon bug comment {} --agent {} --message \"<root cause>\"",
+                b.id, agent.agent
             );
             println!(
-                "  agentmon bug resolve {} -p {} --agent {} --resolution \"<fix, why, verification>\"",
-                b.id, project.project, agent.agent
+                "  agentmon bug resolve {} --agent {} --resolution \"<fix, why, verification>\"",
+                b.id, agent.agent
             );
             Ok(())
         }
         BugCmd::Comment {
             id,
-            project,
             agent,
             message,
             body_file,
@@ -1174,14 +1509,13 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                     file_flag: "--body-file (or --message-file)",
                     template: "A sentence or two: what you found, what you tried, what it means \
                                for the fix.",
-                    example: "agentmon bug comment BUG-0002 -p agent-monitoring \\\n  \
+                    example: "agentmon bug comment BUG-0002 \\\n  \
                               --agent cli-builder \\\n  --message \"Root cause: setup() never \
-                              started a watcher, so vault-changed was never emitted.\"",
+                              started a watcher, so project-changed was never emitted.\"",
                 },
             )?;
-            let vault = open(cli)?;
-            let b =
-                vault.comment_bug(&project.project, id, &agent.agent, &message, at.as_deref())?;
+            let store = open(cli)?;
+            let b = store.comment_bug(id, &agent.agent, &message, at.as_deref())?;
             if cli.json {
                 return print_json(&b);
             }
@@ -1197,7 +1531,6 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
         }
         BugCmd::Resolve {
             id,
-            project,
             agent,
             resolution,
             resolution_file,
@@ -1214,8 +1547,8 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                     example: validate::RESOLUTION_EXAMPLE,
                 },
             )?;
-            let vault = open(cli)?;
-            let b = vault.resolve_bug(&project.project, id, &agent.agent, &resolution, at.as_deref())?;
+            let store = open(cli)?;
+            let b = store.resolve_bug(id, &agent.agent, &resolution, at.as_deref())?;
             if cli.json {
                 return print_json(&b);
             }
@@ -1231,14 +1564,13 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             Ok(())
         }
         BugCmd::List {
-            project,
             status,
             severity,
             label,
             assignee,
         } => {
-            let vault = open(cli)?;
-            let mut bugs = vault.bugs(&project.project)?;
+            let store = open(cli)?;
+            let mut bugs = store.bugs()?;
             if let Some(s) = status {
                 let want = agentmon_core::parse_bug_status(s)?;
                 bugs.retain(|b| b.meta.status == want);
@@ -1263,7 +1595,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                 return print_json(&bugs);
             }
             if bugs.is_empty() {
-                println!("No bugs match in project '{}'.", project.project);
+                println!("No bugs match in {}.", store.root().display());
                 return Ok(());
             }
             println!(
@@ -1285,9 +1617,9 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             println!("\n{} bug(s), {} still open", bugs.len(), open_n);
             Ok(())
         }
-        BugCmd::View { id, project } => {
-            let vault = open(cli)?;
-            let b = vault.bug(&project.project, id)?;
+        BugCmd::View { id } => {
+            let store = open(cli)?;
+            let b = store.bug(id)?;
             if cli.json {
                 return print_json(&b);
             }
@@ -1315,18 +1647,230 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
 }
 
 // ---------------------------------------------------------------------------
+// notes
+// ---------------------------------------------------------------------------
+
+fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
+    match cmd {
+        NoteCmd::Add {
+            agent,
+            title,
+            note_type,
+            description,
+            name,
+            body,
+            body_file,
+            tags,
+            refs,
+            at,
+        } => {
+            let note_type: NoteType = agentmon_core::parse_note_type(note_type)?;
+            let body = read_text(
+                body.as_deref(),
+                body_file.as_deref(),
+                BodySource {
+                    what: "note body",
+                    inline_flag: "--body",
+                    file_flag: "--body-file",
+                    template: validate::NOTE_TEMPLATE,
+                    example: validate::NOTE_EXAMPLE,
+                },
+            )?;
+            let store = open(cli)?;
+            let n = store.add_note(&NewNote {
+                agent: agent.agent.clone(),
+                name: name.clone(),
+                title: title.clone(),
+                note_type,
+                description: description.clone(),
+                tags: tags.clone(),
+                refs: refs.clone(),
+                body,
+                at: at.clone(),
+            })?;
+            if cli.json {
+                return print_json(&n);
+            }
+            println!(
+                "Added note {}  [{}]  {}",
+                n.id,
+                n.record.meta.note_type.as_str(),
+                n.record.meta.title
+            );
+            println!("  {}", n.path);
+            println!();
+            println!("Next:");
+            println!(
+                "  agentmon note update {} --agent {} --body-file <file>   # when it changes",
+                n.id, agent.agent
+            );
+            println!("  agentmon note list   # what the project already knows");
+            Ok(())
+        }
+        NoteCmd::Update {
+            name,
+            agent,
+            title,
+            note_type,
+            description,
+            tags,
+            refs,
+            body,
+            body_file,
+            at,
+        } => {
+            let note_type = note_type
+                .as_deref()
+                .map(agentmon_core::parse_note_type)
+                .transpose()?;
+            // Unlike the required bodies above, an update without a body is a metadata
+            // edit — so only read a body when one of the two flags was actually passed.
+            let body = match (body.as_deref(), body_file.as_deref()) {
+                (None, None) => None,
+                (inline, file) => Some(read_text(
+                    inline,
+                    file,
+                    BodySource {
+                        what: "note body",
+                        inline_flag: "--body",
+                        file_flag: "--body-file",
+                        template: validate::NOTE_TEMPLATE,
+                        example: validate::NOTE_EXAMPLE,
+                    },
+                )?),
+            };
+            let store = open(cli)?;
+            let n = store.update_note(
+                name,
+                &UpdateNote {
+                    agent: agent.agent.clone(),
+                    title: title.clone(),
+                    note_type,
+                    description: description.clone(),
+                    tags: tags.clone(),
+                    refs: refs.clone(),
+                    body,
+                    at: at.clone(),
+                },
+            )?;
+            if cli.json {
+                return print_json(&n);
+            }
+            println!("Updated note {}  {}", n.id, n.record.meta.title);
+            println!("  {}", n.event.summary);
+            println!("  {}", n.path);
+            Ok(())
+        }
+        NoteCmd::Remove { name, agent, at } => {
+            let store = open(cli)?;
+            let gone = store.remove_note(name, &agent.agent, at.as_deref())?;
+            if cli.json {
+                return print_json(&gone);
+            }
+            println!("Removed note {}  {}", gone.name, gone.record.title);
+            println!("  the note_removed event keeps the trail on the feed");
+            Ok(())
+        }
+        NoteCmd::List {
+            note_type,
+            tag,
+            agent,
+            search,
+        } => {
+            let store = open(cli)?;
+            let mut notes = store.notes()?;
+            if let Some(t) = note_type {
+                let want = agentmon_core::parse_note_type(t)?;
+                notes.retain(|n| n.meta.note_type == want);
+            }
+            if let Some(t) = tag {
+                notes.retain(|n| n.meta.tags.iter().any(|x| x.eq_ignore_ascii_case(t)));
+            }
+            if let Some(a) = agent {
+                notes.retain(|n| n.meta.agent.eq_ignore_ascii_case(a));
+            }
+            if let Some(q) = search {
+                let q = q.to_lowercase();
+                notes.retain(|n| {
+                    format!(
+                        "{} {} {} {}",
+                        n.meta.name, n.meta.title, n.meta.description, n.search_text
+                    )
+                    .to_lowercase()
+                    .contains(&q)
+                });
+            }
+            if cli.json {
+                return print_json(&notes);
+            }
+            if notes.is_empty() {
+                println!("No notes match in {}.", store.root().display());
+                println!();
+                println!("Leave the first one:");
+                println!(
+                    "  agentmon note add --agent <you> --type memory --title \"<fact>\" \\"
+                );
+                println!("    --description \"<one line>\" --body \"...\"");
+                return Ok(());
+            }
+            for n in &notes {
+                // The agent shown is whoever the current words belong to — the last
+                // rewriter, else the author — because it sits beside the updated time.
+                println!(
+                    "{:<32} {:<10} {:<16} {}",
+                    clip(&n.meta.name, 32),
+                    n.meta.note_type.as_str(),
+                    clip(n.meta.current_agent(), 16),
+                    n.last_activity
+                );
+                println!("  {}", clip(&n.meta.description, 96));
+            }
+            println!("\n{} note(s). Read one: agentmon note view <name>", notes.len());
+            Ok(())
+        }
+        NoteCmd::View { name } => {
+            let store = open(cli)?;
+            let n = store.note(name)?;
+            if cli.json {
+                return print_json(&n);
+            }
+            println!("{}  [{}]  {}", n.meta.name, n.meta.note_type.as_str(), n.meta.title);
+            println!("{}", n.meta.description);
+            println!(
+                "by {} · created {} · updated {}{}",
+                n.meta.agent,
+                n.meta.created,
+                n.meta.updated,
+                match n.meta.updated_by.as_deref() {
+                    Some(editor) if editor != n.meta.agent => format!(" by {editor}"),
+                    _ => String::new(),
+                }
+            );
+            if !n.meta.tags.is_empty() {
+                println!("tags: {}", n.meta.tags.join(", "));
+            }
+            if !n.meta.refs.is_empty() {
+                println!("refs: {}", n.meta.refs.join(", "));
+            }
+            println!("\n{}", n.body);
+            Ok(())
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // status / doctor
 // ---------------------------------------------------------------------------
 
-fn cmd_status(cli: &Cli, project: &str, json: bool) -> CliResult {
-    let vault = open(cli)?;
-    let snap = vault.status(project)?;
+fn cmd_status(cli: &Cli, json: bool) -> CliResult {
+    let store = open(cli)?;
+    let snap = store.status()?;
     if json {
         return print_json(&snap);
     }
     let c = &snap.project.counts;
-    println!("{}  ({})", snap.project.name, snap.project.slug);
-    println!("{}", vault.root().display());
+    println!("{}", snap.project.name);
+    println!("{}", store.root().display());
     println!();
     println!(
         "work   {} in progress · {} done · {} total",
@@ -1364,6 +1908,7 @@ fn cmd_status(cli: &Cli, project: &str, json: bool) -> CliResult {
         "bugs   {} open · {} total{}",
         c.bugs_open, c.bugs_total, sev_text
     );
+    println!("notes  {} (agentmon note list)", c.notes_total);
 
     if !snap.active_work.is_empty() {
         println!("\nACTIVE WORK");
@@ -1385,6 +1930,17 @@ fn cmd_status(cli: &Cli, project: &str, json: bool) -> CliResult {
                 b.meta.severity.as_str(),
                 clip(b.meta.assignee.as_deref().unwrap_or("unassigned"), 18),
                 b.meta.title
+            );
+        }
+    }
+    if !snap.recent_notes.is_empty() {
+        println!("\nLATEST NOTES  (agentmon note view <name>)");
+        for n in &snap.recent_notes {
+            println!(
+                "  {:<10} {:<30} {}",
+                n.meta.note_type.as_str(),
+                clip(&n.meta.name, 30),
+                clip(&n.meta.description, 60)
             );
         }
     }
@@ -1417,8 +1973,8 @@ fn cmd_status(cli: &Cli, project: &str, json: bool) -> CliResult {
 }
 
 fn cmd_doctor(cli: &Cli, strict: bool, json: bool) -> CliResult {
-    let vault = open(cli)?;
-    let report = doctor::check(&vault)?;
+    let store = open(cli)?;
+    let report = doctor::check(&store)?;
     let errors = report.errors();
     let warnings = report.warnings();
     let failed = errors > 0 || (strict && warnings > 0);
@@ -1433,8 +1989,8 @@ fn cmd_doctor(cli: &Cli, strict: bool, json: bool) -> CliResult {
         println!("{}", serde_json::to_string_pretty(&payload).unwrap());
     } else {
         println!(
-            "{} — {} project(s), {} work log(s), {} bug(s), {} event(s)",
-            report.vault, report.projects, report.worklogs, report.bugs, report.events
+            "{} — {} work log(s), {} bug(s), {} note(s), {} event(s)",
+            report.path, report.worklogs, report.bugs, report.notes, report.events
         );
         if report.problems.is_empty() {
             println!("\nNo problems found.");
@@ -1459,11 +2015,11 @@ fn cmd_doctor(cli: &Cli, strict: bool, json: bool) -> CliResult {
     if failed {
         Err(CliError {
             code: exit::PROBLEMS,
-            kind: "vault_problems",
+            kind: "project_problems",
             message: format!(
                 "{errors} error(s) and {warnings} warning(s) in {}. Fix them and re-run \
                  `agentmon doctor`.",
-                report.vault
+                report.path
             ),
         })
     } else {
@@ -1472,11 +2028,118 @@ fn cmd_doctor(cli: &Cli, strict: bool, json: bool) -> CliResult {
 }
 
 // ---------------------------------------------------------------------------
+// app feedback (machine-level — no store, no --dir)
+// ---------------------------------------------------------------------------
+
+fn run_app_feedback(cli: &Cli, cmd: &AppFeedbackCmd) -> CliResult {
+    match cmd {
+        AppFeedbackCmd::Add {
+            r#type,
+            title,
+            body,
+            agent,
+            at,
+        } => {
+            let item = agentmon_core::add_feedback(&agentmon_core::NewFeedback {
+                kind: agentmon_core::parse_feedback_kind(r#type)?,
+                title: title.clone(),
+                body: body.clone().unwrap_or_default(),
+                agent: agent.agent.clone(),
+                at: at.clone(),
+            })?;
+            if cli.json {
+                return print_json(&item);
+            }
+            println!("Filed {}  {}", item.id, item.title);
+            if let Some(dir) = agentmon_core::feedback_dir() {
+                println!("  {}", dir.join(format!("{}.md", item.id)).display());
+            }
+            println!("  the human reads these on the app's App feedback board");
+            Ok(())
+        }
+        AppFeedbackCmd::List { status, r#type } => {
+            let status = status
+                .as_deref()
+                .map(agentmon_core::parse_feedback_status)
+                .transpose()?;
+            let kind = r#type
+                .as_deref()
+                .map(agentmon_core::parse_feedback_kind)
+                .transpose()?;
+            let items: Vec<_> = agentmon_core::list_feedback()?
+                .into_iter()
+                .filter(|f| status.is_none_or(|s| f.status == s))
+                .filter(|f| kind.is_none_or(|k| f.kind == k))
+                .collect();
+            if cli.json {
+                return print_json(&items);
+            }
+            if items.is_empty() {
+                println!("No app feedback. File some: agentmon app-feedback add --help");
+                return Ok(());
+            }
+            for f in &items {
+                println!(
+                    "{:<8} {:<5} {:<5} {}  ({}, {})",
+                    f.id,
+                    f.kind.as_str(),
+                    f.status.as_str(),
+                    f.title,
+                    f.agent,
+                    &f.created[..10.min(f.created.len())],
+                );
+            }
+            println!("\n{} item(s). Read one: agentmon app-feedback view <FB-ID>", items.len());
+            Ok(())
+        }
+        AppFeedbackCmd::View { id } => {
+            let f = agentmon_core::view_feedback(id)?;
+            if cli.json {
+                return print_json(&f);
+            }
+            println!("{}  {}", f.id, f.title);
+            println!("{} · {} · filed by {} on {}", f.kind.as_str(), f.status.as_str(), f.agent, f.created);
+            if let Some(done) = &f.done {
+                println!("handled on {done}");
+            }
+            if !f.body.is_empty() {
+                println!("\n{}", f.body);
+            }
+            Ok(())
+        }
+        AppFeedbackCmd::Done { id } => {
+            let f = agentmon_core::set_feedback_status(id, agentmon_core::FeedbackStatus::Done)?;
+            if cli.json {
+                return print_json(&f);
+            }
+            println!("Done {}  {}", f.id, f.title);
+            Ok(())
+        }
+        AppFeedbackCmd::Reopen { id } => {
+            let f = agentmon_core::set_feedback_status(id, agentmon_core::FeedbackStatus::Open)?;
+            if cli.json {
+                return print_json(&f);
+            }
+            println!("Reopened {}  {}", f.id, f.title);
+            Ok(())
+        }
+        AppFeedbackCmd::Delete { id } => {
+            let f = agentmon_core::delete_feedback(id)?;
+            if cli.json {
+                return print_json(&f);
+            }
+            println!("Deleted {}  {}", f.id, f.title);
+            Ok(())
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // plumbing
 // ---------------------------------------------------------------------------
 
-fn open(cli: &Cli) -> std::result::Result<Vault, CliError> {
-    Ok(Vault::resolve(cli.vault.as_deref())?)
+fn open(cli: &Cli) -> std::result::Result<Store, CliError> {
+    Ok(Store::resolve(cli.dir.as_deref())?)
 }
 
 fn print_json<T: serde::Serialize>(value: &T) -> CliResult {
@@ -1635,7 +2298,7 @@ mod tests {
             exit::NOT_FOUND,
             exit::INVALID_BODY,
             exit::CONFLICT,
-            exit::INVALID_VAULT,
+            exit::INVALID_PROJECT,
             exit::IO,
         ];
         let mut sorted = codes.to_vec();
@@ -1649,9 +2312,9 @@ mod tests {
     fn core_errors_map_to_the_documented_codes() {
         let cases: Vec<(CoreError, u8)> = vec![
             (
-                CoreError::ProjectNotFound {
-                    slug: "x".into(),
-                    vault: PathBuf::from("v"),
+                CoreError::ProjectDirNotFound {
+                    path: PathBuf::from("p"),
+                    hint: "no project here".into(),
                 },
                 exit::NOT_FOUND,
             ),
@@ -1661,7 +2324,7 @@ mod tests {
             ),
             (
                 CoreError::malformed("f.md", "bad frontmatter"),
-                exit::INVALID_VAULT,
+                exit::INVALID_PROJECT,
             ),
             (
                 CoreError::InvalidId {
@@ -1706,23 +2369,41 @@ mod tests {
     #[test]
     fn json_is_global_so_placement_never_matters() {
         for args in [
-            vec!["agentmon", "--json", "work", "list", "-p", "demo"],
-            vec!["agentmon", "work", "list", "-p", "demo", "--json"],
-            vec!["agentmon", "work", "--json", "list", "-p", "demo"],
+            vec!["agentmon", "--json", "work", "list"],
+            vec!["agentmon", "work", "list", "--json"],
+            vec!["agentmon", "work", "--json", "list"],
         ] {
             let cli = Cli::try_parse_from(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
             assert!(cli.json, "{args:?}");
         }
-        let cli = Cli::try_parse_from(["agentmon", "work", "list", "-p", "demo"]).unwrap();
+        let cli = Cli::try_parse_from(["agentmon", "work", "list"]).unwrap();
         assert!(!cli.json, "--json is opt-in");
-        // and the same is true of --vault, which agents write in both places
+        // and the same is true of --dir, which agents write in both places
         for args in [
-            vec!["agentmon", "--vault", "v", "status", "-p", "demo"],
-            vec!["agentmon", "status", "-p", "demo", "--vault", "v"],
+            vec!["agentmon", "--dir", "d", "status"],
+            vec!["agentmon", "status", "--dir", "d"],
         ] {
             let cli = Cli::try_parse_from(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
-            assert_eq!(cli.vault.as_deref(), Some(Path::new("v")), "{args:?}");
+            assert_eq!(cli.dir.as_deref(), Some(Path::new("d")), "{args:?}");
         }
+    }
+
+    #[test]
+    fn there_is_no_project_flag_left_to_type() {
+        // v2 resolves the project from the directory, like git. A stray -p in a script
+        // must fail loudly at parse time, not be silently accepted.
+        assert!(
+            Cli::try_parse_from(["agentmon", "work", "list", "-p", "demo"]).is_err(),
+            "-p must not parse"
+        );
+        assert!(
+            Cli::try_parse_from(["agentmon", "status", "--project", "demo"]).is_err(),
+            "--project must not parse"
+        );
+        assert!(
+            Cli::try_parse_from(["agentmon", "work", "list", "--vault", "v"]).is_err(),
+            "--vault is v1 and must not parse"
+        );
     }
 
     #[test]
@@ -1731,7 +2412,7 @@ mod tests {
         // renamed here, the manual is wrong and a fresh agent will paste a flag that
         // does not exist.
         let cases: &[(&[&str], &str)] = &[
-            (&["project", "create"], "at"),
+            (&["init"], "at"),
             (&["project", "update"], "at"),
             (&["work", "start"], "started-at"),
             (&["work", "update"], "at"),
@@ -1742,6 +2423,9 @@ mod tests {
             (&["bug", "claim"], "at"),
             (&["bug", "comment"], "at"),
             (&["bug", "resolve"], "at"),
+            (&["note", "add"], "at"),
+            (&["note", "update"], "at"),
+            (&["note", "remove"], "at"),
         ];
         for (path, flag) in cases {
             assert!(
@@ -1759,7 +2443,7 @@ mod tests {
             vec!["agentmon", "bug", "comment", "BUG-0001"],
         ] {
             let mut args = path.clone();
-            args.extend(["-p", "demo", "--agent", "a", "--message-file", "notes.md"]);
+            args.extend(["--agent", "a", "--message-file", "notes.md"]);
             let cli = Cli::try_parse_from(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
             let file = match cli.command {
                 Command::Work(WorkCmd::Update { body_file, .. }) => body_file,
@@ -1778,8 +2462,6 @@ mod tests {
             "agentmon",
             "work",
             "start",
-            "-p",
-            "demo",
             "--agent",
             "a",
             "--title",
@@ -1814,5 +2496,21 @@ mod tests {
         assert_eq!(err.code, exit::USAGE);
         assert!(err.message.contains("--body-file - to read stdin"), "{}", err.message);
         assert!(err.message.contains("## What"), "{}", err.message);
+    }
+
+    #[test]
+    fn migrate_names_its_three_required_flags() {
+        for missing in [
+            vec!["agentmon", "migrate", "--project", "p", "--to", "t"],
+            vec!["agentmon", "migrate", "--from", "f", "--to", "t"],
+            vec!["agentmon", "migrate", "--from", "f", "--project", "p"],
+        ] {
+            assert!(Cli::try_parse_from(&missing).is_err(), "{missing:?}");
+        }
+        let cli = Cli::try_parse_from([
+            "agentmon", "migrate", "--from", "f", "--project", "p", "--to", "t",
+        ])
+        .unwrap();
+        assert!(matches!(cli.command, Command::Migrate { .. }));
     }
 }

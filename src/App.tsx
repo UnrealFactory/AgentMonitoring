@@ -4,21 +4,26 @@ import { AppProvider, useApp } from "./AppContext";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { DeleteProjectProvider } from "./components/DeleteProject";
+import { MouseGestureLayer } from "./components/MouseGestures";
 import { Sidebar } from "./components/Sidebar";
 import { Titlebar } from "./components/Titlebar";
 import { TooltipLayer } from "./components/Tooltip";
 import { InlineCode, plainMarks, Skeleton } from "./components/ui";
-import { isTauri, vaultErrorMessage } from "./lib/api";
+import { isTauri, projectErrorMessage } from "./lib/api";
 import { formatDateTimeUtc } from "./lib/format";
 import { t, useLocale } from "./lib/i18n";
 import { isModalOpen } from "./lib/modal";
+import { useScrollRestoration } from "./lib/useScrollRestoration";
 import { useWindowTitle } from "./lib/useWindowTitle";
 import { DashboardPage } from "./pages/DashboardPage";
 import { WorkListPage } from "./pages/WorkListPage";
 import { WorkDetailPage } from "./pages/WorkDetailPage";
 import { BugsPage } from "./pages/BugsPage";
 import { BugDetailPage } from "./pages/BugDetailPage";
+import { NotesPage } from "./pages/NotesPage";
+import { NoteDetailPage } from "./pages/NoteDetailPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { AppFeedbackPage } from "./pages/AppFeedbackPage";
 
 /** Boot screen: send the human to the project that moved most recently. */
 function Home() {
@@ -43,7 +48,7 @@ function Home() {
    * a vault that opened and holds nothing yet.
    */
   if (error || !projects.length) return <Navigate to="/projects" replace />;
-  return <Navigate to={`/p/${projects[0].slug}`} replace />;
+  return <Navigate to={`/p/${projects[0].id}`} replace />;
 }
 
 function Shell() {
@@ -58,6 +63,10 @@ function Shell() {
   // The vault subscription lives in AppProvider: every screen reads the nonce it feeds,
   // so the whole app refreshes together (AppContext.tsx).
   useWindowTitle();
+
+  // Back (Alt+Left, the ← gesture) returns to the scroll position the reader left, and a
+  // fresh navigation starts at the top (lib/useScrollRestoration.ts).
+  useScrollRestoration();
 
   /* Backspace-free navigation: Alt+Left goes back, matching the desktop shell.
    *
@@ -95,6 +104,10 @@ function Shell() {
         </main>
         <CommandPalette />
       </div>
+      {/* Hold the right button and draw: ←→ navigate, ↑↓ scroll, ↑↓ together reload, and
+          on the desktop →↑ maximizes and ↓→ closes to the tray. A plain right-click is
+          untouched — the menu above still owns it (components/MouseGestures.tsx). */}
+      <MouseGestureLayer />
     </>
   );
 }
@@ -109,13 +122,13 @@ function Shell() {
  * When nothing could be read at all the page itself carries the error, so the bar defers.
  */
 function VaultTroubleBar() {
-  const { trouble, error, reload, vault } = useApp();
+  const { trouble, error, reload } = useApp();
   if (!trouble || error) return null;
   /* The backend's message is written for somebody who can act on it and can run to four
      lines. One line here, the rest in the tooltip: a banner that shouts a paragraph over
      the screen is a banner people learn to close. Translated first, and cut afterwards:
      the clause before the dash is the diagnosis in either language. */
-  const message = vaultErrorMessage(trouble.message);
+  const message = projectErrorMessage(trouble.message);
   const [headline] = message.split(" — ");
   return (
     <div className="vault-alert-wrap">
@@ -125,7 +138,7 @@ function VaultTroubleBar() {
           <strong>{t("shell.trouble.headline")}</strong>{" "}
           {t(
             "shell.trouble.body",
-            vault?.path ?? null,
+            null,
             formatDateTimeUtc(new Date(trouble.since).toISOString())
           )}{" "}
           <span className="vault-alert-detail" title={plainMarks(message)}>
@@ -182,11 +195,14 @@ export default function App() {
             <Route element={<Shell />}>
               <Route index element={<Home />} />
               <Route path="projects" element={<ProjectsPage />} />
+              <Route path="app-feedback" element={<AppFeedbackPage />} />
               <Route path="p/:project" element={<DashboardPage />} />
               <Route path="p/:project/work" element={<WorkListPage />} />
               <Route path="p/:project/work/:id" element={<WorkDetailPage />} />
               <Route path="p/:project/bugs" element={<BugsPage />} />
               <Route path="p/:project/bugs/:id" element={<BugDetailPage />} />
+              <Route path="p/:project/notes" element={<NotesPage />} />
+              <Route path="p/:project/notes/:id" element={<NoteDetailPage />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>

@@ -445,6 +445,123 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+/* ---------------------------------------------------------------------------
+   The app's own update — one card at the foot, only when a newer release exists
+   (src/components/AppUpdate.tsx)
+   ------------------------------------------------------------------------ */
+
+.app-update {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.app-update-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.app-update-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.app-update-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.app-update-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.app-update-title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-update-meta {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-update-applying,
+.app-update-failure {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.app-update-failure {
+  color: var(--red);
+  overflow-wrap: anywhere;
+}
+
+.app-update-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.app-update-actions button {
+  flex: 1;
+  padding: 4px var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.app-update-later {
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.app-update-later:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.app-update-go {
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid transparent;
+}
+
+.app-update-go:hover {
+  background: var(--accent-hover);
+}
+
+.app-update-go:active {
+  background: var(--accent-active);
+}
+
 .vault-path {
   display: flex;
   align-items: center;
@@ -732,6 +849,11 @@
 .palette-kind.is-work {
   color: var(--blue);
   background: var(--blue-soft);
+}
+
+.palette-kind.is-note {
+  color: var(--series-note);
+  background: var(--series-note-wash);
 }
 
 .palette-empty {
@@ -1112,6 +1234,83 @@
   from {
     opacity: 0;
   }
+}
+
+/* ===========================================================================
+   MOUSE GESTURES — the trail a right-drag leaves, and the bubble that names it
+
+   Drawn over everything, including the title bar (90): the stroke is the cursor's own wake
+   and may pass anywhere the cursor does. It can afford the top slot because nothing here is
+   ever hit-testable — the whole layer is pointer-events: none — so it covers the window
+   without owning any of it (components/MouseGestures.tsx).
+   ======================================================================== */
+
+.mg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  transition: opacity 0.22s var(--ease);
+}
+
+/* An executed stroke fades out; a cancelled one is simply gone (no class, no fade). */
+.mg-layer.out {
+  opacity: 0;
+}
+
+.mg-trail {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.mg-trail polyline {
+  fill: none;
+  stroke: var(--accent-text);
+  stroke-opacity: 0.9;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 7px rgba(94, 106, 210, 0.5));
+}
+
+/* The bubble: glyph over words, centered in the window — not on the cursor, which is
+   mid-stroke and about to move. Raised surface, hairline, real shadow: the menu's family.
+   Opaque on purpose; it is read against whatever the trail is being drawn over. */
+.mg-label {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 104px;
+  padding: 16px 22px 13px;
+  border-radius: var(--radius-xl);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  color: var(--accent-text);
+  animation: mg-pop 0.17s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes mg-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.mg-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 /* --- page scaffold -------------------------------------------------------- */
@@ -1538,6 +1737,15 @@
 .pill-bug-in_progress { background: var(--status-in-progress-soft); color: var(--status-in-progress); }
 .pill-bug-resolved { background: var(--status-resolved-soft); color: var(--status-resolved); }
 .pill-bug-closed { background: var(--status-closed-soft); color: var(--status-closed); }
+
+/* Note types. Not states — a note does not progress — so the four wear categorical hues
+   the app already means things with: indigo for durable knowledge (the brand's own hue),
+   amber for a handoff that wants reading before work starts, purple for a settled
+   decision, grey for a pointer elsewhere. The word is always beside the colour. */
+.pill-note-memory { background: var(--accent-soft); color: var(--accent-text); }
+.pill-note-handoff { background: var(--amber-soft); color: var(--amber); }
+.pill-note-decision { background: var(--purple-soft); color: var(--purple); }
+.pill-note-reference { background: var(--grey-soft); color: var(--text-secondary); }
 
 .pill-sev-critical { background: var(--sev-critical-soft); color: var(--sev-critical); }
 .pill-sev-high { background: var(--sev-high-soft); color: var(--sev-high); }
@@ -3019,6 +3227,25 @@ a.rel-row:hover .rel-id {
   box-shadow: inset 0 0 0 1.5px var(--text-tertiary);
 }
 
+/* note types, same alphabet as the pills above */
+.sdot-note-memory {
+  background: var(--accent);
+}
+
+.sdot-note-handoff {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+
+.sdot-note-decision {
+  background: var(--purple);
+}
+
+.sdot-note-reference {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-tertiary);
+}
+
 .sdot-missing {
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--border-strong);
@@ -3169,6 +3396,93 @@ a.rel-row:hover .rel-id {
 
 .tag-more {
   color: var(--text-tertiary);
+}
+
+/* -- the notes list ---------------------------------------------------------
+   A note row is two lines on purpose: the title names it, and the author's own one-line
+   description under it is the hook the list exists to show — an agent (or the human)
+   scans these instead of opening bodies. Everything else matches the work rows, so the
+   two lists read as one product. */
+
+.note-rows li + li .note-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.note-row {
+  height: auto;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.note-row-main {
+  flex: 1 1 auto;
+  min-width: 30ch;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.note-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.note-row-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The name is the note's address — what `agentmon note view` takes — so it rides beside
+   the title the way an id does, in the id's own type. */
+.note-row-name {
+  flex: none;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.note-row-desc {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -- note detail ------------------------------------------------------------ */
+
+/* The description, at reading altitude: one step up from body text, set off by the
+   accent's quiet bar — the same shape a pull quote takes, because that is what it is. */
+.note-lead {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border-left: 2px solid var(--accent);
+  background: var(--bg-raised);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.note-foot {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+/* The last rewriter's chip under the 수정 date in the side card — its own line, so the
+   date column stays tabular. */
+.side-editor {
+  display: block;
+  margin-top: 3px;
 }
 
 /* search + filter chrome */
@@ -4598,6 +4912,7 @@ kbd {
 .mix-seg.tone-done { background: var(--series-done); }
 .mix-seg.tone-bug { background: var(--series-bug); }
 .mix-seg.tone-resolved { background: var(--series-fix); }
+.mix-seg.tone-note { background: var(--series-note); }
 
 .day-count {
   font-size: var(--text-sm);
@@ -4672,6 +4987,7 @@ a.feed-row:hover {
 .event-icon.tone-done { color: var(--series-done); }
 .event-icon.tone-bug { color: var(--series-bug); }
 .event-icon.tone-resolved { color: var(--series-fix); }
+.event-icon.tone-note { color: var(--series-note); }
 
 .feed-body {
   display: flex;
@@ -5103,7 +5419,34 @@ a.feed-row:hover .feed-ref {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
-  flex: none;
+  /* A folder path, since v2 — long, and the least important thing on the row when space
+     runs out. Ellipsized from a bounded width; the full path is the tooltip. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 34ch;
+  flex: 0 1 auto;
+}
+
+/* A registered path whose folder cannot be read right now: present, dimmed, explicable —
+   never a row that silently vanished. */
+.project-row.is-unavailable {
+  opacity: 0.6;
+}
+
+.project-row.is-unavailable .project-name {
+  color: var(--text-secondary);
+}
+
+/* The location field: an input with its picker button on the same line. */
+.field-with-action {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.field-with-action .input {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Wrapped, never clamped: a description cut mid-word is a description the reader has to
@@ -5314,6 +5657,120 @@ a.feed-row:hover .feed-ref {
 /* the filter search box sets a fixed width on .input; a form field takes its column */
 .create-panel .input {
   width: 100%;
+}
+
+/* A file name is data: the label's uppercase must not shout CLAUDE.md into CLAUDE.MD.
+   And the choice hugs its three segments like every other segmented control instead of
+   stretching a border across the column. */
+.claude-md-field .field-label {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.claude-md-choice {
+  align-self: flex-start;
+}
+
+/* The MCP registration row: the on/off choice, and — while on — the default agent
+   handle the registration will carry, side by side. */
+.mcp-json-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mcp-json-row .claude-md-choice {
+  align-self: auto;
+  flex: none;
+}
+
+.mcp-agent-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 220px;
+}
+
+/* ==========================================================================
+   App feedback board — bugs and wishes about the app itself
+   ======================================================================= */
+
+.feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 860px;
+}
+
+.feedback-row {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Done items stay on the board as evidence; dimming is their whole state change. */
+.feedback-row.is-done {
+  opacity: 0.55;
+}
+
+.feedback-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.feedback-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.feedback-id {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.fb-kind {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.fb-kind-bug {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.fb-kind-idea {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.feedback-body {
+  margin-top: var(--space-2);
+}
+
+.feedback-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.feedback-actions {
+  margin-left: auto;
 }
 
 .create-actions {
@@ -5639,6 +6096,154 @@ a.ref-inline.is-unknown:hover {
   color: var(--text-tertiary);
 }
 
+/* --- code tokens (lib/highlight.ts) ---------------------------------------
+   Four colours and no more: comments recede, strings and numbers are data, keywords are
+   structure. All four are hues this app already means something with, dimmed to sit in a
+   code block rather than shout from one. */
+
+.tok-com {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.tok-str {
+  color: var(--green);
+}
+
+.tok-num {
+  color: var(--amber);
+}
+
+.tok-kw {
+  color: var(--accent-text);
+}
+
+/* --- task lists (`- [x]`) -------------------------------------------------- */
+
+.prose li.task-item {
+  list-style: none;
+  /* The box stands where the bullet stood, so a mixed list keeps one left edge. */
+  margin-left: calc(-1 * var(--space-5));
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.task-box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-inset);
+  color: var(--accent-text);
+}
+
+.task-box svg {
+  width: 10px;
+  height: 10px;
+  display: block;
+}
+
+.prose li.task-item.is-done .task-box {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+/* Done items dim but never strike: the words are still the record. */
+.prose li.task-item.is-done .task-text {
+  color: var(--text-secondary);
+}
+
+/* --- callouts (`> [!note]`) ------------------------------------------------ */
+
+.prose-callout {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid var(--callout-ink, var(--blue));
+  background: var(--callout-wash, var(--blue-soft));
+}
+
+.prose-callout.is-note { --callout-ink: var(--blue); --callout-wash: var(--blue-soft); }
+.prose-callout.is-tip { --callout-ink: var(--green); --callout-wash: var(--green-soft); }
+.prose-callout.is-important { --callout-ink: var(--purple); --callout-wash: var(--purple-soft); }
+.prose-callout.is-warning { --callout-ink: var(--amber); --callout-wash: var(--amber-soft); }
+.prose-callout.is-caution { --callout-ink: var(--red); --callout-wash: var(--red-soft); }
+
+.callout-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--callout-ink);
+  word-break: keep-all;
+}
+
+.callout-glyph {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.prose-callout .callout-body {
+  margin-top: var(--space-2);
+  color: var(--text-primary);
+}
+
+/* --- images (`![alt](assets/x.svg)`) --------------------------------------- */
+
+.prose-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.prose-img {
+  display: block;
+  max-width: 100%;
+  max-height: 560px;
+  object-fit: contain;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-inset);
+  padding: var(--space-3);
+}
+
+/* The rare image inside a sentence: capped to the line, never a layout event. */
+.prose-img-inline {
+  display: inline-block;
+  max-height: 1.4em;
+  vertical-align: -0.25em;
+}
+
+.prose-figure figcaption {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* A diagram that cannot be read is said out loud, like a stale record chip — a blank
+   where evidence was cited would be the renderer covering for a mis-citation. */
+.prose-img-broken {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  word-break: keep-all;
+}
+
 /* --- narrow windows ------------------------------------------------------- */
 
 /* The bug strip's three stops each carry a name and a date. Side by side they need
@@ -5675,5 +6280,68 @@ a.ref-inline.is-unknown:hover {
 
   .page {
     padding: var(--space-5) var(--space-4) var(--space-12);
+  }
+}
+
+/* --- wide windows ----------------------------------------------------------
+   Every screen was drawn for the window it was built in: a content column centred
+   in whatever was left, which in a maximized window on a 2560 display meant two
+   voids wider than half the content on either side of it — on the dashboard and
+   the boards just as much as on a record. Two steps up, so a page fills the
+   window it is actually in:
+
+   * ≥1560px — `--content-max` stops being a cap for the working screens: the
+     dashboard, the boards and the vault bar run the full window the way
+     linear.app draws its screens, with only the page's own gutters.
+   * A record does not: it is a document with a rail, and the owner judged both
+     ways of spending a maximized window's width on it — pinning the rail to the
+     window's edge tore the page into a column, a void and a strip ("2번 사진");
+     the readable composition is the one the mid-size window already has, the
+     document and its rail together as one block. So a record keeps that block
+     and the block grows through two sizes (width, rail, gap and prose step
+     together), centred in whatever the window adds beyond it. The contents rail
+     stays stacked above the fact card on the right at every size — the
+     contents-on-the-left round read as more margins, not fewer.
+   ------------------------------------------------------------------------- */
+
+@media (min-width: 1560px) {
+  :root {
+    --content-max: none;
+  }
+
+  .page-detail {
+    max-width: 1300px;
+  }
+
+  .detail-layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: var(--space-12);
+  }
+
+  .prose {
+    font-size: 15px;
+    max-width: 82ch;
+  }
+}
+
+@media (min-width: 1840px) {
+  /* Full-bleed content sits against the window edge; a step more gutter keeps it
+     from reading as touching it. */
+  .page {
+    padding-inline: var(--space-10);
+  }
+
+  .page-detail {
+    max-width: 1520px;
+  }
+
+  .detail-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: var(--space-16);
+  }
+
+  .prose {
+    font-size: 16px;
+    max-width: 92ch;
   }
 }

@@ -6,22 +6,15 @@ pub type Result<T> = std::result::Result<T, CoreError>;
 /// what was being read, where, and (where applicable) what to run instead.
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
-    #[error("no vault found at {path}: {hint}")]
-    VaultNotFound { path: PathBuf, hint: String },
+    /// No AgentMonitoring project where one was expected. The wording is shared with the
+    /// dev server's twin of this message (scripts/project-fs.mjs); the desktop app shows
+    /// it to a human, in Korean, so `src/lib/api.ts` matches the shape and re-says it —
+    /// see the tests at the foot of this file before changing the wording.
+    #[error("no project found at {path}: {hint}")]
+    ProjectDirNotFound { path: PathBuf, hint: String },
 
-    /// The parenthesised hint here and in `RecordNotFound` exists nowhere else: the dev
-    /// server's twin of these messages (scripts/vault-fs.mjs) stops at the slug. The desktop
-    /// app shows them to a human, in Korean, so `src/lib/api.ts` matches both shapes and
-    /// re-says them — see the tests at the foot of this file before changing the wording.
-    #[error("project '{slug}' not found in vault {vault} (run `agentmon project list` to see projects)")]
-    ProjectNotFound { slug: String, vault: PathBuf },
-
-    #[error("record '{id}' not found in project '{slug}' (expected file {path})")]
-    RecordNotFound {
-        id: String,
-        slug: String,
-        path: PathBuf,
-    },
+    #[error("record '{id}' not found in this project (expected file {path})")]
+    RecordNotFound { id: String, path: PathBuf },
 
     #[error("{path}: {message}")]
     Malformed { path: PathBuf, message: String },
@@ -124,10 +117,9 @@ impl CoreError {
     /// app to classify each of these the same way the browser build does.
     pub fn kind(&self) -> &'static str {
         match self {
-            CoreError::VaultNotFound { .. } => "vault_not_found",
-            CoreError::ProjectNotFound { .. } => "project_not_found",
+            CoreError::ProjectDirNotFound { .. } => "project_not_found",
             CoreError::RecordNotFound { .. } => "record_not_found",
-            CoreError::Malformed { .. } => "invalid_vault",
+            CoreError::Malformed { .. } => "invalid_project",
             CoreError::InvalidId { .. } | CoreError::InvalidValue { .. } => "invalid_argument",
             CoreError::InvalidBody(_) => "invalid_body",
             CoreError::Conflict { .. } => "conflict",
@@ -152,23 +144,13 @@ mod tests {
     /// side, made against the binary this crate builds.
     #[test]
     fn the_messages_the_app_translates() {
-        let project = CoreError::ProjectNotFound {
-            slug: "nosuch".into(),
-            vault: PathBuf::from("/v"),
-        };
-        assert_eq!(
-            project.to_string(),
-            "project 'nosuch' not found in vault /v (run `agentmon project list` to see projects)"
-        );
-
         let record = CoreError::RecordNotFound {
             id: "BUG-9999".into(),
-            slug: "demo".into(),
-            path: PathBuf::from("/v/BUG-9999.md"),
+            path: PathBuf::from("/p/BUG-9999.md"),
         };
         assert_eq!(
             record.to_string(),
-            "record 'BUG-9999' not found in project 'demo' (expected file /v/BUG-9999.md)"
+            "record 'BUG-9999' not found in this project (expected file /p/BUG-9999.md)"
         );
 
         let id = CoreError::InvalidId {
@@ -180,22 +162,22 @@ mod tests {
             "invalid id 'NOTANID': expected the form BUG-NNNN (e.g. BUG-0001)"
         );
 
-        let vault = CoreError::VaultNotFound {
-            path: PathBuf::from("/v"),
-            hint: "no vault.json in that directory. Run `agentmon init --vault <dir>` to create one.".into(),
+        let dir = CoreError::ProjectDirNotFound {
+            path: PathBuf::from("/p"),
+            hint: "no AgentMonitoring/project.json in that directory.".into(),
         };
-        assert!(vault.to_string().starts_with("no vault found at /v: "));
+        assert!(dir.to_string().starts_with("no project found at /p: "));
     }
 
     /// The kinds `src/lib/api.ts` maps onto a headline. A new variant that lands in none of
-    /// them is a failure the app will call "could not read the vault" — which is a sentence
-    /// about the disk, and usually a lie about a link.
+    /// them is a failure the app will call "could not read the project" — which is a
+    /// sentence about the disk, and usually a lie about a link.
     #[test]
     fn kinds_are_stable() {
         assert_eq!(
-            CoreError::ProjectNotFound {
-                slug: "x".into(),
-                vault: PathBuf::from("/v"),
+            CoreError::ProjectDirNotFound {
+                path: PathBuf::from("/p"),
+                hint: "x".into(),
             }
             .kind(),
             "project_not_found"
@@ -203,8 +185,7 @@ mod tests {
         assert_eq!(
             CoreError::RecordNotFound {
                 id: "WORK-0001".into(),
-                slug: "x".into(),
-                path: PathBuf::from("/v"),
+                path: PathBuf::from("/p"),
             }
             .kind(),
             "record_not_found"

@@ -1,10 +1,13 @@
 // The tool surface and what each tool does.
 //
 // The schemas below are the whole context cost of this server: they are sent to the
-// model on every conversation that has it enabled. Five tools, one sentence each, no
+// model on every conversation that has it enabled. Seven tools, one sentence each, no
 // property description that repeats what its name already says. The body contract that
 // takes a page of the manual to explain is encoded as three required fields — what, why,
 // how — so a caller cannot get the markdown shape wrong and no prose has to teach it.
+// `note` is one tool, not four: its verbs share every field, and the upsert rule (write
+// rewrites an existing name in place) is exactly the one-fact-one-file discipline the
+// manual teaches.
 
 import path from "node:path";
 import { runCli, cliErrorText, listArg } from "./cli.mjs";
@@ -17,6 +20,8 @@ import {
   oneLine,
   renderBugList,
   renderBugView,
+  renderNoteList,
+  renderNoteView,
   renderSnapshot,
   renderWorkList,
   renderWorkView,
@@ -24,7 +29,7 @@ import {
 
 const str = { type: "string" };
 const strList = { type: "array", items: { type: "string" } };
-const project = { type: "string", description: "Override the server default." };
+const dir = { type: "string", description: "Another project folder; overrides the server default." };
 const agent = { type: "string", description: "Override the server default." };
 const when = { type: "string", description: "UTC ISO8601 of when it really happened." };
 
@@ -46,7 +51,7 @@ export const TOOLS = [
         refs: { ...strList, description: "Related WORK/BUG ids." },
         started_at: when,
         finished_at: when,
-        project,
+        dir,
         agent,
       },
       required: ["title", "what", "why", "how"],
@@ -65,7 +70,7 @@ export const TOOLS = [
         abandon: { type: "string", description: "Why the work stopped for good; marks it abandoned." },
         files: { ...strList, description: "Paths touched." },
         at: when,
-        project,
+        dir,
         agent,
       },
       required: ["id"],
@@ -83,7 +88,7 @@ export const TOOLS = [
         labels: strList,
         refs: { ...strList, description: "Related WORK/BUG ids." },
         created_at: when,
-        project,
+        dir,
         agent,
       },
       required: ["title", "severity", "report"],
@@ -101,16 +106,39 @@ export const TOOLS = [
         resolution: { type: "string", description: "The fix, why it works, how it was verified." },
         claim: { type: "boolean", description: "Take the bug; refuses if another agent holds it." },
         at: when,
-        project,
+        dir,
         agent,
       },
       required: ["id"],
     },
   },
   {
+    name: "note",
+    description:
+      "Share knowledge with the other agents — memory, handoff, decision or reference notes: list scans them, read opens one, write adds or rewrites one, remove retires it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["list", "read", "write", "remove"], description: "Default list." },
+        name: { type: "string", description: "Kebab-case identity; derived from title on a first write." },
+        title: { type: "string", description: "One specific line." },
+        type: { type: "string", enum: ["memory", "handoff", "decision", "reference"] },
+        description: { type: "string", description: "One line a scanner reads instead of the body." },
+        body: { type: "string", description: "Free-form markdown; write replaces it." },
+        tags: strList,
+        refs: { ...strList, description: "Related WORK/BUG ids or note names." },
+        query: { type: "string", description: "list: match name, title, description, body." },
+        full: { type: "boolean", description: "read: the whole body instead of a summary." },
+        at: when,
+        dir,
+        agent,
+      },
+    },
+  },
+  {
     name: "status",
     description:
-      "Read the vault: a project snapshot, the work list, the bug list, or one record — compact summaries unless full is set.",
+      "Read the project: a snapshot, the work list, the bug list, or one record — compact summaries unless full is set.",
     // The one hint worth its bytes: a client that knows this tool cannot write can run it
     // without asking the human first.
     annotations: { readOnlyHint: true },
@@ -124,8 +152,25 @@ export const TOOLS = [
         agent: { type: "string", description: "Filter: work by author, bugs by assignee." },
         limit: { type: "integer", description: `Rows, default ${DEFAULT_LIMIT}, max ${MAX_LIMIT}.` },
         full: { type: "boolean", description: "mode=view: the whole record instead of a summary." },
-        project,
+        dir,
       },
+    },
+  },
+  {
+    name: "app_feedback",
+    description:
+      "File a bug or a wish about the AgentMonitoring app itself — its tools, CLI or boards — not about the project you are working in.",
+    inputSchema: {
+      type: "object",
+      // No dir: feedback about the app is machine-level and belongs to no project.
+      properties: {
+        type: { type: "string", enum: ["bug", "idea"] },
+        title: { type: "string", description: "One specific line." },
+        body: { type: "string", description: "Repro for a bug; the situation behind an idea." },
+        at: when,
+        agent,
+      },
+      required: ["type", "title"],
     },
   },
 ];
@@ -141,20 +186,20 @@ function need(args, names, tool) {
 }
 
 function ident(args, ctx, wantAgent = true) {
-  const slug = String(args?.project ?? "").trim() || ctx.project;
+  const dirArg = String(args?.dir ?? "").trim();
+  const at = dirArg ? { ...ctx, dir: dirArg } : ctx;
   const who = String(args?.agent ?? "").trim() || ctx.agent;
-  if (!slug) throw new ToolError('no project: pass project, or start the server with --project <slug>.');
   if (wantAgent && !who) throw new ToolError('no agent: pass agent, or start the server with --agent <handle>.');
-  return { slug, who };
+  return { at, who };
 }
 
 function flag(args, name, value) {
   if (value != null && value !== "") args.push(name, String(value));
 }
 
-function recordPath(ctx, slug, id) {
-  const dir = id.toUpperCase().startsWith("WORK") ? "worklogs" : "bugs";
-  return path.join(ctx.vault, "projects", slug, dir, `${id.toUpperCase()}.md`);
+function recordPath(at, id) {
+  const sub = id.toUpperCase().startsWith("WORK") ? "worklogs" : "bugs";
+  return path.join(at.dir, sub, `${id.toUpperCase()}.md`);
 }
 
 const lines = (...parts) => text(parts.filter(Boolean).join("\n"));
@@ -162,15 +207,15 @@ const lines = (...parts) => text(parts.filter(Boolean).join("\n"));
 /* ------------------------------------------------------------------ handlers */
 
 async function logWork(args, ctx) {
-  const { slug, who } = ident(args, ctx);
+  const { at, who } = ident(args, ctx);
   need(args, ["title", "what", "why", "how"], "log_work");
   const body = `## What\n\n${args.what.trim()}\n\n## Why\n\n${args.why.trim()}\n\n## How\n\n${args.how.trim()}\n`;
 
-  const startArgs = ["work", "start", "-p", slug, "--agent", who, "--title", oneLine(args.title), "--body-file", "-", "--json"];
+  const startArgs = ["work", "start", "--agent", who, "--title", oneLine(args.title), "--body-file", "-", "--json"];
   flag(startArgs, "--tags", listArg(args.tags));
   flag(startArgs, "--refs", listArg(args.refs));
   flag(startArgs, "--started-at", args.started_at);
-  const started = await runCli(ctx, startArgs, body);
+  const started = await runCli(at, startArgs, body);
   if (!started.ok) return fail(cliErrorText(started));
 
   const id = started.json?.id ?? "the work log";
@@ -182,17 +227,17 @@ async function logWork(args, ctx) {
     // rather than dropping the caller's list without a word.
     const held = listArg(args.files) ? ", with the files" : "";
     return lines(
-      `${id} in_progress · ${slug} · ${who}`,
+      `${id} in_progress · ${who}`,
       `started ${startedAt}`,
       file,
       `close it with update_work(id="${id}", outcome=…${held})`
     );
   }
 
-  const doneArgs = ["work", "done", id, "-p", slug, "--agent", who, "--outcome-file", "-", "--json"];
+  const doneArgs = ["work", "done", id, "--agent", who, "--outcome-file", "-", "--json"];
   flag(doneArgs, "--files", listArg(args.files));
   flag(doneArgs, "--finished-at", args.finished_at);
-  const done = await runCli(ctx, doneArgs, String(args.outcome).trim());
+  const done = await runCli(at, doneArgs, String(args.outcome).trim());
   if (!done.ok) {
     return fail(
       `${id} exists and is in progress — only closing it failed, so do not log the work again; retry with update_work(id="${id}", outcome=…).\n${cliErrorText(done)}`
@@ -200,14 +245,14 @@ async function logWork(args, ctx) {
   }
   const rec = done.json?.record ?? {};
   return lines(
-    `${id} done · ${slug} · ${who}`,
+    `${id} done · ${who}`,
     `started ${rec.started ?? startedAt} · finished ${rec.finished ?? ""}`,
     file
   );
 }
 
 async function updateWork(args, ctx) {
-  const { slug, who } = ident(args, ctx);
+  const { at, who } = ident(args, ctx);
   need(args, ["id"], "update_work");
   const id = String(args.id).trim().toUpperCase();
   const note = String(args.note ?? "").trim();
@@ -221,9 +266,9 @@ async function updateWork(args, ctx) {
   let stamp = "";
 
   if (note) {
-    const a = ["work", "update", id, "-p", slug, "--agent", who, "--message-file", "-", "--json"];
+    const a = ["work", "update", id, "--agent", who, "--message-file", "-", "--json"];
     flag(a, "--at", args.at);
-    const r = await runCli(ctx, a, note);
+    const r = await runCli(at, a, note);
     if (!r.ok) return fail(cliErrorText(r));
     done.push("note added");
     file = r.json?.path ?? file;
@@ -231,10 +276,10 @@ async function updateWork(args, ctx) {
   }
 
   if (outcome) {
-    const a = ["work", "done", id, "-p", slug, "--agent", who, "--outcome-file", "-", "--json"];
+    const a = ["work", "done", id, "--agent", who, "--outcome-file", "-", "--json"];
     flag(a, "--files", listArg(args.files));
     flag(a, "--finished-at", args.at);
-    const r = await runCli(ctx, a, outcome);
+    const r = await runCli(at, a, outcome);
     if (!r.ok) return fail(stepFailure(done, cliErrorText(r)));
     done.push("closed");
     file = r.json?.path ?? file;
@@ -242,9 +287,9 @@ async function updateWork(args, ctx) {
   }
 
   if (abandon) {
-    const a = ["work", "abandon", id, "-p", slug, "--agent", who, "--reason-file", "-", "--json"];
+    const a = ["work", "abandon", id, "--agent", who, "--reason-file", "-", "--json"];
     flag(a, "--at", args.at);
-    const r = await runCli(ctx, a, abandon);
+    const r = await runCli(at, a, abandon);
     if (!r.ok) return fail(cliErrorText(r));
     done.push("abandoned");
     file = r.json?.path ?? file;
@@ -256,10 +301,10 @@ async function updateWork(args, ctx) {
 }
 
 async function reportBug(args, ctx) {
-  const { slug, who } = ident(args, ctx);
+  const { at, who } = ident(args, ctx);
   need(args, ["title", "severity", "report"], "report_bug");
   const a = [
-    "bug", "create", "-p", slug, "--agent", who,
+    "bug", "create", "--agent", who,
     "--title", oneLine(args.title),
     "--severity", String(args.severity).trim(),
     "--body-file", "-", "--json",
@@ -267,18 +312,18 @@ async function reportBug(args, ctx) {
   flag(a, "--labels", listArg(args.labels));
   flag(a, "--refs", listArg(args.refs));
   flag(a, "--created-at", args.created_at);
-  const r = await runCli(ctx, a, String(args.report).trim());
+  const r = await runCli(at, a, String(args.report).trim());
   if (!r.ok) return fail(cliErrorText(r));
   const rec = r.json?.record ?? {};
   return lines(
-    `${r.json?.id} open · ${rec.severity} · ${slug} · reported by ${who}`,
+    `${r.json?.id} open · ${rec.severity} · reported by ${who}`,
     `created ${rec.created ?? r.json?.event?.ts ?? ""}`,
     r.json?.path ?? ""
   );
 }
 
 async function resolveBug(args, ctx) {
-  const { slug, who } = ident(args, ctx);
+  const { at, who } = ident(args, ctx);
   need(args, ["id"], "resolve_bug");
   const id = String(args.id).trim().toUpperCase();
   const comment = String(args.comment ?? "").trim();
@@ -292,9 +337,9 @@ async function resolveBug(args, ctx) {
   let stamp = "";
 
   if (wantClaim) {
-    const a = ["bug", "claim", id, "-p", slug, "--agent", who, "--json"];
+    const a = ["bug", "claim", id, "--agent", who, "--json"];
     flag(a, "--at", args.at);
-    const r = await runCli(ctx, a);
+    const r = await runCli(at, a);
     if (!r.ok) {
       // Claiming is implicit when a resolution is given, so a bug another agent holds
       // would otherwise dead-end here — name the way past it.
@@ -309,18 +354,18 @@ async function resolveBug(args, ctx) {
   }
 
   if (comment) {
-    const a = ["bug", "comment", id, "-p", slug, "--agent", who, "--message-file", "-", "--json"];
+    const a = ["bug", "comment", id, "--agent", who, "--message-file", "-", "--json"];
     flag(a, "--at", args.at);
-    const r = await runCli(ctx, a, comment);
+    const r = await runCli(at, a, comment);
     if (!r.ok) return fail(stepFailure(done, cliErrorText(r)));
     done.push("commented");
     file = r.json?.path ?? file;
   }
 
   if (resolution) {
-    const a = ["bug", "resolve", id, "-p", slug, "--agent", who, "--resolution-file", "-", "--json"];
+    const a = ["bug", "resolve", id, "--agent", who, "--resolution-file", "-", "--json"];
     flag(a, "--at", args.at);
-    const r = await runCli(ctx, a, resolution);
+    const r = await runCli(at, a, resolution);
     if (!r.ok) return fail(stepFailure(done, cliErrorText(r)));
     done.push("resolved");
     file = r.json?.path ?? file;
@@ -332,18 +377,18 @@ async function resolveBug(args, ctx) {
 }
 
 async function status(args, ctx) {
-  const { slug } = ident(args, ctx, false);
+  const { at } = ident(args, ctx, false);
   const mode = String(args.mode ?? "project").trim() || "project";
   const limit = Math.max(1, Math.min(MAX_LIMIT, Number(args.limit) || DEFAULT_LIMIT));
 
   if (mode === "project") {
-    const r = await runCli(ctx, ["status", "-p", slug, "--json"]);
+    const r = await runCli(at, ["status", "--json"]);
     if (!r.ok) return fail(cliErrorText(r));
-    return text(renderSnapshot(r.json ?? {}, { project: slug }));
+    return text(renderSnapshot(r.json ?? {}));
   }
 
   if (mode === "work" || mode === "bugs") {
-    const a = mode === "work" ? ["work", "list", "-p", slug] : ["bug", "list", "-p", slug];
+    const a = mode === "work" ? ["work", "list"] : ["bug", "list"];
     flag(a, "--status", args.state);
     if (mode === "work") flag(a, "--agent", args.agent);
     else {
@@ -351,11 +396,11 @@ async function status(args, ctx) {
       flag(a, "--severity", args.severity);
     }
     a.push("--json");
-    const r = await runCli(ctx, a);
+    const r = await runCli(at, a);
     if (!r.ok) return fail(cliErrorText(r));
     const all = Array.isArray(r.json) ? r.json : [];
     const shown = all.slice(0, limit);
-    const opts = { project: slug, total: all.length, limit };
+    const opts = { total: all.length, limit };
     return text(mode === "work" ? renderWorkList(shown, opts) : renderBugList(shown, opts));
   }
 
@@ -364,17 +409,125 @@ async function status(args, ctx) {
     const id = String(args.id).trim().toUpperCase();
     const kind = id.startsWith("BUG") ? "bug" : "work";
     if (args.full) {
-      const r = await runCli(ctx, [kind, "view", id, "-p", slug]);
+      const r = await runCli(at, [kind, "view", id]);
       if (!r.ok) return fail(cliErrorText(r));
       return text(clamp(r.stdout, FULL_CAP));
     }
-    const r = await runCli(ctx, [kind, "view", id, "-p", slug, "--json"]);
+    const r = await runCli(at, [kind, "view", id, "--json"]);
     if (!r.ok) return fail(cliErrorText(r));
-    const file = recordPath(ctx, slug, id);
+    const file = recordPath(at, id);
     return text(kind === "work" ? renderWorkView(r.json ?? {}, file) : renderBugView(r.json ?? {}, file));
   }
 
   throw new ToolError(`unknown mode '${mode}': use project, work, bugs or view.`);
+}
+
+async function note(args, ctx) {
+  const action = String(args.action ?? "list").trim() || "list";
+  const name = String(args.name ?? "").trim().toLowerCase();
+
+  if (action === "list") {
+    const { at } = ident(args, ctx, false);
+    const a = ["note", "list", "--json"];
+    flag(a, "--type", args.type);
+    flag(a, "--search", args.query);
+    const r = await runCli(at, a);
+    if (!r.ok) return fail(cliErrorText(r));
+    const all = Array.isArray(r.json) ? r.json : [];
+    return text(renderNoteList(all, { total: all.length }));
+  }
+
+  if (action === "read") {
+    const { at } = ident(args, ctx, false);
+    need(args, ["name"], "note(action=read)");
+    if (args.full) {
+      const r = await runCli(at, ["note", "view", name]);
+      if (!r.ok) return fail(cliErrorText(r));
+      return text(clamp(r.stdout, FULL_CAP));
+    }
+    const r = await runCli(at, ["note", "view", name, "--json"]);
+    if (!r.ok) return fail(cliErrorText(r));
+    return text(renderNoteView(r.json ?? {}, path.join(at.dir, "notes", `${name}.md`)));
+  }
+
+  if (action === "write") {
+    const { at, who } = ident(args, ctx);
+    // One fact, one file: a write against a name that exists rewrites it in place, so a
+    // caller never has to know whether it is creating or correcting.
+    const exists = name ? (await runCli(at, ["note", "view", name, "--json"])).ok : false;
+
+    if (exists) {
+      const a = ["note", "update", name, "--agent", who, "--json"];
+      flag(a, "--title", args.title ? oneLine(args.title) : null);
+      flag(a, "--type", args.type);
+      flag(a, "--description", args.description ? oneLine(args.description) : null);
+      flag(a, "--tags", listArg(args.tags));
+      flag(a, "--refs", listArg(args.refs));
+      flag(a, "--at", args.at);
+      const body = String(args.body ?? "").trim();
+      if (body) a.push("--body-file", "-");
+      const r = await runCli(at, a, body || undefined);
+      if (!r.ok) return fail(cliErrorText(r));
+      return lines(
+        `${r.json?.id} rewritten · ${who}`,
+        r.json?.event?.summary ?? "",
+        r.json?.path ?? ""
+      );
+    }
+
+    need(args, ["title", "type", "description", "body"], "note(action=write)");
+    const a = [
+      "note", "add", "--agent", who,
+      "--title", oneLine(args.title),
+      "--type", String(args.type).trim(),
+      "--description", oneLine(args.description),
+      "--body-file", "-", "--json",
+    ];
+    flag(a, "--name", name || null);
+    flag(a, "--tags", listArg(args.tags));
+    flag(a, "--refs", listArg(args.refs));
+    flag(a, "--at", args.at);
+    const r = await runCli(at, a, String(args.body).trim());
+    if (!r.ok) return fail(cliErrorText(r));
+    const rec = r.json?.record ?? {};
+    return lines(
+      `${r.json?.id} added · ${rec.type} · ${who}`,
+      `rewrite it later with note(action="write", name="${r.json?.id}", …)`,
+      r.json?.path ?? ""
+    );
+  }
+
+  if (action === "remove") {
+    const { at, who } = ident(args, ctx);
+    need(args, ["name"], "note(action=remove)");
+    const r = await runCli(at, ["note", "remove", name, "--agent", who, "--json"]);
+    if (!r.ok) return fail(cliErrorText(r));
+    return lines(
+      `${r.json?.name} removed · ${who}`,
+      "the note_removed event keeps the trail on the feed"
+    );
+  }
+
+  throw new ToolError(`unknown action '${action}': use list, read, write or remove.`);
+}
+
+async function appFeedback(args, ctx) {
+  const { at, who } = ident(args, ctx);
+  need(args, ["type", "title"], "app_feedback");
+  const a = [
+    "app-feedback", "add", "--agent", who,
+    "--type", String(args.type).trim(),
+    "--title", oneLine(args.title),
+    "--json",
+  ];
+  flag(a, "--body", String(args.body ?? "").trim() || null);
+  flag(a, "--at", args.at);
+  const r = await runCli(at, a);
+  if (!r.ok) return fail(cliErrorText(r));
+  return lines(
+    `${r.json?.id} filed · ${r.json?.type} · ${who}`,
+    "about the app itself — the maintainer works these on the App feedback board"
+  );
 }
 
 function stepFailure(done, message) {
@@ -382,7 +535,7 @@ function stepFailure(done, message) {
   return `${already}${message}`;
 }
 
-const HANDLERS = { log_work: logWork, update_work: updateWork, report_bug: reportBug, resolve_bug: resolveBug, status };
+const HANDLERS = { log_work: logWork, update_work: updateWork, report_bug: reportBug, resolve_bug: resolveBug, note, status, app_feedback: appFeedback };
 
 export async function callTool(name, args, ctx) {
   const handler = HANDLERS[name];

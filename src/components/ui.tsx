@@ -3,10 +3,17 @@
  * a small coloured dot plus a label, never a shouting block of colour.
  */
 import { useState, type ReactNode } from "react";
-import { nothingToRetry, vaultErrorMessage } from "../lib/api";
+import { nothingToRetry, projectErrorMessage } from "../lib/api";
 import { t } from "../lib/i18n";
-import type { BugStatus, Severity, WorkStatus } from "../lib/types";
-import { bugStatusLabel, severityAbbr, severityLabel, unassigned, workStatusLabel } from "../lib/words";
+import type { BugStatus, NoteType, Severity, WorkStatus } from "../lib/types";
+import {
+  bugStatusLabel,
+  noteTypeLabel,
+  severityAbbr,
+  severityLabel,
+  unassigned,
+  workStatusLabel,
+} from "../lib/words";
 
 export function WorkStatusPill({ status }: { status: WorkStatus }) {
   return (
@@ -56,6 +63,40 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
         </span>
       ) : null}
     </span>
+  );
+}
+
+/**
+ * What a note is for, carried the way every state in this app is carried: a dot and the
+ * word. The tooltip says what the type means, because "Handoff" is a word and the reading
+ * protocol behind it — read this before you start — is the point.
+ */
+export function NoteTypePill({ type }: { type: NoteType }) {
+  const tip =
+    type === "memory"
+      ? t("notes.tipMemory")
+      : type === "handoff"
+        ? t("notes.tipHandoff")
+        : type === "decision"
+          ? t("notes.tipDecision")
+          : t("notes.tipReference");
+  return (
+    <span className={`pill pill-note-${type}`} title={tip}>
+      <span className="dot" aria-hidden="true" />
+      {noteTypeLabel(type)}
+    </span>
+  );
+}
+
+/** The same fact as a dot alone, for rows — the type word sits elsewhere on the row. */
+export function NoteTypeDot({ type }: { type: NoteType }) {
+  return (
+    <span
+      className={`sdot sdot-note-${type}`}
+      title={noteTypeLabel(type)}
+      aria-label={noteTypeLabel(type)}
+      role="img"
+    />
   );
 }
 
@@ -480,11 +521,11 @@ export function ErrorState({
 }) {
   return (
     <div className="error-state" role="alert">
-      <p className="error-title">{title ?? t("vault.readFailed")}</p>
+      <p className="error-title">{title ?? t("proj.readFailed")}</p>
       {/* The headline is the app's sentence; this is the backend's, said in the reader's
           language when it is one of the dozen sentences this repository writes. */}
       <p className="error-message">
-        <InlineCode text={vaultErrorMessage(message)} />
+        <InlineCode text={projectErrorMessage(message)} />
       </p>
       {(onRetry || action) && (
         <div className="error-actions">

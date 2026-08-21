@@ -11,7 +11,7 @@
  */
 import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { useProjectSlug, useVaultNonce } from "../AppContext";
+import { useProjectId, useDataNonce } from "../AppContext";
 import { agentColumnWidth } from "../lib/columns";
 import { api, failureTitle, nothingToRetry, projectGone } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
@@ -49,7 +49,7 @@ const DEFAULTS = { status: "all", agent: "all", tag: "all", q: "" };
 const ALLOWED = { status: ["all", ...GROUP_ORDER] } as const;
 
 export function WorkListPage() {
-  const slug = useProjectSlug()!;
+  const projectId = useProjectId()!;
   const {
     data,
     error,
@@ -57,7 +57,7 @@ export function WorkListPage() {
     status: httpStatus,
     loading,
     reload,
-  } = useAsync(() => api.listWorklogs(slug), [slug], useVaultNonce());
+  } = useAsync(() => api.listWorklogs(projectId), [projectId], useDataNonce());
   /* The project went out from under an open list — deleted in another window, or from this
      window's own sidebar. A list of a project that is not in the vault has nothing left to
      be a list of, so the screen becomes the one the app already draws for a stale project
@@ -170,7 +170,7 @@ export function WorkListPage() {
   const filtersActive = isDirty();
   const clearFilters = useCallback(() => reset(), [reset]);
   const clearQuery = useCallback(() => set("q", ""), [set]);
-  const href = useCallback((w: WorklogSummary) => `/p/${slug}/work/${w.id}`, [slug]);
+  const href = useCallback((w: WorklogSummary) => `/p/${projectId}/work/${w.id}`, [projectId]);
   const { cursor, setCursor, rowRefs } = useListKeyboard({
     items: flat,
     href,
@@ -326,8 +326,10 @@ export function WorkListPage() {
             hint={
               <>
                 {t("work.empty.hint")}
+                {/* v2 syntax: the CLI resolves the project from the directory it runs in,
+                    like git — the `-p <id>` this line used to print does not parse. */}
                 <code className="empty-code">
-                  agentmon work start -p {slug} --agent &lt;name&gt; --title &lt;title&gt;
+                  agentmon work start --agent &lt;name&gt; --title "&lt;title&gt;" --body "…"
                 </code>
               </>
             }
@@ -375,11 +377,11 @@ export function WorkListPage() {
                             rowRefs.current[i] = el;
                           }}
                           className={`work-row${cursor === i ? " is-cursor" : ""}`}
-                          to={`/p/${slug}/work/${w.id}`}
+                          to={`/p/${projectId}/work/${w.id}`}
                           onMouseEnter={() => setCursor(i)}
                           onFocus={() => setCursor(i)}
                           {...contextMenu(() =>
-                            recordMenu({ kind: "work", id: w.id, title: w.title, slug })
+                            recordMenu({ kind: "work", id: w.id, title: w.title, projectId })
                           )}
                         >
                           <WorkStatusDot status={w.status} />

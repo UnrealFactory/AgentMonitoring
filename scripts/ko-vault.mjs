@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Build a throwaway vault whose **records** are Korean, with the release CLI.
+ * Build throwaway Korean project folders with the release CLI.
  *
- *   node scripts/ko-vault.mjs [--out DIR]      # build one and print its path
+ *   node scripts/ko-vault.mjs [--out DIR]      # build them and print AGENTMON_DIRS
  *
  * Five rounds of Korean review read Korean chrome over English data, because the only vault
  * this repo has ever pointed the app at is its own — and its records are written in English
@@ -57,14 +57,14 @@ const ago = (hours) => new Date(Date.now() - hours * 3600_000).toISOString();
  * what is in the fixture without running it.
  */
 const PLAN = [
-  ["project", "create", "gyeolje",
+  ["gyeolje", "init",
     "--name", "결제 게이트웨이",
     "--description",
     "카드 결제 승인과 취소, 부분 환불, 그리고 매일 자정에 도는 정산 배치를 맡고 있는 서비스입니다. 가맹점별 정산 내역과 대사 결과도 여기서 만듭니다.",
     "--tags", "결제,정산",
     "--agent", "결제팀-에이전트",
     "--at", ago(72)],
-  ["project", "create", "baesong",
+  ["baesong", "init",
     "--name", "배송 추적",
     "--description",
     "주문 한 건이 창고를 떠나 문 앞에 닿기까지의 상태를 모읍니다. 택배사마다 다른 응답을 하나의 배송 상태로 정규화해서 고객 안내 문구를 만듭니다.",
@@ -72,7 +72,7 @@ const PLAN = [
     "--agent", "배송팀-에이전트",
     "--at", ago(70)],
 
-  ["work", "start", "-p", "gyeolje", "--agent", "결제팀-에이전트",
+  ["gyeolje", "work", "start", "--agent", "결제팀-에이전트",
     "--title", "결제 승인 재시도 규칙을 어댑터 세 곳에서 한 모듈로 모으기",
     "--tags", "결제,재시도",
     "--started-at", ago(66),
@@ -84,16 +84,16 @@ const PLAN = [
 
 ## How
 재시도 규칙과 함께 카드사 응답 코드 표를 재시도 정책 모듈로 옮기고, 어댑터는 그 판단을 받아서 쓰기만 합니다. 카드사별 예외는 표에 한 줄씩 적어 두었고, 사양서에 없는 응답 코드는 재시도하지 않는 쪽을 기본값으로 두었습니다.`],
-  ["work", "update", "WORK-0001", "-p", "gyeolje", "--agent", "결제팀-에이전트",
+  ["gyeolje", "work", "update", "WORK-0001", "--agent", "결제팀-에이전트",
     "--at", ago(40),
     "--message",
     "카드사 두 곳의 응답 코드 표를 옮겼습니다. 남은 한 곳은 사양서가 아직 오지 않아서 기다리는 중이고, 그동안은 기존 판단을 그대로 두었습니다."],
-  ["work", "done", "WORK-0001", "-p", "gyeolje", "--agent", "결제팀-에이전트",
+  ["gyeolje", "work", "done", "WORK-0001", "--agent", "결제팀-에이전트",
     "--finished-at", ago(18),
     "--outcome",
     "재시도 규칙은 한곳에 모았습니다. 어댑터 세 곳이 같은 표를 보고 같은 응답 코드에는 같은 답을 내며, 사양서에 없는 코드는 재시도하지 않습니다. 단위 테스트 마흔한 개와 실제 승인 로그 하루치를 다시 돌려서 확인했습니다."],
 
-  ["work", "start", "-p", "gyeolje", "--agent", "정산-에이전트",
+  ["gyeolje", "work", "start", "--agent", "정산-에이전트",
     "--title", "부분 환불 금액이 원 단위에서 어긋나는 문제를 정산 쪽에서 먼저 확인하기",
     "--tags", "정산,환불",
     "--refs", "BUG-0002",
@@ -106,31 +106,31 @@ const PLAN = [
 
 ## How
 환불 한 건을 원장, 정산 배치, 카드사 명세 세 곳에서 각각 꺼내 같은 화면에 놓는 작은 도구를 먼저 만들었습니다. 그다음 어긋난 주문 스물세 건을 그 도구로 훑어서 공통점을 찾습니다.`],
-  ["work", "update", "WORK-0002", "-p", "gyeolje", "--agent", "정산-에이전트",
+  ["gyeolje", "work", "update", "WORK-0002", "--agent", "정산-에이전트",
     "--at", ago(3),
     "--message",
     "어긋난 주문 스물세 건 가운데 열아홉 건이 환불을 세 번 이상 나눈 주문이었습니다. 나누어 담을 때마다 남은 금액을 다시 반올림하는 자리가 있는 것으로 보입니다."],
 
-  ["bug", "create", "-p", "gyeolje", "--agent", "결제팀-에이전트",
+  ["gyeolje", "bug", "create", "--agent", "결제팀-에이전트",
     "--title", "장바구니에서 카드번호 입력 화면으로 넘어가면 결제 금액이 이전 금액으로 남아 있습니다",
     "--severity", "high",
     "--labels", "결제,장바구니",
     "--created-at", ago(30),
     "--body",
     "장바구니에서 수량을 바꾼 뒤 곧바로 결제하기를 누르면 카드번호 입력 화면의 결제 금액이 수량을 바꾸기 전 금액으로 남아 있습니다. 화면을 새로 고치면 올바른 금액이 나오므로 서버가 내려주는 값은 맞고, 화면이 들고 있는 값이 낡은 것으로 보입니다. 재현은 수량을 바꾼 뒤 2초 안에 결제하기를 누를 때만 됩니다."],
-  ["bug", "comment", "BUG-0001", "-p", "gyeolje", "--agent", "정산-에이전트",
+  ["gyeolje", "bug", "comment", "BUG-0001", "--agent", "정산-에이전트",
     "--at", ago(26),
     "--message",
     "장바구니 화면이 금액을 다시 계산하는 요청과 결제 화면으로 넘어가는 이동이 경쟁하는 것으로 보입니다. 이동을 막지 말고 결제 화면이 스스로 금액을 다시 물어보게 하는 편이 안전해 보입니다."],
 
-  ["bug", "create", "-p", "gyeolje", "--agent", "정산-에이전트",
+  ["gyeolje", "bug", "create", "--agent", "정산-에이전트",
     "--title", "정산 배치가 자정에 두 번 도는 날이 있어 가맹점 정산 내역이 중복으로 만들어집니다",
     "--severity", "critical",
     "--labels", "정산,배치",
     "--created-at", ago(52),
     "--body",
     "일일 정산 배치가 자정에 한 번만 돌아야 하는데, 한 달에 두세 번 같은 날짜로 정산 내역이 두 벌 만들어집니다. 중복으로 만들어진 날은 가맹점에 나가는 정산 금액이 두 배가 되므로 발견 즉시 손으로 지우고 있습니다."],
-  ["bug", "resolve", "BUG-0002", "-p", "gyeolje", "--agent", "결제팀-에이전트",
+  ["gyeolje", "bug", "resolve", "BUG-0002", "--agent", "결제팀-에이전트",
     "--at", ago(20),
     "--resolution",
     "원인은 배치 스케줄러가 서머타임이 없는 지역에서도 자정을 두 번 지나는 날을 만들어 낸 것이었습니다. 고친 방법은 실행 시각이 아니라 정산 대상 날짜를 잠금 열쇠로 삼아, 같은 날짜의 정산이 이미 있으면 두 번째 실행이 아무 일도 하지 않고 끝나게 한 것입니다. 지난 석 달치 정산을 다시 돌려서 중복이 하나도 생기지 않는 것을 확인했습니다."],
@@ -138,7 +138,7 @@ const PLAN = [
   /* The work log the two bugs above point the reader at — and the record whose 관련 항목 rail
      is the one this fixture exists to fill (see the header). Two outgoing rows, both carrying
      a title somebody wrote long, which is the only shape `.rel-title` wraps in. */
-  ["work", "start", "-p", "gyeolje", "--agent", "결제팀-에이전트",
+  ["gyeolje", "work", "start", "--agent", "결제팀-에이전트",
     "--title", "결제 화면이 장바구니에서 받은 금액을 그대로 쓰지 않고 스스로 다시 물어보게 바꾸기",
     "--tags", "결제,장바구니",
     "--refs", "BUG-0001,WORK-0001",
@@ -151,12 +151,57 @@ const PLAN = [
 
 ## How
 결제 화면이 열리면 주문 금액을 다시 물어보고, 답이 오기 전까지는 결제 버튼을 누를 수 없게 두었습니다. 금액이 달라졌으면 바뀐 금액과 달라진 이유를 함께 보여 주고, 사용자가 확인한 뒤에만 승인을 요청합니다.`],
-  ["work", "update", "WORK-0003", "-p", "gyeolje", "--agent", "결제팀-에이전트",
+  ["gyeolje", "work", "update", "WORK-0003", "--agent", "결제팀-에이전트",
     "--at", ago(2),
     "--message",
     "결제 화면이 금액을 다시 물어보는 부분까지 끝냈습니다. 금액이 달라졌을 때 보여 줄 안내 문구는 결제 흐름을 멈추지 않는 쪽으로 다시 쓰고 있습니다."],
 
-  ["work", "start", "-p", "baesong", "--agent", "배송팀-에이전트",
+  /* The notes: the third record kind, in Korean, because the notes screens are swept by the
+     same gates as the rest. Names are explicit ASCII — a fully Korean title has nothing to
+     derive a kebab name from, which is itself the case worth fixturing (the CLI's own error
+     says to pass --name). One note is updated after creation so 수정 ≠ 작성 renders. */
+  ["gyeolje", "note", "add", "--agent", "결제팀-에이전트",
+    "--name", "retry-policy-table",
+    "--type", "memory",
+    "--title", "카드사 응답 코드의 재시도 여부는 재시도 정책 모듈의 표가 원본입니다",
+    "--description", "응답 코드별 재시도 여부를 고칠 때는 어댑터가 아니라 재시도 정책 모듈의 표를 고칩니다.",
+    "--tags", "결제,재시도",
+    "--refs", "WORK-0001",
+    "--at", ago(16),
+    "--body",
+    "어댑터 세 곳이 같은 표를 읽습니다. 어댑터 쪽에서 판단을 덧붙이면 WORK-0001 이전의 상태로 돌아가는 것이므로, 카드사별 예외는 반드시 표에 한 줄로 적습니다. 사양서에 없는 응답 코드는 재시도하지 않는 것이 기본값입니다."],
+  ["gyeolje", "note", "add", "--agent", "정산-에이전트",
+    "--name", "refund-rounding-handoff",
+    "--type", "handoff",
+    "--title", "부분 환불 1원 오차 조사 인계",
+    "--description", "어긋난 주문 스물세 건 중 열아홉 건이 세 번 이상 나눈 환불입니다. 반올림 자리부터 보세요.",
+    "--tags", "정산,환불",
+    "--refs", "WORK-0002,BUG-0002",
+    "--at", ago(8),
+    "--body", `## 지금까지
+원장·정산 배치·카드사 명세를 나란히 놓는 도구는 만들어져 있고, 어긋난 주문 스물세 건을 훑은 결과 열아홉 건이 환불을 세 번 이상 나눈 주문이었습니다.
+
+## 먼저 할 일
+나누어 담을 때마다 남은 금액을 다시 반올림하는 자리를 찾는 것입니다. 정산 배치 쪽이 아니라 환불 요청을 만드는 쪽일 가능성이 높습니다.`],
+  /* Rewritten by a DIFFERENT agent on purpose: the list row and the detail byline show
+     the last rewriter beside the author, and this is the fixture that puts that surface
+     in front of the Korean gates. */
+  ["gyeolje", "note", "update", "refund-rounding-handoff", "--agent", "결제팀-에이전트",
+    "--at", ago(2),
+    "--description",
+    "반올림 자리는 환불 요청을 만드는 쪽으로 좁혀졌습니다. 남은 금액 계산 함수부터 보세요."],
+  ["baesong", "note", "add", "--agent", "배송팀-에이전트",
+    "--name", "carrier-status-source",
+    "--type", "reference",
+    "--title", "택배사별 상태 이름 원본 문서",
+    "--description", "상태 표에 없는 이름을 만나면 각 택배사의 연동 사양서에서 원래 정의를 먼저 확인합니다.",
+    "--tags", "배송,정규화",
+    "--refs", "WORK-0001",
+    "--at", ago(5),
+    "--body",
+    "택배사 세 곳의 연동 사양서는 사내 위키의 배송 연동 페이지에 모여 있습니다. 상태 표 파일과 사양서의 판번호를 함께 적어 두었으므로, 표를 고칠 때는 사양서 판이 바뀌었는지부터 확인합니다."],
+
+  ["baesong", "work", "start", "--agent", "배송팀-에이전트",
     "--title", "택배사 세 곳의 배송 상태를 하나의 상태 값으로 정규화하기",
     "--tags", "배송,정규화",
     "--started-at", ago(46),
@@ -168,11 +213,11 @@ const PLAN = [
 
 ## How
 상태 표는 택배사별로 한 파일씩 두고, 표에 없는 상태를 만나면 알 수 없음으로 두되 원래 이름을 기록에 남깁니다. 안내 문구는 우리 상태 값에서만 만들고 택배사 이름은 문구에 넣지 않습니다.`],
-  ["work", "done", "WORK-0001", "-p", "baesong", "--agent", "배송팀-에이전트",
+  ["baesong", "work", "done", "WORK-0001", "--agent", "배송팀-에이전트",
     "--finished-at", ago(6),
     "--outcome",
     "택배사 세 곳의 상태 이름 마흔여덟 가지를 상태 값 여섯 개로 옮겼습니다. 표에 없는 이름은 알 수 없음으로 떨어지고 원래 이름이 기록에 남으므로, 새 상태가 생기면 다음 날 목록에서 바로 보입니다."],
-  ["bug", "create", "-p", "baesong", "--agent", "배송팀-에이전트",
+  ["baesong", "bug", "create", "--agent", "배송팀-에이전트",
     "--title", "배송 완료 안내 문구가 반품 접수된 주문에도 그대로 나갑니다",
     "--severity", "medium",
     "--labels", "배송,안내",
@@ -187,16 +232,20 @@ const PLAN = [
      handle that is both went down the Korean one and came out as a lowercase "n" — the only
      lowercase monogram in an app full of uppercase ones (P9 rounds 7 and 8 critics). One
      comment on a swept screen is enough for the gate to read it. */
-  ["bug", "comment", "BUG-0001", "-p", "baesong", "--agent", "nova-배송팀",
+  ["baesong", "bug", "comment", "BUG-0001", "--agent", "nova-배송팀",
     "--at", ago(5),
     "--message",
     "회수 건은 택배사 응답에 방향 표시가 따로 오고 있어서, 상태 표에 방향 칸을 하나 더 두면 배송 완료와 회수 완료를 갈라낼 수 있습니다. 안내 문구는 그 뒤에 방향별로 나누어 쓰면 됩니다."],
 ];
 
 /** Run one CLI call against `dir`, with the fixture's own error message on failure. */
-const run = (dir, argv) => {
+const run = (dir, argv, base) => {
   try {
-    execFileSync(CLI, ["--vault", dir, "--json", ...argv], { encoding: "utf8" });
+    execFileSync(CLI, ["--dir", dir, "--json", ...argv], {
+      encoding: "utf8",
+      // A scratch registry: fixtures must not bookmark themselves on the real machine.
+      env: { ...process.env, AGENTMON_REGISTRY_DIR: join(base, ".registry") },
+    });
   } catch (err) {
     throw new Error(
       `ko-vault: \`agentmon ${argv.slice(0, 3).join(" ")}\` failed — ${err.stdout || err.message}`,
@@ -205,22 +254,29 @@ const run = (dir, argv) => {
 };
 
 /**
- * Build the fixture in `dir` (default: a fresh temp directory) and return its path.
- * Nothing here touches ./vault; the CLI is only ever handed `--vault dir`.
+ * Build the fixture under `base` (default: a fresh temp directory) — one location per
+ * project, each holding its AgentMonitoring folder — and return the project folders,
+ * ready to join(";") into AGENTMON_DIRS. Nothing here touches the repo's own records;
+ * the CLI is only ever handed `--dir`.
  */
-export function buildKoreanVault(dir = mkdtempSync(join(tmpdir(), "agentmon-ko-"))) {
+export function buildKoreanProjects(base = mkdtempSync(join(tmpdir(), "agentmon-ko-"))) {
   if (!existsSync(CLI)) {
     throw new Error(
       `ko-vault: no release CLI at ${CLI}. Build it first: cargo build --release -p agentmon-cli`,
     );
   }
-  run(dir, ["init", "--name", "한국어 기록 볼트"]);
-  for (const argv of PLAN) run(dir, argv);
-  return dir;
+  const dirs = [];
+  for (const [name, ...argv] of PLAN) {
+    const dir = join(base, name);
+    run(dir, argv, base);
+    const root = join(dir, "AgentMonitoring");
+    if (!dirs.includes(root)) dirs.push(root);
+  }
+  return dirs;
 }
 
 if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, "/")}`) {
   const i = process.argv.indexOf("--out");
   const out = i >= 0 ? process.argv[i + 1] : undefined;
-  console.log(buildKoreanVault(out));
+  console.log(buildKoreanProjects(out).join(";"));
 }

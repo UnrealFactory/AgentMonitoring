@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Prove the two triage screens keep their state in the URL, and that their search reaches
- * the whole record.
+ * Prove the three list screens — bugs, work, notes — keep their state in the URL, and that
+ * their search reaches the whole record.
  *
  *   npm run check:urlstate
  *   node scripts/check-urlstate.mjs [--port 5173] [--url ORIGIN]
@@ -62,8 +62,9 @@ try {
     log,
   }));
 
-  const projects = await (await fetch(`${ORIGIN}/vault-api/projects`)).json();
-  const slug = projects.find((p) => p.slug === "relay")?.slug ?? projects[0].slug;
+  const rows = await (await fetch(`${ORIGIN}/project-api/projects`)).json();
+  const projects = rows.filter((r) => r.available && r.project).map((r) => r.project);
+  const slug = projects[0].id;
   log(`checking /p/${slug}`);
 
   browser = await chromium.launch();
@@ -80,7 +81,7 @@ try {
   // Tabs and chips by `data-value`: what they are called is the dictionary's business,
   // and this gate is about the URL.
   await page.locator('[role="tab"][data-value="all"]').click();
-  await page.locator('.sev-chip[data-value="critical"]').click();
+  await page.locator('.sev-chip[data-value="medium"]').click();
   await page.getByLabel(T("bugs.searchLabel")).fill("pg_stat_activity");
   await page.waitForFunction(() => document.querySelectorAll(".work-rows .work-row").length === 1);
 
@@ -88,7 +89,7 @@ try {
   check(
     "every filter is in the URL",
     params.get("tab") === "all" &&
-      params.get("severity") === "critical" &&
+      params.get("severity") === "medium" &&
       params.get("q") === "pg_stat_activity",
     search(page),
   );
@@ -96,15 +97,15 @@ try {
   const matched = await rowIds(page);
   check(
     "search reaches the record body, not just the row",
-    matched.length === 1 && matched[0] === "BUG-0004",
-    `matched ${JSON.stringify(matched)} — "pg_stat_activity" appears only in BUG-0004's report and thread`,
+    matched.length === 1 && matched[0] === "BUG-0008",
+    `matched ${JSON.stringify(matched)} — "pg_stat_activity" appears only in BUG-0008's report and thread`,
   );
 
   // -- open a record, come back, and the board is where it was ------------------------------
   const filtered = page.url();
   await page.locator(".work-rows .work-row").first().click();
   await ready(page);
-  check("a row opens its record", /\/bugs\/BUG-0004$/.test(new URL(page.url()).pathname), page.url());
+  check("a row opens its record", /\/bugs\/BUG-0008$/.test(new URL(page.url()).pathname), page.url());
 
   await page.goBack();
   await ready(page);
@@ -143,6 +144,8 @@ try {
     { screen: "bugs", query: "reporter=nobody-at-all", control: T("filter.byReporter"), reads: T("filter.allReporters") },
     { screen: "work", query: "agent=nobody-at-all", control: T("filter.byAgent"), reads: T("filter.allAgents") },
     { screen: "work", query: "tag=nonexistent-tag", control: T("filter.byTag"), reads: T("filter.allTags") },
+    { screen: "notes", query: "agent=nobody-at-all", control: T("filter.byAgent"), reads: T("filter.allAgents") },
+    { screen: "notes", query: "tag=nonexistent-tag", control: T("filter.byTag"), reads: T("filter.allTags") },
   ];
 
   /** How many rows each board shows with nothing filtered — the number to fall back to. */
@@ -150,6 +153,7 @@ try {
   for (const [screen, url] of [
     ["bugs", `${ORIGIN}/p/${slug}/bugs?tab=all`],
     ["work", `${ORIGIN}/p/${slug}/work`],
+    ["notes", `${ORIGIN}/p/${slug}/notes`],
   ]) {
     await fresh.goto(url, { waitUntil: "domcontentloaded" });
     await ready(fresh);
@@ -161,8 +165,11 @@ try {
   // Every one of them is checked, on both boards and on the dashboard, because "the two we
   // remembered" is how `?status=banana` came to be read back off the agent menu.
   const tabbed = [
-    { screen: "bugs", query: "tab=zzz", tab: "unresolved", rows: "unresolved" },
+    /* The bug board's default tab is Unresolved, a subset, so its row count has no baseline
+       to equal — `rows` names the baseline only where the default tab shows everything. */
+    { screen: "bugs", query: "tab=zzz", tab: "unresolved" },
     { screen: "work", query: "status=banana", tab: "all", rows: "work" },
+    { screen: "notes", query: "type=banana", tab: "all", rows: "notes" },
   ];
   for (const t of tabbed) {
     await fresh.goto(`${ORIGIN}/p/${slug}/${t.screen}?${t.query}`, { waitUntil: "domcontentloaded" });
@@ -174,7 +181,7 @@ try {
     const rows = await fresh.locator(".work-rows .work-row").count();
     check(
       `?${t.query} falls back to the default tab on /${t.screen}`,
-      selected && (t.rows !== "work" || rows === baseline.work),
+      selected && (!t.rows || rows === baseline[t.rows]),
       `default tab ${selected ? "selected" : "NOT selected"}, ${rows} rows`,
     );
   }
@@ -199,8 +206,10 @@ try {
 
   // The other half of the same claim: a value the project *does* contain still filters.
   // Without this the check above passes on a board that ignores its URL entirely.
-  const allBugs = await (await fetch(`${ORIGIN}/vault-api/projects/${slug}/bugs`)).json();
-  const allWork = await (await fetch(`${ORIGIN}/vault-api/projects/${slug}/worklogs`)).json();
+  const allBugs = await (await fetch(`${ORIGIN}/project-api/projects/${slug}/bugs`)).json();
+  const allWork = await (await fetch(`${ORIGIN}/project-api/projects/${slug}/worklogs`)).json();
+  const allNotes = await (await fetch(`${ORIGIN}/project-api/projects/${slug}/notes`)).json();
+  const firstNoteTag = allNotes.flatMap((n) => n.tags)[0];
   const real = [
     { screen: "bugs", key: "label", value: allBugs.flatMap((b) => b.labels)[0], control: T("filter.byLabel") },
     {
@@ -211,6 +220,24 @@ try {
     },
     { screen: "work", key: "agent", value: allWork[0]?.agent, control: T("filter.byAgent") },
     { screen: "work", key: "tag", value: allWork.flatMap((w) => w.tags)[0], control: T("filter.byTag") },
+    /* The notes entries carry the exact count the vault says the value covers, because
+       `rows < baseline` is not checkable here: every live note is by one agent, so the
+       honest claim is "choosing the value gives exactly the records that carry it" —
+       which is stronger than the strict-subset check, not a relaxation of it. */
+    {
+      screen: "notes",
+      key: "agent",
+      value: allNotes[0]?.agent,
+      control: T("filter.byAgent"),
+      rows: allNotes.filter((n) => n.agent === allNotes[0]?.agent).length,
+    },
+    {
+      screen: "notes",
+      key: "tag",
+      value: firstNoteTag,
+      control: T("filter.byTag"),
+      rows: allNotes.filter((n) => n.tags.includes(firstNoteTag)).length,
+    },
   ];
   for (const r of real) {
     const base = r.screen === "bugs" ? "tab=all&" : "";
@@ -222,8 +249,10 @@ try {
     const reads = (await fresh.getByLabel(r.control).first().innerText()).trim();
     check(
       `?${r.key}=${r.value} does filter /${r.screen}`,
-      rows > 0 && rows < baseline[r.screen] && reads === r.value,
-      `${rows} rows (unfiltered: ${baseline[r.screen]}), control reads "${reads}"`,
+      rows > 0 &&
+        (r.rows !== undefined ? rows === r.rows : rows < baseline[r.screen]) &&
+        reads === r.value,
+      `${rows} rows (unfiltered: ${baseline[r.screen]}${r.rows !== undefined ? `, expected ${r.rows}` : ""}), control reads "${reads}"`,
     );
   }
 
@@ -281,17 +310,17 @@ try {
   await page.goto(`${ORIGIN}/p/${slug}/work`, { waitUntil: "domcontentloaded" });
   await ready(page);
   await page.locator('[role="tab"][data-value="done"]').click();
-  await page.getByLabel(T("work.searchLabel")).fill("sqlx");
+  await page.getByLabel(T("work.searchLabel")).fill("create_new");
   await page.waitForFunction(() => !!document.querySelector(".work-rows .work-row, .empty-title"));
   const workParams = new URLSearchParams(search(page));
   check(
     "work list keeps status + query in the URL",
-    workParams.get("status") === "done" && workParams.get("q") === "sqlx",
+    workParams.get("status") === "done" && workParams.get("q") === "create_new",
     search(page),
   );
   const workFiltered = page.url();
   const workRows = await rowIds(page);
-  check("work search reaches What/Why/How and the updates", workRows.length > 0, `"sqlx" is in WORK-0003 body only; matched ${JSON.stringify(workRows)}`);
+  check("work search reaches What/Why/How and the updates", workRows.length > 0, `"create_new" is in WORK-0003 body only; matched ${JSON.stringify(workRows)}`);
 
   await page.locator(".work-rows .work-row").first().click();
   await ready(page);
@@ -299,6 +328,48 @@ try {
   await ready(page);
   check("Back returns to the filtered work list", page.url() === workFiltered, page.url());
   check("…with the rows it had", JSON.stringify(await rowIds(page)) === JSON.stringify(workRows));
+
+  // -- and the notes list, the third record kind, does the same ------------------------------
+  //
+  // A note row has no WORK/BUG id: its identity is its kebab name, so the rows are read off
+  // `.note-row-name`. The search claim is the work list's: the query reaches the body, not
+  // just the row — "err_unsupported_esm" is in python-is-a-store-stub's body and appears in
+  // no note's name, title or description.
+  const noteNames = () => page.locator(".note-rows .note-row .note-row-name").allTextContents();
+  await page.goto(`${ORIGIN}/p/${slug}/notes`, { waitUntil: "domcontentloaded" });
+  await ready(page);
+  check("notes list opens clean (no query string on the default view)", search(page) === "");
+  await page.locator('[role="tab"][data-value="memory"]').click();
+  await page.getByLabel(T("notes.searchLabel")).fill("err_unsupported_esm");
+  await page.waitForFunction(() => !!document.querySelector(".work-rows .note-row, .empty-title"));
+  const noteParams = new URLSearchParams(search(page));
+  check(
+    "notes list keeps type + query in the URL",
+    noteParams.get("type") === "memory" && noteParams.get("q") === "err_unsupported_esm",
+    search(page),
+  );
+  const notesMatched = await noteNames();
+  check(
+    "note search reaches the note body, not just the row",
+    notesMatched.length === 1 && notesMatched[0] === "python-is-a-store-stub",
+    `matched ${JSON.stringify(notesMatched)} — "err_unsupported_esm" is only in python-is-a-store-stub's body`,
+  );
+  const notesFiltered = page.url();
+  await page.locator(".note-rows .note-row").first().click();
+  await ready(page);
+  check(
+    "a note row opens its record",
+    /\/notes\/python-is-a-store-stub$/.test(new URL(page.url()).pathname),
+    page.url(),
+  );
+  await page.goBack();
+  await ready(page);
+  check("Back returns to the filtered notes list", page.url() === notesFiltered, page.url());
+  check("…with the rows it had", JSON.stringify(await noteNames()) === JSON.stringify(notesMatched));
+  check(
+    "…and the search box still holding the query",
+    (await page.getByLabel(T("notes.searchLabel")).inputValue()) === "err_unsupported_esm",
+  );
 } catch (err) {
   failures += 1;
   console.error(`[check-urlstate] FAILED: ${err.message}`);

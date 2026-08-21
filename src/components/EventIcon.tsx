@@ -36,6 +36,23 @@ export function EventIcon({ type }: { type: string }) {
   else if (type === "bug_commented")
     path = <path d="M2.6 3.6h8.8v5.2H6.2l-2.4 2V8.8H2.6z" {...stroke} strokeWidth={1.3} />;
   else if (type === "bug_closed") path = <path d="M7 2.8v8.4 M3.6 4.4l6.8 5.2" {...stroke} />;
+  /* A note is a page with a folded corner; the revision keeps the page and marks the fold,
+     and the removal is the page struck through — the record of the note leaving, which is
+     the honest half of a removable record. */
+  else if (type === "note_created")
+    path = <path d="M3.4 2.8h5.2l2 2v6.4H3.4z M8.6 2.8v2h2" {...stroke} strokeWidth={1.3} />;
+  else if (type === "note_updated")
+    path = (
+      <path
+        d="M3.4 2.8h5.2l2 2v6.4H3.4z M8.6 2.8v2h2 M5.2 8.8l3.4-3.4 M5.2 8.8h-.9v-.9"
+        {...stroke}
+        strokeWidth={1.3}
+      />
+    );
+  else if (type === "note_removed")
+    path = (
+      <path d="M3.4 2.8h5.2l2 2v6.4H3.4z M8.6 2.8v2h2 M4.6 9.4l4.8-4.8" {...stroke} strokeWidth={1.3} />
+    );
   else path = <path d="M2.6 4.4h3.4l1 1.4h4.4v5.2H2.6z" {...stroke} strokeWidth={1.3} />;
 
   return (

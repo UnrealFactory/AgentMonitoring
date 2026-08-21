@@ -42,8 +42,23 @@ export const en = {
   "window.maximize": "Maximize",
   "window.restore": "Restore down",
   "window.close": "Close",
+  "window.closeToTray": "Close — keeps running in the tray",
 
-  "shell.trouble.headline": "Not reading the vault right now.",
+  /* -- mouse gestures (desktop) ----------------------------------------------
+     The words in the bubble while a right-drag is being drawn: each one names what
+     letting go right now will do, so an unfamiliar stroke can be checked before it is
+     committed (components/MouseGestures.tsx). */
+
+  "gesture.scrollTop": "Scroll to top",
+  "gesture.scrollBottom": "Scroll to bottom",
+  "gesture.back": "Back",
+  "gesture.forward": "Forward",
+  "gesture.refresh": "Reload the records",
+  "gesture.maximize": "Maximize window",
+  "gesture.restore": "Restore size",
+  "gesture.close": "Close window",
+
+  "shell.trouble.headline": "Not reading the records right now.",
   "shell.trouble.body": (path: string | null, when: string) =>
     `Everything below is the last good data${path ? ` from ${path}` : ""}, as of ${when}.`,
 
@@ -57,26 +72,57 @@ export const en = {
   /* -- sidebar -------------------------------------------------------------- */
 
   "nav.project": "Project",
-  "nav.vault": "Vault",
+  "nav.vault": "On this machine",
   "nav.dashboard": "Dashboard",
   "nav.work": "Work",
   "nav.bugs": "Bugs",
+  "nav.notes": "Notes",
   "nav.projects": "Projects",
   "nav.search": "Search",
   "nav.searchTip": "Search (Ctrl+K)",
   "nav.allProjects": "All projects",
   "nav.noWorkYet": "no work logs yet",
   "nav.manageProjects": "Manage projects…",
-  "nav.projectCount": (n: number) => `${n} projects in this vault`,
+  "nav.projectCount": (n: number) => `${n} projects on this machine`,
   "nav.moreOnProjects": (n: number) => `${n} more on Projects…`,
   "nav.moreTip": (n: number) =>
-    `This vault has ${n} projects. See them all on the Projects screen.`,
+    `${n} projects are registered on this machine. See them all on the Projects screen.`,
+  "nav.appFeedback": "App feedback",
+  "nav.appFeedbackTip": (n: number) =>
+    `${n} open feedback item${n === 1 ? "" : "s"} about this app`,
 
-  "vault.none": "no vault open",
-  "vault.unreadable": "could not be read — open one",
-  "vault.resolving": "resolving…",
+  /* -- app feedback board -------------------------------------------------------- */
+
+  "fb.title": "App feedback",
+  "fb.sub":
+    "Bugs and wishes agents filed about this app itself — AgentMonitoring, not the project they were working in.",
+  "fb.count": (total: number, open: number) =>
+    open > 0
+      ? `${total} item${total === 1 ? "" : "s"} · ${open} open`
+      : `${total} item${total === 1 ? "" : "s"}`,
+  "fb.kindBug": "Bug",
+  "fb.kindIdea": "Idea",
+  "fb.markDone": "Mark done",
+  "fb.reopen": "Reopen",
+  "fb.doneOn": (when: string) => `handled ${when}`,
+  "fb.delete": "Delete",
+  "fb.deleteArmed": "Really delete?",
+  "fb.deleteTip": "Only done items can be deleted — it disappears from the board for good.",
+  "fb.emptyTitle": "No feedback yet",
+  "fb.emptyHint":
+    "Items appear when an agent files one with the `app_feedback` MCP tool (CLI: `agentmon app-feedback`).",
+  "fb.noMatch": "Nothing matches this filter",
+
   "vault.readerDesktop": "desktop app",
   "vault.readerBrowser": "dev server",
+
+  /* -- the app's own update card (desktop only, src/components/AppUpdate.tsx) - */
+
+  "update.title": "New version available",
+  "update.later": "Later",
+  "update.go": "Update",
+  "update.applying": "Updating in the PowerShell window — this app closes in a moment.",
+  "update.failed": "The update could not start",
 
   /* -- the two menus (right button) ----------------------------------------- */
 
@@ -84,7 +130,7 @@ export const en = {
   "menu.copyId": "Copy id",
   "menu.copyTitle": "Copy title",
   "menu.copyLink": "Copy link",
-  "menu.copySlug": "Copy slug",
+  "menu.copyPath": "Copy folder path",
   /* The only item in the app that destroys anything. Its hint is not a category ("danger")
      but the consequence, in the words the dialog behind it repeats. */
   "menu.delete": "Delete",
@@ -100,12 +146,12 @@ export const en = {
 
   "del.title": "Delete project",
   "del.contains": "This project holds",
-  "del.warn": (slug: string) =>
-    `This permanently removes the folder \`projects/${slug}\` and every file in it from the vault directory. It does not go to the recycle bin, and there is no undo.`,
+  "del.warn": (path: string) =>
+    `This permanently removes the folder \`${path}\` and every record in it from the disk. The code around it is not touched. It does not go to the recycle bin, and there is no undo.`,
   "del.warnRefs":
-    "Records in other projects are not touched. Links that pointed into this one become addresses this vault no longer has, and the app answers them with the screen that says so.",
-  "del.confirmLabel": "Type the slug to confirm",
-  "del.confirmHint": (slug: string) => `Must match exactly: ${slug}`,
+    "Records in other projects are not touched. Links that pointed into this one become addresses this app no longer has, and it answers them with the screen that says so.",
+  "del.confirmLabel": "Type the project name to confirm",
+  "del.confirmHint": (name: string) => `Must match exactly: ${name}`,
   "del.confirm": "Delete project",
   "del.deleting": "Deleting…",
   "del.doneToast": (name: string) => `Deleted ${name}.`,
@@ -113,22 +159,23 @@ export const en = {
   /* -- command palette ------------------------------------------------------ */
 
   "palette.title": "Command palette",
-  "palette.placeholder": "Work log or bug id, a title, a project, a screen…",
-  "palette.inputLabel": "Search work logs, bugs, projects and screens",
+  "palette.placeholder": "A record id or note name, a title, a project, a screen…",
+  "palette.inputLabel": "Search work logs, bugs, notes, projects and screens",
   "palette.results": "Results",
-  "palette.groupRecords": "Work logs & bugs",
+  "palette.groupRecords": "Work logs, bugs & notes",
   "palette.groupProjects": "Projects",
   "palette.groupGoTo": "Go to",
   "palette.noMatch": (query: string) => `Nothing matches “${query}”.`,
   "palette.searching": (records: number, projects: number) =>
-    `Searching ${records} work logs and bugs across ${projects === 1 ? "1 project" : `${projects} projects`} by id (WORK-12) and by title.`,
+    `Searching ${records} work logs, bugs and notes across ${projects === 1 ? "1 project" : `${projects} projects`} by id (WORK-12), by name and by title.`,
   "palette.nothingLoaded":
-    "Nothing is loaded yet — this vault has no work logs or bugs, or they could not be read.",
+    "Nothing is loaded yet — no project has work logs, bugs or notes, or they could not be read.",
   "palette.move": "move",
   "palette.open": "open",
   "palette.close": "close",
   "palette.kindWork": "work",
   "palette.kindBug": "bug",
+  "palette.kindNote": "note",
   "palette.metaProject": "project",
   "palette.metaAgent": "agent",
   "palette.metaSeverity": "severity",
@@ -143,6 +190,7 @@ export const en = {
   /* -- filters -------------------------------------------------------------- */
 
   "filter.byStatus": "Filter by status",
+  "filter.byType": "Filter by type",
   "filter.byAgent": "Filter by agent",
   "filter.byTag": "Filter by tag",
   "filter.bySeverity": "Filter by severity",
@@ -160,6 +208,7 @@ export const en = {
   "filter.clear": "Clear filters",
   "filter.matches": (n: number) => (n === 1 ? "1 match" : `${n} matches`),
   "filter.chipStatus": (value: string) => `Status: ${value}`,
+  "filter.chipType": (value: string) => `Type: ${value}`,
   "filter.chipAgent": (value: string) => `Agent: ${value}`,
   "filter.chipTag": (value: string) => `Tag: ${value}`,
   "filter.chipSeverity": (value: string) => `Severity: ${value}`,
@@ -181,6 +230,50 @@ export const en = {
   "work.emptyFiltered.title": "No work matches these filters",
   "work.emptyFiltered.hint": (total: number) =>
     `${total === 1 ? "1 work log" : `${total} work logs`} in this project, none of them matching all of the filters above.`,
+
+  /* -- notes list ------------------------------------------------------------
+     The shared agent notes: memory, handoffs, decisions, references. A note is knowledge,
+     not history — agents rewrite it in place and remove it when it stops being true, and
+     the event feed keeps the trail. The list is the index an arriving agent scans. */
+
+  "notes.title": "Notes",
+  "notes.sub":
+    "What the agents know and want each other to know — memory, handoffs, decisions and references, rewritten in place as the truth changes.",
+  "notes.searchPlaceholder": "Search notes",
+  "notes.searchLabel": "Search notes",
+  "notes.sortNote": "Sorted by most recently updated — the newest handoff first.",
+  "notes.tabAllTip": "Every note in this project",
+  "notes.tipMemory": "Durable facts and gotchas about this project",
+  "notes.tipHandoff": "State left for whoever works next",
+  "notes.tipDecision": "Choices made here, and the reasoning behind them",
+  "notes.tipReference": "Pointers to things outside the project",
+  "notes.empty.title": "No notes yet",
+  "notes.empty.hint":
+    "Agents leave here what they wish the previous agent had told them — a gotcha, a handoff, a decision:",
+  "notes.emptyFiltered.title": "No notes match these filters",
+  "notes.emptyFiltered.hint": (total: number) =>
+    `${total === 1 ? "1 note" : `${total} notes`} in this project, none of them matching all of the filters above.`,
+
+  /* -- note detail ------------------------------------------------------------ */
+
+  "nd.note": "Note",
+  "nd.type": "Type",
+  "nd.agent": "Agent",
+  "nd.created": "Created",
+  "nd.updated": "Updated",
+  "nd.lastActivity": "Last activity",
+  "nd.backToList": "Back to the notes list",
+  "nd.notesList": "Notes",
+  "nd.bylineLeft": "left this note on",
+  /* Followed by the editor's own chip: "· revised by [nova] 5m ago". The name is a chip,
+     not a word in this sentence, so the label stays name-free in both languages. */
+  "nd.revisedBy": "revised by",
+  "nd.neverRevised": "not revised since it was written",
+  "nd.body": "Body",
+  /* The line under the fold that teaches the contract: a note is rewritten, not appended
+     to, and the CLI is where that happens. */
+  "nd.updateHint": (name: string) =>
+    `A note holds what is currently true. Agents rewrite it in place with \`agentmon note update ${name}\` — and remove it with \`agentmon note remove ${name}\` when keeping it would mislead. Every change lands on the activity feed.`,
 
   /* -- bug board ------------------------------------------------------------ */
 
@@ -228,12 +321,25 @@ export const en = {
   "rec.references": "References",
   "rec.referencedBy": "Referenced by",
   "rec.referencesHint": (noun: string) => `written into this ${noun}’s refs`,
-  "rec.referencedByHint": (id: string) => `work logs and bugs that point back at ${id}`,
-  "rec.missingRef": "no work log or bug with this id in this project",
+  "rec.referencedByHint": (id: string) => `work logs, bugs and notes that point back at ${id}`,
+  "rec.missingRef": "no work log, bug or note with this id in this project",
   /* The same fact on the chip inside a sentence, where the id has to be named because the
      tooltip is all the reader can see. Assembled here, not at the call site: the id leads in
      English and can lead in Korean too, but only the dictionary gets to decide that. */
-  "rec.missingRefTip": (id: string) => `${id} — no work log or bug with this id in this project`,
+  "rec.missingRefTip": (id: string) =>
+    `${id} — no work log, bug or note with this id in this project`,
+
+  /* -- record bodies: the renderer's own words --------------------------------
+     Callout labels for `> [!note]` etc., and the one sentence an image that will not
+     load gets — a missing diagram is a mis-citation the reader deserves to see, like a
+     stale record chip (lib/markdown.tsx). */
+
+  "md.calloutNote": "Note",
+  "md.calloutTip": "Tip",
+  "md.calloutImportant": "Important",
+  "md.calloutWarning": "Warning",
+  "md.calloutCaution": "Caution",
+  "md.imageFailed": "Could not load the image",
   "rec.corrections": (n: number, where: string) =>
     `**${n === 1 ? "1 correction" : `${n} corrections`}** to this record — see ${where}`,
   "ui.severityOf": (label: string) => `${label} severity`,
@@ -242,7 +348,7 @@ export const en = {
   "rec.correction": "Correction",
   "rec.inUpdates": "Updates",
   "rec.inThread": "the thread",
-  "rec.staleGone": (id: string) => `${id} is no longer in this vault.`,
+  "rec.staleGone": (id: string) => `${id} is no longer in this project.`,
   "rec.staleUnread": (id: string) => `${id} could not be read again.`,
   "rec.staleBody": "Everything below is the copy that was on screen when it was last read.",
   "rec.checks": (n: number) => (n === 1 ? "1 check" : `${n} checks`),
@@ -346,12 +452,12 @@ export const en = {
 
   "proj.title": "Projects",
   "proj.sub":
-    "Everything in one vault directory of plain files — copy it to another machine and the history comes with it.",
+    "Each project is one `AgentMonitoring` folder of plain files, living inside the repo it describes — commit it and the history travels with the code.",
   "proj.new": "New project",
   "proj.newTitle": "New project",
   "proj.create": "Create project",
   "proj.creating": "Creating…",
-  "proj.inVault": "In this vault",
+  "proj.inVault": "On this machine",
   "proj.count": (n: number) => (n === 1 ? "1 project" : `${n} projects`),
   "proj.noDescription": "No description yet.",
   "proj.workLogs": "Work logs",
@@ -371,130 +477,109 @@ export const en = {
   "proj.dotQuiet": "quiet project",
   "proj.dotStale": "stale project",
   "proj.nothingRecordedYet": "Nothing recorded yet",
-  "proj.acrossVault": "Across the vault",
+  "proj.acrossVault": "Across all projects",
   "proj.newest": (n: number) => `newest ${n}`,
   "proj.recent": "recent",
-  "proj.vaultEmptyFeed": "Nothing has been recorded in this vault yet. The first",
+  "proj.vaultEmptyFeed": "Nothing has been recorded in any project yet. The first",
   "proj.vaultEmptyFeedTail": "shows up here.",
 
   "proj.form.name": "Name",
   "proj.form.namePlaceholder": "Checkout rewrite",
-  "proj.form.slug": "Slug",
-  "proj.form.slugPlaceholder": "checkout-rewrite",
-  "proj.form.slugTaken": "A project with this slug already exists in the vault.",
-  "proj.form.slugBad": "Lowercase letters, digits, - or _ only.",
-  /* The name has nothing a directory name can be made of — every Hangul name, and any other
-     script's. Says the rule, then the one thing left to do, because this hint is the only
-     thing on screen while the create button is disabled (P9 rounds 7 and 8 critics). */
-  "proj.form.slugNeeded":
-    "No slug can be made from this name — the slug is the directory name under projects/, so it takes lowercase letters, digits, - or _ only. Type one here.",
-  "proj.form.slugHint": "The directory name under projects/. Immutable once created.",
+  "proj.form.location": "Location",
+  "proj.form.locationPlaceholder": "C:\\Code\\my-app",
+  "proj.form.locationHint":
+    "Typically the code repo the work happens in. The records live in an `AgentMonitoring` folder inside it — commit that folder and the history travels with the code.",
+  "proj.form.browse": "Browse…",
+  "proj.form.locationNeeded": "Pick where the project's records should live.",
   "proj.form.description": "Description",
   "proj.form.descriptionPlaceholder":
     "One or two sentences a reader who has never seen this project can start from.",
   "proj.form.tags": "Tags",
   "proj.form.tagsPlaceholder": "frontend, payments",
-  "proj.form.writes": (slug: string) => `Writes projects/${slug}/project.json and its first event, exactly as`,
+  "proj.form.claudeMd": "CLAUDE.md",
+  "proj.form.claudeMdNone": "Don't add",
+  "proj.form.claudeMdHint":
+    "Writes a CLAUDE.md at the repo root telling coding agents to record their work here. If the file already exists, only the section is appended.",
+  "proj.form.mcpJson": "MCP registration (.mcp.json)",
+  "proj.form.mcpJsonOn": "Create",
+  "proj.form.mcpJsonOff": "Skip",
+  "proj.form.mcpAgent": "Default agent handle",
+  "proj.form.mcpJsonHint":
+    "Writes a .mcp.json at the repo root registering the agentmon MCP server — Claude Code reads the file on its own, so agents have the recording tools from their first session. If the file already exists, only the agentmon entry is added or replaced. The input is the default agent handle written onto records.",
+  "proj.form.writes": (location: string) =>
+    `Creates \`${location}\\AgentMonitoring\` with its project.json and first event, exactly as`,
   "proj.form.writesTail": "would.",
 
-  /* -- the vault bar and onboarding -------------------------------------------- */
+  /* -- project rows, opening and removing --------------------------------------- */
 
-  "vault.bar": "Vault",
-  "vault.label": "Vault",
-  "vault.projects": "Projects",
-  "vault.schema": "Schema",
-  "vault.created": "Created",
-  "vault.readBy": "Read by",
-  "vault.openedFrom": (source: string) => `Opened from ${source}`,
-  "vault.openFolder": "Open vault folder…",
-  "vault.opening": "Opening…",
-  "vault.createVault": "Create a vault…",
-  "vault.creating": "Creating…",
-  "vault.createTip":
-    "Pick a folder; the app writes vault.json and projects/ into it, exactly as `agentmon init` would.",
-  "vault.noneOpenTitle": "No vault open",
-  "vault.noneOpenSub": "The app reads one directory of plain files. This one could not be read.",
-  "vault.readFailed": "Could not read the vault",
-  "vault.notInThisVault": "Not in this vault",
-  "vault.noProject": (slug: string) => `This vault has no project called “${slug}”`,
-  "vault.noRecord": (id: string) => `This project has no ${id}`,
-  /** An address that could not name a record whatever the vault held: `/work/NOTANID`. */
-  "vault.badAddress": "That address is not a record",
-  "vault.source.query": "?vault= in this window's address",
-  "vault.source.env": "the AGENTMON_VAULT environment variable",
-  "vault.source.flag": "the folder opened in this app",
-  "vault.source.cwdVault": "./vault in the working directory",
-  "vault.source.cwd": "the working directory",
-  "vault.source.exeVault": "the vault folder beside the app",
+  "proj.openFolder": "Open project…",
+  "proj.opening": "Opening…",
+  "proj.openTip":
+    "Pick a folder that holds an AgentMonitoring folder — a repo cloned from another machine, a drive you plugged back in — and it joins this list.",
+  "proj.remove": "Remove from list",
+  "proj.removeHint": "keeps every file — open it again any time",
+  "proj.unavailable": "Unavailable",
+  "proj.unavailableHint":
+    "The folder cannot be read right now — a moved folder, an unplugged drive. The row stays so you can see what is missing; remove it if it is gone for good.",
+  "proj.noneRegisteredTitle": "No projects on this machine yet",
+  "proj.noneRegisteredSub":
+    "Each project is one `AgentMonitoring` folder of plain files. Create one here, or open a folder that already has one.",
+  "proj.readFailed": "Could not read the project",
+  "proj.notHere": "Not in this project",
+  "proj.notRegistered": (id: string) => `No project “${id}” on this machine`,
+  "proj.noRecord": (id: string) => `This project has no ${id}`,
+  /** An address that could not name a record whatever the folders held: `/work/NOTANID`. */
+  "proj.badAddress": "That address is not a record",
 
   /* -- what a failure says ------------------------------------------------------
-     The headline of a failed read is one of the four `vault.*` lines above; these are
-     the sentence under it — the backend's own diagnosis, which is written in whichever
+     The headline of a failed read is one of the `proj.*` lines above; these are the
+     sentence under it — the backend's own diagnosis, which is written in whichever
      language the backend was written in and has to arrive in the reader's.
      src/lib/api.ts matches the message it was handed and calls one of these, keeping the
      paths, ids and command lines exactly as the backend wrote them. An unrecognised
      message is passed through: a true sentence in the wrong language beats a guess. */
 
-  "err.noVaultForQuery": (dir: string, cmd: string) =>
-    `The folder given as \`?vault=\` has no \`vault.json\` — \`${dir}\`. Point it at a vault folder, or make one there with \`${cmd}\``,
-  "err.noVaultForEnv": (dir: string, fallback: string, cmd: string) =>
-    `The folder \`AGENTMON_VAULT\` names has no \`vault.json\` — \`${dir}\`. A configured vault is the only vault this server serves, so it is not falling back to \`${fallback}\`. Restore that folder, fix the variable, or make a vault there with \`${cmd}\``,
-  "err.noVaultAnywhere": (dirs: string, cmd: string) =>
-    `No \`vault.json\` in ${dirs}. Set \`AGENTMON_VAULT\`, open the window with \`?vault=<dir>\`, or make a vault with \`${cmd}\``,
-  /** How a list of candidate folders is joined inside the sentence above. */
-  "err.orJoin": " or ",
-  "err.noVaultAt": (path: string, hint: string) => `No vault here — \`${path}\`. ${hint}`,
-  "err.noVaultJsonHint": (cmd: string) =>
-    `That folder has no \`vault.json\`. Make one with \`${cmd}\``,
-  "err.notAVault": (dir: string, cmd: string) =>
-    `Not a vault folder — \`${dir}\` has no \`vault.json\`. Pick the folder that holds \`vault.json\` and \`projects/\`, or make one there with \`${cmd}\``,
-  "err.folderUnreadable": (detail: string) => `That folder cannot be read: \`${detail}\``,
-  /* These two carry a hint clause that only the Rust backend adds, so the join lives here,
-     where both halves are on one line and a missing full stop is visible. Assembled in
-     api.ts, the two clauses ran together into one sentence — on the desktop only, which is
-     the half no browser gate can read. */
-  "err.projectNotFound": (slug: string, vault: string, hint: string) =>
-    `This vault has no project \`${slug}\` — vault: \`${vault}\`.${hint}`,
-  "err.projectListHint": (cmd: string) => ` The projects it does have: \`${cmd}\``,
-  "err.recordNotFound": (id: string, slug: string, hint: string) =>
-    `Project \`${slug}\` has no \`${id}\`.${hint}`,
+  "err.noProjectAt": (path: string) =>
+    `No project here — \`${path}\` has no \`AgentMonitoring/project.json\`. Pick the folder that holds the \`AgentMonitoring\` folder, or create a project there.`,
+  "err.noProjectAtHint": (path: string, hint: string) => `No project here — \`${path}\`. ${hint}`,
+  "err.projectNotRegistered": (id: string) =>
+    `No project with id \`${id}\` is registered on this machine — it was removed from the list, or its folder is gone.`,
+  "err.foldersUnreachable": (id: string, n: number, paths: string) =>
+    `Cannot tell whether \`${id}\` is here — ${n} registered folder(s) cannot be read right now: \`${paths}\``,
+  "err.recordNotFound": (id: string, hint: string) => `This project has no \`${id}\`.${hint}`,
   "err.expectedFile": (path: string) => ` Expected the file \`${path}\``,
-  "err.badSlug": (slug: string) =>
-    `Not a usable project slug — \`${slug}\`. Lower-case letters, digits, \`-\` and \`_\` only.`,
   "err.badId": (id: string, expected: string, example: string) =>
     `Not a usable id — \`${id}\`. Expected \`${expected}\` (for example \`${example}\`).`,
-  "err.noRoute": (path: string) => `The vault API has no route for \`${path}\``,
+  "err.folderUnreadable": (detail: string) => `That folder cannot be read: \`${detail}\``,
+  "err.noDirsToServe": (hint: string) =>
+    `The dev server has no AgentMonitoring folder to read — ${hint}`,
+  "err.noRoute": (path: string) => `The project API has no route for \`${path}\``,
   "err.unreachable": (path: string, detail: string) =>
-    `Could not reach the vault API at \`${path}\`. Is the dev server running? (\`${detail}\`)`,
-  "err.httpStatus": (status: number) => `The vault API answered \`${status}\``,
-  "err.stoppedAnswering": "The vault stopped answering",
-  "err.desktopOnlySwitch":
-    "Switching vaults is a desktop-app feature. In browser mode, open the window with `?vault=<dir>` or set `AGENTMON_VAULT` before `npm run dev`.",
+    `Could not reach the project API at \`${path}\`. Is the dev server running? (\`${detail}\`)`,
+  "err.httpStatus": (status: number) => `The project API answered \`${status}\``,
   "err.desktopOnlyPicker": "The folder picker is a desktop-app feature.",
-  "err.desktopOnlyCreate":
-    'Making a vault from the window is a desktop-app feature. In browser mode, run: `agentmon init --vault <dir> --name "<vault name>"`',
+  "err.desktopOnlyOpen":
+    "Opening a project folder is a desktop-app feature. In browser mode, start the dev server with `AGENTMON_DIRS=<folder;folder>` or open the window with `?dirs=`.",
+  "err.desktopOnlyRemove": "The project list lives with the desktop app; browser mode serves a fixed set of folders.",
 
-  "onboard.titleEmpty": "This vault has no projects yet",
-  "onboard.titleNone": "There is no vault here yet",
+  "onboard.titleEmpty": "No work recorded yet",
+  "onboard.titleNone": "No projects on this machine yet",
   "onboard.sub":
-    "A vault is a directory of plain files: `vault.json`, then one folder per project holding its work logs, its bugs and its event log. Agents write it with the `agentmon` CLI; this app reads it.",
-  "onboard.stepVault": "Make the vault",
-  "onboard.stepProject": "Create a project",
+    "A project is one `AgentMonitoring` folder of plain files inside the repo it describes: its work logs, its bugs and its event log. Agents write it with the `agentmon` CLI; this app reads every folder on the list above.",
+  "onboard.stepProject": "Create a project in your repo",
   "onboard.stepWork": "Record the first piece of work",
-  "onboard.noteCreateVault":
-    "Or press **Create a vault…** above and pick a folder — it writes the same two things, and opens it here.",
   "onboard.noteNewProject": "Or press **New project** above — it writes the same files.",
   "onboard.noteBody":
     "The body needs `## What`, `## Why` and `## How`; the CLI prints a template if it is missing.",
   "onboard.footCli": (path: string) =>
     `The \`agentmon\` binary ships with this app, at \`${path}\` — the commands above already point at it.`,
-  "onboard.footDesktop": "Already have a vault on this machine? Use **Open vault folder…** above.",
+  "onboard.footDesktop":
+    "Already have a project on this machine — a clone from another computer? Use **Open project…** above.",
   "onboard.footBrowser":
-    "Already have a vault? Point the dev server at it with `AGENTMON_VAULT`, or this window at it with `?vault=<dir>`.",
+    "Already have a project? Point the dev server at it with `AGENTMON_DIRS=<folder>`, or this window with `?dirs=<folder>`.",
   "onboard.footHelp": (cli: string) =>
     ` The full command set is in \`${cli} --help\`, and every subcommand takes \`--help\` too.`,
   "onboard.footManual": (path: string) => ` The manual is on this machine at \`${path}\`.`,
-  "vault.browserHint": "Open another vault with `?vault=<dir>`, or start the dev server with `AGENTMON_VAULT`.",
 
   /* -- dashboard --------------------------------------------------------------- */
 
@@ -530,12 +615,12 @@ export const en = {
   "dash.rowInProgress": "in progress",
   "dash.rowStartedTip": (when: string) => `Started ${when}`,
   "dash.rowStateTip": (state: string, since: string) => `${state} · ${since}`,
-  "dash.latestNote": "Latest note",
+  "dash.latestNote": "Latest update",
   "dash.latestNoteTip": (when: string) =>
-    `The opening sentence of each paragraph of the note posted ${when}`,
+    `The opening sentence of each paragraph of the update posted ${when}`,
   "dash.waitingOn": (agent: string) => `waiting on ${agent}`,
   "dash.waitingOnTip": (agent: string, sentence: string) =>
-    `${agent}'s newest note says: “${sentence}”`,
+    `${agent}'s newest update says: “${sentence}”`,
 
   "dash.unresolvedBugs": "Unresolved bugs",
   "dash.bugsFiledHere": "bugs filed here",
@@ -578,8 +663,8 @@ export const en = {
   "dash.allWork": "All work",
   "dash.bugBoard": "Bug board",
   "dash.chartWorkEmpty": "No work logs yet",
-  "dash.chartWorkEmptyHint": (slug: string) =>
-    `This chart draws itself the moment an agent runs \`agentmon work start -p ${slug}\`.`,
+  "dash.chartWorkEmptyHint":
+    "This chart draws itself the moment an agent runs `agentmon work start` in this project.",
   "dash.chartBugsEmpty": "No bugs filed yet",
   "dash.chartBugsEmptyHint": "Nothing to plot, which on this chart is the good state.",
   "dash.seriesStarted": "started",
@@ -590,7 +675,7 @@ export const en = {
   "dash.agentsCard": "Agents",
   "dash.agentsEmpty": "No agent has recorded anything in this range",
   "dash.agentsEmptyHint":
-    "Widen the range above, or check the vault: every CLI mutation appends one line to events.jsonl.",
+    "Widen the range above, or check the project folder: every CLI mutation appends one line to events.jsonl.",
   "dash.colAgent": "Agent",
   "dash.colActivity": "Activity",
   "dash.colDone": "Done",
@@ -601,9 +686,10 @@ export const en = {
   "dash.colResolvedTip": "Bugs this agent resolved",
   "dash.legendWork": "work",
   "dash.legendBugs": "bugs",
+  "dash.legendNotes": "notes",
   "dash.legendProject": "project",
-  "dash.agentBarTip": (total: number, work: number, bugs: number, project: number) =>
-    `${total === 1 ? "1 event" : `${total} events`} — ${work} on work, ${bugs} on bugs${project ? `, ${project} on the project` : ""}`,
+  "dash.agentBarTip": (total: number, work: number, notes: number, bugs: number, project: number) =>
+    `${total === 1 ? "1 event" : `${total} events`} — ${work} on work${notes ? `, ${notes} on notes` : ""}, ${bugs} on bugs${project ? `, ${project} on the project` : ""}`,
   "dash.agentDotTip": (count: string, inProgress: string, seen: string) =>
     `${count} ${inProgress} · last seen ${seen}`,
   "dash.agentIdleTip": (inProgress: string, seen: string) =>
@@ -660,13 +746,20 @@ export const en = {
 
   "word.workNoun": "work log",
   "word.bugNoun": "bug",
+  "word.noteNoun": "note",
   "word.workLogs": (n: number) => (n === 1 ? "1 work log" : `${n} work logs`),
   "word.bugs": (n: number) => (n === 1 ? "1 bug" : `${n} bugs`),
+  "word.notes": (n: number) => (n === 1 ? "1 note" : `${n} notes`),
   "word.events": (n: number) => (n === 1 ? "1 event" : `${n} events`),
 
   "word.work.in_progress": "In progress",
   "word.work.done": "Done",
   "word.work.abandoned": "Abandoned",
+  /* What each kind of note is for — the note's first filter, one word each. */
+  "word.note.memory": "Memory",
+  "word.note.handoff": "Handoff",
+  "word.note.decision": "Decision",
+  "word.note.reference": "Reference",
   "word.bug.open": "Open",
   "word.bug.in_progress": "In progress",
   "word.bug.resolved": "Resolved",
@@ -717,6 +810,9 @@ export const en = {
     `${unresolved} of ${total === 1 ? "1 bug" : `${total} bugs`} filed here unresolved — open or in progress`,
   "word.doneOrAbandoned": "done or abandoned",
   "word.resolvedOrClosed": "resolved or closed",
+  /** The notes count's tooltip: what the number is, and what a note is. */
+  "word.noteTipHere": (n: number) =>
+    `${n === 1 ? "1 note" : `${n} notes`} here — knowledge the agents keep for each other: memory, handoffs, decisions, references`,
 
   /* -- feed verbs ---------------------------------------------------------------- */
 
@@ -729,18 +825,25 @@ export const en = {
   "verb.bug_commented": "commented on",
   "verb.bug_resolved": "resolved",
   "verb.bug_closed": "closed",
+  "verb.note_created": "left a note",
+  "verb.note_updated": "revised the note",
+  /* The one removal verb in the feed, and it belongs to notes alone: a note is knowledge,
+     and knowledge that went wrong is taken down — with this line left behind saying who
+     and when. Work logs and bugs never take this verb; nothing removes them. */
+  "verb.note_removed": "removed the note",
   "verb.project_created": "created this project",
   "verb.project_updated": "updated the project",
 
   /* What a day's traffic is called when it is summarised in one line. */
   "recent.started": "started",
-  "recent.notes": "notes",
+  "recent.notes": "updates",
   "recent.done": "done",
   "recent.abandoned": "abandoned",
   "recent.filed": "filed",
   "recent.claimed": "claimed",
   "recent.resolved": "resolved",
   "recent.closed": "closed",
+  "recent.sharedNotes": "notes",
   "recent.project": "project",
   "recent.other": "other",
 
@@ -749,6 +852,7 @@ export const en = {
   "tone.done": "done",
   "tone.bug": "bugs",
   "tone.resolved": "resolved",
+  "tone.note": "notes",
   "tone.neutral": "project",
 
   /* -- time ------------------------------------------------------------------------ */

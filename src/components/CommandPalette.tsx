@@ -36,13 +36,14 @@ import { api } from "../lib/api";
 import { t } from "../lib/i18n";
 import {
   bugStatusLabel,
+  noteTypeLabel,
   severityLabel,
   unresolvedCount,
   workLogs,
   workStatusLabel,
 } from "../lib/words";
 import { isDialogOpen, trapTab, useModalLock } from "../lib/modal";
-import type { BugSummary, Project, WorklogSummary } from "../lib/types";
+import type { BugSummary, NoteSummary, Project, WorklogSummary } from "../lib/types";
 /* The avatar's monogram is the avatar's, wherever it is drawn: one function, so a Korean
    handle cannot wear two different marks on two screens (components/ui.tsx). */
 import { agentInitials } from "./ui";
@@ -84,7 +85,7 @@ interface Item {
   to: string;
   /** How well it matched the query; higher sorts first inside its group. */
   score: number;
-  kind?: "work" | "bug";
+  kind?: "work" | "bug" | "note";
 }
 
 /** One project's records, as the palette holds them. */
@@ -92,6 +93,7 @@ interface Loaded {
   project: Project;
   works: WorklogSummary[];
   bugs: BugSummary[];
+  notes: NoteSummary[];
 }
 
 /** Word-start beats mid-word; a prefix beats both. 0 means "not a match". */
@@ -176,8 +178,14 @@ function idGuesses(query: string): string[] {
   return [`WORK-${n}`, `BUG-${n}`];
 }
 
+/** The folder a project lives in — `C:\Code\MyApp\AgentMonitoring` → `MyApp`. */
+function folderOf(path: string): string {
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 2] ?? parts[parts.length - 1] ?? path;
+}
+
 export function CommandPalette() {
-  const { projects, vaultNonce } = useApp();
+  const { projects, dataNonce } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -192,7 +200,7 @@ export function CommandPalette() {
   /** Whatever had the keyboard when the palette opened, to hand it back on close. */
   const returnFocus = useRef<HTMLElement | null>(null);
 
-  const slug = location.pathname.startsWith("/p/")
+  const currentId = location.pathname.startsWith("/p/")
     ? location.pathname.split("/")[2]
     : undefined;
 
@@ -257,28 +265,29 @@ export function CommandPalette() {
   /* Every project's records, read once per vault change. Two requests per project on the
      first open of a session — a vault has a handful of projects, and the alternative is a
      search box that can only see the folder the URL happens to name. */
-  const key = projects.map((p) => p.slug).join(",");
+  const key = projects.map((p) => p.id).join(",");
   useEffect(() => {
     if (!open || !projects.length) return;
-    if (records?.key === key && records.nonce === vaultNonce) return;
+    if (records?.key === key && records.nonce === dataNonce) return;
     let cancelled = false;
     Promise.all(
       projects.map(async (project) => {
         try {
-          const [works, bugs] = await Promise.all([
-            api.listWorklogs(project.slug),
-            api.listBugs(project.slug),
+          const [works, bugs, notes] = await Promise.all([
+            api.listWorklogs(project.id),
+            api.listBugs(project.id),
+            api.listNotes(project.id),
           ]);
-          return { project, works, bugs };
+          return { project, works, bugs, notes };
         } catch {
           // One project mid-write (or with a record that will not parse) must not take
           // the other projects' records out of the palette with it.
-          return { project, works: [], bugs: [] };
+          return { project, works: [], bugs: [], notes: [] };
         }
       })
     )
       .then((loaded) => {
-        if (!cancelled) setRecords({ nonce: vaultNonce, key, loaded });
+        if (!cancelled) setRecords({ nonce: dataNonce, key, loaded });
       })
       .catch(() => {
         /* the palette still switches projects and screens without them */
@@ -286,7 +295,7 @@ export function CommandPalette() {
     return () => {
       cancelled = true;
     };
-  }, [open, key, vaultNonce, projects, records?.key, records?.nonce]);
+  }, [open, key, dataNonce, projects, records?.key, records?.nonce]);
 
   const items = useMemo<Item[]>(() => {
     const q = query.trim().toLowerCase();
@@ -298,36 +307,42 @@ export function CommandPalette() {
        so a bug filed a minute ago could never reach it: five work logs, every time. */
     const recency = new Map<string, number>();
     if (records) {
-      const all: { id: string; slug: string; at: string }[] = [];
-      for (const { project, works, bugs } of records.loaded) {
-        for (const w of works) all.push({ id: w.id, slug: project.slug, at: w.lastActivity });
-        for (const b of bugs) all.push({ id: b.id, slug: project.slug, at: b.lastActivity });
+      const all: { id: string; pid: string; at: string }[] = [];
+      for (const { project, works, bugs, notes } of records.loaded) {
+        for (const w of works) all.push({ id: w.id, pid: project.id, at: w.lastActivity });
+        for (const b of bugs) all.push({ id: b.id, pid: project.id, at: b.lastActivity });
+        for (const n of notes) all.push({ id: n.name, pid: project.id, at: n.lastActivity });
       }
       all.sort((a, b) => b.at.localeCompare(a.at));
-      all.forEach((r, i) => recency.set(`${r.slug}/${r.id}`, all.length - i));
+      all.forEach((r, i) => recency.set(`${r.pid}/${r.id}`, all.length - i));
     }
 
-    for (const { project, works, bugs } of records?.loaded ?? []) {
-      const here = project.slug === slug;
+    for (const { project, works, bugs, notes } of records?.loaded ?? []) {
+      const here = project.id === currentId;
       /* Inside a project the useful second fact is who has it; from the vault screen it is
          which project it is in — the two together do not fit on one row and would cut the
          project name in half, which is the fact that stops the reader guessing. */
-      const add = (r: WorklogSummary | BugSummary, kind: "work" | "bug", meta: MetaPart[]) => {
-        const byId = ids.includes(r.id) ? 200 : score(r.id, q);
+      const add = (
+        r: { id: string; title: string; searchable?: string },
+        kind: "work" | "bug" | "note",
+        to: string,
+        meta: MetaPart[]
+      ) => {
+        const byId = ids.includes(r.id) ? 200 : score(r.searchable ?? r.id, q);
         const byTitle = score(r.title, q);
         let s = Math.max(byId, byTitle);
         if (s <= 0) return;
         // An empty query ranks by when the record last moved, not by which kind it is.
-        if (!q) s = recency.get(`${project.slug}/${r.id}`) ?? 0;
+        if (!q) s = recency.get(`${project.id}/${r.id}`) ?? 0;
         // A tie between two projects goes to the one the reader is standing in.
         if (here) s += q ? 4 : 0.5;
         out.push({
-          id: `${project.slug}/${r.id}`,
+          id: `${project.id}/${r.id}`,
           group: "records",
           label: r.title,
           hint: r.id,
           meta: here ? meta : [{ kind: "project", text: project.name } as MetaPart, ...meta],
-          to: `/p/${project.slug}/${kind === "work" ? "work" : "bugs"}/${r.id}`,
+          to,
           score: s,
           kind,
         });
@@ -340,43 +355,61 @@ export function CommandPalette() {
          board that says 진행 중 is the vocabulary breaking at the one surface that reaches
          every screen. */
       for (const w of works) {
-        add(w, "work", [
+        add(w, "work", `/p/${project.id}/work/${w.id}`, [
           ...(here ? [{ kind: "agent", text: w.agent } as MetaPart] : []),
           { kind: "state", text: workStatusLabel(w.status) },
         ]);
       }
       for (const b of bugs) {
-        add(b, "bug", [
+        add(b, "bug", `/p/${project.id}/bugs/${b.id}`, [
           ...(here ? [{ kind: "severity", text: severityLabel(b.severity) } as MetaPart] : []),
           { kind: "state", text: bugStatusLabel(b.status) },
         ]);
       }
+      for (const n of notes) {
+        /* A note's name is its id and also words ("registry-gate-gotcha"), so it is worth
+           matching mid-word the way titles are — `searchable` feeds the same scorer. */
+        add(
+          { id: n.name, title: n.title, searchable: n.name },
+          "note",
+          `/p/${project.id}/notes/${n.name}`,
+          [
+            // The last rewriter, else the author — the same agent the notes list shows.
+            ...(here ? [{ kind: "agent", text: n.updatedBy ?? n.agent } as MetaPart] : []),
+            { kind: "state", text: noteTypeLabel(n.type) },
+          ]
+        );
+      }
     }
 
     for (const p of projects) {
-      const s = Math.max(score(p.name, q), score(p.slug, q));
+      const s = Math.max(score(p.name, q), score(folderOf(p.path), q));
       if (s > 0) {
         out.push({
-          id: `project:${p.slug}`,
+          id: `project:${p.id}`,
           group: "projects",
           label: p.name,
-          hint: p.slug,
+          /* The location, not the opaque id: two projects with one name are told apart by
+             where they live, which is also the only searchable fact the id would hide. */
+          hint: folderOf(p.path),
           meta: [
             { kind: "count", text: workLogs(p.counts.workTotal) },
             { kind: "count", text: unresolvedCount(p.counts.bugsOpen) },
           ],
-          to: `/p/${p.slug}`,
-          score: s + (p.slug === slug ? 5 : 0),
+          to: `/p/${p.id}`,
+          score: s + (p.id === currentId ? 5 : 0),
         });
       }
     }
 
+    const currentName = projects.find((p) => p.id === currentId)?.name;
     const pages: { label: string; to: string; hint?: string }[] = [
-      ...(slug
+      ...(currentId
         ? [
-            { label: t("nav.dashboard"), to: `/p/${slug}`, hint: slug },
-            { label: t("nav.work"), to: `/p/${slug}/work`, hint: slug },
-            { label: t("nav.bugs"), to: `/p/${slug}/bugs`, hint: slug },
+            { label: t("nav.dashboard"), to: `/p/${currentId}`, hint: currentName },
+            { label: t("nav.work"), to: `/p/${currentId}/work`, hint: currentName },
+            { label: t("nav.bugs"), to: `/p/${currentId}/bugs`, hint: currentName },
+            { label: t("nav.notes"), to: `/p/${currentId}/notes`, hint: currentName },
           ]
         : []),
       { label: t("nav.projects"), to: "/projects" },
@@ -407,7 +440,7 @@ export function CommandPalette() {
     return [...topRecords, ...rest].sort(
       (a, b) => order[a.group] - order[b.group] || b.score - a.score
     );
-  }, [query, projects, records, slug]);
+  }, [query, projects, records, currentId]);
 
   useEffect(() => setActive(0), [query]);
 
@@ -495,7 +528,7 @@ export function CommandPalette() {
   if (!open) return null;
 
   const searchable = (records?.loaded ?? []).reduce(
-    (n, l) => n + l.works.length + l.bugs.length,
+    (n, l) => n + l.works.length + l.bugs.length + l.notes.length,
     0
   );
   let lastGroup: Group | null = null;
@@ -577,7 +610,11 @@ export function CommandPalette() {
                   >
                     {item.kind && (
                       <span className={`palette-kind is-${item.kind}`}>
-                        {item.kind === "bug" ? t("palette.kindBug") : t("palette.kindWork")}
+                        {item.kind === "bug"
+                          ? t("palette.kindBug")
+                          : item.kind === "note"
+                            ? t("palette.kindNote")
+                            : t("palette.kindWork")}
                       </span>
                     )}
                     <span className="palette-label">{item.label}</span>

@@ -9,7 +9,7 @@
  */
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useCurrentProject, useProjectSlug, useVaultNonce } from "../AppContext";
+import { useCurrentProject, useProjectId, useDataNonce } from "../AppContext";
 import { api, failureTitle, nothingToRetry } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useActiveSection } from "../lib/useActiveSection";
@@ -63,13 +63,13 @@ function Stamp({ iso, relative = true }: { iso: string; relative?: boolean }) {
 }
 
 export function WorkDetailPage() {
-  const slug = useProjectSlug()!;
+  const projectId = useProjectId()!;
   const project = useCurrentProject();
   const { id = "" } = useParams<{ id: string }>();
   const { data, error, refreshError, status, loading, reload } = useAsync(
-    () => api.getWorklog(slug, id),
-    [slug, id],
-    useVaultNonce()
+    () => api.getWorklog(projectId, id),
+    [projectId, id],
+    useDataNonce()
   );
 
   const work = data;
@@ -79,7 +79,7 @@ export function WorkDetailPage() {
   const contextMenu = useContextMenu();
   const recordMenu = useRecordMenu();
   const projectMenu = useProjectMenu();
-  const related = useRelated(slug, id, work?.refs ?? EMPTY);
+  const related = useRelated(projectId, id, work?.refs ?? EMPTY);
   /** Notes their authors opened with "Correction:" — see src/lib/updates.ts. */
   const corrections = countCorrections(work?.updates ?? []);
   /** The outcome's own parts (Shipped / Verified / Known gaps), as its author labelled them. */
@@ -117,7 +117,7 @@ export function WorkDetailPage() {
           message={error}
           onRetry={noRetry ? undefined : reload}
           action={
-            <Link className="button" to={`/p/${slug}/work`}>
+            <Link className="button" to={`/p/${projectId}/work`}>
               {t("wd.backToList")}
             </Link>
           }
@@ -160,7 +160,7 @@ export function WorkDetailPage() {
             onRetry={gone ? undefined : reload}
             action={
               gone ? (
-                <Link className="button button-sm" to={`/p/${slug}/work`}>
+                <Link className="button button-sm" to={`/p/${projectId}/work`}>
                   {t("wd.workList")}
                 </Link>
               ) : undefined
@@ -170,15 +170,15 @@ export function WorkDetailPage() {
         <nav className="breadcrumb">
           {/* The crumb is a link to the project, so it opens the project's menu — the same
               one the sidebar row for it opens. Only "Work" between them stays plain: a list
-              screen is not a thing there is a slug to copy or a folder to delete for. */}
+              screen is not a thing there is a projectId to copy or a folder to delete for. */}
           <Link
-            to={`/p/${slug}`}
+            to={`/p/${projectId}`}
             {...contextMenu(() => (project ? projectMenu(project) : null))}
           >
-            {project?.name ?? slug}
+            {project?.name ?? projectId}
           </Link>
           <span aria-hidden="true">/</span>
-          <Link to={`/p/${slug}/work`}>{t("nav.work")}</Link>
+          <Link to={`/p/${projectId}/work`}>{t("nav.work")}</Link>
           <span aria-hidden="true">/</span>
           <span className="mono">{work.id}</span>
         </nav>
@@ -186,7 +186,7 @@ export function WorkDetailPage() {
         <header
           className="record-head"
           {...contextMenu(() =>
-            recordMenu({ kind: "work", id: work.id, title: work.title, slug, here: true })
+            recordMenu({ kind: "work", id: work.id, title: work.title, projectId, here: true })
           )}
         >
           <RecordTitle title={work.title} id={work.id} />
@@ -307,7 +307,7 @@ export function WorkDetailPage() {
               </section>
             )}
 
-            <RelatedSection slug={slug} id={work.id} kind="work" related={related} />
+            <RelatedSection projectId={projectId} id={work.id} kind="work" related={related} />
 
             {work.extraSections.map((s) => (
               <section className="record-section" key={s.title}>

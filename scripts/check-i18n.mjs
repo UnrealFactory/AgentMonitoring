@@ -92,7 +92,7 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 import { ensureServer, startServer, stopServer, waitForServer } from "./dev-server.mjs";
 import { t, useLocale } from "./i18n.mjs";
-import { buildKoreanVault } from "./ko-vault.mjs";
+import { buildKoreanProjects } from "./ko-vault.mjs";
 
 /* The app's own duration formatter, for choosing which record the sweep reads — the gate must
    not carry a second opinion about how long "5시간 48분" is (see resolvedBugIn). Outside a
@@ -168,8 +168,8 @@ const SWEEP_ONLY = flag("--sweep-only");
 const log = (...m) => console.log("[check-i18n]", ...m);
 
 const api = async (path) => {
-  const res = await fetch(`${ORIGIN}/vault-api${path}`);
-  if (!res.ok) throw new Error(`GET /vault-api${path} -> ${res.status}`);
+  const res = await fetch(`${ORIGIN}/project-api${path}`);
+  if (!res.ok) throw new Error(`GET /project-api${path} -> ${res.status}`);
   return res.json();
 };
 
@@ -196,7 +196,7 @@ const resolvedBugIn = async (origin, slug, bugs) => {
   let best = null;
   for (const b of bugs) {
     if (!b.resolved && b.status !== "resolved") continue;
-    const res = await fetch(`${origin}/vault-api/projects/${slug}/bugs/${b.id}`);
+    const res = await fetch(`${origin}/project-api/projects/${slug}/bugs/${b.id}`);
     if (!res.ok) continue;
     const detail = await res.json();
     if (!detail.resolution) continue;
@@ -217,7 +217,12 @@ const resolvedBugIn = async (origin, slug, bugs) => {
 const AUTHOR = [
   ".prose", // every rendered record body: What/Why/How, notes, comments, resolutions
   ".record-title", // the title an agent gave the record
+  ".feedback-title", // an app-feedback item's title, written by the filing agent
+  ".feedback-body", // …and its body
   ".work-row-title",
+  ".note-row-title", // a shared note's title, on its list row
+  ".note-row-desc", // …and the author's one-line description under it
+  ".note-lead", // the same description at the head of the note's own page
   ".now-row-title",
   ".rel-title",
   ".palette-label", // a record's title in the palette
@@ -264,9 +269,11 @@ const CHROME = [".ref-inline.is-unknown"];
  * The picker's two segments are 한국어 and English, each written in its own language, which
  * is the one rule every language picker keeps: a reader who landed in the wrong one has to
  * be able to read their way out. So it is the one place Hangul is allowed on an English
- * screen, and the tooltip on each segment carries the same name.
+ * screen, and the tooltip on each segment carries the same name. The New project form's
+ * CLAUDE.md choice keeps the same rule for the same reason: the label tells you what the
+ * generated file will read like, in that file's own language.
  */
-const OTHER_TONGUE = [".locale-toggle"];
+const OTHER_TONGUE = [".locale-toggle", ".claude-md-choice"];
 
 /** Values that are data rather than language, and are the same in every locale. */
 const TOKENS = [
@@ -277,14 +284,18 @@ const TOKENS = [
   /\bagentmon\b/g,
   /\bvault\.json\b/g,
   /\bevents\.jsonl\b/g,
+  /\bCLAUDE\.md\b/g,
   /\bprojects\/[^\s]*/g,
-  /\bAGENTMON_VAULT\b/g,
+  /\bAGENTMON_DIRS?\b/g,
+  /\bproject\.json\b/g,
   /--[a-z-]+/g,
   /\bv\d+\b/g,
   /##\s*\w+/g,
   /\bEnglish\b/g, // the language toggle names the other language in its own language
   /\bID\b/g, // written in Latin in Korean product UIs, like URL and CLI
   /\bCLI\b/g, // …and CLI itself, which is what the onboarding calls the thing agents run
+  /\bMCP\b/g, // the protocol name, printed as-is like CLI
+  /\bapp[_-]feedback\b/g, // the app-feedback tool and CLI verb (docs/MCP.md)
   /\brefs\b/g, // the frontmatter key a record's cross-references live under (SPEC)
   /[A-Za-z]:[\\/][^\s"]*/g, // a Windows path, as the vault bar and its tooltip print it
   /(?:^|\s)[\\/][\w./\\-]+/g, // a route or a POSIX path
@@ -311,6 +322,13 @@ const LATIN = /[A-Za-z]{2,}/g;
 const VOCABULARIES = [
   { name: "work status", selector: ".pill[class*='pill-work-']", keys: ["word.work.in_progress", "word.work.done", "word.work.abandoned"] },
   { name: "bug status", selector: ".pill[class*='pill-bug-']", keys: ["word.bug.open", "word.bug.in_progress", "word.bug.resolved", "word.bug.closed"] },
+  /* The third record kind's own closed vocabulary: the type pill on a note's page must be
+     exactly the dictionary's word — 지식/인계/결정/참조, never a synonym or a truncation. */
+  {
+    name: "note type",
+    selector: ".pill[class*='pill-note-']",
+    keys: ["word.note.memory", "word.note.handoff", "word.note.decision", "word.note.reference"],
+  },
   {
     name: "severity",
     selector: ".pill-sev",
@@ -445,6 +463,9 @@ const COUNTED_KEYS = [
   "word.unassignedLabel",
   "word.doneOrAbandoned",
   "word.resolvedOrClosed",
+  /* The note noun. Every Korean string that counts notes says 메모 4개, noun first — the
+     note-type words themselves arrive through the vocabulary spread above. */
+  "word.noteNoun",
   /* The burn-up's two upper series: the words the tooltip printed behind its numbers. */
   "dash.seriesStarted",
   "dash.seriesFiled",
@@ -502,7 +523,7 @@ const BREAKABLE = [
  * width where it wraps.
  *
  * **A record of each kind is not a record in each state.** `bug` here is `bugs[0]`, and this
- * vault sorts bugs open-first (scripts/vault-fs.mjs), so it is an *open* bug on every project
+ * reader sorts bugs open-first (scripts/project-fs.mjs), so it is an *open* bug on every project
  * of both vaults — which means `.outcome-card.is-resolution` was never rendered on any screen
  * this sweep opened, at any width, and the 해결 내용 header inside it broke Korean words for
  * two rounds under a gate that reported clean (P9 round 8 critic: 74 of 837 readings of that
@@ -531,7 +552,7 @@ const SWEEP_SCREENS = (projects) => [
         .fill(t("ko", "proj.form.namePlaceholder"));
     },
   },
-  ...projects.flatMap(({ slug, work, bug, resolvedBug }) => [
+  ...projects.flatMap(({ slug, work, bug, note, resolvedBug }) => [
     {
       name: `dashboard ${slug}`,
       path: `/p/${slug}`,
@@ -564,6 +585,27 @@ const SWEEP_SCREENS = (projects) => [
           path: `/p/${slug}/bugs/${bug}`,
           wait: ".record-title",
           filled: [".record-title", ".prose", ".rel-title"],
+        }]
+      : []),
+    /* The notes list: the third record kind's index, whose rows carry two author-written
+       lines (title and description) in a fixed-width grid — the shape that wraps. Waited on
+       by its rows, so a fixture that stops writing notes fails here instead of passing over
+       an empty list. */
+    {
+      name: `notes ${slug}`,
+      path: `/p/${slug}/notes`,
+      wait: ".note-rows .note-row",
+      filled: [".note-row-title", ".note-row-desc"],
+    },
+    /* …and one note in full — chosen with refs (see the builders), so the Related rail
+       renders and `.rel-title` holds a Korean title on the fixture. The lead line is the
+       author's description, the longest single sentence a note screen prints. */
+    ...(note
+      ? [{
+          name: `note detail ${note}`,
+          path: `/p/${slug}/notes/${note}`,
+          wait: ".record-title",
+          filled: [".record-title", ".note-lead", ".prose", ".rel-title"],
         }]
       : []),
     /* The one screen in the app that prints a date *and* two durations in one box — the
@@ -1023,14 +1065,19 @@ try {
     log,
   }));
 
-  const projects = await api("/projects");
+  const projectRows = await api("/projects");
+  const projects = projectRows.filter((r) => r.available && r.project).map((r) => r.project);
   /* Everything the vault itself names — agent handles, project names and slugs, tags and
      labels — is data the app prints as written, in any language. Read from the vault rather
      than listed here, so a new agent name is not a new gate failure. */
   const vaultWords = new Set();
   for (const p of projects) {
     vaultWords.add(p.name);
-    vaultWords.add(p.slug);
+    /* …and its id. The doc above says "project names and slugs" and for a whole era the id
+       *was* the name, so only the name was ever read. v2 ids are their own token
+       (prj-agent-monitoring), and the breadcrumb prints one verbatim while the project list
+       is still in flight — data, not language, exactly like the name it stands in for. */
+    vaultWords.add(p.id);
     for (const tag of p.tags ?? []) vaultWords.add(tag);
   }
   const screens = [];
@@ -1040,13 +1087,17 @@ try {
   /** Each project and one record of each kind in it — what the width sweep walks. */
   const sweepProjects = [];
   for (const p of projects) {
-    const works = await api(`/projects/${p.slug}/worklogs`);
-    const bugs = await api(`/projects/${p.slug}/bugs`);
+    const works = await api(`/projects/${p.id}/worklogs`);
+    const bugs = await api(`/projects/${p.id}/bugs`);
+    const notesList = await api(`/projects/${p.id}/notes`);
     sweepProjects.push({
-      slug: p.slug,
+      slug: p.id,
       work: works[0]?.id ?? null,
       bug: bugs[0]?.id ?? null,
-      resolvedBug: await resolvedBugIn(ORIGIN, p.slug, bugs),
+      /* A note *with refs*, so the sweep's note-detail screen renders the Related rail —
+         a note without one would sweep a page with an empty box where `.rel-title` goes. */
+      note: (notesList.find((n) => n.refs?.length) ?? notesList[0])?.name ?? null,
+      resolvedBug: await resolvedBugIn(ORIGIN, p.id, bugs),
     });
     for (const w of works) {
       vaultWords.add(w.agent);
@@ -1058,6 +1109,13 @@ try {
       if (b.assignee) vaultWords.add(b.assignee);
       for (const l of b.labels ?? []) vaultWords.add(l);
     }
+    /* Note agents and tags are vault data exactly as work ones are; a note's kebab *name*
+       is not added, because everywhere the app prints one is mono (.note-row-name, the
+       breadcrumb, a feed ref, a palette hint) — a name outside a mono box is a finding. */
+    for (const n of notesList) {
+      vaultWords.add(n.agent);
+      for (const tag of n.tags ?? []) vaultWords.add(tag);
+    }
     /* Actors off the event log too, not only off the records.
      *
      * An actor is a handle out of the vault wherever it is printed — the feed's `.feed-actor`
@@ -1067,16 +1125,16 @@ try {
      * src/lib/api.ts). So the day this vault got its first human-made write, five screens
      * started failing this gate for printing a name that came out of the vault they were
      * reading. */
-    for (const e of await api(`/projects/${p.slug}/events`)) vaultWords.add(e.actor);
-    if (p.slug === projects[0].slug) {
+    for (const e of await api(`/projects/${p.id}/events`)) vaultWords.add(e.actor);
+    if (p.id === projects[0].id) {
       firstWork = works[0]?.id ?? null;
       firstBug = bugs[0]?.id ?? null;
     }
     screens.push(
-      { name: `dashboard ${p.slug}`, path: `/p/${p.slug}`, wait: ".now-strip .now-hero-value" },
-      { name: `dashboard ${p.slug} 7d`, path: `/p/${p.slug}?range=7d`, wait: ".chart-legend" },
-      { name: `work ${p.slug}`, path: `/p/${p.slug}/work`, wait: ".work-rows .work-row" },
-      { name: `bugs ${p.slug}`, path: `/p/${p.slug}/bugs?tab=all`, wait: ".work-rows .bug-row" },
+      { name: `dashboard ${p.id}`, path: `/p/${p.id}`, wait: ".now-strip .now-hero-value" },
+      { name: `dashboard ${p.id} 7d`, path: `/p/${p.id}?range=7d`, wait: ".chart-legend" },
+      { name: `work ${p.id}`, path: `/p/${p.id}/work`, wait: ".work-rows .work-row" },
+      { name: `bugs ${p.id}`, path: `/p/${p.id}/bugs?tab=all`, wait: ".work-rows .bug-row" },
       /* …and the same dashboard with the tooltips *open*, which is the only state they are
          ever read in and the one no gate had ever loaded: the burn-up tip exists on hover or
          on focus and is in no screenshot, no DOM this gate walked and no clipping run, so
@@ -1084,14 +1142,14 @@ try {
          (P9 round 5 critic). Both charts at once, and both ways in — a hover does not move
          focus, so the keyboard's tip stays open under the mouse's. */
       {
-        name: `dashboard ${p.slug} chart tips`,
-        path: `/p/${p.slug}`,
+        name: `dashboard ${p.id} chart tips`,
+        path: `/p/${p.id}`,
         wait: ".chart-tip",
         prepare: openTips(true),
       },
       {
-        name: `dashboard ${p.slug} 7d chart tips`,
-        path: `/p/${p.slug}?range=7d`,
+        name: `dashboard ${p.id} 7d chart tips`,
+        path: `/p/${p.id}?range=7d`,
         wait: ".chart-tip",
         prepare: openTips(false),
       },
@@ -1108,24 +1166,40 @@ try {
     for (const w of works) {
       screens.push({
         name: `work detail ${w.id}`,
-        path: `/p/${p.slug}/work/${w.id}`,
+        path: `/p/${p.id}/work/${w.id}`,
         wait: ".record-title",
       });
     }
     for (const b of bugs) {
       screens.push({
         name: `bug detail ${b.id}`,
-        path: `/p/${p.slug}/bugs/${b.id}`,
+        path: `/p/${p.id}/bugs/${b.id}`,
+        wait: ".record-title",
+      });
+    }
+    /* The third record kind: its list, and every note in full — the same "every record,
+       not a sample" rule the two loops above follow. The list is waited on by its rows, so
+       a vault whose notes stop being served fails loudly rather than passing over an empty
+       screen. */
+    screens.push({ name: `notes ${p.id}`, path: `/p/${p.id}/notes`, wait: ".note-rows .note-row" });
+    for (const n of notesList) {
+      screens.push({
+        name: `note detail ${n.name}`,
+        path: `/p/${p.id}/notes/${n.name}`,
         wait: ".record-title",
       });
     }
   }
+  /* The app feedback board is machine-level — whatever this machine's agents filed. Its
+     titles and bodies are author content (AUTHOR above); its agents are vault-style data. */
+  for (const f of await api("/app-feedback")) vaultWords.add(f.agent);
   screens.push(
     { name: "projects", path: "/projects", wait: ".project-row" },
+    { name: "app feedback", path: "/app-feedback", wait: ".empty, .feedback-list" },
     { name: "not found", path: "/nowhere-at-all", wait: ".page-title" },
     {
       name: "command palette",
-      path: `/p/${projects[0].slug}`,
+      path: `/p/${projects[0].id}`,
       wait: ".palette-item",
       prepare: async (page) => {
         await page.waitForSelector(".page-title", { state: "visible" });
@@ -1135,7 +1209,7 @@ try {
     },
     {
       name: "record menu",
-      path: `/p/${projects[0].slug}/work`,
+      path: `/p/${projects[0].id}/work`,
       wait: ".ctx-menu",
       prepare: async (page) => {
         await page.waitForSelector(".work-row", { state: "visible" });
@@ -1170,7 +1244,7 @@ try {
     },
     {
       name: "filter menu",
-      path: `/p/${projects[0].slug}/bugs?tab=all`,
+      path: `/p/${projects[0].id}/bugs?tab=all`,
       wait: ".select-menu",
       prepare: async (page) => {
         await page.waitForSelector(".select-button", { state: "visible" });
@@ -1202,9 +1276,9 @@ try {
     );
   };
   for (const [name, path, wait] of [
-    ["dashboard", `/p/${projects[0].slug}`, ".now-strip .now-hero-value"],
-    ...(firstWork ? [["work detail", `/p/${projects[0].slug}/work/${firstWork}`, ".record-title"]] : []),
-    ...(firstBug ? [["bug detail", `/p/${projects[0].slug}/bugs/${firstBug}`, ".record-title"]] : []),
+    ["dashboard", `/p/${projects[0].id}`, ".now-strip .now-hero-value"],
+    ...(firstWork ? [["work detail", `/p/${projects[0].id}/work/${firstWork}`, ".record-title"]] : []),
+    ...(firstBug ? [["bug detail", `/p/${projects[0].id}/bugs/${firstBug}`, ".record-title"]] : []),
     /* The 404, which this gate only ever loaded cold (the `not found` screen above). Loading
        it is not the test: NotFound() calls t() and, until round 5, read nothing that changes,
        while its route element is built once in App() — so the window repainted around it and
@@ -1230,10 +1304,10 @@ try {
    * (P8 critic). It does now: a stale record link, a project slug nobody owns, and a
    * window pointed at a folder that is not a vault.
    *
-   * `?vault=` is read once and kept in sessionStorage (src/lib/api.ts), so the unreadable
+   * `?dirs=` is read once and kept in sessionStorage (src/lib/api.ts), so the unreadable
    * ones come last and get their own browser context — otherwise every screen after them
    * would be looking at the same broken folder. */
-  const slug = projects[0].slug;
+  const slug = projects[0].id;
   /* The slug this gate types into the address bar is data on the screen that answers it,
      exactly as a real slug is — the app prints back what it was asked for. */
   const NO_SUCH_PROJECT = "does-not-exist";
@@ -1252,24 +1326,26 @@ try {
     { name: "bug board, no such project", path: `/p/${NO_SUCH_PROJECT}/bugs`, wait: ".error-title" },
   );
 
-  /* A real directory with no vault.json in it: this repo's own docs/. The message names it,
+  /* A real directory with no project in it: this repo's own docs/. The message names it,
      so it has to be a path that exists rather than a placeholder. */
-  const noVault = `?vault=${encodeURIComponent(join(process.cwd(), "docs"))}`;
+  const noProject = `?dirs=${encodeURIComponent(join(process.cwd(), "docs"))}`;
   const unreadable = [
-    { name: "dashboard, unreadable vault", path: `/p/${slug}${noVault}`, wait: ".error-title" },
-    { name: "work list, unreadable vault", path: `/p/${slug}/work${noVault}`, wait: ".error-title" },
-    { name: "bug board, unreadable vault", path: `/p/${slug}/bugs${noVault}`, wait: ".error-title" },
+    { name: "dashboard, unreadable folder", path: `/p/${slug}${noProject}`, wait: ".error-title" },
+    { name: "work list, unreadable folder", path: `/p/${slug}/work${noProject}`, wait: ".error-title" },
+    { name: "bug board, unreadable folder", path: `/p/${slug}/bugs${noProject}`, wait: ".error-title" },
     {
-      name: "work detail, unreadable vault",
-      path: `/p/${slug}/work/WORK-0001${noVault}`,
+      name: "work detail, unreadable folder",
+      path: `/p/${slug}/work/WORK-0001${noProject}`,
       wait: ".error-title",
     },
     {
-      name: "bug detail, unreadable vault",
-      path: `/p/${slug}/bugs/BUG-0001${noVault}`,
+      name: "bug detail, unreadable folder",
+      path: `/p/${slug}/bugs/BUG-0001${noProject}`,
       wait: ".error-title",
     },
-    { name: "projects, unreadable vault", path: `/projects${noVault}`, wait: ".error-title" },
+    /* /projects is the screen that explains an unreadable folder rather than erroring on
+       it: the row stays, dimmed, with the diagnosis on it (SPEC v2, screen 7). */
+    { name: "projects, unreadable folder", path: `/projects${noProject}`, wait: ".project-row.is-unavailable" },
   ];
 
   /* An agent handle or a tag is a Latin word the app is right to print. They are matched as
@@ -1442,7 +1518,7 @@ try {
     await useLocale(page, LOCALE);
     await walk(page, screens, WIDE);
 
-    // Its own session, because `?vault=` sticks to the one it is opened in.
+    // Its own session, because `?dirs=` sticks to the one it is opened in.
     const broken = await browser.newContext(VIEW);
     await useLocale(broken, LOCALE);
     await walk(await broken.newPage(), unreadable, WIDE);
@@ -1462,7 +1538,7 @@ try {
     await useLocale(narrow, LOCALE);
     await walk(
       await narrow.newPage(),
-      screens.filter((s) => /^(bugs|work|dashboard) /.test(s.name)),
+      screens.filter((s) => /^(bugs|work|notes|dashboard) /.test(s.name)),
       NARROW,
     );
     await narrow.close();
@@ -1606,25 +1682,30 @@ try {
      * (scripts/ko-vault.mjs). Built rather than committed, in a temp directory that is
      * deleted at the end, on its own dev server: the live vault is never pointed at, written
      * to or read by anything but the walk above. */
-    const koVault = mkdtempSync(join(tmpdir(), "agentmon-ko-"));
-    temps.push(koVault);
-    log(`building a Korean-content vault with the release CLI in ${koVault}…`);
-    buildKoreanVault(koVault);
-    koServer = startServer(KO_PORT, { env: { AGENTMON_VAULT: koVault } });
+    const koBase = mkdtempSync(join(tmpdir(), "agentmon-ko-"));
+    temps.push(koBase);
+    log(`building Korean-content projects with the release CLI in ${koBase}…`);
+    const koDirs = buildKoreanProjects(koBase);
+    koServer = startServer(KO_PORT, {
+      env: { AGENTMON_DIRS: koDirs.join(";"), AGENTMON_REGISTRY_DIR: join(koBase, ".registry") },
+    });
     const koOrigin = `http://localhost:${KO_PORT}`;
     await waitForServer(koServer, koOrigin);
     const koProjects = [];
-    for (const p of await (await fetch(`${koOrigin}/vault-api/projects`)).json()) {
-      const works = await (await fetch(`${koOrigin}/vault-api/projects/${p.slug}/worklogs`)).json();
-      const bugs = await (await fetch(`${koOrigin}/vault-api/projects/${p.slug}/bugs`)).json();
+    const koRows = await (await fetch(`${koOrigin}/project-api/projects`)).json();
+    for (const p of koRows.filter((r) => r.available && r.project).map((r) => r.project)) {
+      const works = await (await fetch(`${koOrigin}/project-api/projects/${p.id}/worklogs`)).json();
+      const bugs = await (await fetch(`${koOrigin}/project-api/projects/${p.id}/bugs`)).json();
+      const notes = await (await fetch(`${koOrigin}/project-api/projects/${p.id}/notes`)).json();
       koProjects.push({
-        slug: p.slug,
+        slug: p.id,
         work: works[0]?.id ?? null,
         bug: bugs[0]?.id ?? null,
-        resolvedBug: await resolvedBugIn(koOrigin, p.slug, bugs),
+        note: (notes.find((n) => n.refs?.length) ?? notes[0])?.name ?? null,
+        resolvedBug: await resolvedBugIn(koOrigin, p.id, bugs),
       });
     }
-    await sweep(koOrigin, koProjects, "ko-vault ", { fixture: true });
+    await sweep(koOrigin, koProjects, "ko-fixture ", { fixture: true });
   }
 
   if (findings.length) {

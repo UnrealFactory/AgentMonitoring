@@ -67,6 +67,19 @@ impl ProjectLock {
                     spins += 1;
                     std::thread::sleep(backoff(spins));
                 }
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                    // Windows: `create_new` against a lock file that another holder's
+                    // Drop is mid-deleting answers ACCESS_DENIED, not AlreadyExists —
+                    // the file is in the delete-pending state. Same meaning, same cure:
+                    // someone else was just here, so wait and retry. A directory that is
+                    // genuinely unwritable still fails, at the deadline instead of
+                    // instantly, with the real error.
+                    if Instant::now() >= deadline {
+                        return Err(CoreError::io(&path, e));
+                    }
+                    spins += 1;
+                    std::thread::sleep(backoff(spins));
+                }
                 Err(e) => return Err(CoreError::io(&path, e)),
             }
         }

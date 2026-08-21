@@ -3,21 +3,21 @@
  * human does that an agent cannot.
  *
  * The app used to file projects away instead ("archive"), which kept every record and could
- * be undone. That was removed: a project you have stopped using should leave the vault, and
- * a status that only half-hides it is a second state to reason about for no benefit the
- * reader asked for. What replaces it deletes for real — `projects/<slug>/` and everything
- * inside it, off the disk, with no recycle bin and no undo — so the whole design of this
- * file is about the moment *before* the click:
+ * be undone. That was removed: a project you have stopped using is *removed from the list*
+ * (undoable, touches nothing) or deleted for real — its `AgentMonitoring` folder and
+ * everything inside it, off the disk, with no recycle bin and no undo. The code around
+ * that folder is never touched. So the whole design of this file is about the moment
+ * *before* the click:
  *
  *   * **The item that opens it says what it costs.** 삭제, red, under a divider, hinting
  *     "영구 삭제 — 되돌릴 수 없습니다" (src/lib/menus.ts). Nothing here is a surprise.
  *   * **The dialog states what will be lost**, in counts read from the project a moment
  *     ago — 작업 로그 27개 · 버그 4개 · 이벤트 61건 — rather than saying "are you sure?"
  *     over a name.
- *   * **The confirmation is the slug, typed.** Not a second button: typing `relay` is an
- *     act you cannot perform by reflex, and it is the same string the reader can see one
- *     line above. The button stays disabled until it matches exactly, and ↵ in an empty
- *     field does nothing at all.
+ *   * **The confirmation is the project name, typed.** Not a second button: typing it is
+ *     an act you cannot perform by reflex, and it is the same string the reader can see
+ *     one line above. The button stays disabled until it matches exactly, and ↵ in an
+ *     empty field does nothing at all.
  *   * **Every way out is cheap.** esc, the scrim, Cancel — and none of them ask twice.
  *   * **It owns the window while it is up.** The keys that move the app all stand down for
  *     it: Alt+Left does not walk the page out from under it, Ctrl+K does not open the
@@ -44,7 +44,7 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../AppContext";
-import { api, vaultErrorMessage } from "../lib/api";
+import { api, projectErrorMessage } from "../lib/api";
 import { t } from "../lib/i18n";
 import { dialogDepth, modalDepth, onModalChange, trapTab, useModalLock } from "../lib/modal";
 import { bugCount, eventCount, workLogs } from "../lib/words";
@@ -72,9 +72,9 @@ export function DeleteProjectProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={request}>
       {children}
-      {/* Keyed by slug: asking about a second project must not inherit the first one's
+      {/* Keyed by id: asking about a second project must not inherit the first one's
           half-typed confirmation. */}
-      {project && <DeleteDialog key={project.slug} project={project} onClose={close} />}
+      {project && <DeleteDialog key={project.id} project={project} onClose={close} />}
     </Ctx.Provider>
   );
 }
@@ -92,11 +92,11 @@ function DeleteDialog({ project, onClose }: { project: Project; onClose: () => v
   /** Whatever had the keyboard when the dialog opened, to hand it back on close. */
   const returnFocus = useRef<HTMLElement | null>(null);
 
-  /* Only the exact slug arms the button. Trimmed, because a slug pasted out of the row
-     above it can arrive with a space on the end and that is not a different intention;
-     not lower-cased, because a slug *is* lower case and "RELAY" is a reader who has not
-     read the field. */
-  const armed = typed.trim() === project.slug;
+  /* Only the exact project name arms the button. Trimmed, because a name pasted out of
+     the row above it can arrive with a space on the end and that is not a different
+     intention; case is kept, because the name one line up shows its own case and copying
+     it is the act being asked for. */
+  const armed = typed.trim() === project.name;
   const c = project.counts;
 
   /* Every screen-level key handler in the app asks this first (src/lib/modal.ts) — so the
@@ -193,14 +193,13 @@ function DeleteDialog({ project, onClose }: { project: Project; onClose: () => v
     setBusy(true);
     setError(null);
     try {
-      const gone = await api.deleteProject(project.slug);
+      const gone = await api.deleteProject(project.id);
       onClose();
       /* The reader may be standing inside the project that just stopped existing — from the
          sidebar, the switcher, the breadcrumb of one of its records. Leaving them on a
-         screen whose data is gone would answer their delete with "could not read the
-         vault". */
-      if (location.pathname === `/p/${project.slug}` ||
-          location.pathname.startsWith(`/p/${project.slug}/`)) {
+         screen whose data is gone would answer their delete with a read error. */
+      if (location.pathname === `/p/${project.id}` ||
+          location.pathname.startsWith(`/p/${project.id}/`)) {
         navigate("/projects");
       }
       refresh();
@@ -233,7 +232,7 @@ function DeleteDialog({ project, onClose }: { project: Project; onClose: () => v
           </h2>
           <p className="modal-project">
             <span className="modal-project-name">{project.name}</span>
-            <span className="modal-project-slug mono">{project.slug}</span>
+            <span className="modal-project-slug mono">{project.path}</span>
           </p>
         </header>
 
@@ -245,7 +244,7 @@ function DeleteDialog({ project, onClose }: { project: Project; onClose: () => v
         </dl>
 
         <p className="modal-warn">
-          <RichText text={t("del.warn", project.slug)} />
+          <RichText text={t("del.warn", project.path)} />
         </p>
         <p className="modal-note">{t("del.warnRefs")}</p>
 
@@ -266,13 +265,13 @@ function DeleteDialog({ project, onClose }: { project: Project; onClose: () => v
               onChange={(e) => setTyped(e.target.value)}
             />
             <span className="field-hint" id="delete-project-hint">
-              {t("del.confirmHint", project.slug)}
+              {t("del.confirmHint", project.name)}
             </span>
           </label>
 
           {error && (
             <p className="form-error" role="alert">
-              <InlineCode text={vaultErrorMessage(error)} />
+              <InlineCode text={projectErrorMessage(error)} />
             </p>
           )}
 
@@ -281,7 +280,7 @@ function DeleteDialog({ project, onClose }: { project: Project; onClose: () => v
               className="button button-danger"
               type="submit"
               disabled={!armed || busy}
-              title={armed ? undefined : t("del.confirmHint", project.slug)}
+              title={armed ? undefined : t("del.confirmHint", project.name)}
             >
               {busy ? t("del.deleting") : t("del.confirm")}
             </button>

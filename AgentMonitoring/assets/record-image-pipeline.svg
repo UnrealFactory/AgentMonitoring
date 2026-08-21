@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 300" width="660" height="300" font-family="Segoe UI, sans-serif" font-size="13">
+  <rect x="0" y="0" width="660" height="300" rx="10" fill="#16171a" stroke="#2f3035"/>
+  <rect x="30" y="30" width="240" height="64" rx="8" fill="none" stroke="#a5adf0" stroke-width="2"/>
+  <text x="150" y="56" fill="#e8e9eb" text-anchor="middle">record body</text>
+  <text x="150" y="78" fill="#a5adf0" text-anchor="middle" font-family="Consolas, monospace" font-size="12">![alt](assets/diagram.svg)</text>
+  <path d="M150 94 v36" stroke="#8a8f98" stroke-width="2" fill="none"/>
+  <path d="M144 122 l6 10 l6 -10" fill="none" stroke="#8a8f98" stroke-width="2"/>
+  <rect x="30" y="134" width="240" height="52" rx="8" fill="none" stroke="#8a8f98" stroke-width="2"/>
+  <text x="150" y="156" fill="#e8e9eb" text-anchor="middle">Store::asset — path lock</text>
+  <text x="150" y="175" fill="#8a8f98" text-anchor="middle" font-size="11">relative · inside the folder · svg png jpg … · ≤10MB</text>
+  <path d="M270 160 h60 v-52 h28" stroke="#8a8f98" stroke-width="2" fill="none"/>
+  <path d="M350 102 l10 6 l-10 6" fill="none" stroke="#8a8f98" stroke-width="2"/>
+  <path d="M270 160 h60 v58 h28" stroke="#8a8f98" stroke-width="2" fill="none"/>
+  <path d="M350 212 l10 6 l-10 6" fill="none" stroke="#8a8f98" stroke-width="2"/>
+  <rect x="364" y="76" width="266" height="60" rx="8" fill="none" stroke="#4cb782" stroke-width="2"/>
+  <text x="497" y="100" fill="#e8e9eb" text-anchor="middle">desktop · get_record_asset</text>
+  <text x="497" y="120" fill="#4cb782" text-anchor="middle" font-family="Consolas, monospace" font-size="12">ipc::Response → blob: URL</text>
+  <rect x="364" y="188" width="266" height="60" rx="8" fill="none" stroke="#4cb782" stroke-width="2"/>
+  <text x="497" y="212" fill="#e8e9eb" text-anchor="middle">browser · dev middleware</text>
+  <text x="497" y="232" fill="#4cb782" text-anchor="middle" font-family="Consolas, monospace" font-size="12">GET …/files/assets/diagram.svg</text>
+  <text x="497" y="272" fill="#8a8f98" text-anchor="middle" font-size="12">both end in &lt;img&gt; — where even an SVG runs no script</text>
+</svg>

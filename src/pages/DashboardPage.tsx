@@ -28,7 +28,7 @@
  */
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useApp, useProjectSlug, useVaultNonce } from "../AppContext";
+import { useApp, useProjectId, useDataNonce } from "../AppContext";
 import { api, failureTitle, nothingToRetry, projectGone } from "../lib/api";
 import { agentColumnWidth } from "../lib/columns";
 import { useAsync } from "../lib/useAsync";
@@ -97,6 +97,7 @@ import {
 } from "../lib/dashboard";
 import type {
   BugSummary,
+  NoteSummary,
   Project,
   VaultEvent,
   WorklogSummary,
@@ -104,10 +105,11 @@ import type {
 } from "../lib/types";
 import type { CSSProperties, ReactNode } from "react";
 
-type Snapshot = [Project, WorklogSummary[], BugSummary[], VaultEvent[]];
+type Snapshot = [Project, WorklogSummary[], BugSummary[], NoteSummary[], VaultEvent[]];
 
 const NO_WORK: WorklogSummary[] = [];
 const NO_BUGS: BugSummary[] = [];
+const NO_SHARED_NOTES: NoteSummary[] = [];
 const NO_EVENTS: VaultEvent[] = [];
 const NO_NOTES: Record<string, WorkUpdate | undefined> = {};
 
@@ -122,17 +124,23 @@ const UNRESOLVED_BUG_ROWS = 3;
  * Copy title / Copy link menu the work list and the bug board open, because it is the same
  * record — and this is the screen a reader lands on first.
  */
-const workRef = (w: WorklogSummary, slug: string): RecordRef => ({
+const workRef = (w: WorklogSummary, projectId: string): RecordRef => ({
   kind: "work",
   id: w.id,
   title: w.title,
-  slug,
+  projectId,
 });
-const bugRef = (b: BugSummary, slug: string): RecordRef => ({
+const bugRef = (b: BugSummary, projectId: string): RecordRef => ({
   kind: "bug",
   id: b.id,
   title: b.title,
-  slug,
+  projectId,
+});
+const noteRef = (n: NoteSummary, projectId: string): RecordRef => ({
+  kind: "note",
+  id: n.name,
+  title: n.title,
+  projectId,
 });
 
 /** The one filter on this screen, kept in the URL like every other view state. */
@@ -146,23 +154,24 @@ const RANGES: { value: string; label: () => string; days: number | null }[] = [
 ];
 
 export function DashboardPage() {
-  const slug = useProjectSlug()!;
+  const projectId = useProjectId()!;
   /** Set while the vault is unreadable — the shell says so, and this screen stops
       advertising itself as live (AppContext). */
   const { trouble } = useApp();
   /* Every loader on this screen takes the vault nonce, so a record an agent writes lands
      here without a navigation and without a skeleton — the flag says live, the clock ticks
      every thirty seconds, and now the numbers under them are as new as the sidebar's. */
-  const nonce = useVaultNonce();
+  const nonce = useDataNonce();
   const { data, error, refreshError, status, loading, reload } = useAsync<Snapshot>(
     () =>
       Promise.all([
-        api.getProject(slug),
-        api.listWorklogs(slug),
-        api.listBugs(slug),
-        api.listEvents(slug),
+        api.getProject(projectId),
+        api.listWorklogs(projectId),
+        api.listBugs(projectId),
+        api.listNotes(projectId),
+        api.listEvents(projectId),
       ]),
-    [slug],
+    [projectId],
     nonce
   );
   /* The project went out from under an open dashboard — deleted in another window, or from
@@ -181,7 +190,8 @@ export function DashboardPage() {
   const project = data?.[0];
   const works = data?.[1] ?? NO_WORK;
   const bugs = data?.[2] ?? NO_BUGS;
-  const events = data?.[3] ?? NO_EVENTS;
+  const sharedNotes = data?.[3] ?? NO_SHARED_NOTES;
+  const events = data?.[4] ?? NO_EVENTS;
 
   /* -- now: live facts, never scoped by the range ------------------------- */
 
@@ -237,7 +247,7 @@ export function DashboardPage() {
     const pairs = await Promise.all(
       ids.map(async (id) => {
         try {
-          const detail = await api.getWorklog(slug, id);
+          const detail = await api.getWorklog(projectId, id);
           return [id, detail.updates[detail.updates.length - 1]] as const;
         } catch {
           // A note is a bonus on top of the row; a record that will not load must never
@@ -247,7 +257,7 @@ export function DashboardPage() {
       })
     );
     return Object.fromEntries(pairs);
-  }, [slug, activeIds], nonce);
+  }, [projectId, activeIds], nonce);
 
   /* -- the range, and everything it scopes -------------------------------- */
 
@@ -289,10 +299,11 @@ export function DashboardPage() {
    */
   const recordsById = useMemo(() => {
     const byId = new Map<string, RecordRef>();
-    for (const w of works) byId.set(w.id, workRef(w, slug));
-    for (const b of bugs) byId.set(b.id, bugRef(b, slug));
+    for (const w of works) byId.set(w.id, workRef(w, projectId));
+    for (const b of bugs) byId.set(b.id, bugRef(b, projectId));
+    for (const n of sharedNotes) byId.set(n.name, noteRef(n, projectId));
     return byId;
-  }, [works, bugs, slug]);
+  }, [works, bugs, sharedNotes, projectId]);
 
   const scoped = useMemo(
     () => events.filter((e) => Date.parse(e.ts) >= axis.from),
@@ -366,7 +377,7 @@ export function DashboardPage() {
 
       <section className="now-strip" aria-label={t("dash.currentState")}>
         <InProgress
-          slug={slug}
+          projectId={projectId}
           active={activeWork}
           total={works.length}
           lastDone={lastDone}
@@ -374,7 +385,7 @@ export function DashboardPage() {
           agents={knownAgents}
           now={now}
         />
-        <UnresolvedBugs slug={slug} bugs={openBugs} total={bugs.length} now={now} />
+        <UnresolvedBugs projectId={projectId} bugs={openBugs} total={bugs.length} now={now} />
         <LastDay recent={recent} events={events} now={now} />
       </section>
 
@@ -403,7 +414,7 @@ export function DashboardPage() {
           title={t("dash.chartWork")}
           sub={t("dash.chartWorkSub", changeNote)}
           action={
-            <Link className="card-action" to={`/p/${slug}/work`}>
+            <Link className="card-action" to={`/p/${projectId}/work`}>
               {t("dash.allWork")}
             </Link>
           }
@@ -417,7 +428,7 @@ export function DashboardPage() {
             scope={scopeLabel}
             empty={{
               title: t("dash.chartWorkEmpty"),
-              hint: t("dash.chartWorkEmptyHint", slug),
+              hint: t("dash.chartWorkEmptyHint"),
             }}
           />
         </ChartCard>
@@ -426,7 +437,7 @@ export function DashboardPage() {
           title={t("dash.chartBugs")}
           sub={t("dash.chartBugsSub", changeNote)}
           action={
-            <Link className="card-action" to={`/p/${slug}/bugs?tab=all`}>
+            <Link className="card-action" to={`/p/${projectId}/bugs?tab=all`}>
               {t("dash.bugBoard")}
             </Link>
           }
@@ -446,10 +457,10 @@ export function DashboardPage() {
         </ChartCard>
       </div>
 
-      <AgentsCard slug={slug} rows={agents} total={scoped.length} now={now} />
+      <AgentsCard projectId={projectId} rows={agents} total={scoped.length} now={now} />
 
       <ActivityCard
-        slug={slug}
+        projectId={projectId}
         groups={dayGroups}
         total={scoped.length}
         now={now}
@@ -471,7 +482,7 @@ const FRESH_DOT: Record<Freshness, string> = {
 };
 
 function InProgress({
-  slug,
+  projectId,
   active,
   total,
   lastDone,
@@ -479,7 +490,7 @@ function InProgress({
   agents,
   now,
 }: {
-  slug: string;
+  projectId: string;
   active: WorklogSummary[];
   /** Every work log this project has ever had — the denominator of the hero figure. */
   total: number;
@@ -539,8 +550,8 @@ function InProgress({
               <li>
                 <Link
                   className="now-row"
-                  to={`/p/${slug}/work/${lastDone.id}`}
-                  {...contextMenu(() => recordMenu(workRef(lastDone, slug)))}
+                  to={`/p/${projectId}/work/${lastDone.id}`}
+                  {...contextMenu(() => recordMenu(workRef(lastDone, projectId)))}
                 >
                   <span className="sdot sdot-done" aria-hidden="true" />
                   <span className="now-row-main">
@@ -574,7 +585,7 @@ function InProgress({
           {active.slice(0, IN_PROGRESS_ROWS).map((w) => (
             <InProgressRow
               key={w.id}
-              slug={slug}
+              projectId={projectId}
               work={w}
               note={notes[w.id]}
               agents={agents}
@@ -584,7 +595,7 @@ function InProgress({
           ))}
           {active.length > IN_PROGRESS_ROWS && (
             <li>
-              <Link className="now-more" to={`/p/${slug}/work?status=in_progress`}>
+              <Link className="now-more" to={`/p/${projectId}/work?status=in_progress`}>
                 {t("dash.moreInProgress", active.length - IN_PROGRESS_ROWS)}
               </Link>
             </li>
@@ -596,14 +607,14 @@ function InProgress({
 }
 
 function InProgressRow({
-  slug,
+  projectId,
   work,
   note,
   agents,
   now,
   iso,
 }: {
-  slug: string;
+  projectId: string;
   work: WorklogSummary;
   note: WorkUpdate | undefined;
   /** Every agent name this project's records carry, for reading an ask in the note. */
@@ -634,8 +645,8 @@ function InProgressRow({
        it share one hover surface and read as a single row about one work log, so the right
        button answers the same way over either half. Events from the link bubble here, which
        is also how Shift+F10 on the focused link reaches this handler. */
-    <li className="now-item" {...contextMenu(() => recordMenu(workRef(work, slug)))}>
-      <Link className="now-row" to={`/p/${slug}/work/${work.id}`}>
+    <li className="now-item" {...contextMenu(() => recordMenu(workRef(work, projectId)))}>
+      <Link className="now-row" to={`/p/${projectId}/work/${work.id}`}>
         <span
           className={`sdot ${FRESH_DOT[state]}`}
           title={t("dash.rowStateTip", workStatusLabel("in_progress"), since)}
@@ -681,7 +692,7 @@ function InProgressRow({
             {outline.waitingOn && outline.waitingOn !== work.agent && (
               <Link
                 className="now-ask"
-                to={`/p/${slug}/work?agent=${encodeURIComponent(outline.waitingOn)}`}
+                to={`/p/${projectId}/work?agent=${encodeURIComponent(outline.waitingOn)}`}
                 title={t(
                   "dash.waitingOnTip",
                   work.agent,
@@ -724,12 +735,12 @@ function InProgressRow({
  * progress*, and a heading that calls it open contradicts the pill on its own row.
  */
 function UnresolvedBugs({
-  slug,
+  projectId,
   bugs: unresolvedBugs,
   total,
   now,
 }: {
-  slug: string;
+  projectId: string;
   /** The unresolved ones, in triage order. Named for what they are, not for the panel. */
   bugs: BugSummary[];
   total: number;
@@ -745,7 +756,7 @@ function UnresolvedBugs({
       <h2 className="now-label">
         <Link
           className="now-label-link"
-          to={`/p/${slug}/bugs`}
+          to={`/p/${projectId}/bugs`}
           title={t("bugs.tabUnresolvedTip", unresolvedMeans())}
         >
           {t("dash.unresolvedBugs")}
@@ -767,7 +778,7 @@ function UnresolvedBugs({
           <li key={severity}>
             <Link
               className={`sev-chip sev-chip-${severity}${count === 0 ? " is-zero" : ""}`}
-              to={`/p/${slug}/bugs?severity=${severity}`}
+              to={`/p/${projectId}/bugs?severity=${severity}`}
               title={t("dash.sevChipTip", count, unresolved(), severityLabel(severity))}
             >
               <span className="sev-chip-dot" aria-hidden="true" />
@@ -784,8 +795,8 @@ function UnresolvedBugs({
             <li key={b.id}>
               <Link
                 className="now-row"
-                to={`/p/${slug}/bugs/${b.id}`}
-                {...contextMenu(() => recordMenu(bugRef(b, slug)))}
+                to={`/p/${projectId}/bugs/${b.id}`}
+                {...contextMenu(() => recordMenu(bugRef(b, projectId)))}
               >
                 <BugStatusDot status={b.status} />
                 <span className="now-row-main">
@@ -856,7 +867,7 @@ function UnresolvedBugs({
           ))}
           {unresolvedBugs.length > shown.length && (
             <li>
-              <Link className="now-more" to={`/p/${slug}/bugs`}>
+              <Link className="now-more" to={`/p/${projectId}/bugs`}>
                 {t("dash.moreUnresolved", unresolvedBugs.length - shown.length, unresolved())}
               </Link>
             </li>
@@ -982,12 +993,12 @@ function ChartCard({
    ======================================================================= */
 
 function AgentsCard({
-  slug,
+  projectId,
   rows,
   total,
   now,
 }: {
-  slug: string;
+  projectId: string;
   rows: ReturnType<typeof agentRows>;
   /** Events in the range — the number the Activity card below prints. */
   total: number;
@@ -1006,6 +1017,7 @@ function AgentsCard({
   );
   const max = Math.max(1, ...rows.map((r) => r.total));
   const anyProject = rows.some((r) => r.project > 0);
+  const anyNotes = rows.some((r) => r.notes > 0);
 
   return (
     <section className="card">
@@ -1014,11 +1026,12 @@ function AgentsCard({
         <Legend
           items={[
             { color: "var(--series-work)", label: t("dash.legendWork") },
+            ...(anyNotes ? [{ color: "var(--series-note)", label: t("dash.legendNotes") }] : []),
             { color: "var(--series-bug)", label: t("dash.legendBugs") },
             ...(anyProject ? [{ color: "var(--grey)", label: t("dash.legendProject") }] : []),
           ]}
         />
-        <Link className="card-action" to={`/p/${slug}/work`}>
+        <Link className="card-action" to={`/p/${projectId}/work`}>
           {t("dash.allWork")}
         </Link>
       </header>
@@ -1054,8 +1067,8 @@ function AgentsCard({
                       className="agent-row"
                       to={
                         r.hasWorklogs
-                          ? `/p/${slug}/work?agent=${encodeURIComponent(r.agent)}`
-                          : `/p/${slug}/bugs?tab=all&reporter=${encodeURIComponent(r.agent)}`
+                          ? `/p/${projectId}/work?agent=${encodeURIComponent(r.agent)}`
+                          : `/p/${projectId}/bugs?tab=all&reporter=${encodeURIComponent(r.agent)}`
                       }
                     >
                       <span className="agent-cell-name">
@@ -1091,9 +1104,13 @@ function AgentsCard({
                         <SplitBar
                           max={max}
                           total={r.total}
-                          title={t("dash.agentBarTip", r.total, r.work, r.bugs, r.project)}
+                          title={t("dash.agentBarTip", r.total, r.work, r.notes, r.bugs, r.project)}
+                          /* Note sits between work and bugs: the pairs it touches are the
+                             ones the palette validator passed (tokens.css, --series-note),
+                             and the grey project segment keeps its old neighbour. */
                           parts={[
                             { value: r.work, color: "var(--series-work)", label: "work" },
+                            { value: r.notes, color: "var(--series-note)", label: "notes" },
                             { value: r.bugs, color: "var(--series-bug)", label: "bugs" },
                             { value: r.project, color: "var(--grey)", label: "project" },
                           ]}
@@ -1130,13 +1147,13 @@ function AgentsCard({
    ======================================================================= */
 
 function ActivityCard({
-  slug,
+  projectId,
   groups,
   total,
   now,
   records,
 }: {
-  slug: string;
+  projectId: string;
   groups: ReturnType<typeof groupByDay>;
   total: number;
   now: number;
@@ -1259,7 +1276,7 @@ function ActivityCard({
                     <ol className="feed">
                       {(expanded[g.day] ? g.events : g.events.slice(0, DAY_PREVIEW)).map((e, i) => (
                         <FeedRow
-                          slug={slug}
+                          projectId={projectId}
                           event={e}
                           now={now}
                           records={records}
@@ -1289,17 +1306,17 @@ function ActivityCard({
 }
 
 function FeedRow({
-  slug,
+  projectId,
   event,
   now,
   records,
 }: {
-  slug: string;
+  projectId: string;
   event: VaultEvent;
   now: number;
   records: Map<string, RecordRef>;
 }) {
-  const href = refHref(slug, event.ref);
+  const href = refHref(projectId, event.ref);
   const contextMenu = useContextMenu();
   const recordMenu = useRecordMenu();
   /* A feed line about a record is a row about that record, and gets its menu. The lines

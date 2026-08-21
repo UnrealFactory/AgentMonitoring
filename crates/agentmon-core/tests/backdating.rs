@@ -9,22 +9,22 @@ use std::path::PathBuf;
 
 use agentmon_core::doctor;
 use agentmon_core::{
-    AbandonWork, FinishWork, NewBug, NewProject, ProjectStatus, Severity, StartWork, UpdateProject,
-    Vault, WorkStatus,
+    AbandonWork, FinishWork, NewBug, NewProject, Severity, StartWork, Store, UpdateProject,
+    WorkStatus,
 };
 
 // ---------------------------------------------------------------------------
 // harness
 // ---------------------------------------------------------------------------
 
-struct TempVault {
-    dir: PathBuf,
-    vault: Vault,
+struct TempProject {
+    location: PathBuf,
+    store: Store,
 }
 
-impl TempVault {
-    fn new(tag: &str) -> TempVault {
-        let dir = std::env::temp_dir().join(format!(
+impl TempProject {
+    fn new(tag: &str) -> TempProject {
+        let location = std::env::temp_dir().join(format!(
             "agentmon-backdate-{tag}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
@@ -32,31 +32,31 @@ impl TempVault {
                 .unwrap()
                 .as_nanos()
         ));
-        fs::create_dir_all(&dir).unwrap();
-        let vault = Vault::init(&dir, "Test vault").expect("init");
-        vault
-            .create_project(&NewProject {
-                slug: "demo".into(),
+        fs::create_dir_all(&location).unwrap();
+        let store = Store::init(
+            &location,
+            &NewProject {
                 name: "Demo".into(),
                 description: "A project used by the agentmon-core tests.".into(),
                 tags: vec!["test".into()],
                 actor: "test-runner".into(),
                 at: None,
-            })
-            .expect("create project");
-        TempVault { dir, vault }
+            },
+        )
+        .expect("init");
+        TempProject { location, store }
     }
 }
 
-impl Drop for TempVault {
+impl Drop for TempProject {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.dir);
+        let _ = fs::remove_dir_all(&self.location);
     }
 }
 
-const BODY: &str = "## What\n\nRecord work in the vault after it is already finished.\n\n\
+const BODY: &str = "## What\n\nRecord work after it is already finished.\n\n\
 ## Why\n\nAgents write the log at the end of a task, so a CLI that can only stamp `now` \
-produces a vault where every record looks like it took a second.\n\n## How\n\nEvery \
+produces a history where every record looks like it took a second.\n\n## How\n\nEvery \
 mutation takes an optional timestamp, validated against the state it follows.\n";
 
 const OUTCOME: &str = "Shipped --started-at/--finished-at/--at across the write path; \
@@ -69,31 +69,27 @@ const T0: &str = "2026-08-18T09:12:00Z"; // started
 const T1: &str = "2026-08-18T10:05:00Z"; // a progress note
 const T2: &str = "2026-08-18T11:30:00Z"; // finished
 
-fn start_at(tv: &TempVault, when: Option<&str>) -> String {
-    tv.vault
-        .start_work(
-            "demo",
-            &StartWork {
-                agent: "cli-builder".into(),
-                title: "Record work that was already finished".into(),
-                body: BODY.into(),
-                started_at: when.map(str::to_string),
-                ..Default::default()
-            },
-        )
+fn start_at(tp: &TempProject, when: Option<&str>) -> String {
+    tp.store
+        .start_work(&StartWork {
+            agent: "cli-builder".into(),
+            title: "Record work that was already finished".into(),
+            body: BODY.into(),
+            started_at: when.map(str::to_string),
+            ..Default::default()
+        })
         .expect("work start")
         .id
 }
 
 fn finish(
-    tv: &TempVault,
+    tp: &TempProject,
     id: &str,
     finished_at: Option<&str>,
     started_at: Option<&str>,
 ) -> agentmon_core::Result<()> {
-    tv.vault
+    tp.store
         .finish_work(
-            "demo",
             id,
             &FinishWork {
                 agent: "cli-builder".into(),
@@ -106,9 +102,9 @@ fn finish(
         .map(|_| ())
 }
 
-fn event_ts(tv: &TempVault, event_type: &str) -> String {
-    tv.vault
-        .events("demo", None)
+fn event_ts(tp: &TempProject, event_type: &str) -> String {
+    tp.store
+        .events(None)
         .unwrap()
         .into_iter()
         .find(|e| e.event_type == event_type)
@@ -122,127 +118,116 @@ fn event_ts(tv: &TempVault, event_type: &str) -> String {
 
 #[test]
 fn work_finished_earlier_can_be_recorded_now() {
-    let tv = TempVault::new("work");
-    let id = start_at(&tv, Some(T0));
-    tv.vault
+    let tp = TempProject::new("work");
+    let id = start_at(&tp, Some(T0));
+    tp.store
         .update_work(
-            "demo",
             &id,
             "cli-builder",
             "Halfway: the parser round-trips, the writer still drops unknown keys.",
             Some(T1),
         )
         .unwrap();
-    finish(&tv, &id, Some(T2), None).unwrap();
+    finish(&tp, &id, Some(T2), None).unwrap();
 
-    let d = tv.vault.worklog("demo", &id).unwrap();
+    let d = tp.store.worklog(&id).unwrap();
     assert_eq!(d.meta.started, T0, "the start the agent gave is what is stored");
     assert_eq!(d.meta.finished.as_deref(), Some(T2));
     assert_eq!(d.updates[0].ts, T1);
     assert_eq!(d.last_activity, T2);
 
     // the event log agrees, so the activity feed is not a lie
-    assert_eq!(event_ts(&tv, "work_started"), T0);
-    assert_eq!(event_ts(&tv, "work_updated"), T1);
-    assert_eq!(event_ts(&tv, "work_done"), T2);
-    let order: Vec<String> = tv
-        .vault
-        .events("demo", None)
+    assert_eq!(event_ts(&tp, "work_started"), T0);
+    assert_eq!(event_ts(&tp, "work_updated"), T1);
+    assert_eq!(event_ts(&tp, "work_done"), T2);
+    let order: Vec<String> = tp
+        .store
+        .events(None)
         .unwrap()
         .into_iter()
         .filter(|e| e.event_type.starts_with("work_"))
         .map(|e| e.event_type)
         .collect();
     assert_eq!(order, ["work_done", "work_updated", "work_started"], "newest first");
-    assert_eq!(doctor::check(&tv.vault).unwrap().errors(), 0);
+    assert_eq!(doctor::check(&tp.store).unwrap().errors(), 0);
 }
 
 #[test]
 fn odd_timestamp_spellings_are_normalized_to_one_shape() {
-    let tv = TempVault::new("formats");
+    let tp = TempProject::new("formats");
     for spelling in [
         "2026-08-18T09:12:00Z",
         "2026-08-18 09:12",
         "2026-08-18T09:12:00.500Z",
         "2026-08-18T11:12:00+02:00",
     ] {
-        let id = start_at(&tv, Some(spelling));
-        assert_eq!(
-            tv.vault.worklog("demo", &id).unwrap().meta.started,
-            T0,
-            "{spelling}"
-        );
+        let id = start_at(&tp, Some(spelling));
+        assert_eq!(tp.store.worklog(&id).unwrap().meta.started, T0, "{spelling}");
     }
 }
 
 #[test]
 fn a_timestamp_that_will_not_parse_names_the_flag_and_the_forms() {
-    let tv = TempVault::new("parse");
-    let err = tv
-        .vault
-        .start_work(
-            "demo",
-            &StartWork {
-                agent: "cli-builder".into(),
-                title: "Yesterday".into(),
-                body: BODY.into(),
-                started_at: Some("yesterday afternoon".into()),
-                ..Default::default()
-            },
-        )
+    let tp = TempProject::new("parse");
+    let err = tp
+        .store
+        .start_work(&StartWork {
+            agent: "cli-builder".into(),
+            title: "Yesterday".into(),
+            body: BODY.into(),
+            started_at: Some("yesterday afternoon".into()),
+            ..Default::default()
+        })
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument");
     let text = err.to_string();
     assert!(text.contains("--started-at"), "{text}");
     assert!(text.contains("2026-08-18T09:12:00Z"), "shows the form to copy: {text}");
-    assert!(tv.vault.worklogs("demo").unwrap().is_empty(), "nothing was written");
+    assert!(tp.store.worklogs().unwrap().is_empty(), "nothing was written");
 }
 
 #[test]
 fn a_timestamp_in_the_future_is_refused_everywhere() {
-    let tv = TempVault::new("future");
+    let tp = TempProject::new("future");
     let future = "2099-01-01T00:00:00Z";
 
-    let err = tv
-        .vault
-        .start_work(
-            "demo",
-            &StartWork {
-                agent: "cli-builder".into(),
-                title: "Work from the future".into(),
-                body: BODY.into(),
-                started_at: Some(future.into()),
-                ..Default::default()
-            },
-        )
+    let err = tp
+        .store
+        .start_work(&StartWork {
+            agent: "cli-builder".into(),
+            title: "Work from the future".into(),
+            body: BODY.into(),
+            started_at: Some(future.into()),
+            ..Default::default()
+        })
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument");
     assert!(err.to_string().contains("at or before now"), "{err}");
-    assert!(tv.vault.worklogs("demo").unwrap().is_empty());
+    assert!(tp.store.worklogs().unwrap().is_empty());
 
-    let id = start_at(&tv, Some(T0));
-    let err = tv
-        .vault
-        .update_work("demo", &id, "cli-builder", "From the future.", Some(future))
+    let id = start_at(&tp, Some(T0));
+    let err = tp
+        .store
+        .update_work(&id, "cli-builder", "From the future.", Some(future))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument", "{err}");
-    let err = finish(&tv, &id, Some(future), None).unwrap_err();
+    let err = finish(&tp, &id, Some(future), None).unwrap_err();
     assert_eq!(err.kind(), "invalid_argument", "{err}");
 
-    let d = tv.vault.worklog("demo", &id).unwrap();
+    let d = tp.store.worklog(&id).unwrap();
     assert_eq!(d.meta.status, WorkStatus::InProgress, "both failures wrote nothing");
     assert!(d.updates.is_empty());
 }
 
 #[test]
 fn a_timestamp_before_the_state_it_follows_is_refused() {
-    let tv = TempVault::new("order");
-    let id = start_at(&tv, Some(T1));
+    let tp = TempProject::new("order");
+    let id = start_at(&tp, Some(T1));
 
     // an update before the work started
-    let err = tv
-        .vault
-        .update_work("demo", &id, "cli-builder", "Time travel.", Some(T0))
+    let err = tp
+        .store
+        .update_work(&id, "cli-builder", "Time travel.", Some(T0))
         .unwrap_err();
     assert!(
         err.to_string().contains("at or after the work log's started time"),
@@ -251,24 +236,24 @@ fn a_timestamp_before_the_state_it_follows_is_refused() {
     assert!(err.to_string().contains(T1), "names the time to beat: {err}");
 
     // an update before the previous update
-    tv.vault
-        .update_work("demo", &id, "cli-builder", "First note, in order.", Some(T2))
+    tp.store
+        .update_work(&id, "cli-builder", "First note, in order.", Some(T2))
         .unwrap();
-    let err = tv
-        .vault
-        .update_work("demo", &id, "cli-builder", "Second note, backwards.", Some(T1))
+    let err = tp
+        .store
+        .update_work(&id, "cli-builder", "Second note, backwards.", Some(T1))
         .unwrap_err();
     assert!(err.to_string().contains("at or after the previous note"), "{err}");
-    assert_eq!(tv.vault.worklog("demo", &id).unwrap().updates.len(), 1);
+    assert_eq!(tp.store.worklog(&id).unwrap().updates.len(), 1);
 
     // finishing before the last note, and before the start
     for bad in [T1, T0] {
-        let err = finish(&tv, &id, Some(bad), None).unwrap_err();
+        let err = finish(&tp, &id, Some(bad), None).unwrap_err();
         assert_eq!(err.kind(), "invalid_argument", "{err}");
         assert!(err.to_string().contains("--finished-at"), "{err}");
     }
     assert_eq!(
-        tv.vault.worklog("demo", &id).unwrap().meta.status,
+        tp.store.worklog(&id).unwrap().meta.status,
         WorkStatus::InProgress,
         "a rejected timestamp leaves the record alone"
     );
@@ -276,70 +261,65 @@ fn a_timestamp_before_the_state_it_follows_is_refused() {
 
 #[test]
 fn work_done_can_correct_the_start_but_not_break_the_order() {
-    let tv = TempVault::new("restart");
-    let id = start_at(&tv, Some(T1));
+    let tp = TempProject::new("restart");
+    let id = start_at(&tp, Some(T1));
 
     // --started-at after --finished-at
-    let err = finish(&tv, &id, Some(T1), Some(T2)).unwrap_err();
+    let err = finish(&tp, &id, Some(T1), Some(T2)).unwrap_err();
     assert!(err.to_string().contains("at or after --started-at"), "{err}");
 
     // --started-at after a note that is already on the record
-    tv.vault
-        .update_work("demo", &id, "cli-builder", "A note at T1.", Some(T1))
+    tp.store
+        .update_work(&id, "cli-builder", "A note at T1.", Some(T1))
         .unwrap();
-    let err = finish(&tv, &id, Some(T2), Some(T2)).unwrap_err();
+    let err = finish(&tp, &id, Some(T2), Some(T2)).unwrap_err();
     assert!(
         err.to_string().contains("at or before this record's first progress note"),
         "{err}"
     );
 
     // correcting the start backwards is what the flag is for
-    finish(&tv, &id, Some(T2), Some(T0)).unwrap();
-    let d = tv.vault.worklog("demo", &id).unwrap();
+    finish(&tp, &id, Some(T2), Some(T0)).unwrap();
+    let d = tp.store.worklog(&id).unwrap();
     assert_eq!(d.meta.started, T0);
     assert_eq!(d.meta.finished.as_deref(), Some(T2));
-    assert_eq!(doctor::check(&tv.vault).unwrap().errors(), 0);
+    assert_eq!(doctor::check(&tp.store).unwrap().errors(), 0);
 }
 
 // ---------------------------------------------------------------------------
 // bugs
 // ---------------------------------------------------------------------------
 
-fn file_bug(tv: &TempVault, created_at: Option<&str>) -> String {
-    tv.vault
-        .create_bug(
-            "demo",
-            &NewBug {
-                agent: "ui-builder".into(),
-                title: "Desktop app shows stale records".into(),
-                severity: Severity::High,
-                labels: vec![],
-                refs: vec![],
-                body: REPORT.into(),
-                created_at: created_at.map(str::to_string),
-            },
-        )
+fn file_bug(tp: &TempProject, created_at: Option<&str>) -> String {
+    tp.store
+        .create_bug(&NewBug {
+            agent: "ui-builder".into(),
+            title: "Desktop app shows stale records".into(),
+            severity: Severity::High,
+            labels: vec![],
+            refs: vec![],
+            body: REPORT.into(),
+            created_at: created_at.map(str::to_string),
+        })
         .expect("bug create")
         .id
 }
 
 #[test]
 fn a_bug_can_be_filed_claimed_and_resolved_after_the_fact() {
-    let tv = TempVault::new("bug");
-    let id = file_bug(&tv, Some(T0));
-    tv.vault.claim_bug("demo", &id, "cli-builder", Some(T1)).unwrap();
-    tv.vault
+    let tp = TempProject::new("bug");
+    let id = file_bug(&tp, Some(T0));
+    tp.store.claim_bug(&id, "cli-builder", Some(T1)).unwrap();
+    tp.store
         .comment_bug(
-            "demo",
             &id,
             "cli-builder",
             "Root cause: the Tauri shell never started a watcher.",
             Some(T1),
         )
         .unwrap();
-    tv.vault
+    tp.store
         .resolve_bug(
-            "demo",
             &id,
             "cli-builder",
             "Started the watcher in setup(); verified with cargo test and a live refresh.",
@@ -347,42 +327,39 @@ fn a_bug_can_be_filed_claimed_and_resolved_after_the_fact() {
         )
         .unwrap();
 
-    let b = tv.vault.bug("demo", &id).unwrap();
+    let b = tp.store.bug(&id).unwrap();
     assert_eq!(b.meta.created, T0);
     assert_eq!(b.meta.claimed.as_deref(), Some(T1));
     assert_eq!(b.comments[0].ts, T1);
     assert_eq!(b.meta.resolved.as_deref(), Some(T2));
     assert_eq!(b.last_activity, T2);
-    assert_eq!(event_ts(&tv, "bug_created"), T0);
-    assert_eq!(event_ts(&tv, "bug_claimed"), T1);
-    assert_eq!(event_ts(&tv, "bug_commented"), T1);
-    assert_eq!(event_ts(&tv, "bug_resolved"), T2);
-    assert_eq!(doctor::check(&tv.vault).unwrap().errors(), 0);
+    assert_eq!(event_ts(&tp, "bug_created"), T0);
+    assert_eq!(event_ts(&tp, "bug_claimed"), T1);
+    assert_eq!(event_ts(&tp, "bug_commented"), T1);
+    assert_eq!(event_ts(&tp, "bug_resolved"), T2);
+    assert_eq!(doctor::check(&tp.store).unwrap().errors(), 0);
 }
 
 #[test]
 fn out_of_order_bug_mutations_are_refused() {
-    let tv = TempVault::new("bug-order");
-    let id = file_bug(&tv, Some(T1));
+    let tp = TempProject::new("bug-order");
+    let id = file_bug(&tp, Some(T1));
 
-    let err = tv
-        .vault
-        .claim_bug("demo", &id, "cli-builder", Some(T0))
-        .unwrap_err();
+    let err = tp.store.claim_bug(&id, "cli-builder", Some(T0)).unwrap_err();
     assert!(
         err.to_string().contains("at or after the bug's created time"),
         "{err}"
     );
     assert_eq!(
-        tv.vault.bug("demo", &id).unwrap().meta.claimed,
+        tp.store.bug(&id).unwrap().meta.claimed,
         None,
         "the rejected claim wrote nothing"
     );
 
-    tv.vault.claim_bug("demo", &id, "cli-builder", Some(T2)).unwrap();
-    let err = tv
-        .vault
-        .resolve_bug("demo", &id, "cli-builder", OUTCOME, Some(T1))
+    tp.store.claim_bug(&id, "cli-builder", Some(T2)).unwrap();
+    let err = tp
+        .store
+        .resolve_bug(&id, "cli-builder", OUTCOME, Some(T1))
         .unwrap_err();
     assert!(
         err.to_string()
@@ -390,12 +367,12 @@ fn out_of_order_bug_mutations_are_refused() {
         "{err}"
     );
 
-    let err = tv
-        .vault
-        .comment_bug("demo", &id, "cli-builder", "Backwards comment.", Some(T0))
+    let err = tp
+        .store
+        .comment_bug(&id, "cli-builder", "Backwards comment.", Some(T0))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument", "{err}");
-    assert!(tv.vault.bug("demo", &id).unwrap().comments.is_empty());
+    assert!(tp.store.bug(&id).unwrap().comments.is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -404,16 +381,15 @@ fn out_of_order_bug_mutations_are_refused() {
 
 #[test]
 fn abandoning_work_records_the_reason_and_stops_the_clock() {
-    let tv = TempVault::new("abandon");
-    let id = start_at(&tv, Some(T0));
-    tv.vault
-        .update_work("demo", &id, "cli-builder", "Tried the naive approach first.", Some(T1))
+    let tp = TempProject::new("abandon");
+    let id = start_at(&tp, Some(T0));
+    tp.store
+        .update_work(&id, "cli-builder", "Tried the naive approach first.", Some(T1))
         .unwrap();
 
-    let w = tv
-        .vault
+    let w = tp
+        .store
         .abandon_work(
-            "demo",
             &id,
             &AbandonWork {
                 agent: "cli-builder".into(),
@@ -427,7 +403,7 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
     assert_eq!(w.event.event_type, "work_abandoned");
     assert_eq!(w.event.ts, T2);
 
-    let d = tv.vault.worklog("demo", &id).unwrap();
+    let d = tp.store.worklog(&id).unwrap();
     assert_eq!(d.meta.status, WorkStatus::Abandoned);
     assert_eq!(d.meta.finished.as_deref(), Some(T2), "the clock stops when it stops");
     assert_eq!(d.updates.len(), 2, "the reason is a timestamped note");
@@ -438,28 +414,27 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
         d.updates[1]
     );
     assert!(d.outcome.is_none(), "abandoned work has no outcome");
-    assert_eq!(doctor::check(&tv.vault).unwrap().errors(), 0);
+    assert_eq!(doctor::check(&tp.store).unwrap().errors(), 0);
     assert_eq!(
-        tv.vault.status("demo").unwrap().active_work.len(),
+        tp.store.status().unwrap().active_work.len(),
         0,
         "the dashboard stops showing it as active"
     );
 
     // an abandoned record is closed: no second abandon, no completion. A later note is
     // still allowed — it is how the record gets corrected — but it cannot predate the stop.
-    tv.vault
-        .update_work("demo", &id, "cli-builder", "Correction: WORK-0009 is WORK-0010.", None)
+    tp.store
+        .update_work(&id, "cli-builder", "Correction: WORK-0009 is WORK-0010.", None)
         .expect("a closed record still takes a correction");
-    assert_eq!(tv.vault.worklog("demo", &id).unwrap().meta.status, WorkStatus::Abandoned);
-    let err = tv
-        .vault
-        .update_work("demo", &id, "cli-builder", "Backwards in time.", Some(T1))
+    assert_eq!(tp.store.worklog(&id).unwrap().meta.status, WorkStatus::Abandoned);
+    let err = tp
+        .store
+        .update_work(&id, "cli-builder", "Backwards in time.", Some(T1))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument");
-    let err = tv
-        .vault
+    let err = tp
+        .store
         .abandon_work(
-            "demo",
             &id,
             &AbandonWork {
                 agent: "cli-builder".into(),
@@ -469,18 +444,17 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
         )
         .unwrap_err();
     assert!(err.to_string().contains("already abandoned"), "{err}");
-    assert_eq!(finish(&tv, &id, None, None).unwrap_err().kind(), "conflict");
+    assert_eq!(finish(&tp, &id, None, None).unwrap_err().kind(), "conflict");
 }
 
 #[test]
 fn abandon_needs_a_real_reason_and_refuses_finished_work() {
-    let tv = TempVault::new("abandon-guards");
-    let id = start_at(&tv, None);
+    let tp = TempProject::new("abandon-guards");
+    let id = start_at(&tp, None);
     for bad in ["", "wip", "   "] {
-        let err = tv
-            .vault
+        let err = tp
+            .store
             .abandon_work(
-                "demo",
                 &id,
                 &AbandonWork {
                     agent: "cli-builder".into(),
@@ -492,16 +466,12 @@ fn abandon_needs_a_real_reason_and_refuses_finished_work() {
         assert_eq!(err.kind(), "invalid_body", "{bad:?} should be rejected");
         assert!(err.to_string().contains("agentmon work abandon"), "{err}");
     }
-    assert_eq!(
-        tv.vault.worklog("demo", &id).unwrap().meta.status,
-        WorkStatus::InProgress
-    );
+    assert_eq!(tp.store.worklog(&id).unwrap().meta.status, WorkStatus::InProgress);
 
-    finish(&tv, &id, None, None).unwrap();
-    let err = tv
-        .vault
+    finish(&tp, &id, None, None).unwrap();
+    let err = tp
+        .store
         .abandon_work(
-            "demo",
             &id,
             &AbandonWork {
                 agent: "cli-builder".into(),
@@ -520,147 +490,53 @@ fn abandon_needs_a_real_reason_and_refuses_finished_work() {
 
 #[test]
 fn project_update_changes_metadata_and_logs_an_event() {
-    let tv = TempVault::new("project-update");
-    let w = tv
-        .vault
-        .update_project(
-            "demo",
-            &UpdateProject {
-                name: Some("Demo, renamed".into()),
-                description: Some("The project the agentmon-core tests write into.".into()),
-                tags: Some(vec!["test".into(), "core".into(), "test".into()]),
-                status: None,
-                actor: "cli-builder".into(),
-                at: None,
-            },
-        )
+    let tp = TempProject::new("project-update");
+    let original_id = tp.store.project().unwrap().id;
+    let w = tp
+        .store
+        .update_project(&UpdateProject {
+            name: Some("Demo, renamed".into()),
+            description: Some("The project the agentmon-core tests write into.".into()),
+            tags: Some(vec!["test".into(), "core".into(), "test".into()]),
+            actor: "cli-builder".into(),
+            at: None,
+        })
         .unwrap();
     assert_eq!(w.event.event_type, "project_updated");
     assert!(w.event.summary.contains("Demo, renamed"), "{}", w.event.summary);
 
-    let p = tv.vault.project("demo").unwrap();
+    let p = tp.store.project().unwrap();
     assert_eq!(p.name, "Demo, renamed");
     assert_eq!(p.description, "The project the agentmon-core tests write into.");
     assert_eq!(p.tags, vec!["test", "core"], "duplicates are dropped");
-    assert_eq!(p.slug, "demo", "the slug and id never move");
-    assert_eq!(p.id, "prj-demo");
+    assert_eq!(p.id, original_id, "the id never moves");
+    assert_eq!(p.version, agentmon_core::SCHEMA_VERSION, "the version survives the rewrite");
     assert!(p.created_at.is_some(), "createdAt survives the rewrite");
 
     // one field changes alone
-    tv.vault
-        .update_project(
-            "demo",
-            &UpdateProject {
-                description: Some("Only the description this time.".into()),
-                actor: "cli-builder".into(),
-                ..Default::default()
-            },
-        )
+    tp.store
+        .update_project(&UpdateProject {
+            description: Some("Only the description this time.".into()),
+            actor: "cli-builder".into(),
+            ..Default::default()
+        })
         .unwrap();
-    let p = tv.vault.project("demo").unwrap();
+    let p = tp.store.project().unwrap();
     assert_eq!(p.name, "Demo, renamed", "untouched fields survive");
     assert_eq!(p.description, "Only the description this time.");
 
     // nothing to change is an error, not a silent no-op
-    let err = tv
-        .vault
-        .update_project(
-            "demo",
-            &UpdateProject {
-                actor: "cli-builder".into(),
-                ..Default::default()
-            },
-        )
+    let err = tp
+        .store
+        .update_project(&UpdateProject {
+            actor: "cli-builder".into(),
+            ..Default::default()
+        })
         .unwrap_err();
     assert_eq!(err.kind(), "conflict");
     assert!(err.to_string().contains("--name"), "{err}");
 
-    assert_eq!(
-        tv.vault
-            .update_project(
-                "nope",
-                &UpdateProject {
-                    name: Some("x".into()),
-                    actor: "cli-builder".into(),
-                    ..Default::default()
-                }
-            )
-            .unwrap_err()
-            .kind(),
-        "project_not_found"
-    );
-
-    let report = doctor::check(&tv.vault).unwrap();
+    let report = doctor::check(&tp.store).unwrap();
     assert_eq!(report.errors(), 0, "{:#?}", report.problems);
     assert_eq!(report.warnings(), 0, "project_updated is a known event type");
-}
-
-/// `--status archived` is a v1 schema field and nothing else.
-///
-/// The app used to act on it — the Projects screen filed the project away and the switcher
-/// stopped offering it — and no longer does: archiving was removed from the product (P12),
-/// so every project in a vault is listed whatever this field says, and a project the human
-/// is finished with is deleted (`tests/delete_project.rs`). What still has to hold is the
-/// *writing* of it: the flag round-trips, it is reversible, it deletes nothing, and it is
-/// logged like every other mutation — because v1 files in the wild carry the key and a
-/// reader that mangled it would rewrite somebody's vault.
-#[test]
-fn project_status_round_trips_and_removes_nothing() {
-    let tv = TempVault::new("project-archive");
-    tv.vault
-        .start_work(
-            "demo",
-            &StartWork {
-                agent: "nova".into(),
-                title: "Something worth keeping".into(),
-                body: BODY.into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-
-    let archived = tv
-        .vault
-        .update_project(
-            "demo",
-            &UpdateProject {
-                status: Some(ProjectStatus::Archived),
-                actor: "app".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    assert_eq!(archived.event.event_type, "project_updated");
-    assert!(
-        archived.event.summary.contains("archived"),
-        "the event says what happened: {}",
-        archived.event.summary
-    );
-    assert_eq!(archived.record.status, ProjectStatus::Archived);
-
-    let p = tv.vault.project("demo").unwrap();
-    assert_eq!(p.status, ProjectStatus::Archived);
-    assert_eq!(p.counts.work_total, 1, "a status change deletes no records");
-    assert_eq!(p.name, "Demo", "and changes nothing else");
-    assert_eq!(tv.vault.worklogs("demo").unwrap().len(), 1);
-    assert!(
-        tv.vault.projects().unwrap().iter().any(|x| x.slug == "demo"),
-        "the listing carries every project on disk; the app draws all of them"
-    );
-
-    // …and back again.
-    tv.vault
-        .update_project(
-            "demo",
-            &UpdateProject {
-                status: Some(ProjectStatus::Active),
-                actor: "app".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    assert_eq!(tv.vault.project("demo").unwrap().status, ProjectStatus::Active);
-
-    let report = doctor::check(&tv.vault).unwrap();
-    assert_eq!(report.errors(), 0, "{:#?}", report.problems);
 }

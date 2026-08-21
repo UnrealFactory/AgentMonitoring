@@ -1,12 +1,12 @@
 /**
- * The cross-reference block, shared by the work log page and the bug page.
+ * The cross-reference block, shared by the work log, bug and note pages.
  *
  * A `refs:` list in a record's frontmatter is a relationship, and a relationship has two
  * ends. Showing only the end the author happened to type is how a reader misses that the
  * follow-ups from a piece of work became three separate bugs. So this block shows both:
  *
  *   References     — what this one points at
- *   Referenced by  — every work log and bug in the project that points back here
+ *   Referenced by  — every work log, bug and note in the project that points back here
  *
  * Each row carries the id, the *title*, and the other record's own status (dot + pill),
  * because "BUG-0008" alone tells a reader nothing they can act on.
@@ -14,18 +14,18 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { useVaultNonce } from "../AppContext";
+import { useDataNonce } from "../AppContext";
 import { useAsync } from "../lib/useAsync";
 import { recordPath } from "../lib/markdown";
 import { useContextMenu } from "./ContextMenu";
 import { useRecordMenu } from "../lib/menus";
-import { BugStatusPill, RecordStatusDot, SeverityBadge, WorkStatusPill } from "./ui";
-import { bugNoun, workNoun } from "../lib/words";
+import { BugStatusPill, NoteTypeDot, NoteTypePill, RecordStatusDot, SeverityBadge, WorkStatusPill } from "./ui";
+import { bugNoun, noteNoun, workNoun } from "../lib/words";
 import { formatDateTimeUtc, formatRelative } from "../lib/format";
 import { t } from "../lib/i18n";
-import type { BugSummary, WorklogSummary } from "../lib/types";
+import type { BugSummary, NoteSummary, WorklogSummary } from "../lib/types";
 
-type RecordKind = "work" | "bug";
+type RecordKind = "work" | "bug" | "note";
 
 interface RelatedItem {
   id: string;
@@ -33,48 +33,73 @@ interface RelatedItem {
   kind: RecordKind;
   work?: WorklogSummary;
   bug?: BugSummary;
+  note?: NoteSummary;
   lastActivity: string;
 }
 
-const toItem = (r: WorklogSummary | BugSummary): RelatedItem =>
-  "agent" in r
-    ? { id: r.id, title: r.title, kind: "work", work: r, lastActivity: r.lastActivity }
-    : { id: r.id, title: r.title, kind: "bug", bug: r, lastActivity: r.lastActivity };
+/* Tagged at the call site, never duck-typed: a note has an `agent` field too, so the old
+   `"agent" in r` test would have read every note as a work log. */
+const workItem = (r: WorklogSummary): RelatedItem => ({
+  id: r.id,
+  title: r.title,
+  kind: "work",
+  work: r,
+  lastActivity: r.lastActivity,
+});
+const bugItem = (r: BugSummary): RelatedItem => ({
+  id: r.id,
+  title: r.title,
+  kind: "bug",
+  bug: r,
+  lastActivity: r.lastActivity,
+});
+const noteItem = (r: NoteSummary): RelatedItem => ({
+  id: r.name,
+  title: r.title,
+  kind: "note",
+  note: r,
+  lastActivity: r.lastActivity,
+});
 
 export type RelatedIndex = ReturnType<typeof useRelated>;
 
 /**
  * Both directions of the index for one record. The page calls this once and hands the
- * result to the section below, so a record page never asks the vault for the same two
+ * result to the section below, so a record page never asks the vault for the same three
  * lists twice.
  */
-export function useRelated(slug: string, id: string, refs: string[]) {
-  const nonce = useVaultNonce();
-  const works = useAsync(() => api.listWorklogs(slug), [slug], nonce);
-  const bugs = useAsync(() => api.listBugs(slug), [slug], nonce);
+export function useRelated(projectId: string, id: string, refs: string[]) {
+  const nonce = useDataNonce();
+  const works = useAsync(() => api.listWorklogs(projectId), [projectId], nonce);
+  const bugs = useAsync(() => api.listBugs(projectId), [projectId], nonce);
+  const notes = useAsync(() => api.listNotes(projectId), [projectId], nonce);
 
   return useMemo(() => {
-    const loading = works.loading || bugs.loading;
-    const all: RelatedItem[] = [...(works.data ?? []), ...(bugs.data ?? [])].map(toItem);
+    const loading = works.loading || bugs.loading || notes.loading;
+    const all: RelatedItem[] = [
+      ...(works.data ?? []).map(workItem),
+      ...(bugs.data ?? []).map(bugItem),
+      ...(notes.data ?? []).map(noteItem),
+    ];
     const byId = new Map(all.map((r) => [r.id, r]));
 
     const outgoing = refs.map((ref) => byId.get(ref) ?? { ref });
     const incoming = all
       .filter((r) => r.id !== id)
-      .filter((r) => (r.work?.refs ?? r.bug?.refs ?? []).includes(id))
+      .filter((r) => (r.work?.refs ?? r.bug?.refs ?? r.note?.refs ?? []).includes(id))
       .filter((r) => !refs.includes(r.id))
       .sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
 
     /* The same index, keyed for the prose: an id written into a sentence gets the title of
-       the record it names (lib/markdown.tsx). Withheld until both lists are in, so a chip
+       the record it names (lib/markdown.tsx). Withheld until every list is in, so a chip
        is never drawn as "no such record" while the vault is still being read. */
     const titles = loading ? null : new Map(all.map((r) => [r.id, r.title]));
 
     return { loading, outgoing, incoming, titles, count: outgoing.length + incoming.length };
-  }, [works.data, works.loading, bugs.data, bugs.loading, refs, id]);
+  }, [works.data, works.loading, bugs.data, bugs.loading, notes.data, notes.loading, refs, id]);
 }
 
-function RelatedRow({ slug, item }: { slug: string; item: RelatedItem }) {
+function RelatedRow({ projectId, item }: { projectId: string; item: RelatedItem }) {
   /* A row here is a work log or a bug, so it is the same row the list screens draw and gets
      the same right-button menu. `here` is deliberately not set: this is the *other* record,
      the one the reader is not on, so Open is the item that matters most on it. */
@@ -84,15 +109,19 @@ function RelatedRow({ slug, item }: { slug: string; item: RelatedItem }) {
     <li>
       <Link
         className="rel-row"
-        to={recordPath(slug, item.id)}
+        to={recordPath(projectId, item.id)}
         {...contextMenu(() =>
-          recordMenu({ kind: item.kind, id: item.id, title: item.title, slug })
+          recordMenu({ kind: item.kind, id: item.id, title: item.title, projectId })
         )}
       >
-        <RecordStatusDot
-          status={item.work ? item.work.status : item.bug!.status}
-          kind={item.kind}
-        />
+        {item.note ? (
+          <NoteTypeDot type={item.note.type} />
+        ) : (
+          <RecordStatusDot
+            status={item.work ? item.work.status : item.bug!.status}
+            kind={item.kind as "work" | "bug"}
+          />
+        )}
         <span className="rel-id mono">{item.id}</span>
         <span className="rel-title" title={item.title}>
           {item.title}
@@ -101,6 +130,8 @@ function RelatedRow({ slug, item }: { slug: string; item: RelatedItem }) {
           {item.bug && <SeverityBadge severity={item.bug.severity} />}
           {item.work ? (
             <WorkStatusPill status={item.work.status} />
+          ) : item.note ? (
+            <NoteTypePill type={item.note.type} />
           ) : (
             <BugStatusPill status={item.bug!.status} />
           )}
@@ -131,19 +162,19 @@ function MissingRow({ id }: { id: string }) {
 }
 
 export function RelatedSection({
-  slug,
+  projectId,
   id,
   kind,
   related,
 }: {
-  slug: string;
+  projectId: string;
   id: string;
   kind: RecordKind;
   related: RelatedIndex;
 }) {
   const { outgoing, incoming, count } = related;
   /* The object's own noun, from lib/words.ts: a work log is a work log on every screen. */
-  const noun = kind === "bug" ? bugNoun() : workNoun();
+  const noun = kind === "bug" ? bugNoun() : kind === "note" ? noteNoun() : workNoun();
 
   if (count === 0) return null;
 
@@ -169,7 +200,7 @@ export function RelatedSection({
                 "ref" in item ? (
                   <MissingRow key={item.ref} id={item.ref} />
                 ) : (
-                  <RelatedRow key={item.id} slug={slug} item={item} />
+                  <RelatedRow key={item.id} projectId={projectId} item={item} />
                 )
               )}
             </ul>
@@ -187,7 +218,7 @@ export function RelatedSection({
             </div>
             <ul className="rel-rows">
               {incoming.map((item) => (
-                <RelatedRow key={item.id} slug={slug} item={item} />
+                <RelatedRow key={item.id} projectId={projectId} item={item} />
               ))}
             </ul>
           </div>

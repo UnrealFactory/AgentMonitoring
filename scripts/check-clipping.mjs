@@ -100,8 +100,8 @@ const LOCALE = value("--locale", process.env.SHOT_LOCALE || "ko");
 const log = (...m) => console.log("[check-clipping]", ...m);
 
 const api = async (path) => {
-  const res = await fetch(`${ORIGIN}/vault-api${path}`);
-  if (!res.ok) throw new Error(`GET /vault-api${path} -> ${res.status}`);
+  const res = await fetch(`${ORIGIN}/project-api${path}`);
+  if (!res.ok) throw new Error(`GET /project-api${path} -> ${res.status}`);
   return res.json();
 };
 
@@ -434,34 +434,43 @@ try {
     log,
   }));
 
-  const projects = await api("/projects");
-  const wanted = WANT_PROJECT ? projects.filter((p) => p.slug === WANT_PROJECT) : projects;
+  const rows = await api("/projects");
+  const projects = rows.filter((r) => r.available && r.project).map((r) => r.project);
+  const wanted = WANT_PROJECT ? projects.filter((p) => p.name === WANT_PROJECT || p.id === WANT_PROJECT) : projects;
   if (!wanted.length) {
     throw new Error(
-      `no project '${WANT_PROJECT}' in this vault. Known slugs: ${projects.map((p) => p.slug).join(", ")}`,
+      `no project '${WANT_PROJECT}' on this list. Known projects: ${projects.map((p) => p.name).join(", ")}`,
     );
   }
 
   /** Every screen of the app, and every record in it. All of them count. */
   const screens = [];
   for (const p of wanted) {
-    const bugs = await api(`/projects/${p.slug}/bugs`);
-    const works = await api(`/projects/${p.slug}/worklogs`);
+    const bugs = await api(`/projects/${p.id}/bugs`);
+    const works = await api(`/projects/${p.id}/worklogs`);
+    const notes = await api(`/projects/${p.id}/notes`);
     // `tips` marks the screens that have charts, whose tooltips are opened and measured.
-    screens.push({ path: `/p/${p.slug}`, tips: true });
+    screens.push({ path: `/p/${p.id}`, tips: true });
     // …and the same charts over a wider window, where a bucket holds more ids and the tip
     // has more to fit into the same 168px.
-    screens.push({ path: `/p/${p.slug}?range=all`, tips: true });
-    screens.push({ path: `/p/${p.slug}/work` });
-    screens.push({ path: `/p/${p.slug}/bugs` });
+    screens.push({ path: `/p/${p.id}?range=all`, tips: true });
+    screens.push({ path: `/p/${p.id}/work` });
+    screens.push({ path: `/p/${p.id}/bugs` });
     // The board opens on the bugs that still need someone; the dense view is All.
-    screens.push({ path: `/p/${p.slug}/bugs?tab=all` });
-    for (const w of works) screens.push({ path: `/p/${p.slug}/work/${w.id}` });
-    for (const b of bugs) screens.push({ path: `/p/${p.slug}/bugs/${b.id}` });
+    screens.push({ path: `/p/${p.id}/bugs?tab=all` });
+    screens.push({ path: `/p/${p.id}/notes` });
+    for (const w of works) screens.push({ path: `/p/${p.id}/work/${w.id}` });
+    for (const b of bugs) screens.push({ path: `/p/${p.id}/bugs/${b.id}` });
+    // Every note too: a note's id is its kebab name, so its screens are addressed by name.
+    for (const n of notes) screens.push({ path: `/p/${p.id}/notes/${n.name}` });
   }
   screens.push({ path: "/projects" });
 
-  const records = screens.filter((s) => /\/(work|bugs)\/[A-Z]/.test(s.path)).length;
+  /* A record screen is a work log's or a bug's (uppercase id) — or a note's, whose name is
+     lowercase kebab, which is why the two shapes are matched apart. */
+  const records = screens.filter(
+    (s) => /\/(work|bugs)\/[A-Z]/.test(s.path) || /\/notes\/[a-z0-9-]+/.test(s.path),
+  ).length;
   log(
     `${screens.length} screens (${records} records in ${wanted.length} project(s)) × ${WIDTHS.length} widths · ${LOCALE}`,
   );

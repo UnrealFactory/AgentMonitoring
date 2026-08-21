@@ -1,4 +1,4 @@
-//! `agentmon doctor` — walk the vault and report everything that is wrong with it.
+//! `agentmon doctor` — walk the project folder and report everything wrong with it.
 //!
 //! Doctor reads the files directly rather than going through the normal reader, because
 //! the normal reader is allowed to give up on the first corrupt record and doctor is not:
@@ -7,7 +7,7 @@
 //! Two levels, and the distinction is load-bearing:
 //!   * **error** — the app will render this record wrong, or a human will read something
 //!     untrue (a `done` work log with no outcome, frontmatter that does not parse).
-//!   * **warning** — the vault is readable but something is off (an event pointing at a
+//!   * **warning** — the project is readable but something is off (an event pointing at a
 //!     record that no longer exists, a lock file left behind by a killed process).
 
 use std::collections::HashMap;
@@ -20,7 +20,7 @@ use crate::body;
 use crate::error::Result;
 use crate::fsx::LOCK_FILE;
 use crate::model::*;
-use crate::vault::Vault;
+use crate::store::Store;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -33,7 +33,7 @@ pub enum Level {
 #[serde(rename_all = "camelCase")]
 pub struct Problem {
     pub level: Level,
-    /// Where the problem is, e.g. `agent-monitoring/WORK-0003` or `vault.json`.
+    /// Where the problem is, e.g. `WORK-0003.md` or `project.json`.
     pub scope: String,
     pub message: String,
     /// What to do about it — always actionable, never "check the file".
@@ -62,12 +62,13 @@ impl Problem {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Report {
-    pub vault: String,
-    pub vault_name: String,
+    pub path: String,
+    pub name: String,
     pub schema_version: u32,
-    pub projects: usize,
     pub worklogs: usize,
     pub bugs: usize,
+    #[serde(default)]
+    pub notes: usize,
     pub events: usize,
     pub problems: Vec<Problem>,
 }
@@ -86,7 +87,7 @@ impl Report {
             .count()
     }
     pub fn records_checked(&self) -> usize {
-        self.worklogs + self.bugs
+        self.worklogs + self.bugs + self.notes
     }
 }
 
@@ -104,124 +105,56 @@ const EVENT_TYPES: &[&str] = &[
     "bug_commented",
     "bug_resolved",
     "bug_closed",
+    "note_created",
+    "note_updated",
+    "note_removed",
 ];
 
-pub fn check(vault: &Vault) -> Result<Report> {
+pub fn check(store: &Store) -> Result<Report> {
     let mut problems: Vec<Problem> = Vec::new();
-    let root = vault.root().to_path_buf();
+    let dir = store.root().to_path_buf();
 
-    let info = vault.info()?;
-    if info.version != crate::SCHEMA_VERSION {
-        problems.push(Problem::error(
-            "vault.json",
-            format!(
-                "schema version is {} but this build of agentmon speaks v{}",
-                info.version,
-                crate::SCHEMA_VERSION
-            ),
-            "upgrade agentmon (`cargo build --release -p agentmon-cli`) or point at a vault \
-             written by a matching build",
-        ));
-    }
-    if info.name.trim().is_empty() {
-        problems.push(Problem::error(
-            "vault.json",
-            "\"name\" is empty; the app shows it as the vault's title",
-            "set a name, e.g. \"name\": \"AgentMonitoring\"",
-        ));
-    }
-
-    let projects_dir = root.join("projects");
-    if !projects_dir.is_dir() {
-        problems.push(Problem::error(
-            "projects/",
-            "the projects directory does not exist",
-            "create the first project: `agentmon project create <slug> --name \"<name>\"`",
-        ));
-    }
-
-    let mut n_projects = 0usize;
-    let mut n_work = 0usize;
-    let mut n_bugs = 0usize;
-    let mut n_events = 0usize;
-
-    let mut dirs: Vec<_> = if projects_dir.is_dir() {
-        fs::read_dir(&projects_dir)
-            .map_err(|e| crate::CoreError::io(&projects_dir, e))?
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.is_dir())
-            .collect()
-    } else {
-        Vec::new()
-    };
-    dirs.sort();
-
-    for dir in dirs {
-        let slug = dir
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-        if !dir.join("project.json").is_file() {
-            problems.push(Problem::warn(
-                format!("projects/{slug}"),
-                "directory has no project.json, so the app will not list it",
-                format!(
-                    "create it with `agentmon project create {slug} --name \"<name>\"`, or delete \
-                     the directory"
-                ),
-            ));
-            continue;
-        }
-        n_projects += 1;
-        check_project(&dir, &slug, &mut problems, &mut n_work, &mut n_bugs, &mut n_events);
-    }
-
-    Ok(Report {
-        vault: info.path,
-        vault_name: info.name,
-        schema_version: info.version,
-        projects: n_projects,
-        worklogs: n_work,
-        bugs: n_bugs,
-        events: n_events,
-        problems,
-    })
-}
-
-fn check_project(
-    dir: &Path,
-    slug: &str,
-    problems: &mut Vec<Problem>,
-    n_work: &mut usize,
-    n_bugs: &mut usize,
-    n_events: &mut usize,
-) {
     // -- project.json -------------------------------------------------------
+    let mut name = String::new();
+    let mut version = 0u32;
     let pj = dir.join("project.json");
     match fs::read_to_string(&pj) {
         Err(e) => problems.push(Problem::error(
-            format!("{slug}/project.json"),
+            "project.json",
             format!("cannot be read: {e}"),
-            "restore the file or recreate the project with `agentmon project create`",
+            "restore the file or recreate the project with `agentmon init`",
         )),
         Ok(raw) => match serde_json::from_str::<Project>(&raw) {
             Err(e) => problems.push(Problem::error(
-                format!("{slug}/project.json"),
+                "project.json",
                 format!("is not valid project JSON: {e}"),
-                "required keys: id, slug, name, status (active|archived); see SPEC.md",
+                "required keys: version (2), id, name; see SPEC.md",
             )),
             Ok(p) => {
-                if p.slug != slug {
+                name = p.name.clone();
+                version = p.version;
+                if p.version != crate::SCHEMA_VERSION {
                     problems.push(Problem::error(
-                        format!("{slug}/project.json"),
-                        format!("\"slug\" is \"{}\" but the directory is \"{slug}\"", p.slug),
-                        format!("set \"slug\": \"{slug}\" — the directory name is what -p matches"),
+                        "project.json",
+                        format!(
+                            "schema version is {} but this build of agentmon speaks v{}",
+                            p.version,
+                            crate::SCHEMA_VERSION
+                        ),
+                        "v1 vault data is moved forward with `agentmon migrate --from <vault> \
+                         --project <slug> --to <folder>`",
+                    ));
+                }
+                if p.id.trim().is_empty() {
+                    problems.push(Problem::error(
+                        "project.json",
+                        "\"id\" is empty; the app routes by it",
+                        "set a stable id, e.g. \"id\": \"prj-checkout\"",
                     ));
                 }
                 if p.name.trim().is_empty() {
                     problems.push(Problem::error(
-                        format!("{slug}/project.json"),
+                        "project.json",
                         "\"name\" is empty",
                         "set a display name; the sidebar shows it",
                     ));
@@ -231,25 +164,35 @@ fn check_project(
     }
 
     // -- worklogs -----------------------------------------------------------
+    let mut n_work = 0usize;
     let mut work_ids: HashMap<String, String> = HashMap::new();
     for path in md_files(&dir.join("worklogs")) {
-        *n_work += 1;
-        check_worklog(&path, slug, problems, &mut work_ids);
+        n_work += 1;
+        check_worklog(&path, &mut problems, &mut work_ids);
     }
 
     // -- bugs ---------------------------------------------------------------
+    let mut n_bugs = 0usize;
     let mut bug_ids: HashMap<String, String> = HashMap::new();
     for path in md_files(&dir.join("bugs")) {
-        *n_bugs += 1;
-        check_bug(&path, slug, problems, &mut bug_ids);
+        n_bugs += 1;
+        check_bug(&path, &mut problems, &mut bug_ids);
+    }
+
+    // -- notes --------------------------------------------------------------
+    let mut n_notes = 0usize;
+    for path in md_files(&dir.join("notes")) {
+        n_notes += 1;
+        check_note(&path, &mut problems);
     }
 
     // -- events.jsonl -------------------------------------------------------
+    let mut n_events = 0usize;
     let events = dir.join("events.jsonl");
     if events.is_file() {
         match fs::read_to_string(&events) {
             Err(e) => problems.push(Problem::error(
-                format!("{slug}/events.jsonl"),
+                "events.jsonl",
                 format!("cannot be read: {e}"),
                 "check file permissions; the app reads this on every dashboard load",
             )),
@@ -258,10 +201,10 @@ fn check_project(
                     if line.trim().is_empty() {
                         continue;
                     }
-                    *n_events += 1;
+                    n_events += 1;
                     match serde_json::from_str::<Event>(line) {
                         Err(e) => problems.push(Problem::error(
-                            format!("{slug}/events.jsonl:{}", i + 1),
+                            format!("events.jsonl:{}", i + 1),
                             format!("line is not a valid event: {e}"),
                             "each line is one JSON object: {\"ts\":...,\"actor\":...,\
                              \"type\":...,\"ref\":...,\"summary\":...}. Delete or fix the line — \
@@ -270,7 +213,7 @@ fn check_project(
                         Ok(ev) => {
                             if !EVENT_TYPES.contains(&ev.event_type.as_str()) {
                                 problems.push(Problem::warn(
-                                    format!("{slug}/events.jsonl:{}", i + 1),
+                                    format!("events.jsonl:{}", i + 1),
                                     format!("unknown event type \"{}\"", ev.event_type),
                                     format!("known types: {}", EVENT_TYPES.join(", ")),
                                 ));
@@ -281,11 +224,11 @@ fn check_project(
                                 } else if r.starts_with("BUG-") {
                                     !bug_ids.contains_key(r)
                                 } else {
-                                    false // project refs and free-form refs are fine
+                                    false // free-form refs are fine
                                 };
                                 if missing {
                                     problems.push(Problem::warn(
-                                        format!("{slug}/events.jsonl:{}", i + 1),
+                                        format!("events.jsonl:{}", i + 1),
                                         format!("references {r}, which does not exist"),
                                         "the record was deleted or renamed; the activity feed \
                                          will link nowhere",
@@ -294,7 +237,7 @@ fn check_project(
                             }
                             if let Err(msg) = check_ts(&ev.ts) {
                                 problems.push(Problem::error(
-                                    format!("{slug}/events.jsonl:{}", i + 1),
+                                    format!("events.jsonl:{}", i + 1),
                                     format!("timestamp \"{}\" {msg}", ev.ts),
                                     "events sort by this string; use UTC ISO8601 \
                                      (2026-08-18T09:12:00Z)",
@@ -305,9 +248,9 @@ fn check_project(
                 }
             }
         }
-    } else if *n_work + *n_bugs > 0 {
+    } else if n_work + n_bugs > 0 {
         problems.push(Problem::warn(
-            format!("{slug}/events.jsonl"),
+            "events.jsonl",
             "missing, so the dashboard's activity feed is empty",
             "it is created by the first `agentmon work start` / `bug create` in this project",
         ));
@@ -324,23 +267,131 @@ fn check_project(
             .unwrap_or(0);
         if age > 300 {
             problems.push(Problem::warn(
-                format!("{slug}/{LOCK_FILE}"),
+                LOCK_FILE,
                 format!("a write lock has been held for {age}s — the process holding it \
                          probably died"),
                 format!("delete {}; agentmon reclaims it automatically after 120s", lock.display()),
             ));
         }
     }
+
+    Ok(Report {
+        path: dir.display().to_string(),
+        name,
+        schema_version: version,
+        worklogs: n_work,
+        bugs: n_bugs,
+        notes: n_notes,
+        events: n_events,
+        problems,
+    })
 }
 
-fn check_worklog(
-    path: &Path,
-    slug: &str,
-    problems: &mut Vec<Problem>,
-    seen: &mut HashMap<String, String>,
-) {
+fn check_note(path: &Path, problems: &mut Vec<Problem>) {
     let file = file_name(path);
-    let scope = format!("{slug}/{file}");
+    let scope = file.clone();
+    let raw = match fs::read_to_string(path) {
+        Ok(r) => r,
+        Err(e) => {
+            problems.push(Problem::error(
+                scope,
+                format!("cannot be read: {e}"),
+                "check file permissions",
+            ));
+            return;
+        }
+    };
+    let Some((fm, _md)) = body::split_frontmatter(&raw) else {
+        problems.push(Problem::error(
+            scope,
+            "has no YAML frontmatter (the file must start with a `---` fenced block)",
+            "see the note schema in SPEC.md; the fastest fix is to rewrite it with \
+             `agentmon note add`",
+        ));
+        return;
+    };
+    let meta: Note = match serde_yaml::from_str(fm) {
+        Ok(m) => m,
+        Err(e) => {
+            problems.push(Problem::error(
+                scope,
+                format!("frontmatter does not parse: {e}"),
+                "required keys: name, title, type (memory|handoff|decision|reference), \
+                 description, agent, created, updated. Quote any value containing a colon",
+            ));
+            return;
+        }
+    };
+
+    let stem = file.trim_end_matches(".md");
+    if meta.name != stem {
+        problems.push(Problem::error(
+            &scope,
+            format!("frontmatter name is \"{}\" but the file is {file}", meta.name),
+            format!(
+                "rename the file to {}.md, or set name: {stem} — the name is the note's \
+                 identity and its address",
+                meta.name
+            ),
+        ));
+    }
+    if crate::store::validate_note_name(&meta.name).is_err() {
+        problems.push(Problem::error(
+            &scope,
+            format!("name \"{}\" is not a valid note name", meta.name),
+            "names are kebab-case, 2–64 letters, digits and hyphens — they double as file \
+             names, URLs and --refs values",
+        ));
+    }
+    if meta.title.trim().is_empty() {
+        problems.push(Problem::error(
+            &scope,
+            "`title` is empty",
+            "give it the one-line summary the notes list shows",
+        ));
+    }
+    if meta.description.trim().is_empty() {
+        problems.push(Problem::error(
+            &scope,
+            "`description` is empty",
+            "one line saying what this note knows — it is how agents decide whether to \
+             open the body",
+        ));
+    }
+    if meta.agent.trim().is_empty() {
+        problems.push(Problem::error(
+            &scope,
+            "`agent` is empty",
+            "set the agent handle that wrote the note",
+        ));
+    }
+    for (key, value) in [("created", &meta.created), ("updated", &meta.updated)] {
+        if let Err(msg) = check_ts(value) {
+            problems.push(Problem::error(
+                &scope,
+                format!("`{key}` \"{value}\" {msg}"),
+                "use UTC ISO8601, e.g. 2026-08-18T09:12:00Z",
+            ));
+        }
+    }
+    if check_ts(&meta.created).is_ok()
+        && check_ts(&meta.updated).is_ok()
+        && meta.updated < meta.created
+    {
+        problems.push(Problem::error(
+            &scope,
+            format!(
+                "`updated` ({}) is before `created` ({})",
+                meta.updated, meta.created
+            ),
+            "fix whichever timestamp is wrong; the notes list sorts by updated",
+        ));
+    }
+}
+
+fn check_worklog(path: &Path, problems: &mut Vec<Problem>, seen: &mut HashMap<String, String>) {
+    let file = file_name(path);
+    let scope = file.clone();
     let raw = match fs::read_to_string(path) {
         Ok(r) => r,
         Err(e) => {
@@ -484,14 +535,9 @@ fn check_worklog(
     }
 }
 
-fn check_bug(
-    path: &Path,
-    slug: &str,
-    problems: &mut Vec<Problem>,
-    seen: &mut HashMap<String, String>,
-) {
+fn check_bug(path: &Path, problems: &mut Vec<Problem>, seen: &mut HashMap<String, String>) {
     let file = file_name(path);
-    let scope = format!("{slug}/{file}");
+    let scope = file.clone();
     let raw = match fs::read_to_string(path) {
         Ok(r) => r,
         Err(e) => {

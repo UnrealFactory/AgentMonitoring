@@ -35,18 +35,26 @@
  *     state; see the header of lib/i18n/ko.ts.)
  */
 import { t } from "./i18n";
-import type { BugStatus, Severity, WorkStatus } from "./types";
+import type { BugStatus, NoteType, Severity, WorkStatus } from "./types";
 
 /* -- objects ---------------------------------------------------------------- */
 
 /** The noun for one unit of recorded work, everywhere in the UI. */
 export const workNoun = (): string => t("word.workNoun");
 export const bugNoun = (): string => t("word.bugNoun");
+/**
+ * The shared-knowledge record (memory / handoff / decision / reference). In English it is
+ * a **note**; in Korean it is **메모** — deliberately not 노트, which this app already
+ * spends on the progress notes inside a work log (진행 노트). One noun per object.
+ */
+export const noteNoun = (): string => t("word.noteNoun");
 
 /** "1 work log" / "12 work logs" / "작업 로그 12개" */
 export const workLogs = (n: number): string => t("word.workLogs", n);
 /** "1 bug" / "24 bugs" / "버그 24개" */
 export const bugCount = (n: number): string => t("word.bugs", n);
+/** "1 note" / "5 notes" / "메모 5개" */
+export const noteCount = (n: number): string => t("word.notes", n);
 /** "12 events" / "이벤트 12건" */
 export const eventCount = (n: number): string => t("word.events", n);
 
@@ -68,6 +76,20 @@ export const bugStatusLabel = (status: BugStatus): string =>
       : status === "resolved"
         ? t("word.bug.resolved")
         : t("word.bug.closed");
+
+/**
+ * What each kind of note is for, as its one word: memory / handoff / decision / reference
+ * — 지식 / 인계 / 결정 / 참조. The type is the reader's first filter, so the word is the
+ * same on the tab, the pill, the palette row and the tooltip that explains it.
+ */
+export const noteTypeLabel = (type: NoteType): string =>
+  type === "memory"
+    ? t("word.note.memory")
+    : type === "handoff"
+      ? t("word.note.handoff")
+      : type === "decision"
+        ? t("word.note.decision")
+        : t("word.note.reference");
 
 export const severityLabel = (severity: Severity): string =>
   severity === "critical"

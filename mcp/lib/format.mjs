@@ -54,25 +54,63 @@ function fit(header, rows, footer, cap = RESULT_CAP) {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-export function renderWorkList(records, { project, total, limit }) {
-  if (!records.length) return `${project}: no work logs match.`;
+export function renderWorkList(records, { total, limit }) {
+  if (!records.length) return "no work logs match.";
   const rows = records.map((r) => row(r.id, r.status, r.agent, r.title));
-  const header = `${project} work — ${plural(total, "record")}`;
+  const header = `work — ${plural(total, "record")}`;
   return fit(header, rows, (shown) =>
     shown < total ? `showing ${shown}; raise limit (max ${MAX_LIMIT}) or filter by state/agent` : null
   );
 }
 
-export function renderBugList(records, { project, total, limit }) {
-  if (!records.length) return `${project}: no bugs match.`;
+export function renderBugList(records, { total, limit }) {
+  if (!records.length) return "no bugs match.";
   const rows = records.map((r) => row(r.id, `${r.severity}/${r.status}`, r.assignee || r.reporter, r.title));
-  const header = `${project} bugs — ${plural(total, "bug")} (id severity/status owner)`;
+  const header = `bugs — ${plural(total, "bug")} (id severity/status owner)`;
   return fit(header, rows, (shown) =>
     shown < total ? `showing ${shown}; raise limit (max ${MAX_LIMIT}) or filter by state/severity` : null
   );
 }
 
-export function renderSnapshot(snap, { project }) {
+export function renderNoteList(records, { total }) {
+  if (!records.length) return "no notes match. Leave one: note(action=\"write\", …).";
+  // The description IS the row: a note list exists so an agent can decide what to read
+  // without opening bodies, and the author wrote that one line for exactly this. The
+  // agent shown is whoever the current words belong to — the last rewriter, else the
+  // author — since notes are shared and mutable.
+  const rows = records.flatMap((n) => [
+    `  ${trunc(`${n.name} ${n.type} ${trunc(n.updatedBy || n.agent, 12)}`, ROW_CAP)}`,
+    `    ${trunc(n.description, ROW_CAP + 8)}`,
+  ]);
+  const header = `notes — ${plural(total, "note")} (name type author / description)`;
+  return fit(header, rows, (shown) =>
+    shown < rows.length ? `more exist; filter by type or query` : null
+  );
+}
+
+export function renderNoteView(r, path) {
+  return summary({
+    meta: [
+      `${r.name} ${r.type}`,
+      `by ${r.agent}`,
+      r.updatedBy && r.updatedBy !== r.agent ? `rewritten by ${r.updatedBy}` : null,
+      `updated ${r.updated ?? r.created ?? ""}`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    title: r.title,
+    facts: [
+      r.tags?.length ? `tags ${r.tags.join(",")}` : null,
+      r.refs?.length ? `refs ${r.refs.join(",")}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    gist: [r.description, r.body].filter(Boolean).join(" — "),
+    path,
+  });
+}
+
+export function renderSnapshot(snap) {
   const c = snap.project?.counts ?? {};
   const bySeverity = {};
   for (const b of snap.openBugs ?? []) bySeverity[b.severity] = (bySeverity[b.severity] ?? 0) + 1;
@@ -81,7 +119,7 @@ export function renderSnapshot(snap, { project }) {
     .map((s) => `${bySeverity[s]} ${s}`)
     .join(", ");
   const header =
-    `${project}: ${c.workTotal ?? 0} work (${c.workInProgress ?? 0} in progress), ` +
+    `${snap.project?.name ?? "project"}: ${c.workTotal ?? 0} work (${c.workInProgress ?? 0} in progress), ` +
     `${c.bugsOpen ?? 0} bugs open${sev ? ` (${sev})` : ""}, last activity ${c.lastActivity ?? "never"}`;
 
   const active = (snap.activeWork ?? []).slice(0, 3).map((w) => row(w.id, "", w.agent, w.title));
@@ -103,7 +141,7 @@ export function renderSnapshot(snap, { project }) {
  * meta / title / facts / gist / path — where only the gist is elastic. It is capped at
  * GIST_CAP, which is what makes this a summary rather than a small copy of the record:
  * enough of the outcome to decide whether to spend `full: true` on the rest. It shrinks
- * further, and is dropped entirely, when a long title or a deep vault path leaves less
+ * further, and is dropped entirely, when a long title or a deep file path leaves less
  * room than that, so the whole thing always comes back inside the cap.
  */
 function summary({ meta, title, facts, gist, path }) {

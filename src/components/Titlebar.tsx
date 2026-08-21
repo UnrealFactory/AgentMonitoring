@@ -40,8 +40,10 @@
 import { useEffect, useState } from "react";
 import { t, useLocale } from "../lib/i18n";
 
-/** Ask the window to do something, and say so out loud when it will not. */
-async function ask(action: "minimize" | "toggleMaximize" | "close", permission: string) {
+/** Ask the window to do something, and say so out loud when it will not.
+ *  Exported for the mouse-gesture layer, whose RU/DR strokes are these same two commands
+ *  by another hand (components/MouseGestures.tsx). */
+export async function ask(action: "minimize" | "toggleMaximize" | "close", permission: string) {
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     await getCurrentWindow()[action]();
@@ -133,11 +135,15 @@ export function Titlebar() {
           </svg>
         )}
       </button>
+      {/* The X hides to the tray now (src-tauri: on_window_event + init_tray), and the
+          tooltip says so — a window that "closes" while its process keeps running is a
+          surprise unless the button itself announces it. The accessible *name* stays the
+          one word 닫기; the sentence rides along as the description. */}
       <button
         type="button"
         className="titlebar-button titlebar-close"
         aria-label={t("window.close")}
-        title={t("window.close")}
+        title={t("window.closeToTray")}
         onClick={() => void ask("close", "allow-close")}
       >
         <svg className="titlebar-glyph" viewBox="0 0 12 12" aria-hidden="true" focusable="false">

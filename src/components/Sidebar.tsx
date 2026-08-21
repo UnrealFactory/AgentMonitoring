@@ -1,19 +1,19 @@
 /**
- * The shell's left column: which vault, which project, which screen.
+ * The shell's left column: which project, which screen.
  *
  * Two rules it has to keep, both learned from critics:
  *
- *   * **Say a thing once.** The brand, its subtitle and the footer all used to print the
- *     vault's name, with its path on screen twice at the same time — three copies of one
- *     word beside 668px of empty column. The app is named at the top, the vault is named at
- *     the bottom, and the Projects screen owns the path.
+ *   * **Say a thing once.** The app is named at the top, the reader's place is named by
+ *     the switcher, and the Projects screen owns every path.
  *   * **Never leave the column empty.** Off a project — on /projects — the nav used to hold
- *     a single row. The vault's projects are always listed, so there is somewhere to go
+ *     a single row. The registered projects are always listed, so there is somewhere to go
  *     from every screen, and the list doubles as the switcher's flat form.
  */
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useApp, useCurrentProject } from "../AppContext";
+import { useApp, useCurrentProject, useDataNonce } from "../AppContext";
+import { api } from "../lib/api";
+import { useAsync } from "../lib/useAsync";
 import { openPalette } from "./CommandPalette";
 import { useContextMenu } from "./ContextMenu";
 import { useProjectMenu } from "../lib/menus";
@@ -27,6 +27,7 @@ import {
   workTipHere,
 } from "../lib/words";
 import { t } from "../lib/i18n";
+import { AppUpdate } from "./AppUpdate";
 import { LocaleToggle } from "./LocaleToggle";
 import type { Project } from "../lib/types";
 
@@ -47,8 +48,12 @@ const AppMark = () => (
 );
 
 export function Sidebar() {
-  const { vault, projects, error, transport } = useApp();
+  const { projects, transport } = useApp();
   const current = useCurrentProject();
+  /* The App feedback board's open count. Errors stay silent here — the board's own page
+     reports them; a column of navigation is no place for a load failure. */
+  const feedback = useAsync(() => api.listAppFeedback(), [], useDataNonce());
+  const feedbackOpen = (feedback.data ?? []).filter((f) => f.status === "open").length;
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -119,16 +124,13 @@ export function Sidebar() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [menuOpen]);
 
-  const base = current ? `/p/${current.slug}` : undefined;
-  /* Every project in the vault, and no filter in front of it. There used to be one — a
-     project could be "archived", which took it out of this list and out of the switcher
-     while leaving it readable by its address, so the column had to make an exception for
-     the archived project you happened to be standing in. Both are gone (P12): the vault's
-     projects are the vault's projects, and one you have finished with is deleted. */
+  const base = current ? `/p/${current.id}` : undefined;
+  /* Every readable registered project, and no filter in front of it. Archiving is gone
+     (P12): a project you have finished with is removed from the list or deleted, not
+     filed away. Unavailable rows (an unplugged drive) live on the Projects screen, which
+     can explain them; a nav row that goes nowhere belongs nowhere. */
   const switchable: Project[] = projects;
   const listed = switchable.slice(0, NAV_PROJECT_LIMIT);
-  /** The vault's own directory name — "…/Temp/vault-live-test" against "…/AgentMonitoring/vault". */
-  const folder = vault?.path?.split(/[\\/]/).filter(Boolean).pop() ?? "";
 
   return (
     <aside className="sidebar">
@@ -195,13 +197,13 @@ export function Sidebar() {
           <div className="switcher-menu" role="menu">
             {switchable.map((p, i) => (
               <button
-                key={p.slug}
+                key={p.id}
                 role="menuitem"
                 ref={(el) => {
                   itemRefs.current[i] = el;
                 }}
-                className={`switcher-item${p.slug === current?.slug ? " is-current" : ""}`}
-                onClick={() => navigate(`/p/${p.slug}`)}
+                className={`switcher-item${p.id === current?.id ? " is-current" : ""}`}
+                onClick={() => navigate(`/p/${p.id}`)}
                 {...contextMenu(() => projectMenu(p))}
               >
                 <span className="switcher-item-name">{p.name}</span>
@@ -290,6 +292,18 @@ export function Sidebar() {
                 </span>
               )}
             </NavLink>
+            <NavLink to={`${base}/notes`} className="nav-item">
+              <NavIcon name="notes" />
+              {t("nav.notes")}
+              {current.counts.notesTotal > 0 && (
+                <span
+                  className="nav-count tabular"
+                  title={t("word.noteTipHere", current.counts.notesTotal)}
+                >
+                  {current.counts.notesTotal}
+                </span>
+              )}
+            </NavLink>
           </>
         )}
 
@@ -309,10 +323,10 @@ export function Sidebar() {
             "Relay" as the current page: two rows, two claims, one reader. */}
         {listed.map((p) => (
           <Link
-            key={p.slug}
-            to={`/p/${p.slug}`}
-            className={`nav-item nav-sub${p.slug === current?.slug ? " is-current" : ""}`}
-            aria-current={p.slug === current?.slug ? "location" : undefined}
+            key={p.id}
+            to={`/p/${p.id}`}
+            className={`nav-item nav-sub${p.id === current?.id ? " is-current" : ""}`}
+            aria-current={p.id === current?.id ? "location" : undefined}
             title={`${p.name} — ${workTipHere(
               p.counts.workTotal,
               p.counts.workInProgress
@@ -349,18 +363,37 @@ export function Sidebar() {
             </span>
           </Link>
         )}
+
+        {/* About the app itself, not any project — which is why it sits at the section's
+            end rather than among the project rows above. */}
+        <NavLink to="/app-feedback" className="nav-item">
+          <NavIcon name="feedback" />
+          {t("nav.appFeedback")}
+          {feedbackOpen > 0 && (
+            <span
+              className="nav-count nav-count-open tabular"
+              title={t("nav.appFeedbackTip", feedbackOpen)}
+            >
+              {feedbackOpen}
+            </span>
+          )}
+        </NavLink>
       </nav>
 
       <div className="sidebar-foot">
+        {/* A newer release of the app itself, when there is one — desktop only, silent
+            otherwise (src/components/AppUpdate.tsx). First in the foot: it is news about
+            the app the foot describes, and it leaves when acted on. */}
+        <AppUpdate />
         {/* The language, where a reader looks for it: at the bottom of the shell, under the
             vault it names. One control, two words, applied to the whole window on click
             (src/components/LocaleToggle.tsx). */}
         <LocaleToggle />
-        {/* The vault, named once. Its path is on the Projects screen, which is where the
-            reader can act on it — and is one click away through this link. A plain Link:
-            as a NavLink this footer marked itself the current page on /projects, which lit
-            two rows in one column at once. */}
-        <Link className="vault-path" to="/projects" title={vault?.path ?? ""}>
+        {/* Where the projects are managed, one click away. Every path is on the Projects
+            screen, which is where the reader can act on them. A plain Link: as a NavLink
+            this footer marked itself the current page on /projects, which lit two rows in
+            one column at once. */}
+        <Link className="vault-path" to="/projects" title={t("nav.projectCount", projects.length)}>
           <svg className="vault-path-icon" viewBox="0 0 16 16" aria-hidden="true">
             <path
               d="M2.5 4.5 h4 l1.2 1.6 h5.8 v6.4 h-11 z"
@@ -371,20 +404,9 @@ export function Sidebar() {
             />
           </svg>
           <span className="vault-path-text">
-            <span className="vault-path-name">
-              {vault?.name ?? (error ? t("vault.none") : "—")}
-            </span>
-            {/* The folder, not the whole path: enough to tell two vaults apart from any
-                screen — which is how a reader notices they are not where they thought —
-                without printing the path twice on the screen that owns it. The full path is
-                the tooltip, and the Projects screen prints it. And never "resolving…"
-                forever: a vault that failed to open says so. */}
+            <span className="vault-path-name">{t("proj.count", projects.length)}</span>
             <span className="vault-path-value">
-              {vault
-                ? `${transport === "tauri" ? t("vault.readerDesktop") : t("vault.readerBrowser")} · ${folder}`
-                : error
-                  ? t("vault.unreadable")
-                  : t("vault.resolving")}
+              {transport === "tauri" ? t("vault.readerDesktop") : t("vault.readerBrowser")}
             </span>
           </span>
         </Link>
@@ -393,12 +415,16 @@ export function Sidebar() {
   );
 }
 
-function NavIcon({ name }: { name: "dashboard" | "work" | "bug" | "projects" }) {
+function NavIcon({ name }: { name: "dashboard" | "work" | "bug" | "notes" | "projects" | "feedback" }) {
   const paths: Record<string, string> = {
     dashboard: "M2.5 9.5 L6 5.5 L8.5 8 L13.5 3",
     work: "M3 3.5 H13 M3 8 H13 M3 12.5 H9",
     bug: "M8 3.5 a3 3 0 0 1 3 3 v3 a3 3 0 0 1 -6 0 v-3 a3 3 0 0 1 3 -3 z M3 7 H5 M11 7 H13 M3 11 H5 M11 11 H13",
+    // A page with a folded corner — the same glyph the feed draws for a note event.
+    notes: "M4 2.5 h5.5 l2.5 2.5 v8.5 h-8 z M9.5 2.5 v2.5 h2.5 M6 8 h4 M6 10.5 h4",
     projects: "M2.5 4.5 h4 l1.2 1.6 h5.8 v6.4 h-11 z",
+    // A speech bubble: feedback is agents talking to the app's maintainer.
+    feedback: "M2.5 3.5 h11 v7 h-6.5 l-2.5 2.5 v-2.5 h-2 z M5.5 7 h5",
   };
   return (
     <svg className="nav-icon" viewBox="0 0 16 16" aria-hidden="true">

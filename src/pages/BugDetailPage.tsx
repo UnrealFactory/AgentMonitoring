@@ -13,7 +13,7 @@
  */
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useCurrentProject, useProjectSlug, useVaultNonce } from "../AppContext";
+import { useCurrentProject, useProjectId, useDataNonce } from "../AppContext";
 import { api, failureTitle, nothingToRetry } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useActiveSection } from "../lib/useActiveSection";
@@ -67,13 +67,13 @@ function Stamp({ iso, relative = true }: { iso: string; relative?: boolean }) {
 }
 
 export function BugDetailPage() {
-  const slug = useProjectSlug()!;
+  const projectId = useProjectId()!;
   const project = useCurrentProject();
   const { id = "" } = useParams<{ id: string }>();
   const { data, error, refreshError, status, loading, reload } = useAsync(
-    () => api.getBug(slug, id),
-    [slug, id],
-    useVaultNonce()
+    () => api.getBug(projectId, id),
+    [projectId, id],
+    useDataNonce()
   );
 
   const bug = data;
@@ -81,7 +81,7 @@ export function BugDetailPage() {
   const contextMenu = useContextMenu();
   const recordMenu = useRecordMenu();
   const projectMenu = useProjectMenu();
-  const related = useRelated(slug, id, bug?.refs ?? EMPTY);
+  const related = useRelated(projectId, id, bug?.refs ?? EMPTY);
 
   /**
    * The resolution, split into the parts its author labelled (Root cause / Fix / Verified /
@@ -116,7 +116,7 @@ export function BugDetailPage() {
           message={error}
           onRetry={noRetry ? undefined : reload}
           action={
-            <Link className="button" to={`/p/${slug}/bugs`}>
+            <Link className="button" to={`/p/${projectId}/bugs`}>
               {t("bd.backToBoard")}
             </Link>
           }
@@ -172,7 +172,7 @@ export function BugDetailPage() {
             onRetry={gone ? undefined : reload}
             action={
               gone ? (
-                <Link className="button button-sm" to={`/p/${slug}/bugs`}>
+                <Link className="button button-sm" to={`/p/${projectId}/bugs`}>
                   {t("bd.bugBoard")}
                 </Link>
               ) : undefined
@@ -183,13 +183,13 @@ export function BugDetailPage() {
           {/* Same as the work log's: the crumb names a project, so it opens the project's
               menu. "Bugs" beside it is a list screen and stays plain. */}
           <Link
-            to={`/p/${slug}`}
+            to={`/p/${projectId}`}
             {...contextMenu(() => (project ? projectMenu(project) : null))}
           >
-            {project?.name ?? slug}
+            {project?.name ?? projectId}
           </Link>
           <span aria-hidden="true">/</span>
-          <Link to={`/p/${slug}/bugs`}>{t("nav.bugs")}</Link>
+          <Link to={`/p/${projectId}/bugs`}>{t("nav.bugs")}</Link>
           <span aria-hidden="true">/</span>
           <span className="mono">{bug.id}</span>
         </nav>
@@ -197,7 +197,7 @@ export function BugDetailPage() {
         <header
           className="record-head"
           {...contextMenu(() =>
-            recordMenu({ kind: "bug", id: bug.id, title: bug.title, slug, here: true })
+            recordMenu({ kind: "bug", id: bug.id, title: bug.title, projectId, here: true })
           )}
         >
           <RecordTitle title={bug.title} id={bug.id} />
@@ -280,7 +280,7 @@ export function BugDetailPage() {
               </section>
             )}
 
-            <RelatedSection slug={slug} id={bug.id} kind="bug" related={related} />
+            <RelatedSection projectId={projectId} id={bug.id} kind="bug" related={related} />
 
             {bug.extraSections.map((s) => (
               <section className="record-section" key={s.title}>

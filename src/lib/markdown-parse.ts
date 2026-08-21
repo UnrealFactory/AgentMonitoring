@@ -24,14 +24,29 @@ export type Inline =
   | { kind: "ref"; id: string }
   | { kind: "strong"; children: Inline[] }
   | { kind: "em"; children: Inline[] }
+  | { kind: "del"; children: Inline[] }
+  /** `![alt](src)`. The renderer decides what a src is allowed to be (markdown.tsx). */
+  | { kind: "image"; alt: string; src: string }
   | { kind: "link"; href: string; children: Inline[] };
+
+/** One row of a list. `task` is the checkbox state, or null for an ordinary item. */
+export interface ListItem {
+  text: string;
+  task: "open" | "done" | null;
+}
+
+/** The five callout tones GitHub's `> [!NOTE]` syntax names; anything else stays a quote. */
+export type CalloutTone = "note" | "tip" | "important" | "warning" | "caution";
 
 export type Block =
   | { kind: "heading"; level: number; text: string }
   | { kind: "paragraph"; text: string }
   | { kind: "code"; lang: string; text: string }
-  | { kind: "list"; ordered: boolean; start: number; items: string[] }
+  | { kind: "list"; ordered: boolean; start: number; items: ListItem[] }
   | { kind: "quote"; text: string }
+  | { kind: "callout"; tone: CalloutTone; text: string }
+  /** A paragraph that is exactly one image: drawn as a figure with the alt as caption. */
+  | { kind: "figure"; alt: string; src: string }
   | { kind: "rule" }
   | { kind: "table"; header: string[]; rows: string[][] };
 
@@ -139,15 +154,21 @@ export function parseBlocks(src: string): Block[] {
       const ordered = marker[3] !== undefined;
       // The author's own numbering, kept: a list that opens at 3 renders as 3.
       const start = ordered ? Number(marker[3]) : 1;
-      const items: string[] = [];
+      const items: ListItem[] = [];
       while (i < lines.length) {
         const m = lines[i].match(LIST_MARKER);
         if (m && (m[3] !== undefined) === ordered) {
-          items.push(m[4]);
+          // `- [ ] item` / `- [x] item`: the checkbox is state, not words.
+          const task = m[4].match(/^\[( |x|X)\]\s+(.*)$/);
+          items.push(
+            task
+              ? { text: task[2], task: task[1] === " " ? "open" : "done" }
+              : { text: m[4], task: null }
+          );
           i += 1;
           // Wrapped continuation lines belong to the item they hang under.
           while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !LIST_MARKER.test(lines[i])) {
-            items[items.length - 1] += ` ${lines[i].trim()}`;
+            items[items.length - 1].text += ` ${lines[i].trim()}`;
             i += 1;
           }
         } else break;
@@ -161,6 +182,19 @@ export function parseBlocks(src: string): Block[] {
       while (i < lines.length && /^\s*>/.test(lines[i])) {
         body.push(lines[i].replace(/^\s*>\s?/, ""));
         i += 1;
+      }
+      /* GitHub's callout dialect: a quote whose first line is exactly `[!NOTE]` (or tip /
+         important / warning / caution) is an aside with a tone, and the marker line is
+         consumed — it is state, like a task's checkbox. A marker with trailing words is
+         not the syntax, and stays a quote, words and all. */
+      const callout = body[0]?.match(/^\[!(note|tip|important|warning|caution)\]\s*$/i);
+      if (callout) {
+        blocks.push({
+          kind: "callout",
+          tone: callout[1].toLowerCase() as CalloutTone,
+          text: body.slice(1).join("\n").trim(),
+        });
+        continue;
       }
       blocks.push({ kind: "quote", text: body.join("\n") });
       continue;
@@ -180,8 +214,14 @@ export function parseBlocks(src: string): Block[] {
       para.push(lines[i]);
       i += 1;
     }
-    if (para.length) blocks.push({ kind: "paragraph", text: para.join("\n") });
-    else i += 1;
+    if (para.length) {
+      const text = para.join("\n");
+      // A paragraph that is exactly one image is a figure — the way agents actually place
+      // a diagram — and its alt is the caption. An image inside a sentence stays inline.
+      const figure = text.trim().match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+      if (figure) blocks.push({ kind: "figure", alt: figure[1], src: figure[2] });
+      else blocks.push({ kind: "paragraph", text });
+    } else i += 1;
   }
 
   return blocks;
@@ -204,12 +244,14 @@ function withRefs(text: string, out: Inline[]): void {
   if (last < text.length) out.push({ kind: "text", text: text.slice(last) });
 }
 
-const INLINE_RE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(\[[^\]]+\]\([^)\s]+\))/g;
+const INLINE_RE =
+  /(`[^`]+`)|(!\[[^\]]*\]\([^)\s]+\))|(~~[^~\n]+~~)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(\[[^\]]+\]\([^)\s]+\))/g;
 
 /**
- * Inline spans: `code`, **bold**, *italic*, [text](href), and bare record ids. Emphasis
- * containers are parsed recursively, so markup inside them is markup and not literal
- * backticks on the screen. `depth` only exists to make runaway nesting impossible.
+ * Inline spans: `code`, `![alt](src)`, ~~struck~~, **bold**, *italic*, [text](href), and
+ * bare record ids. Emphasis containers are parsed recursively, so markup inside them is
+ * markup and not literal backticks on the screen. `depth` only exists to make runaway
+ * nesting impossible.
  */
 export function parseInline(text: string, depth = 0): Inline[] {
   const out: Inline[] = [];
@@ -228,6 +270,12 @@ export function parseInline(text: string, depth = 0): Inline[] {
     const token = m[0];
     if (token.startsWith("`")) {
       out.push({ kind: "code", text: token.slice(1, -1) });
+    } else if (token.startsWith("![")) {
+      const image = token.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+      if (image) out.push({ kind: "image", alt: image[1], src: image[2] });
+      else withRefs(token, out);
+    } else if (token.startsWith("~~")) {
+      out.push({ kind: "del", children: parseInline(token.slice(2, -2), depth + 1) });
     } else if (token.startsWith("**") || token.startsWith("__")) {
       out.push({ kind: "strong", children: parseInline(token.slice(2, -2), depth + 1) });
     } else if (token.startsWith("*")) {
@@ -254,6 +302,10 @@ export function inlineText(nodes: Inline[]): string {
           return n.text;
         case "ref":
           return n.id;
+        case "image":
+          // The source syntax, not just the alt: a flattened record must still say which
+          // file it showed (scripts/markdown-smoke.mjs sweeps on exactly this).
+          return `![${n.alt}](${n.src})`;
         default:
           return inlineText(n.children);
       }

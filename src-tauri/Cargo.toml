@@ -20,6 +20,15 @@ agentmon-core = { workspace = true }
 notify = "8"
 serde = { workspace = true }
 serde_json = { workspace = true }
-tauri = { version = "2", features = [] }
+# `tray-icon`: closing the window hides it to the tray so the watchers keep running;
+# the tray menu (and only the tray menu) can actually quit the app.
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+# A second launch while the first instance sits in the tray must surface that window,
+# not start another process watching the same folders.
+tauri-plugin-single-instance = "2"
+# The update check (src/update.rs): one GET to the GitHub Releases API from the Rust
+# side, so the WebView's CSP keeps its no-network shape. Blocking on purpose — it runs
+# inside spawn_blocking, and an async client would drag a second runtime in.
+ureq = { version = "2", features = ["json"] }

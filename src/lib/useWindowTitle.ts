@@ -19,24 +19,34 @@ const APP = "AgentMonitoring";
 
 /** The screen's own name, in the language on screen — "Work · relay" / "작업 · relay". */
 const screenName = (segment: string): string =>
-  segment === "work" ? t("nav.work") : segment === "bugs" ? t("nav.bugs") : segment;
+  segment === "work"
+    ? t("nav.work")
+    : segment === "bugs"
+      ? t("nav.bugs")
+      : segment === "notes"
+        ? t("nav.notes")
+        : segment;
 
 export function useWindowTitle() {
   const location = useLocation();
-  const { vault, projects, locale } = useApp();
+  const { projects, locale } = useApp();
 
   useEffect(() => {
     const parts = location.pathname.split("/").filter(Boolean);
-    const slug = parts[0] === "p" ? parts[1] : undefined;
-    const project = projects.find((p) => p.slug === slug);
+    const id = parts[0] === "p" ? parts[1] : undefined;
+    const project = projects.find((p) => p.id === id);
 
     let where: string;
     if (parts[0] === "projects") where = t("nav.projects");
-    else if (!slug) where = "";
+    else if (!id) where = "";
     else {
-      const name = project?.name ?? slug;
+      const name = project?.name ?? id;
       const screen = parts[2] ? screenName(parts[2]) : null;
-      const record = parts[3]?.toUpperCase();
+      /* WORK-0012 and BUG-0004 are ids and wear their canonical upper case; a note's name
+         is a kebab word and upper-casing it would print REGISTRY-GATE-GOTCHA in the task
+         switcher — a name nobody typed. */
+      const record =
+        parts[3] && (parts[2] === "notes" ? parts[3] : parts[3].toUpperCase());
       where = record
         ? `${record} · ${name}`
         : screen
@@ -44,11 +54,7 @@ export function useWindowTitle() {
           : name;
     }
 
-    /* The vault's name only when it is not the app's own: this app's vault is called
-       "AgentMonitoring", and "Projects · AgentMonitoring — AgentMonitoring" is a title bar
-       saying one thing three times. */
-    const vaultName = vault?.name && vault.name !== APP ? ` — ${vault.name}` : "";
-    const title = where ? `${where} · ${APP}${vaultName}` : `${APP}${vaultName}`;
+    const title = where ? `${where} · ${APP}` : APP;
     document.title = title;
     if (isTauri()) {
       import("@tauri-apps/api/window")
@@ -70,5 +76,5 @@ export function useWindowTitle() {
     }
     // `locale` is in the dependency list because the title is words: the window in the task
     // switcher has to change language with the screen it names.
-  }, [location.pathname, projects, vault?.name, locale]);
+  }, [location.pathname, projects, locale]);
 }

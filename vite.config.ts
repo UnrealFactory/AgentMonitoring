@@ -1,15 +1,16 @@
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-// Plain JS so the screenshot tooling and the dev server share one vault reader.
+// Plain JS so the screenshot tooling and the dev server share one project reader.
 // @ts-ignore -- untyped local module
-import { vaultApiPlugin } from "./scripts/vite-vault-api.mjs";
+import { projectApiPlugin } from "./scripts/vite-project-api.mjs";
 
 // Tauri drives the dev server through `npm run tauri:dev`; the port must stay fixed
 // because tauri.conf.json points devUrl at it.
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
-  plugins: [react(), vaultApiPlugin({ root: process.cwd() })],
+  plugins: [react(), projectApiPlugin({ root: process.cwd() })],
   clearScreen: false,
   optimizeDeps: {
     /**
@@ -28,10 +29,21 @@ export default defineConfig({
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 5174 } : undefined,
     watch: {
-      // The Rust side is rebuilt by cargo, not by vite. The vault is data, not source:
-      // the app notices a write by polling /vault-api/cursor and refreshing in place, and
+      // The Rust side is rebuilt by cargo, not by vite. The AgentMonitoring folder is data:
+      // the app notices a write by polling /project-api/cursor and refreshing in place, and
       // a dev-server reload on top of that would throw away the page it just updated.
-      ignored: ["**/src-tauri/**", "**/target/**", "**/vault/**"],
+      //
+      // The data-folder pattern is **anchored to the repo root**, not `**/AgentMonitoring/**`:
+      // this repo's own directory is *named* AgentMonitoring, so the any-depth glob matched
+      // every source file in the project and silently killed file watching — the dev server
+      // (and tauri:dev's) then served stale transforms of edited files until it was
+      // restarted, and HMR never fired at all (found while WORK-0039's hook refused to
+      // exist in a running session; BUG-0025).
+      ignored: [
+        "**/src-tauri/**",
+        "**/target/**",
+        resolve(process.cwd(), "AgentMonitoring").replace(/\\/g, "/") + "/**",
+      ],
     },
   },
   build: {

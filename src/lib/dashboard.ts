@@ -413,6 +413,8 @@ export interface AgentRow {
   work: number;
   /** Bug events (filed / claimed / commented / resolved / closed) recorded by this agent. */
   bugs: number;
+  /** Note events (left / revised / removed) recorded by this agent. */
+  notes: number;
   /**
    * Project events (created / updated). Counted like the rest, because the table used to
    * drop them: relay's four agents added up to 83 under an Activity card that said 85, and
@@ -451,6 +453,7 @@ export function agentRows(events: VaultEvent[], works: WorklogSummary[]): AgentR
         agent,
         work: 0,
         bugs: 0,
+        notes: 0,
         project: 0,
         total: 0,
         done: 0,
@@ -470,6 +473,7 @@ export function agentRows(events: VaultEvent[], works: WorklogSummary[]): AgentR
     const r = row(e.actor);
     if (e.type.startsWith("project_")) r.project += 1;
     else if (e.type.startsWith("bug_")) r.bugs += 1;
+    else if (e.type.startsWith("note_")) r.notes += 1;
     else r.work += 1;
     r.total += 1;
     if (e.type === "work_done") r.done += 1;
@@ -501,7 +505,7 @@ export function agentRows(events: VaultEvent[], works: WorklogSummary[]): AgentR
    The activity feed, cut into days
    ----------------------------------------------------------------------- */
 
-export type EventTone = "work" | "done" | "bug" | "resolved" | "neutral";
+export type EventTone = "work" | "done" | "bug" | "resolved" | "note" | "neutral";
 
 export interface DayGroup {
   /** UTC midnight of the day, epoch ms — also the group's key, and all its words need. */
@@ -522,10 +526,14 @@ export function tone(type: string): EventTone {
   if (type.startsWith("work_")) return "work";
   if (type === "bug_resolved" || type === "bug_closed") return "resolved";
   if (type.startsWith("bug_")) return "bug";
+  if (type.startsWith("note_")) return "note";
   return "neutral";
 }
 
-export const TONE_ORDER: EventTone[] = ["work", "done", "bug", "resolved", "neutral"];
+/* Note sits between done and bug on purpose: those neighbours clear the palette
+   validator, and its risky pairs (fix, the neutral grey) never touch it — see the
+   --series-note comment in styles/tokens.css. */
+export const TONE_ORDER: EventTone[] = ["work", "done", "note", "bug", "resolved", "neutral"];
 
 /**
  * What each tone means in words, and the token it is drawn in. The day strip in the feed
@@ -541,13 +549,16 @@ export const toneLabel = (tone: EventTone): string =>
         ? t("tone.bug")
         : tone === "resolved"
           ? t("tone.resolved")
-          : t("tone.neutral");
+          : tone === "note"
+            ? t("tone.note")
+            : t("tone.neutral");
 
 export const TONE_COLOR: Record<EventTone, string> = {
   work: "var(--series-work)",
   done: "var(--series-done)",
   bug: "var(--series-bug)",
   resolved: "var(--series-fix)",
+  note: "var(--series-note)",
   neutral: "var(--grey)",
 };
 
@@ -685,6 +696,12 @@ const RECENT_KEY: Record<string, RecentKey> = {
   bug_claimed: "recent.claimed",
   bug_resolved: "recent.resolved",
   bug_closed: "recent.closed",
+  // The shared notes (memory / handoff / decision / reference) are one act in a day's
+  // summary — somebody put knowledge where the next agent will find it — whether the
+  // file was created, rewritten or taken away.
+  note_created: "recent.sharedNotes",
+  note_updated: "recent.sharedNotes",
+  note_removed: "recent.sharedNotes",
   project_created: "recent.project",
   project_updated: "recent.project",
 };
@@ -698,6 +715,7 @@ type RecentKey =
   | "recent.claimed"
   | "recent.resolved"
   | "recent.closed"
+  | "recent.sharedNotes"
   | "recent.project"
   | "recent.other";
 
@@ -711,6 +729,7 @@ const RECENT_ORDER: RecentKey[] = [
   "recent.claimed",
   "recent.abandoned",
   "recent.closed",
+  "recent.sharedNotes",
   "recent.project",
   "recent.other",
 ];
@@ -922,6 +941,9 @@ export function refHref(slug: string, ref: string | null): string | null {
   if (!ref) return null;
   if (/^WORK-\d+$/.test(ref)) return `/p/${slug}/work/${ref}`;
   if (/^BUG-\d+$/.test(ref)) return `/p/${slug}/bugs/${ref}`;
+  // A note's ref is its kebab name. A removed note's line still links — the notes screen
+  // answers a name that is gone with the same stale-link card every dead ref gets.
+  if (/^[a-z0-9][a-z0-9-]{0,63}$/.test(ref)) return `/p/${slug}/notes/${ref}`;
   return null;
 }
 
@@ -942,6 +964,9 @@ const VERB_KEY: Record<EventType, `verb.${EventType}`> = {
   bug_commented: "verb.bug_commented",
   bug_resolved: "verb.bug_resolved",
   bug_closed: "verb.bug_closed",
+  note_created: "verb.note_created",
+  note_updated: "verb.note_updated",
+  note_removed: "verb.note_removed",
   project_created: "verb.project_created",
   project_updated: "verb.project_updated",
 };

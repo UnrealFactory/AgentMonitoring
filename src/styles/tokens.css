@@ -119,6 +119,16 @@
   --series-bug-wash: rgba(211, 124, 40, 0.14);
   --series-fix: #9b7eec;
   --series-fix-wash: rgba(155, 126, 236, 0.13);
+  /* Notes (the third record kind). Magenta, validated the same way against the pairs
+     that are actually drawn beside it — the strips order themselves so a note segment
+     only ever touches work, done or bug: work↔note ΔE 12.9, bug↔note 17.1 normal /
+     ≥9.8 CVD, done↔note 6.3 deutan (in the with-secondary-encoding band; every strip
+     that draws it has 2px gaps, a worded legend and the counts printed as text).
+     Teal was rejected outright — ΔE 5.7 from --series-done to normal vision — and
+     note↔fix / note↔grey are kept non-adjacent, the same rule that keeps blue and
+     purple out of one chart. Never on the burn-ups. */
+  --series-note: #c9629b;
+  --series-note-wash: rgba(201, 98, 155, 0.13);
 
   /* chart chrome: one step off the surface, recessive, never dashed */
   --chart-grid: #26272b;
@@ -355,7 +365,8 @@ dt {
    warning broke "지워집니다" across two lines (caught by the word-integrity sweep in
    scripts/check-i18n.mjs the first time that dialog was read at 1600px). */
 .modal-warn,
-.modal-note {
+.modal-note,
+.note-foot {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
@@ -394,7 +405,8 @@ dt {
 .prose,
 .project-desc,
 .now-row-title,
-.feed-summary {
+.feed-summary,
+.note-lead {
   word-break: keep-all;
   overflow-wrap: break-word;
 }

@@ -1,20 +1,32 @@
 /**
- * Wire types for the vault API. These mirror the serde output of agentmon-core
- * exactly; both transports (Tauri `invoke` and `/vault-api/*`) return these shapes.
+ * Wire types for the project API (schema v2). These mirror the serde output of
+ * agentmon-core exactly; both transports (Tauri `invoke` and `/project-api/*`) return
+ * these shapes.
  */
 
 export type WorkStatus = "in_progress" | "done" | "abandoned";
 export type BugStatus = "open" | "in_progress" | "resolved" | "closed";
 export type Severity = "critical" | "high" | "medium" | "low";
+/** What a note is for: the reader's first filter (see SPEC.md, notes). */
+export type NoteType = "memory" | "handoff" | "decision" | "reference";
+export type FeedbackKind = "bug" | "idea";
+export type FeedbackStatus = "open" | "done";
 
-export interface VaultInfo {
-  version: number;
-  name: string;
-  createdAt: string | null;
-  /** Absolute path of the vault on this machine. */
-  path: string;
-  /** How it was resolved: flag | env | cwd/vault | cwd. */
-  source: string;
+/**
+ * A bug or wish an agent filed **about this app itself** — machine-level, belonging to
+ * no project (`~/.AgentMonitoring/feedback/FB-NNNN.md`).
+ */
+export interface FeedbackItem {
+  id: string;
+  title: string;
+  type: FeedbackKind;
+  agent: string;
+  status: FeedbackStatus;
+  created: string;
+  /** When the human marked it handled; null while open. */
+  done: string | null;
+  /** Short markdown prose; may be empty — a title can carry a whole wish. */
+  body: string;
 }
 
 export interface ProjectCounts {
@@ -23,27 +35,37 @@ export interface ProjectCounts {
   workDone: number;
   bugsTotal: number;
   bugsOpen: number;
+  notesTotal: number;
   events: number;
   lastActivity: string | null;
 }
 
 export interface Project {
+  /** Schema version of project.json — always 2 for anything this build reads. */
+  version: number;
   id: string;
-  slug: string;
   name: string;
   description: string;
-  /**
-   * The v1 schema's `active | archived` field, still written by
-   * `agentmon project update --status` and still carried by both readers — **and ignored by
-   * every screen in this app**. Archiving was removed from the product (P12): a project the
-   * human has stopped using is deleted, not filed away, and a status the app reads nowhere
-   * cannot make a project half-visible. Kept on the wire because v1 files in the wild carry
-   * it and a reader that dropped it would rewrite them.
-   */
-  status: string;
   tags: string[];
   createdAt: string | null;
   counts: ProjectCounts;
+  /** Absolute path of the AgentMonitoring folder on this machine (reader-filled). */
+  path: string;
+  /** How the folder was resolved: flag | env | walk | registry. */
+  source: string;
+}
+
+/**
+ * One row of the project list: a registered path, and the project inside it when the
+ * folder is reachable. An unavailable row (unplugged drive, moved folder) still renders —
+ * dimmed, by the name the registry last saw — instead of failing the whole list.
+ */
+export interface ProjectRow {
+  available: boolean;
+  path: string;
+  name: string | null;
+  project?: Project;
+  error?: string;
 }
 
 /**
@@ -51,11 +73,11 @@ export interface Project {
  * `api.deleteProject`, since the record it would otherwise return no longer exists.
  *
  * Mirrors `agentmon_core::Deleted` (crates/agentmon-core/src/write.rs) and the JSON the
- * dev server's `DELETE /vault-api/projects/:slug` returns.
+ * dev server's `DELETE /project-api/projects/:id` returns.
  */
 export interface DeletedProject {
   ok: boolean;
-  slug: string;
+  id: string;
   name: string;
   /** The directory that was removed, as it resolved on this machine. */
   path: string;
@@ -73,6 +95,9 @@ export type EventType =
   | "bug_commented"
   | "bug_resolved"
   | "bug_closed"
+  | "note_created"
+  | "note_updated"
+  | "note_removed"
   | "project_created"
   | "project_updated";
 
@@ -164,12 +189,52 @@ export interface BugDetail extends BugMeta {
   body: string;
 }
 
+/**
+ * A note: the third record kind. Work logs and bugs are history; a note is shared
+ * knowledge — memory, handoff, decision or reference — updated in place and removable,
+ * with the trail of edits living in the event log. Its identity is `name` (kebab-case,
+ * also the file name), not a numeric id.
+ */
+interface NoteMeta {
+  name: string;
+  title: string;
+  type: NoteType;
+  /** One line every list shows: the hook a reader scans to decide whether to open it. */
+  description: string;
+  /** Who created it. The full edit trail is the event feed's. */
+  agent: string;
+  /**
+   * Who last rewrote it — the agent whose words the current body is. Null until the
+   * first update. Lists pair an agent with the updated time, so the agent they show is
+   * this one (falling back to the author); the detail page shows both.
+   */
+  updatedBy: string | null;
+  created: string;
+  updated: string;
+  tags: string[];
+  refs: string[];
+  lastActivity: string;
+}
+
+export interface NoteSummary extends NoteMeta {
+  /** First paragraph of the body, for previews where the description is already shown. */
+  excerpt: string;
+  /** Description + body flattened to one line, for search. */
+  searchText: string;
+}
+
+export interface NoteDetail extends NoteMeta {
+  /** Untouched markdown body — notes have no mandated sections. */
+  body: string;
+}
+
 export interface AgentActivity {
   agent: string;
   inProgress: number;
   done: number;
   bugsReported: number;
   bugsResolved: number;
+  notes: number;
   lastActivity: string;
 }
 
@@ -177,6 +242,7 @@ export interface ProjectStatusSnapshot {
   project: Project;
   activeWork: WorklogSummary[];
   openBugs: BugSummary[];
+  recentNotes: NoteSummary[];
   recentEvents: VaultEvent[];
   agents: AgentActivity[];
 }

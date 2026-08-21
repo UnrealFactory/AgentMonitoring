@@ -29,10 +29,10 @@ const BOOT_TIMEOUT_MS = 90_000;
 const WARM_DEPS = ["react", "react-dom/client", "react-router-dom", "@tauri-apps/api/window"];
 const WARM_TIMEOUT_MS = 60_000;
 
-/** The vault info from a server already answering on `origin`, or null. */
+/** The project rows from a server already answering on `origin`, or null. */
 export async function ping(origin) {
   try {
-    const res = await fetch(`${origin}/vault-api/vault`, { signal: AbortSignal.timeout(1500) });
+    const res = await fetch(`${origin}/project-api/projects`, { signal: AbortSignal.timeout(1500) });
     return res.ok ? await res.json() : null;
   } catch {
     return null;
@@ -42,8 +42,8 @@ export async function ping(origin) {
 /**
  * @param {number} port
  * @param {{ root?: string, env?: Record<string, string> }} [options]
- *   `env` adds to the server's environment — `AGENTMON_VAULT` above all, so a tool can
- *   drive the app against a throwaway copy of the vault instead of the live one.
+ *   `env` adds to the server's environment — `AGENTMON_DIRS` above all, so a tool can
+ *   drive the app against a throwaway copy of the records instead of the live ones.
  */
 export function startServer(port, { root = repoRoot, env = {} } = {}) {
   const child = spawn(
@@ -66,14 +66,14 @@ export async function waitForServer(child, origin, timeoutMs = BOOT_TIMEOUT_MS) 
     if (child && child.exitCode !== null) {
       throw new Error(`dev server exited early with code ${child.exitCode}`);
     }
-    const info = await ping(origin);
-    if (info) {
+    const rows = await ping(origin);
+    if (rows) {
       await warmOptimizer(origin);
-      return info;
+      return rows;
     }
     await new Promise((r) => setTimeout(r, 250));
   }
-  throw new Error(`vault API did not answer on ${origin} within ${timeoutMs / 1000}s`);
+  throw new Error(`project API did not answer on ${origin} within ${timeoutMs / 1000}s`);
 }
 
 /**
@@ -131,9 +131,10 @@ export function stopServer(child) {
 /**
  * Reuse the server on `origin` or start one on `port`.
  *
- * Returns `{ vault, server }`; `server` is null when an existing one was reused, and the
- * caller is responsible for `stopServer(server)` when it is not. `requireRunning` is for
- * `--url`: point at somebody else's server and fail loudly if nothing is there.
+ * Returns `{ projects, server }`; `projects` is the row list the server answered with,
+ * `server` is null when an existing one was reused, and the caller is responsible for
+ * `stopServer(server)` when it is not. `requireRunning` is for `--url`: point at somebody
+ * else's server and fail loudly if nothing is there.
  */
 export async function ensureServer({ origin, port, requireRunning = false, log = () => {} }) {
   const running = await ping(origin);
@@ -141,10 +142,10 @@ export async function ensureServer({ origin, port, requireRunning = false, log =
     log(`using the server already listening on ${origin}`);
     // Cheap when it has already settled, and the server may have been started a second ago.
     await warmOptimizer(origin);
-    return { vault: running, server: null };
+    return { projects: running, server: null };
   }
   if (requireRunning) throw new Error(`nothing is serving ${origin}`);
   log("starting vite dev server…");
   const server = startServer(port);
-  return { vault: await waitForServer(server, origin), server };
+  return { projects: await waitForServer(server, origin), server };
 }

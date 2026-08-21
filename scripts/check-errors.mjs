@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Every way the vault can say no, read through the app's own words — on **both transports**.
+ * Every way the records can say no, read through the app's own words — on **both
+ * transports** where both can reach the condition.
  *
  *   npm run check:errors
  *   node scripts/check-errors.mjs [--port 5173] [--locale ko|en] [-v]
@@ -10,38 +11,34 @@
  * `npm run check:i18n` walks the rendered screens, which is the only way to catch a string
  * that never reaches the dictionary — but it drives the Vite dev server, and the dev server
  * is not the product. The desktop app calls `agentmon-core` in process, and core writes
- * sentences the middleware in `scripts/vault-fs.mjs` does not:
+ * clauses the middleware in `scripts/project-fs.mjs` does not:
  *
- *   record 'BUG-9999' not found in project 'agent-monitoring' (expected file C:\…\BUG-9999.md)
- *   project 'nosuch' not found in vault C:\…\vault (run `agentmon project list` to see projects)
+ *   record 'BUG-9999' not found in this project (expected file C:\…\BUG-9999.md)
  *   invalid id 'NOTANID': expected the form BUG-NNNN (e.g. BUG-0001)
  *
- * Both hint clauses and the whole `invalid id` shape exist only in Rust. No browser gate can
- * reach them, and for two rounds nobody did: the first clause reached Korean readers as
- * "찾은 파일 경로" (*the path that was found* — the opposite of what happened), run together
- * with the sentence before it into one line with no boundary; the third reached them as
- * untranslated English under a headline that blamed the disk. The desktop app also has no
- * HTTP status to hand `failureTitle`, so every stale link in the shipping product was
- * headlined "볼트를 읽지 못했습니다" while browser mode — the half the gates could see —
- * said "이 프로젝트에 BUG-9999 기록이 없습니다" for the identical condition.
+ * The hint clause and the whole `invalid id` shape exist only in Rust. No browser gate can
+ * reach them. The desktop app also has no HTTP status to hand `failureTitle`, so a stale
+ * link must classify off the *message* — this gate is what proves the two transports
+ * cannot disagree about one condition.
  *
- * So this gate provokes each failure **twice**: once from the real `agentmon` binary, whose
- * `--json` envelope carries the exact `message` the desktop app receives (`e.to_string()` in
- * src-tauri/src/lib.rs) and core's own machine `kind`; once from the dev server, which
- * answers with a message and an HTTP status. Then it reads both through the real
- * `src/lib/api.ts` — not a copy — and requires that:
+ * So each failure is provoked from the real `agentmon` binary and/or the dev server, then
+ * both answers are read through the real `src/lib/api.ts` — not a copy — and the gate
+ * requires that:
  *
- *   1. **The two transports say the same thing.** Same {@link failureKind}, same headline,
- *      same answer to "is there anything a retry could fix". A status is a fact about HTTP,
- *      not about a vault, and no screen may be built on one.
+ *   1. **The two transports say the same thing** where both can be asked. Same
+ *      {@link failureKind}, same headline, same answer to "is there anything a retry could
+ *      fix". A status is a fact about HTTP, not about a folder of records.
  *   2. **The app agrees with core.** `failureKind` matches `CoreError::kind()`, so a new
- *      variant in Rust cannot quietly land in "could not read the vault".
+ *      variant in Rust cannot quietly land in "could not read the project".
  *   3. **Nothing arrives in the wrong language**, code spans and technical tokens aside.
  *   4. **The sentences are sentences.** A clause that ends and another that begins are
  *      separated by punctuation the reader can see.
  *
- * It prints the finished card — headline and body, both languages — so a human reviewing a
- * round reads the Korean the desktop app will actually show, without building the desktop app.
+ * v2 note: two conditions are structurally one-transport. "No project found at <path>" is
+ * how the CLI (and core, in the desktop app) reports a folder with no project — the app's
+ * screens never see it, because the app reads by id off its registry. "No project with id
+ * '<id>' is registered" is that registry sentence, and the CLI has no id lookup to provoke
+ * it with. Each is checked on the transport that can produce it.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync } from "node:fs";
@@ -51,7 +48,7 @@ import { join } from "node:path";
 import { ensureServer, stopServer, repoRoot } from "./dev-server.mjs";
 
 register("./ts-hooks.mjs", import.meta.url);
-const { failureKind, failureTitle, nothingToRetry, vaultErrorMessage } = await import(
+const { failureKind, failureTitle, nothingToRetry, projectErrorMessage } = await import(
   "../src/lib/api.ts"
 );
 const { setLocale, LOCALES } = await import("../src/lib/i18n/index.ts");
@@ -81,7 +78,9 @@ const VERBOSE = flag("-v") || flag("--verbose");
 const PORT = Number(value("--port", "5173"));
 const ORIGIN = `http://localhost:${PORT}`;
 const LANGS = flag("--locale") ? [value("--locale", "ko")] : LOCALES;
-const VAULT = join(repoRoot, "vault");
+/** The repo's own project folder — real data, and the id inside it. */
+const DATA = join(repoRoot, "AgentMonitoring");
+const PROJECT_ID = "prj-agent-monitoring";
 const log = (msg) => console.log(`[check-errors] ${msg}`);
 
 const exe = process.platform === "win32" ? "agentmon.exe" : "agentmon";
@@ -98,80 +97,75 @@ if (!BIN) {
   process.exit(1);
 }
 
-/**
- * A folder that exists and is not a vault, for the "no vault here" case. `docs/` is the one
- * the browser twin uses too (check-i18n.mjs), because the message names the directory and a
- * placeholder path would make it a different message.
- */
-const NO_VAULT_DIR = join(repoRoot, "docs");
-/** A directory that exists and holds nothing at all, for the CLI's own `--vault`. */
+/** A directory that exists and holds no project, for the CLI's own `--dir`. */
 const EMPTY_DIR = mkdtempSync(join(tmpdir(), "agentmon-check-"));
 
 /**
- * The failures a reader can actually reach, each one asked of both backends.
+ * The failures a reader can actually reach.
  *
  * `cli` is what an agent (or the desktop app, through the same core) runs; `url` is the
- * route the browser build asks for in the same situation; `id` is the record id the address
- * carried, which the detail screens hand to `failureTitle`. `kind` is what
- * `CoreError::kind()` must call it — the third opinion, from Rust.
+ * route the browser build asks for in the same situation; `id` is the record id the
+ * address carried, which the detail screens hand to `failureTitle`. `kind` is what
+ * `CoreError::kind()` must call it — the third opinion, from Rust. A case with no `cli`
+ * or no `url` is one only that transport can produce (see the header).
  */
 const CASES = [
   {
     name: "stale bug link",
-    cli: ["bug", "view", "BUG-9999", "-p", "agent-monitoring"],
-    url: "/vault-api/projects/agent-monitoring/bugs/BUG-9999",
+    cli: ["bug", "view", "BUG-9999"],
+    url: `/project-api/projects/${PROJECT_ID}/bugs/BUG-9999`,
     id: "BUG-9999",
     kind: "record_not_found",
     expect: "no_record",
   },
   {
     name: "stale work link",
-    cli: ["work", "view", "WORK-9999", "-p", "agent-monitoring"],
-    url: "/vault-api/projects/agent-monitoring/worklogs/WORK-9999",
+    cli: ["work", "view", "WORK-9999"],
+    url: `/project-api/projects/${PROJECT_ID}/worklogs/WORK-9999`,
     id: "WORK-9999",
     kind: "record_not_found",
     expect: "no_record",
   },
   {
-    name: "project nobody owns",
-    cli: ["work", "list", "-p", "does-not-exist"],
-    url: "/vault-api/projects/does-not-exist/worklogs",
-    id: null,
-    kind: "project_not_found",
-    expect: "no_project",
-  },
-  {
-    name: "project nobody owns, dashboard",
-    cli: ["status", "-p", "does-not-exist"],
-    url: "/vault-api/projects/does-not-exist/status",
-    id: null,
-    kind: "project_not_found",
-    expect: "no_project",
-  },
-  {
     name: "an id that cannot be a record",
-    cli: ["bug", "view", "NOTANID", "-p", "agent-monitoring"],
-    url: "/vault-api/projects/agent-monitoring/bugs/NOTANID",
+    cli: ["bug", "view", "NOTANID"],
+    url: `/project-api/projects/${PROJECT_ID}/bugs/NOTANID`,
     id: "NOTANID",
     kind: "invalid_argument",
     expect: "bad_address",
   },
   {
-    name: "a slug that cannot be a project",
-    cli: ["work", "list", "-p", "Bad Slug"],
-    url: `/vault-api/projects/${encodeURIComponent("Bad Slug")}/worklogs`,
-    id: null,
+    name: "stale note link",
+    cli: ["note", "view", "no-such-note"],
+    url: `/project-api/projects/${PROJECT_ID}/notes/no-such-note`,
+    id: "no-such-note",
+    kind: "record_not_found",
+    expect: "no_record",
+  },
+  {
+    /* A note's address is a kebab name, so it has its own way of being unusable — and its
+       own `expected the form …` clause, written twice (Rust and the JS twin) on purpose. */
+    name: "a name that cannot be a note",
+    cli: ["note", "view", "UPPER..bad"],
+    url: `/project-api/projects/${PROJECT_ID}/notes/UPPER..bad`,
+    id: "UPPER..bad",
     kind: "invalid_argument",
     expect: "bad_address",
   },
   {
-    name: "a folder that is not a vault",
-    cli: ["work", "list", "-p", "agent-monitoring"],
-    vault: EMPTY_DIR,
-    url: `/vault-api/projects?vault=${encodeURIComponent(NO_VAULT_DIR)}`,
+    name: "a folder with no project (CLI)",
+    cli: ["work", "list"],
+    dir: EMPTY_DIR,
     id: null,
-    kind: "vault_not_found",
-    expect: "unreadable",
+    kind: "project_not_found",
+    expect: "no_project",
+  },
+  {
+    name: "a project id not on this machine (app)",
+    url: "/project-api/projects/prj-nobody-has-this/worklogs",
+    id: null,
+    kind: "project_not_found",
+    expect: "no_project",
   },
 ];
 
@@ -180,14 +174,13 @@ const KIND_MAP = {
   record_not_found: "no_record",
   project_not_found: "no_project",
   invalid_argument: "bad_address",
-  vault_not_found: "unreadable",
-  invalid_vault: "unreadable",
+  invalid_project: "unreadable",
   io_error: "unreadable",
 };
 
 /** Ask the real binary. Returns core's own `{ kind, message }`. */
 function askCli(testCase) {
-  const argv = ["--json", "--vault", testCase.vault ?? VAULT, ...testCase.cli];
+  const argv = ["--json", "--dir", testCase.dir ?? DATA, ...testCase.cli];
   const run = spawnSync(BIN, argv, { encoding: "utf8" });
   if (run.error) throw new Error(`${BIN}: ${run.error.message}`);
   let parsed;
@@ -200,7 +193,7 @@ function askCli(testCase) {
     );
   }
   if (parsed.ok !== false || !parsed.error?.message) {
-    throw new Error(`[${testCase.cli.join(" ")}] did not fail — the vault has changed?`);
+    throw new Error(`[${testCase.cli.join(" ")}] did not fail — the data has changed?`);
   }
   return { kind: parsed.error.kind, message: parsed.error.message };
 }
@@ -227,16 +220,16 @@ async function askServer(testCase) {
 const withoutCode = (text) => text.replace(/`[^`]*`/g, " ");
 
 /**
- * Latin the app is right to print in Korean: the product's name, the CLI's name, the
- * initialisms Korean writes in Latin too, and any record id — `BUG-9999` is the reader's own
- * address, printed back to them. Anything else outside a code span is a message that arrived
- * untranslated.
+ * Latin the app is right to print in Korean: the product's name (which is also the data
+ * folder's name), the CLI's name, the initialisms Korean writes in Latin too, and any
+ * record id — `BUG-9999` is the reader's own address, printed back to them. Anything else
+ * outside a code span is a message that arrived untranslated.
  */
-const ALLOWED = /\b(AgentMonitoring|agentmon|ID|UTC|API|CLI|JSON|vault\.json|[A-Z]{2,}-\d+)\b/g;
+const ALLOWED = /\b(AgentMonitoring|agentmon|ID|UTC|API|CLI|JSON|project\.json|[A-Z]{2,}-\d+|prj-[a-z0-9-]+)\b/g;
 
 const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** @param {string[]} data slugs and ids this failure was asked about: the app prints them back. */
+/** @param {string[]} data ids this failure was asked about: the app prints them back. */
 const latinIn = (text, data = []) => {
   let rest = withoutCode(text).replace(ALLOWED, " ");
   for (const token of data) rest = rest.replace(new RegExp(escape(token), "g"), " ");
@@ -276,62 +269,71 @@ try {
   log(`${CASES.length} failures × ${LANGS.length} language(s) · binary ${BIN}`);
 
   for (const testCase of CASES) {
-    const desktop = askCli(testCase);
-    const browser = await askServer(testCase);
+    const desktop = testCase.cli ? askCli(testCase) : null;
+    const browser = testCase.url ? await askServer(testCase) : null;
     checked += 1;
 
     /* 1. The app's classification agrees with core's own. */
-    const want = KIND_MAP[desktop.kind];
-    if (!want) fail(testCase.name, `core kind "${desktop.kind}" is not in KIND_MAP`);
-    const gotDesktop = failureKind(desktop.message, undefined);
-    const gotBrowser = failureKind(browser.message, browser.status);
-    if (want && gotDesktop !== want) {
-      fail(
-        `${testCase.name} · desktop`,
-        `core says ${desktop.kind} (→ ${want}), the app says ${gotDesktop}\n        ${desktop.message}`
-      );
+    const want = KIND_MAP[testCase.kind];
+    if (!want) fail(testCase.name, `core kind "${testCase.kind}" is not in KIND_MAP`);
+    if (desktop && desktop.kind !== testCase.kind) {
+      fail(`${testCase.name} · desktop`, `core kind is ${desktop.kind}, expected ${testCase.kind}`);
     }
-    if (gotDesktop !== testCase.expect) {
-      fail(`${testCase.name} · desktop`, `expected ${testCase.expect}, got ${gotDesktop}`);
+    const gotDesktop = desktop ? failureKind(desktop.message, undefined) : null;
+    const gotBrowser = browser ? failureKind(browser.message, browser.status) : null;
+    for (const [side, got, message] of [
+      ["desktop", gotDesktop, desktop?.message],
+      ["browser", gotBrowser, browser?.message],
+    ]) {
+      if (got !== null && got !== testCase.expect) {
+        fail(`${testCase.name} · ${side}`, `expected ${testCase.expect}, got ${got}\n        ${message}`);
+      }
     }
 
     /* 2. The two transports answer the same condition the same way. */
-    if (gotDesktop !== gotBrowser) {
-      fail(
-        `${testCase.name} · transports disagree`,
-        `desktop (no status) → ${gotDesktop}; browser (${browser.status}) → ${gotBrowser}`
-      );
-    }
-    if (nothingToRetry(desktop.message, undefined) !== nothingToRetry(browser.message, browser.status)) {
-      fail(
-        `${testCase.name} · transports disagree`,
-        "one of them offers a retry button and the other does not"
-      );
+    if (desktop && browser) {
+      if (gotDesktop !== gotBrowser) {
+        fail(
+          `${testCase.name} · transports disagree`,
+          `desktop (no status) → ${gotDesktop}; browser (${browser.status}) → ${gotBrowser}`
+        );
+      }
+      if (
+        nothingToRetry(desktop.message, undefined) !== nothingToRetry(browser.message, browser.status)
+      ) {
+        fail(
+          `${testCase.name} · transports disagree`,
+          "one of them offers a retry button and the other does not"
+        );
+      }
     }
 
     /* 3. Both sentences, in every language the app ships. */
     for (const locale of LANGS) {
       setLocale(locale, { persist: false });
-      const cards = [
-        ["desktop", failureTitle(desktop.message, undefined, testCase.id), vaultErrorMessage(desktop.message)],
-        ["browser", failureTitle(browser.message, browser.status, testCase.id), vaultErrorMessage(browser.message)],
-      ];
-      if (cards[0][1] !== cards[1][1]) {
+      const cards = [];
+      if (desktop) {
+        cards.push(["desktop", failureTitle(desktop.message, undefined, testCase.id), projectErrorMessage(desktop.message), desktop.message]);
+      }
+      if (browser) {
+        cards.push(["browser", failureTitle(browser.message, browser.status, testCase.id), projectErrorMessage(browser.message), browser.message]);
+      }
+      if (cards.length === 2 && cards[0][1] !== cards[1][1]) {
         fail(
           `${testCase.name} · ${locale} · headline`,
           `desktop: “${cards[0][1]}”\n        browser: “${cards[1][1]}”`
         );
       }
-      for (const [side, title, body] of cards) {
+      for (const [side, title, body, raw] of cards) {
         const where = `${testCase.name} · ${locale} · ${side}`;
-        if (body === (side === "desktop" ? desktop.message : browser.message)) {
+        if (body === raw) {
           fail(where, `nothing in src/lib/api.ts recognises this message:\n        ${body}`);
         }
         if (locale === "ko") {
           /* The address the reader asked for is data, wherever it came from: the id in the
-             route, the slug they typed. The app prints those back verbatim, in either
-             language, exactly as it prints an agent handle or a tag (check-i18n.mjs). */
-          const data = [testCase.id, testCase.cli[testCase.cli.indexOf("-p") + 1]].filter(Boolean);
+             route. The app prints those back verbatim, in either language, exactly as it
+             prints an agent handle or a tag (check-i18n.mjs). */
+          const data = [testCase.id].filter(Boolean);
           const latin = [...latinIn(title, data), ...latinIn(body, data)];
           if (latin.length) fail(where, `English on a Korean screen: ${latin.join(", ")}`);
         }
@@ -346,10 +348,12 @@ try {
 
     if (!VERBOSE) {
       setLocale("ko", { persist: false });
+      const sample = desktop ?? browser;
+      const got = gotDesktop ?? gotBrowser;
       console.log(
-        `  ok  ${testCase.name.padEnd(30)} ${gotDesktop.padEnd(11)} ${failureTitle(desktop.message, undefined, testCase.id)}`
+        `  ok  ${testCase.name.padEnd(38)} ${String(got).padEnd(11)} ${failureTitle(sample.message, browser?.status, testCase.id)}`
       );
-      console.log(`      ${" ".repeat(30)} ${" ".repeat(11)} ${vaultErrorMessage(desktop.message)}`);
+      console.log(`      ${" ".repeat(38)} ${" ".repeat(11)} ${projectErrorMessage(sample.message)}`);
     }
   }
 } catch (err) {
@@ -361,7 +365,7 @@ try {
 
 log(
   failures === 0
-    ? `clean: ${checked} failures, both transports, ${LANGS.join(" + ")} — one condition, one sentence`
+    ? `clean: ${checked} failures, ${LANGS.join(" + ")} — one condition, one sentence`
     : `${failures} problem(s) across ${checked} failures`
 );
 process.exit(failures === 0 ? 0 : 1);
