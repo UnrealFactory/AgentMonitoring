@@ -259,6 +259,38 @@ fn a_timestamp_before_the_state_it_follows_is_refused() {
     );
 }
 
+/**
+ * FB-0001 (2026-08-21): a note whose *message* opened with a `### …` subheading became,
+ * to the old entry splitter, the record's newest note — one whose "timestamp" was that
+ * sentence. Because timestamp comparison falls back to string order on an unparseable
+ * side, and "R7 빌더 …" sorts above every ISO stamp, every later `--at` was refused and
+ * the record could never be updated again. The entry gate (a `###` opens an entry only
+ * when it starts with a date) is what this pins: the next note clears the real floor.
+ */
+#[test]
+fn a_subheading_in_a_note_does_not_brick_the_record() {
+    let tp = TempProject::new("subheading");
+    let id = start_at(&tp, Some(T0));
+
+    tp.store
+        .update_work(
+            &id,
+            "cli-builder",
+            "### R7 빌더 — 삼항 어휘의 거짓 문장 3곳 정정\n\nRound detail.",
+            Some(T1),
+        )
+        .unwrap();
+    // The very shape that was permanently refused: a later note, and a later close.
+    tp.store
+        .update_work(&id, "cli-builder", "Next round, later the same day.", Some(T2))
+        .unwrap();
+    let d = tp.store.worklog(&id).unwrap();
+    assert_eq!(d.updates.len(), 2, "{:?}", d.updates);
+    assert!(d.updates[0].body.contains("### R7 빌더"), "the subheading stays in the body");
+    assert_eq!(d.updates[1].ts, T2);
+    finish(&tp, &id, Some(T2), None).unwrap();
+}
+
 #[test]
 fn work_done_can_correct_the_start_but_not_break_the_order() {
     let tp = TempProject::new("restart");

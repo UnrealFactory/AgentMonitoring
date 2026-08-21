@@ -39,10 +39,16 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../AppContext";
-import { useCopy, type MenuItem, type MenuSpec } from "../components/ContextMenu";
+import {
+  useContextMenuApi,
+  useCopy,
+  type MenuItem,
+  type MenuSpec,
+} from "../components/ContextMenu";
 import { useDeleteProject } from "../components/DeleteProject";
-import { api, isTauri } from "./api";
-import { t } from "./i18n";
+import { plainMarks } from "../components/ui";
+import { api, isTauri, projectErrorMessage, type ScaffoldOutcome } from "./api";
+import { getLocale, t } from "./i18n";
 import { noteCount, unresolvedCount, workLogs } from "./words";
 import type { Project } from "./types";
 
@@ -152,6 +158,46 @@ export function useProjectMenu() {
   const copy = useCopy();
   const requestDelete = useDeleteProject();
   const { refresh } = useApp();
+  const { toast } = useContextMenuApi();
+
+  /* The New-project options, reachable after creation: the CLAUDE.md template and the
+     .mcp.json server path move with the app, and a project made last month has no other
+     way to catch up. Both writes are core's conservative ones (create / append / touch
+     only the agentmon entry), so the item is safe to press twice — the toast conjugates
+     what actually happened. CLAUDE.md is written in the app's current language, the same
+     default the create dialog opens on. */
+  const scaffold = useCallback(
+    (p: Project, kind: "claude" | "mcp") => {
+      void (async () => {
+        const file = kind === "claude" ? "CLAUDE.md" : ".mcp.json";
+        let outcome: ScaffoldOutcome;
+        try {
+          outcome =
+            kind === "claude"
+              ? await api.writeClaudeMd(p.id, getLocale())
+              : await api.writeMcpJson(p.id);
+        } catch (err) {
+          toast(
+            plainMarks(
+              projectErrorMessage(err instanceof Error ? err.message : String(err))
+            ),
+            { tone: "warn" }
+          );
+          return;
+        }
+        toast(
+          outcome === "created"
+            ? t("menu.scaffoldCreated", file)
+            : outcome === "appended"
+              ? t("menu.scaffoldAppended", file)
+              : outcome === "updated"
+                ? t("menu.scaffoldUpdated", file)
+                : t("menu.scaffoldPresent", file)
+        );
+      })();
+    },
+    [toast]
+  );
 
   return useCallback(
     (p: Project): MenuSpec => ({
@@ -188,6 +234,19 @@ export function useProjectMenu() {
           separator: true,
           run: () => copy(p.path, p.path),
         },
+        {
+          id: "claude-md",
+          label: t("menu.claudeMd"),
+          hint: t("menu.claudeMdHint"),
+          separator: true,
+          run: () => scaffold(p, "claude"),
+        },
+        {
+          id: "mcp-json",
+          label: t("menu.mcpJson"),
+          hint: t("menu.mcpJsonHint"),
+          run: () => scaffold(p, "mcp"),
+        },
         /* The undoable way off the list, above the destructive one and nothing like it:
            removing unregisters the path and touches no files. Desktop only — browser
            mode serves a fixed set of folders and has no list to remove from. */
@@ -214,6 +273,6 @@ export function useProjectMenu() {
         },
       ],
     }),
-    [navigate, copy, requestDelete, refresh]
+    [navigate, copy, requestDelete, refresh, scaffold]
   );
 }

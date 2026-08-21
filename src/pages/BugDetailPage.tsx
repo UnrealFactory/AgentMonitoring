@@ -95,13 +95,11 @@ export function BugDetailPage() {
   const locale = useLocale();
   const sections = useMemo(() => {
     if (!bug) return [] as TocEntry[];
-    const out: TocEntry[] = [
-      { id: "report", label: t("bd.report"), count: 0 },
-      { id: "thread", label: t("bd.thread"), count: bug.comments.length },
-    ];
+    const out: TocEntry[] = [{ id: "report", label: t("bd.report"), count: 0 }];
     if (bug.resolution) {
       out.push({ id: "resolution", label: t("bd.resolution"), count: 0 }, ...partsToc(resolution));
     }
+    out.push({ id: "thread", label: t("bd.thread"), count: bug.comments.length });
     if (related.count) out.push({ id: "related", label: t("rec.related"), count: related.count });
     return out;
   }, [bug, related.count, resolution, locale]);
@@ -262,11 +260,14 @@ export function BugDetailPage() {
               )}
             </section>
 
-            <ThreadSection bug={bug} claimDelay={claimDelay} />
-
+            {/* The fix before the thread: it is the newest thing on the record and the
+                thing a reader came for, and the thread below it runs newest-first for
+                the same reason. */}
             {bug.resolution && (
               <ResolutionCard bug={bug} openFor={openFor} resolution={resolution} />
             )}
+
+            <ThreadSection bug={bug} claimDelay={claimDelay} />
 
             {bug.status === "closed" && !bug.resolution && (
               <section className="record-section">
@@ -479,14 +480,15 @@ type ThreadEntry =
   | { kind: "end"; ts: string };
 
 /**
- * The conversation. Comments, the claim and the moment the bug was closed are one
- * chronological thread, because that is how it happened: someone answered, someone picked
- * it up, someone came back with numbers. A comment written *after* the fix — a correction,
- * a follow-up — therefore appears after the fix, where its author put it, rather than being
- * shuffled in front of it by a rail that always ends on the same node.
+ * The conversation, newest at the top: someone came back with numbers, someone picked it
+ * up, someone answered — down to the filing at the bottom, the same one rule as the work
+ * trail (further down is further back). The order *within* the events is still how it
+ * happened: a comment written after the fix — a correction, a follow-up — appears above
+ * the end marker, where its recency puts it, rather than being shuffled behind it by a
+ * rail that always starts on the same node.
  */
 function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string | null }) {
-  // An unfinished bug has no closing timestamp, so its end marker sorts last.
+  // An unfinished bug has no closing timestamp, so its end marker sorts newest.
   const endTs = bug.resolved ?? "￿";
   const rank = (e: ThreadEntry) => (e.kind === "end" ? 1 : 0);
   const entries: ThreadEntry[] = [
@@ -498,9 +500,10 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
       body: c.body,
     })),
     { kind: "end" as const, ts: endTs },
-    // On a tie the end marker goes last: a comment stamped at the same minute as the fix
-    // was written before it, or we cannot tell, and "before" is the safer claim.
-  ].sort((a, b) => a.ts.localeCompare(b.ts) || rank(a) - rank(b));
+    // On a tie the end marker wins: a comment stamped at the same minute as the fix was
+    // written before it, or we cannot tell, and "before" is the safer claim — so in a
+    // newest-first rail it draws *below* the marker.
+  ].sort((a, b) => b.ts.localeCompare(a.ts) || rank(b) - rank(a));
 
   const endLabel = bug.resolved
     ? t("bd.endResolved", bug.resolvedBy ?? t("bd.someAgent"))
@@ -521,25 +524,6 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
       </h2>
 
       <ol className="timeline-rail">
-        <li className="trail-node trail-edge">
-          <span className="trail-dot trail-dot-start" aria-hidden="true" />
-          <div className="trail-edge-text">
-            <span className="trail-edge-label">{t("bd.filedThisBug", bug.reporter)}</span>
-            <span className="trail-edge-time tabular" title={formatDateTimeUtc(bug.created)}>
-              {formatDateTime(bug.created)} · {formatRelative(bug.created)}
-            </span>
-          </div>
-        </li>
-
-        {bug.comments.length === 0 && !bug.claimed && (
-          <li className="trail-node trail-empty">
-            <span className="trail-dot trail-dot-muted" aria-hidden="true" />
-            <p className="trail-empty-text">
-              {t("bd.noAnswers")} <code>agentmon bug comment {bug.id} --message …</code>
-            </p>
-          </li>
-        )}
-
         {entries.map((e, i) =>
           e.kind === "end" ? (
             <li className="trail-node trail-edge" key="end">
@@ -547,12 +531,13 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
               <div className="trail-edge-text">
                 <span className="trail-edge-label">{endLabel}</span>
                 <span className="trail-edge-time tabular">
-                  {/* When the resolution banner follows immediately, it owns the when and
-                      the how long: the thread just hands over to it. If somebody commented
-                      *after* the fix, this node is no longer the last thing in the thread
-                      and has to carry its own date, or the sequence cannot be read. */}
-                  {bug.resolved && bug.resolution && i === entries.length - 1 ? (
-                    <span>{t("bd.fixBelow")}</span>
+                  {/* When the resolution card sits immediately above the thread, it owns
+                      the when and the how long: the thread just hands over to it. If
+                      somebody commented *after* the fix, that comment draws above this
+                      node, which then has to carry its own date, or the sequence cannot
+                      be read. */}
+                  {bug.resolved && bug.resolution && i === 0 ? (
+                    <span>{t("bd.fixAbove")}</span>
                   ) : bug.resolved ? (
                     <span title={formatDateTimeUtc(bug.resolved)}>
                       {formatDateTime(bug.resolved)} · {formatRelative(bug.resolved)} ·{" "}
@@ -612,6 +597,25 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
             </li>
           )
         )}
+
+        {bug.comments.length === 0 && !bug.claimed && (
+          <li className="trail-node trail-empty">
+            <span className="trail-dot trail-dot-muted" aria-hidden="true" />
+            <p className="trail-empty-text">
+              {t("bd.noAnswers")} <code>agentmon bug comment {bug.id} --message …</code>
+            </p>
+          </li>
+        )}
+
+        <li className="trail-node trail-edge">
+          <span className="trail-dot trail-dot-start" aria-hidden="true" />
+          <div className="trail-edge-text">
+            <span className="trail-edge-label">{t("bd.filedThisBug", bug.reporter)}</span>
+            <span className="trail-edge-time tabular" title={formatDateTimeUtc(bug.created)}>
+              {formatDateTime(bug.created)} · {formatRelative(bug.created)}
+            </span>
+          </div>
+        </li>
       </ol>
     </section>
   );

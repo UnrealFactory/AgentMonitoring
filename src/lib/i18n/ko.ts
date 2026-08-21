@@ -207,6 +207,17 @@ export const ko: Dict = {
      title — cannot take 을/를 without knowing how the value ends. Noun-final says the same
      thing and is right whatever is copied. */
   "menu.copiedWhat": (what) => `${what} 복사됨`,
+  /* 새 프로젝트 대화상자의 두 옵션을 만든 뒤에도 누를 수 있게 한 것 — 템플릿과 서버 경로는
+     앱과 함께 움직인다. 쓰기는 코어의 보수적 규칙 그대로라 몇 번 눌러도 안전하고, 토스트가
+     실제로 일어난 일을 말한다. */
+  "menu.claudeMd": "CLAUDE.md 지침 쓰기",
+  "menu.claudeMdHint": "없으면 만들고, 있으면 덧붙입니다",
+  "menu.mcpJson": ".mcp.json MCP 등록",
+  "menu.mcpJsonHint": "agentmon 항목만 갱신 — 다른 서버는 보존",
+  "menu.scaffoldCreated": (file) => `${file} 파일을 만들었습니다`,
+  "menu.scaffoldAppended": (file) => `${file}에 지침을 덧붙였습니다`,
+  "menu.scaffoldUpdated": (file) => `${file}의 agentmon 항목을 갱신했습니다`,
+  "menu.scaffoldPresent": (file) => `${file} — 이미 최신입니다`,
 
   /* -- 프로젝트 삭제 (components/DeleteProject.tsx) ---------------------------
      조사는 프로젝트 이름 뒤가 아니라 "프로젝트" 뒤에 붙는다: 이름은 볼트에서 온 데이터이고,
@@ -497,7 +508,7 @@ export const ko: Dict = {
   "bd.endClosed": "닫힘",
   "bd.endWorking": (agent) => `${agent} — 작업 중입니다`,
   "bd.endWaiting": "담당자를 기다리는 중",
-  "bd.fixBelow": "해결 내용은 아래에 있습니다",
+  "bd.fixAbove": "해결 내용은 위에 있습니다",
   "bd.openFor": (duration) => `열린 지 ${duration}`,
   "bd.addedToReport": "등록 내용 보강",
   "bd.repliedAsAssignee": "담당자 답변",
@@ -664,7 +675,7 @@ export const ko: Dict = {
      띠는 현재일 수 없고, 화면에 '현황 띠'라는 이름도 없다. 맨 위 카드들이 실제로 달고 있는
      이름(현재 상태)으로 부른다. */
   "dash.scope": (range) =>
-    `아래 차트와 에이전트, 활동 기록은 ${range} 기준입니다. 맨 위 현재 상태는 기간과 상관없이 항상 지금이며, 이 페이지의 모든 날짜와 시각은 UTC입니다.`,
+    `아래 차트와 에이전트, 활동 기록은 ${range} 기준입니다. 맨 위 현재 상태는 기간과 상관없이 항상 지금이며, 이 페이지의 모든 날짜와 시각은 이 컴퓨터의 시간대를 따릅니다.`,
   "dash.rangeDays": (days) => `최근 ${days}일`,
   "dash.rangeOneEvent": (date) => `${date}에 기록된 이벤트 1건`,
   "dash.rangeAllEvents": (n, date) => `${date}까지 거슬러 올라가는 전체 이벤트 ${n}건`,
@@ -773,7 +784,7 @@ export const ko: Dict = {
     `이 기간의 이벤트 ${events}건을 각각 기록한 에이전트 앞으로 모두 집계했습니다 — 프로젝트 변경 포함.`,
 
   "dash.activity": "활동",
-  "dash.activityNote": (events, days) => `이벤트 ${events}건 · ${days}일 · UTC`,
+  "dash.activityNote": (events, days) => `이벤트 ${events}건 · ${days}일`,
   "dash.expandAll": "모두 펼치기",
   "dash.collapseAll": "모두 접기",
   "dash.activityEmpty": "이 기간에 기록된 것이 없습니다",
@@ -790,11 +801,11 @@ export const ko: Dict = {
 
   "chart.now": "지금",
   "chart.busiestHourPre": "가장 바쁜 시간대 이벤트 ",
-  "chart.busiestHour": () => "건 · 시각은 UTC",
-  "chart.hourTip": (hour, count) => `${hour} UTC — 이벤트 ${count}건`,
+  "chart.busiestHour": () => "건",
+  "chart.hourTip": (hour, count) => `${hour} — 이벤트 ${count}건`,
   "chart.bucketHours": (day, from, to) => `${day} ${from} – ${to}`,
   "chart.summary": (upperLabel, upper, lowerLabel, lower, noun, periods, from, to) =>
-    `${noun}: ${upperLabel} ${upper}, ${lowerLabel} ${lower}. ${from}부터 ${to}까지 ${periods}개 구간, UTC 기준. `,
+    `${noun}: ${upperLabel} ${upper}, ${lowerLabel} ${lower}. ${from}부터 ${to}까지 ${periods}개 구간. `,
   "chart.summaryDelta": (range, upper, upperLabel, lower, lowerLabel) =>
     `${range} 변화: ${upperLabel} ${upper}, ${lowerLabel} ${lower}. `,
   "chart.summaryKeys": "왼쪽·오른쪽 화살표 키로 구간을 하나씩 읽을 수 있습니다.",
@@ -850,7 +861,9 @@ export const ko: Dict = {
   "word.unassignedFor": (duration) => `${duration}째 담당자 없음`,
   "word.timeToResolve": "해결 소요 시간",
 
-  "word.inProgressOf": (n, total) => `${total}개 중 ${n}개 진행 중`,
+  /* 스위처 카드의 수는 분모를 달지 않는다(머리말 규칙에 대한 소유자 결정 예외) — 전체
+     개수는 바로 아래 작업 행이 들고 있고, "9개 중 1개 진행 중"은 아홉 개가 아직 움직이는
+     것처럼 읽혔다. 분모는 툴팁이 유지하고, 문구는 아래 word.inProgressCount 하나를 쓴다. */
   "word.workLogsInProgressOf": (n, total) => `작업 로그 ${total}개 중 ${n}개 진행 중`,
   "word.unresolvedOf": (n, total) => `${total}개 중 ${n}개 미해결`,
   "word.unresolvedCount": (n) => `미해결 ${n}개`,

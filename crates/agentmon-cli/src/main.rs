@@ -254,6 +254,18 @@ enum ProjectCmd {
         #[arg(long, value_name = "handle", default_value = "claude")]
         agent: String,
     },
+    /// Write the agentmon instructions into this repo's CLAUDE.md — what
+    /// `init --claude-md` does, for a project that already exists. Conservative: a file
+    /// already there gets the section appended after what the human wrote, and a file
+    /// that already carries it (either language) is left alone.
+    #[command(name = "claude-md", after_help = "EXAMPLE\n  agentmon project claude-md --lang ko\n\n  \
+        Re-run it after an app update to pick up a refreshed template: an unchanged \
+        section reports `already_present` and writes nothing.")]
+    ClaudeMd {
+        /// Language of the instructions: ko or en.
+        #[arg(long, value_name = "ko|en")]
+        lang: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1084,6 +1096,38 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
                 }
             }
             println!("  server: {}", server.display());
+            Ok(())
+        }
+        ProjectCmd::ClaudeMd { lang } => {
+            let lang = agentmon_core::parse_claude_md_lang(lang).map_err(|e| {
+                let mut err = CliError::from(e);
+                err.message = err.message.replace("--claude-md", "--lang");
+                err
+            })?;
+            let store = open(cli)?;
+            let (path, outcome) = agentmon_core::write_claude_md(store.location(), lang)?;
+            if cli.json {
+                use agentmon_core::ClaudeMdOutcome as O;
+                return print_json(&serde_json::json!({
+                    "ok": true,
+                    "path": path.display().to_string(),
+                    "outcome": match outcome {
+                        O::Created => "created",
+                        O::Appended => "appended",
+                        O::AlreadyPresent => "already_present",
+                    },
+                }));
+            }
+            use agentmon_core::ClaudeMdOutcome as O;
+            match outcome {
+                O::Created => println!("Wrote {}", path.display()),
+                O::Appended => {
+                    println!("Appended the agentmon section to {}", path.display())
+                }
+                O::AlreadyPresent => {
+                    println!("{} already carries the agentmon section", path.display())
+                }
+            }
             Ok(())
         }
         ProjectCmd::List => {

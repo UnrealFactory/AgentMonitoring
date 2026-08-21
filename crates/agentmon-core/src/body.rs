@@ -94,8 +94,10 @@ pub fn take_section(sections: &mut Vec<Section>, name: &str) -> Option<String> {
     Some(s.body)
 }
 
-/// Split a section body into `### <heading>` entries.
-fn entries(body: &str) -> Vec<(String, String)> {
+/// Split a section body into `### <heading>` entries. `is_entry` decides whether a `###`
+/// heading opens a new entry; one that does not is an agent's own subheading inside its
+/// message, and stays in the body of the entry it was written under.
+fn entries(body: &str, is_entry: impl Fn(&str) -> bool) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
     let mut current: Option<(String, String)> = None;
     let mut in_fence = false;
@@ -105,11 +107,13 @@ fn entries(body: &str) -> Vec<(String, String)> {
         }
         if !in_fence {
             if let Some((3, title)) = heading(line) {
-                if let Some((t, b)) = current.take() {
-                    out.push((t, b.trim().to_string()));
+                if is_entry(title) {
+                    if let Some((t, b)) = current.take() {
+                        out.push((t, b.trim().to_string()));
+                    }
+                    current = Some((title.to_string(), String::new()));
+                    continue;
                 }
-                current = Some((title.to_string(), String::new()));
-                continue;
             }
         }
         if let Some((_, b)) = current.as_mut() {
@@ -123,9 +127,24 @@ fn entries(body: &str) -> Vec<(String, String)> {
     out
 }
 
+/// Does a heading open with a date (`2026-08-21…`), the way every `### <timestamp>` entry
+/// the CLI writes does? The gate that keeps an agent's own `### R7 builder — …` subheading
+/// inside its message: without it, that line became an entry whose "timestamp" was a
+/// sentence — drawn as "—" in the app, and string-`>` than every real ISO stamp, so it
+/// poisoned lastActivity and the record's sort position too.
+fn starts_with_date(text: &str) -> bool {
+    let b = text.trim_start().as_bytes();
+    b.len() >= 10
+        && b[..4].iter().all(u8::is_ascii_digit)
+        && b[4] == b'-'
+        && b[5..7].iter().all(u8::is_ascii_digit)
+        && b[7] == b'-'
+        && b[8..10].iter().all(u8::is_ascii_digit)
+}
+
 /// `## Updates` entries — the heading is the ISO8601 timestamp.
 pub fn work_updates(section: &str) -> Vec<WorkUpdate> {
-    entries(section)
+    entries(section, starts_with_date)
         .into_iter()
         .map(|(ts, body)| WorkUpdate {
             ts: ts.trim().to_string(),
@@ -137,7 +156,7 @@ pub fn work_updates(section: &str) -> Vec<WorkUpdate> {
 /// `## Comments` entries — heading is `<ts> — <agent>` (em dash per SPEC, en dash and
 /// plain hyphen accepted).
 pub fn bug_comments(section: &str) -> Vec<BugComment> {
-    entries(section)
+    entries(section, starts_with_date)
         .into_iter()
         .map(|(head, body)| {
             let (ts, agent) = split_comment_heading(&head);
@@ -410,6 +429,32 @@ mod tests {
         assert_eq!(comments.len(), 1);
         assert_eq!(comments[0].agent, "ui-builder");
         assert_eq!(comments[0].ts, "2026-08-18T10:00:00Z");
+    }
+
+    /// A `###` an agent writes *inside* its message (ElmwoodOnline's WORK-0007: "### R7
+    /// 빌더 — …") is that update's own subheading, not a new entry — as an entry it had
+    /// no timestamp to print ("—" in the app) and, being string-greater than any ISO
+    /// stamp, hijacked lastActivity.
+    #[test]
+    fn a_subheading_inside_a_message_does_not_open_an_entry() {
+        let section = "### 2026-08-21T10:07:40Z\n\n### R7 빌더 — 정정 셋\n\nDetails.\n\n\
+                       ### 2026-08-21T11:00:00Z\n\nNext round.\n";
+        let updates = work_updates(section);
+        assert_eq!(updates.len(), 2, "{updates:?}");
+        assert_eq!(updates[0].ts, "2026-08-21T10:07:40Z");
+        assert!(updates[0].body.contains("### R7 빌더 — 정정 셋"));
+        assert!(updates[0].body.contains("Details."));
+        assert_eq!(updates[1].ts, "2026-08-21T11:00:00Z");
+
+        let comments =
+            bug_comments("### 2026-08-18T10:00:00Z — ui-builder\n\n### repro steps\n\n1. run\n");
+        assert_eq!(comments.len(), 1);
+        assert!(comments[0].body.contains("### repro steps"));
+
+        // A date is a date even without a clock; a sentence starting with digits is not.
+        assert!(starts_with_date("2026-08-18"));
+        assert!(!starts_with_date("R7 빌더 — 정정"));
+        assert!(!starts_with_date("2026년 8월 21일"));
     }
 
     #[test]

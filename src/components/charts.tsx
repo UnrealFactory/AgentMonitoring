@@ -563,8 +563,9 @@ export function HourBars({
           />
         ))}
       </div>
-      {/* An axis, not a decoration: the hours are named, in the same UTC the rest of the
-          page prints, and the tallest bar's value is spelled out so the shape has a scale. */}
+      {/* An axis, not a decoration: the hours are named, in the same local time the rest
+          of the page prints, and the tallest bar's value is spelled out so the shape has a
+          scale. */}
       <p className="hour-axis tabular" aria-hidden="true">
         {ticks.map(({ h, i }) => (
           <span

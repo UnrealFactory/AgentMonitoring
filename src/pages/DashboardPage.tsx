@@ -1231,7 +1231,7 @@ function ActivityCard({
                     className="day-head"
                     aria-expanded={open}
                     onClick={() => toggle(g.day)}
-                    title={`${dayDate(g.day)} UTC · ${mixLabel}`}
+                    title={`${dayDate(g.day)} · ${mixLabel}`}
                   >
                     <svg className="day-caret" viewBox="0 0 12 12" aria-hidden="true">
                       <path

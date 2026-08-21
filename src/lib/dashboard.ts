@@ -9,10 +9,11 @@
  *
  * Two rules the rest of the file obeys:
  *
- *   * **UTC, like the records.** Every timestamp in the vault is UTC ISO8601 and the app
- *     prints UTC everywhere else (lib/format), so buckets and day groups are cut on UTC
- *     boundaries. A dashboard that silently re-cut the day in the reader's timezone would
- *     disagree with the dates printed two rows below it.
+ *   * **Local time, like the rest of the app.** Every timestamp in the vault is UTC
+ *     ISO8601, but the screens print the reader's timezone (lib/format), so buckets and
+ *     day groups are cut on **local** boundaries too. A dashboard that cut the day at UTC
+ *     midnight would file an evening's work under tomorrow's date in Seoul and disagree
+ *     with the times printed two rows below it.
  *   * **No number without its records.** Every bucket and every group keeps the ids that
  *     went into it, so a tooltip can say *which* three work logs finished on the 12th
  *     rather than only that three did.
@@ -98,7 +99,14 @@ export interface TimeAxis {
   to: number;
 }
 
-const floorTo = (t: number, step: number) => Math.floor(t / step) * step;
+/* Floored in the reader's wall time, not epoch time: a day bucket breaks at the reader's
+   midnight — otherwise a KST reader's "day" bar runs 오전 9시 to 오전 9시 and an evening of
+   work lands on the wrong date — and a six-hour bucket starts on a local 00/06/12/18 the
+   ticks can land on. Shift into wall time, floor, shift back. */
+const floorTo = (t: number, step: number) => {
+  const offset = new Date(t).getTimezoneOffset() * 60_000;
+  return Math.floor((t - offset) / step) * step + offset;
+};
 
 /** Buckets covering `[from, to]`, sized so the chart stays readable at any span. */
 export function timeAxis(from: number, to: number): TimeAxis {
@@ -141,15 +149,22 @@ export function timeAxis(from: number, to: number): TimeAxis {
 }
 
 /* Dates on a chart are read at a glance and compared with the ones two cards away, so they
-   are assembled from UTC parts in both languages rather than handed to a locale formatter
-   whose output depends on the machine. Korean puts the year first and the unit after each
-   number — "8월 12일" — which is also a little wider than "12 Aug", and `axisTicks` is told
-   so through `minTickPx` below. */
+   are assembled from local-time parts in both languages rather than handed to a locale
+   formatter — only the timezone varies by machine, never the shape of the string. Korean
+   puts the year first and the unit after each number — "8월 12일" — which is also a little
+   wider than "12 Aug", and `axisTicks` is told so through `minTickPx` below. */
 const pad2 = (n: number): string => String(n).padStart(2, "0");
 
+/* "오후 2시" / "2 pm" on the round hour that chart ticks land on; minutes only when a
+   half-hour timezone offset puts them there ("오후 2:30" / "2:30 pm"). */
 const HOUR_FMT = { format: (ts: number) => {
   const d = new Date(ts);
-  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return getLocale() === "ko"
+    ? `${h < 12 ? "오전" : "오후"} ${h12}${m ? `:${pad2(m)}` : "시"}`
+    : `${h12}${m ? `:${pad2(m)}` : ""} ${h < 12 ? "am" : "pm"}`;
 } };
 
 const KO_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
@@ -157,19 +172,16 @@ const KO_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 const EN_DAY = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
-  timeZone: "UTC",
 });
 const EN_DAY_FULL = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
   day: "numeric",
   month: "short",
-  timeZone: "UTC",
 });
 const EN_DATE = new Intl.DateTimeFormat("en-GB", {
   day: "2-digit",
   month: "short",
   year: "numeric",
-  timeZone: "UTC",
 });
 
 /** "12 Aug" / "8월 12일" */
@@ -177,7 +189,7 @@ const DAY_FMT = {
   format: (ts: number) => {
     const d = new Date(ts);
     return getLocale() === "ko"
-      ? `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`
+      ? `${d.getMonth() + 1}월 ${d.getDate()}일`
       : EN_DAY.format(d);
   },
 };
@@ -187,7 +199,7 @@ const DAY_FULL_FMT = {
   format: (ts: number) => {
     const d = new Date(ts);
     return getLocale() === "ko"
-      ? `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${KO_WEEKDAY[d.getUTCDay()]})`
+      ? `${d.getMonth() + 1}월 ${d.getDate()}일 (${KO_WEEKDAY[d.getDay()]})`
       : EN_DAY_FULL.format(d);
   },
 };
@@ -197,12 +209,12 @@ const DATE_FMT = {
   format: (ts: number) => {
     const d = new Date(ts);
     return getLocale() === "ko"
-      ? `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`
+      ? `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`
       : EN_DATE.format(d);
   },
 };
 
-/** "14:00" for hour buckets, "12 Aug" for day buckets. */
+/** "오후 2시" for hour buckets, "12 Aug" for day buckets. */
 export const axisLabel = (ts: number, granularity: "hour" | "day"): string =>
   granularity === "hour" ? HOUR_FMT.format(ts) : DAY_FMT.format(ts);
 
@@ -226,8 +238,8 @@ export const minTickPx = (): number => (getLocale() === "ko" ? 84 : 64);
      * a tick lands only on a boundary of that interval, so sub-daily ticks fall on
        00:00, 06:00, 12:00 … and never on 06:00, 00:00, 18:00;
      * whenever the ticks are closer together than a day, each one that opens a new
-       UTC day carries that date under it, so the chart always says which days it
-       covers. All of it is UTC, like every other timestamp in the vault.
+       day carries that date under it, so the chart always says which days it
+       covers. All of it in the reader's timezone, like every timestamp on screen.
    ----------------------------------------------------------------------- */
 
 const TICK_INTERVALS = [
@@ -271,7 +283,11 @@ export function axisTicks(axis: TimeAxis, innerWidth: number, minPx = minTickPx(
   let lastDate: string | null = null;
   for (let i = 0; i < n; i += 1) {
     const at = axis.buckets[i].start;
-    if (at % interval !== 0) continue;
+    /* Aligned in the reader's wall time, like the buckets themselves: 오전 12시 · 오전 6시
+       · 오후 12시, and day ticks on local midnights — an epoch modulo would put every
+       tick 9 hours off in Seoul and match no day bucket at all. */
+    const wall = at - new Date(at).getTimezoneOffset() * 60_000;
+    if (wall % interval !== 0) continue;
     const date = DAY_FMT.format(at);
     ticks.push({
       index: i,
@@ -294,7 +310,7 @@ export function axisTicks(axis: TimeAxis, innerWidth: number, minPx = minTickPx(
   return ticks;
 }
 
-/** What a bucket covers, spelled out for a tooltip: "12 Aug, 14:00 – 15:00". */
+/** What a bucket covers, spelled out for a tooltip: "12 Aug, 2 pm – 3 pm". */
 export function bucketLabel(bucket: Bucket, axis: TimeAxis): string {
   if (axis.granularity === "day") {
     return axis.step === DAY
@@ -508,7 +524,7 @@ export function agentRows(events: VaultEvent[], works: WorklogSummary[]): AgentR
 export type EventTone = "work" | "done" | "bug" | "resolved" | "note" | "neutral";
 
 export interface DayGroup {
-  /** UTC midnight of the day, epoch ms — also the group's key, and all its words need. */
+  /** Local midnight of the day, epoch ms — also the group's key, and all its words need. */
   day: number;
   events: VaultEvent[];
   /** How the day breaks down, for the collapsed summary. */
@@ -516,10 +532,8 @@ export interface DayGroup {
   actors: string[];
 }
 
-const startOfUtcDay = (ts: number) => {
-  const d = new Date(ts);
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-};
+/** Midnight in the reader's timezone — the day as the reader lived it, not as UTC cut it. */
+const startOfDay = (ts: number) => new Date(ts).setHours(0, 0, 0, 0);
 
 export function tone(type: string): EventTone {
   if (type === "work_done") return "done";
@@ -574,7 +588,7 @@ export function groupByDay(events: VaultEvent[]): DayGroup[] {
   for (const e of events) {
     const t = ms(e.ts);
     if (t === null) continue;
-    const day = startOfUtcDay(t);
+    const day = startOfDay(t);
     const list = byDay.get(day);
     if (list) list.push(e);
     else byDay.set(day, [e]);
@@ -611,7 +625,7 @@ export function groupByDay(events: VaultEvent[]): DayGroup[] {
  * The day is the only input it needs, and the page has it at the moment it draws the row.
  */
 export function dayLabel(day: number, now: number): string {
-  const days = Math.round((startOfUtcDay(now) - day) / DAY);
+  const days = Math.round((startOfDay(now) - day) / DAY);
   return days === 0
     ? t("dash.today")
     : days === 1

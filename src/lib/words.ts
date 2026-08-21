@@ -172,10 +172,6 @@ export const timeToResolve = (): string => t("word.timeToResolve");
 
 /* -- counts ----------------------------------------------------------------- */
 
-/** "2 of 12 in progress" / "12개 중 2개 진행 중" */
-export const inProgressOf = (n: number, total: number): string =>
-  t("word.inProgressOf", n, total);
-
 /**
  * The same count with its noun in it: "2 of 12 work logs in progress".
  *

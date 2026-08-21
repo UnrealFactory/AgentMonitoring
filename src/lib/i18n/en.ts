@@ -141,6 +141,17 @@ export const en = {
   "menu.copiedSelection": "Copied the selection",
   "menu.copyFailed": "Could not reach the clipboard — select the text and copy it.",
   "menu.copiedWhat": (what: string) => `Copied ${what}`,
+  /* The New-project options, reachable after creation — the template and the server path
+     move with the app. The writes are core's conservative ones, so pressing twice is
+     safe; the toast says what actually happened. */
+  "menu.claudeMd": "Write CLAUDE.md instructions",
+  "menu.claudeMdHint": "creates, or appends to yours",
+  "menu.mcpJson": "Register MCP in .mcp.json",
+  "menu.mcpJsonHint": "touches only the agentmon entry",
+  "menu.scaffoldCreated": (file: string) => `Wrote ${file}`,
+  "menu.scaffoldAppended": (file: string) => `Appended the instructions to ${file}`,
+  "menu.scaffoldUpdated": (file: string) => `Updated the agentmon entry in ${file}`,
+  "menu.scaffoldPresent": (file: string) => `${file} is already up to date`,
 
   /* -- deleting a project (components/DeleteProject.tsx) ---------------------- */
 
@@ -434,7 +445,7 @@ export const en = {
   "bd.endClosed": "Closed",
   "bd.endWorking": (agent: string) => `${agent} is working on it`,
   "bd.endWaiting": "Waiting for someone to claim it",
-  "bd.fixBelow": "the fix is recorded below",
+  "bd.fixAbove": "the fix is recorded above",
   "bd.openFor": (duration: string) => `open for ${duration}`,
   "bd.addedToReport": "added to the report",
   "bd.repliedAsAssignee": "replied as assignee",
@@ -592,7 +603,7 @@ export const en = {
   "dash.liveTip": "Something was recorded in the last two hours",
   "dash.lastActivity": (when: string) => `Last activity ${when}`,
   "dash.scope": (range: string) =>
-    `The charts, the agents and the feed below cover ${range}. The strip above is always now, and every date and time on this page is UTC.`,
+    `The charts, the agents and the feed below cover ${range}. The strip above is always now, and every date and time on this page is in this computer's timezone.`,
   "dash.rangeDays": (days: number) => `the last ${days} days`,
   "dash.rangeOneEvent": (date: string) => `the one recorded event, from ${date}`,
   "dash.rangeAllEvents": (n: number, date: string) =>
@@ -700,7 +711,7 @@ export const en = {
 
   "dash.activity": "Activity",
   "dash.activityNote": (events: number, days: number) =>
-    `${events === 1 ? "1 event" : `${events} events`} · ${days === 1 ? "1 day" : `${days} days`} · UTC`,
+    `${events === 1 ? "1 event" : `${events} events`} · ${days === 1 ? "1 day" : `${days} days`}`,
   "dash.expandAll": "Expand all",
   "dash.collapseAll": "Collapse all",
   "dash.activityEmpty": "Nothing recorded in this range",
@@ -719,9 +730,9 @@ export const en = {
      it — which is also what lets the number sit where each language wants it. */
   "chart.busiestHourPre": "",
   "chart.busiestHour": (max: number) =>
-    ` ${max === 1 ? "event" : "events"} in the busiest hour · times UTC`,
+    ` ${max === 1 ? "event" : "events"} in the busiest hour`,
   "chart.hourTip": (hour: string, count: number) =>
-    `${hour} UTC — ${count} event${count === 1 ? "" : "s"}`,
+    `${hour} — ${count} event${count === 1 ? "" : "s"}`,
   "chart.bucketHours": (day: string, from: string, to: string) => `${day}, ${from} – ${to}`,
   "chart.summary": (
     upperLabel: string,
@@ -733,7 +744,7 @@ export const en = {
     from: string,
     to: string
   ) =>
-    `${upperLabel} ${upper}, ${lowerLabel} ${lower} ${noun} over ${periods} periods from ${from} to ${to}, UTC. `,
+    `${upperLabel} ${upper}, ${lowerLabel} ${lower} ${noun} over ${periods} periods from ${from} to ${to}. `,
   "chart.summaryDelta": (range: string, upper: string, upperLabel: string, lower: string, lowerLabel: string) =>
     `Over ${range}: ${upper} ${upperLabel}, ${lower} ${lowerLabel}. `,
   "chart.summaryKeys": "Use the left and right arrow keys to read each period.",
@@ -793,7 +804,6 @@ export const en = {
   "word.unassignedFor": (duration: string) => `unassigned for ${duration}`,
   "word.timeToResolve": "Time to resolve",
 
-  "word.inProgressOf": (n: number, total: number) => `${n} of ${total} in progress`,
   "word.workLogsInProgressOf": (n: number, total: number) =>
     `${n} of ${total === 1 ? "1 work log" : `${total} work logs`} in progress`,
   "word.unresolvedOf": (n: number, total: number) => `${n} of ${total} unresolved`,

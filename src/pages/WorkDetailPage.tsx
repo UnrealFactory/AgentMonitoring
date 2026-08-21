@@ -99,10 +99,10 @@ export function WorkDetailPage() {
     if (work.files.length) {
       out.push({ id: "files", label: t("wd.files"), count: work.files.length });
     }
-    out.push({ id: "updates", label: t("wd.updates"), count: work.updates.length });
     if (work.outcome) {
       out.push({ id: "outcome", label: t("wd.outcome"), count: 0 }, ...partsToc(outcome));
     }
+    out.push({ id: "updates", label: t("wd.updates"), count: work.updates.length });
     if (related.count) out.push({ id: "related", label: t("rec.related"), count: related.count });
     return out;
   }, [work, related.count, outcome, locale]);
@@ -270,8 +270,8 @@ export function WorkDetailPage() {
 
             {work.files.length > 0 && <FilesSection files={work.files} />}
 
-            <UpdatesSection work={work} />
-
+            {/* Outcome before the trail: the record's newest state is what a reader came
+                for, and the trail below it runs newest-first for the same reason. */}
             {work.outcome && (
               <section className="record-section" id="outcome">
                 <div className="outcome-card">
@@ -306,6 +306,8 @@ export function WorkDetailPage() {
                 </div>
               </section>
             )}
+
+            <UpdatesSection work={work} />
 
             <RelatedSection projectId={projectId} id={work.id} kind="work" related={related} />
 
@@ -473,13 +475,26 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
         )}
       </h2>
 
+      {/* Newest at the top, down to the start: the reader who opens a running record is
+          here for the latest round, not for another scroll past everything they already
+          read. One rule — further down is further back — with the current state as the
+          top edge and the start as the bottom one. The note numbers stay chronological
+          ("note 3" is still the third note written), so a note keeps its name when the
+          trail is read in either direction. */}
       <ol className="timeline-rail">
         <li className="trail-node trail-edge">
-          <span className="trail-dot trail-dot-start" aria-hidden="true" />
+          <span className={`trail-dot trail-dot-${endTone}`} aria-hidden="true" />
           <div className="trail-edge-text">
-            <span className="trail-edge-label">{t("wd.startedThisWork", work.agent)}</span>
-            <span className="trail-edge-time tabular" title={formatDateTimeUtc(work.started)}>
-              {formatDateTime(work.started)} · {formatRelative(work.started)}
+            <span className="trail-edge-label">{endLabel}</span>
+            <span className="trail-edge-time tabular">
+              {work.finished ? (
+                <span title={formatDateTimeUtc(work.finished)}>
+                  {formatDateTime(work.finished)} · {formatRelative(work.finished)} ·{" "}
+                  {t("wd.inTotal", formatDuration(work.started, work.finished))}
+                </span>
+              ) : (
+                <span>{t("wd.soFar", formatDuration(work.started, null))}</span>
+              )}
             </span>
           </div>
         </li>
@@ -494,14 +509,14 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
           </li>
         )}
 
-        {work.updates.map((u, i) => {
+        {[...work.updates.entries()].reverse().map(([n, u]) => {
           /* A note whose author opened it with "Correction:" is drawn as one. The word is
              theirs; the page only stops it reading like the next progress note. */
           const fix = isCorrection(u.body);
           /* Notes are the record agent's unless the CLI wrote a byline into this one. */
           const author = updateAuthor(u.body);
           return (
-            <li className="trail-node" key={`${u.ts}-${i}`}>
+            <li className="trail-node" key={`${u.ts}-${n}`}>
               <span className={`trail-dot${fix ? " trail-dot-correction" : ""}`} aria-hidden="true" />
               <article className={`update-card${fix ? " is-correction" : ""}`}>
                 <header className="update-head">
@@ -512,7 +527,7 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
                       {t("rec.correction")}
                     </span>
                   ) : (
-                    <span className="update-verb">{t("wd.postedUpdate", i + 1)}</span>
+                    <span className="update-verb">{t("wd.postedUpdate", n + 1)}</span>
                   )}
                   <time className="update-ts tabular" dateTime={u.ts} title={formatDateTimeUtc(u.ts)}>
                     {formatDateTime(u.ts)} · {formatRelative(u.ts)}
@@ -527,18 +542,11 @@ function UpdatesSection({ work }: { work: WorklogDetail }) {
         })}
 
         <li className="trail-node trail-edge">
-          <span className={`trail-dot trail-dot-${endTone}`} aria-hidden="true" />
+          <span className="trail-dot trail-dot-start" aria-hidden="true" />
           <div className="trail-edge-text">
-            <span className="trail-edge-label">{endLabel}</span>
-            <span className="trail-edge-time tabular">
-              {work.finished ? (
-                <span title={formatDateTimeUtc(work.finished)}>
-                  {formatDateTime(work.finished)} · {formatRelative(work.finished)} ·{" "}
-                  {t("wd.inTotal", formatDuration(work.started, work.finished))}
-                </span>
-              ) : (
-                <span>{t("wd.soFar", formatDuration(work.started, null))}</span>
-              )}
+            <span className="trail-edge-label">{t("wd.startedThisWork", work.agent)}</span>
+            <span className="trail-edge-time tabular" title={formatDateTimeUtc(work.started)}>
+              {formatDateTime(work.started)} · {formatRelative(work.started)}
             </span>
           </div>
         </li>

@@ -154,6 +154,9 @@ function assetMime(path: string): string {
   );
 }
 
+/** What a scaffold write did — the word the toast conjugates. */
+export type ScaffoldOutcome = "created" | "appended" | "updated" | "already_present";
+
 export const api = {
   /** Every registered project, available or not, most recently active first. */
   listProjects: () => call<ProjectRow[]>("list_projects", {}, "/project-api/projects"),
@@ -287,6 +290,37 @@ export const api = {
           method: "POST",
           body: JSON.stringify({ ...input, agent: input.agent ?? DEFAULT_ACTOR }),
         }),
+
+  /**
+   * Write (or refresh) an existing project's CLAUDE.md instructions — the New-project
+   * option, reachable after creation, because the template moves with the app. The
+   * write is conservative (create / append / leave alone) and the outcome says which.
+   * Outcomes: `created` / `appended` (CLAUDE.md) or `updated` (.mcp.json) /
+   * `already_present`.
+   */
+  writeClaudeMd: (id: string, lang: "ko" | "en"): Promise<ScaffoldOutcome> =>
+    isTauri()
+      ? invokeCommand<ScaffoldOutcome>("write_project_claude_md", { id, lang })
+      : fetchJson<{ outcome: ScaffoldOutcome }>(
+          `/project-api/projects/${encodeURIComponent(id)}/claude-md`,
+          { method: "POST", body: JSON.stringify({ lang }) }
+        ).then((r) => r.outcome),
+
+  /**
+   * Write (or refresh) an existing project's `.mcp.json` agentmon entry — the paths in
+   * it are this machine's, so a repo (or app) that moved needs it rewritten. Other
+   * servers in the file are preserved.
+   */
+  writeMcpJson: (id: string, mcpAgent?: string): Promise<ScaffoldOutcome> =>
+    isTauri()
+      ? invokeCommand<ScaffoldOutcome>("write_project_mcp_json", {
+          id,
+          agent: mcpAgent ?? null,
+        })
+      : fetchJson<{ outcome: ScaffoldOutcome }>(
+          `/project-api/projects/${encodeURIComponent(id)}/mcp-json`,
+          { method: "POST", body: JSON.stringify({ mcpAgent: mcpAgent ?? "" }) }
+        ).then((r) => r.outcome),
 
   /**
    * The App feedback board: bugs and wishes agents filed about this app itself.
@@ -664,8 +698,9 @@ export type DataHealth = { ok: true } | { ok: false; error: string };
  *
  * Desktop: the `project-changed` events the per-folder Rust watchers emit, plus
  * `projects-changed` when the roster itself shifts (a create, an open, a remove, a drive
- * coming back). Browser: a poll of `/project-api/cursor`, which returns one string
- * summarising every record file's size and mtime across every served folder. Both end in
+ * coming back), plus `feedback-changed` from the feedback board's own watcher. Browser: a
+ * poll of `/project-api/cursor`, which returns one string summarising every record file's
+ * size and mtime across every served folder and the feedback board. Both end in
  * the same callback, so nothing above this file knows which one it is on — and every
  * screen in the app hangs off that one signal, rather than the sidebar refreshing while
  * the dashboard beside it goes on printing yesterday.
@@ -692,6 +727,9 @@ export function subscribeProjectChanges(
       .then(async ({ listen }) => {
         register(await listen("project-changed", () => onChange()));
         register(await listen("projects-changed", () => onChange()));
+        // The machine-level feedback board (FB-0001): filed from any directory, owned by
+        // no project, so it has its own watcher and its own event.
+        register(await listen("feedback-changed", () => onChange()));
       })
       .catch(() => {});
 

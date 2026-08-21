@@ -277,7 +277,7 @@ const OTHER_TONGUE = [".locale-toggle", ".claude-md-choice"];
 
 /** Values that are data rather than language, and are the same in every locale. */
 const TOKENS = [
-  /\b(WORK|BUG)-(?:\d+|N{4})\b/g, // an id — and the shape of one, which a bad address is told
+  /\b(WORK|BUG|FB)-(?:\d+|N{4})\b/g, // an id — and the shape of one, which a bad address is told
   /\bAgentMonitoring\b/g,
   /\bUTC\b/g,
   /\bCtrl\b/g,
@@ -285,6 +285,7 @@ const TOKENS = [
   /\bvault\.json\b/g,
   /\bevents\.jsonl\b/g,
   /\bCLAUDE\.md\b/g,
+  /\.mcp\.json\b/g, // the client config file the project menu writes, named as-is
   /\bprojects\/[^\s]*/g,
   /\bAGENTMON_DIRS?\b/g,
   /\bproject\.json\b/g,
@@ -1450,8 +1451,16 @@ try {
       checked += 1;
       let bad = 0;
       for (const item of printed) {
-        const words = foreignIn(item.text.replace(vaultToken, " "));
-        if (!words) continue;
+        /* Two stripping orders, and only what survives both is foreign. Each order has a
+           blind spot: vault words first let a tag named `mcp` bite the middle out of
+           “.mcp.json” (leaving “json”); fixed tokens first let /\bv\d+\b/ bite “v2” out
+           of the handle “v2-rearchitect” (leaving “rearchitect”). A real English word is
+           whole under either order. */
+        const vaultFirst = foreignIn(item.text.replace(vaultToken, " "));
+        const tokensFirst = foreignIn(residue(item.text).replace(vaultToken, " "));
+        const words =
+          vaultFirst && tokensFirst ? vaultFirst.filter((w) => tokensFirst.includes(w)) : null;
+        if (!words || !words.length) continue;
         bad += 1;
         findings.push({ screen: `${screen.name} @${width}`, ...item, words });
       }

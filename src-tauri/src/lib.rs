@@ -397,6 +397,55 @@ async fn open_project(app: AppHandle) -> CmdResult<Option<Project>> {
     Ok(Some(project))
 }
 
+/// Write (or refresh) a registered project's CLAUDE.md instructions — the New-project
+/// dialog's option, reachable after creation too, because the app's template moves with
+/// the app and a project made last month has no other way to catch up. The write is
+/// core's conservative one: create, or append after what the human wrote, or change
+/// nothing when the section is already there. Returns what happened, for the toast.
+#[tauri::command]
+fn write_project_claude_md(
+    id: String,
+    lang: String,
+    extra: State<'_, ExtraRoots>,
+) -> CmdResult<String> {
+    let lang = agentmon_core::parse_claude_md_lang(&lang).map_err(|e| e.to_string())?;
+    let store = store_for(&extra, &id)?;
+    let (_, outcome) =
+        agentmon_core::write_claude_md(store.location(), lang).map_err(|e| e.to_string())?;
+    Ok(match outcome {
+        agentmon_core::ClaudeMdOutcome::Created => "created",
+        agentmon_core::ClaudeMdOutcome::Appended => "appended",
+        agentmon_core::ClaudeMdOutcome::AlreadyPresent => "already_present",
+    }
+    .to_string())
+}
+
+/// Write (or refresh) a registered project's `.mcp.json` agentmon entry — same reason as
+/// [`write_project_claude_md`]: the server path is this machine's, and a repo that moved
+/// (or an app that did) needs the entry rewritten. Other servers in the file are kept.
+#[tauri::command]
+fn write_project_mcp_json(
+    id: String,
+    agent: Option<String>,
+    extra: State<'_, ExtraRoots>,
+) -> CmdResult<String> {
+    let store = store_for(&extra, &id)?;
+    let server = agentmon_core::find_mcp_server().ok_or_else(|| {
+        "this build has no mcp/server.mjs beside it — write the file by hand instead \
+         (see docs/MCP.md)"
+            .to_string()
+    })?;
+    let (_, outcome) =
+        agentmon_core::write_mcp_json(store.location(), &server, agent.as_deref())
+            .map_err(|e| e.to_string())?;
+    Ok(match outcome {
+        agentmon_core::McpJsonOutcome::Created => "created",
+        agentmon_core::McpJsonOutcome::Updated => "updated",
+        agentmon_core::McpJsonOutcome::AlreadyPresent => "already_present",
+    }
+    .to_string())
+}
+
 /// Take a project off this machine's list. **Touches no files** — the folder stays where
 /// it is, and opening it again brings it back. The undoable half of "get this out of my
 /// sidebar"; [`delete_project`] is the other half.
@@ -666,6 +715,9 @@ struct WatcherState {
     /// Roots that were unreachable on the last watchdog tick — the diff is what turns
     /// into a `projects-changed` emit when a drive comes back or goes away.
     unavailable: Mutex<HashSet<PathBuf>>,
+    /// The one watcher that is not a project's: the machine-level App feedback board
+    /// (FB-0001). Held apart from the map so a roster rewrite can never drop it.
+    feedback: Mutex<Option<RecommendedWatcher>>,
 }
 
 /// Watch exactly `roots`: arm what is missing, drop what is no longer wanted. OS-event
@@ -700,6 +752,38 @@ fn watch_store(app: &AppHandle, root: &Path) -> notify::Result<RecommendedWatche
     spawn_store_watcher(root, move |change| {
         let _ = app.emit("project-changed", change);
     })
+}
+
+/// Watch the App feedback board (FB-0001): `~/.AgentMonitoring/feedback` belongs to no
+/// project, so the per-project watchers never saw an agent filing feedback via CLI or
+/// MCP — the board and the sidebar count sat still until some unrelated record write
+/// refreshed them. Armed once at startup (the folder's path cannot change while the app
+/// runs), and the folder is created first so a machine where nothing has been filed yet
+/// still gets a live board the moment the first item lands.
+fn watch_feedback(app: &AppHandle) -> Option<RecommendedWatcher> {
+    let dir = agentmon_core::feedback_dir()?;
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!(
+            "agentmonitoring: not watching {} for feedback ({e}); the board will still \
+             read, but it will not refresh on its own",
+            dir.display()
+        );
+        return None;
+    }
+    let app = app.clone();
+    match spawn_store_watcher(&dir, move |_| {
+        let _ = app.emit("feedback-changed", ());
+    }) {
+        Ok(w) => Some(w),
+        Err(e) => {
+            eprintln!(
+                "agentmonitoring: not watching {} for feedback ({e}); the board will \
+                 still read, but it will not refresh on its own",
+                dir.display()
+            );
+            None
+        }
+    }
 }
 
 /// The watcher itself, independent of Tauri: watch one project folder and call `on_change`
@@ -875,6 +959,10 @@ pub fn run() {
             // Watch every registered project, so a record an agent writes shows up
             // without a navigation.
             rearm_watchers(app.handle(), &watchers, &all_roots(&extra.0));
+            // …and the machine-level feedback board, which belongs to none of them.
+            if let Ok(mut slot) = watchers.feedback.lock() {
+                *slot = watch_feedback(app.handle());
+            }
             // …and watch the watchers, so a folder that goes away dims its row instead of
             // the window quietly freezing on the last numbers it read.
             spawn_watchdog(app.handle().clone());
@@ -893,6 +981,8 @@ pub fn run() {
             open_project,
             remove_project,
             delete_project,
+            write_project_claude_md,
+            write_project_mcp_json,
             list_app_feedback,
             set_app_feedback_status,
             delete_app_feedback,
@@ -1060,6 +1150,46 @@ mod tests {
         assert_eq!(change.path, root.display().to_string());
         assert_eq!(change.id, None, "the folder is gone, so there is no id to read");
         fs::remove_dir_all(root.parent().unwrap()).ok();
+    }
+
+    /**
+     * FB-0001: the feedback board is a bare folder of FB-NNNN.md files with no
+     * project.json — the watcher must still report a filing there (id is None, which the
+     * feedback path ignores), and the board's lock file must stay filtered like a
+     * project's.
+     */
+    #[test]
+    fn a_feedback_filing_in_a_bare_folder_is_reported() {
+        let dir = std::env::temp_dir().join(format!(
+            "agentmonitoring-watch-feedback-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let (tx, rx) = channel::<ProjectChanged>();
+        let _watcher = spawn_store_watcher(&dir, move |c| {
+            let _ = tx.send(c);
+        })
+        .expect("watcher starts");
+        std::thread::sleep(Duration::from_millis(300));
+
+        // What `agentmon app-feedback add` does: lock, then create the record.
+        fs::write(dir.join(".agentmon.lock"), "").unwrap();
+        fs::write(
+            dir.join("FB-0001.md"),
+            "---\nid: FB-0001\ntitle: t\ntype: idea\nagent: a\nstatus: open\n---\n",
+        )
+        .unwrap();
+
+        let change = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("filing feedback reaches the window");
+        assert_eq!(change.path, dir.display().to_string());
+        assert_eq!(change.id, None, "the board has no project.json, and needs none");
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

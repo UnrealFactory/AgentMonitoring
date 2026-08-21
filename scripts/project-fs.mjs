@@ -18,6 +18,7 @@
 //   * the error sentences match the Rust ones — src/lib/api.ts matches them by shape.
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, existsSync, realpathSync, rmSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 
 export const DATA_DIR = "AgentMonitoring";
@@ -236,6 +237,15 @@ function takeSection(secs, name) {
   return secs.splice(i, 1)[0].body;
 }
 
+// Twin of starts_with_date() in agentmon-core/src/body.rs: a `###` heading opens an
+// Updates/Comments entry only when it opens with a date, the way every stamp the CLI
+// writes does. An agent's own `### R7 builder — …` subheading inside its message is not
+// an entry — as one it had no timestamp to print ("—" in the app) and, being
+// string-greater than any ISO stamp, hijacked lastActivity.
+function startsWithDate(text) {
+  return /^\d{4}-\d{2}-\d{2}/.test(text.trimStart());
+}
+
 function entries(body) {
   const out = [];
   let current = null;
@@ -244,7 +254,7 @@ function entries(body) {
     if (isFence(line)) inFence = !inFence;
     if (!inFence) {
       const h = headingOf(line);
-      if (h && h.level === 3) {
+      if (h && h.level === 3 && startsWithDate(h.title)) {
         if (current) out.push({ head: current.head, body: current.body.trim() });
         current = { head: h.title, body: "" };
         continue;
@@ -423,6 +433,16 @@ function parseNote(path) {
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 const isOpen = (status) => status === "open" || status === "in_progress";
+
+/**
+ * `~/.AgentMonitoring/feedback` — agentmon-core's `feedback_dir()` in JS: beside the
+ * registry, honoring the same `AGENTMON_REGISTRY_DIR` override, so the check scripts'
+ * sandboxes cover both.
+ */
+function feedbackDir() {
+  const home = process.env.AGENTMON_REGISTRY_DIR ?? join(homedir(), ".AgentMonitoring");
+  return join(home, "feedback");
+}
 
 function recordFiles(dir, prefix) {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) return [];
@@ -746,6 +766,11 @@ export function createProjectsReader(dirs, source = "registry") {
         }
       }
 
+      // The machine-level feedback board too (FB-0001): it belongs to no served folder,
+      // so without these stats a feedback filed via CLI sat unseen until the next
+      // project write. The desktop twin is the dedicated watcher in src-tauri.
+      for (const file of recordFiles(feedbackDir(), "FB-")) note(file);
+
       // Hashed rather than returned whole: the client only ever compares it to the last
       // one, and a 4KB string on a 2s poll is a waste of everybody's time.
       let hash = 2166136261;
@@ -957,8 +982,24 @@ const REQUIRED = (body, key) => {
  */
 export function handleProjectWrite(reader, repoRoot, pathname, body) {
   const parts = pathname.replace(/^\/+|\/+$/g, "").split("/");
-  const [, a, b] = parts;
+  const [, a, b, c] = parts;
   const actor = (typeof body?.agent === "string" && body.agent.trim()) || "app";
+
+  // Scaffolding for a project that already exists — the New-project options, reachable
+  // later. Shells the CLI verbs (`agentmon project claude-md` / `project mcp-json`), so
+  // the conservative write rules are agentmon's own; --dir targets the served folder.
+  if (a === "projects" && b && (c === "claude-md" || c === "mcp-json") && !parts[4]) {
+    const store = reader.byId(b);
+    const args = ["--dir", store.root, "project"];
+    if (c === "claude-md") {
+      args.push("claude-md", "--lang", REQUIRED(body, "lang"));
+    } else {
+      args.push("mcp-json");
+      const agent = typeof body?.mcpAgent === "string" ? body.mcpAgent.trim() : "";
+      if (agent) args.push("--agent", agent);
+    }
+    return runAgentmon(repoRoot, args);
+  }
 
   if (a === "projects" && !b) {
     const location = REQUIRED(body, "location");

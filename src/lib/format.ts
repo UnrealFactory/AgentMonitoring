@@ -1,10 +1,13 @@
 /**
- * Formatting helpers. Timestamps in the vault are always UTC ISO8601 strings.
+ * Formatting helpers. Timestamps in the vault are always UTC ISO8601 strings; the screens
+ * print them in the **reader's timezone**, so a note saved at 오후 6:32 in Seoul says
+ * 오후 6:32 on screen and matches the file's modified time in Explorer. Tooltips keep the
+ * record's exact UTC string ({@link formatDateTimeUtc}) for when two machines must agree.
  *
  * Words live next door in lib/words.ts and lib/i18n — this file turns data into text, those
  * decide what the text is called. Every function here is written twice, once per language,
- * and both halves are built from the record's **UTC** parts rather than from the reader's
- * timezone: the vault is UTC and the screens say so, in Korean as in English.
+ * and both halves are hand-assembled from date parts rather than handed to a locale
+ * formatter, so only the timezone varies by machine, never the shape of the string.
  */
 import { getLocale, t } from "./i18n";
 
@@ -16,41 +19,56 @@ const parse = (iso: string | null | undefined): Date | null => {
 
 const pad = (n: number): string => String(n).padStart(2, "0");
 
-/** "10:20" — the same clock in both languages, because a clock is not a word. */
-const clock = (d: Date): string => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+/** "오후 6:32" / "6:32 pm" — local wall-clock time, the way the reader's OS says it. */
+const clock12 = (d: Date): string => {
+  const h = d.getHours();
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return getLocale() === "ko"
+    ? `${h < 12 ? "오전" : "오후"} ${h12}:${pad(d.getMinutes())}`
+    : `${h12}:${pad(d.getMinutes())} ${h < 12 ? "am" : "pm"}`;
+};
 
 const EN_DATE = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+
+const EN_DATE_UTC = new Intl.DateTimeFormat("en-GB", {
   day: "2-digit",
   month: "short",
   year: "numeric",
   timeZone: "UTC",
 });
 
-/**
- * "18 Aug 2026, 09:12" / "2026년 8월 18일 09:12" — absolute, unambiguous, and identical on
- * every machine: assembled from UTC parts, never from the reader's locale settings, so a
- * screenshot taken in Seoul and one taken in London hold the same string.
- */
+/** "18 Aug 2026, 6:32 pm" / "2026년 8월 18일 오후 6:32" — in the reader's timezone. */
 export function formatDateTime(iso: string | null | undefined): string {
   const d = parse(iso);
   if (!d) return t("time.empty");
   return getLocale() === "ko"
-    ? `${formatDate(iso)} ${clock(d)}`
-    : `${EN_DATE.format(d)}, ${clock(d)}`;
+    ? `${formatDate(iso)} ${clock12(d)}`
+    : `${EN_DATE.format(d)}, ${clock12(d)}`;
 }
 
-/** "18 Aug 2026, 09:12 UTC" — for tooltips, where the timezone must be explicit. */
+/**
+ * "18 Aug 2026, 09:12 UTC" — for tooltips: the record's own timestamp, identical on every
+ * machine, 24-hour because it is the stored value rather than a wall clock.
+ */
 export function formatDateTimeUtc(iso: string | null | undefined): string {
-  const text = formatDateTime(iso);
-  return text === t("time.empty") ? text : `${text} UTC`;
+  const d = parse(iso);
+  if (!d) return t("time.empty");
+  const clockUtc = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  return getLocale() === "ko"
+    ? `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 ${clockUtc} UTC`
+    : `${EN_DATE_UTC.format(d)}, ${clockUtc} UTC`;
 }
 
-/** "18 Aug 2026" / "2026년 8월 18일" */
+/** "18 Aug 2026" / "2026년 8월 18일" — the reader's local date. */
 export function formatDate(iso: string | null | undefined): string {
   const d = parse(iso);
   if (!d) return t("time.empty");
   return getLocale() === "ko"
-    ? `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`
+    ? `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`
     : EN_DATE.format(d);
 }
 

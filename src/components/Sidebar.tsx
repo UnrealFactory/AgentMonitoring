@@ -20,7 +20,7 @@ import { useProjectMenu } from "../lib/menus";
 import {
   bugTip,
   bugTipHere,
-  inProgressOf,
+  inProgressCount,
   unresolvedCount,
   workLogs,
   workTip,
@@ -178,7 +178,7 @@ export function Sidebar() {
                 ? t("proj.count", projects.length)
                 : current.counts.workTotal === 0
                   ? t("nav.noWorkYet")
-                  : inProgressOf(current.counts.workInProgress, current.counts.workTotal)}
+                  : inProgressCount(current.counts.workInProgress)}
             </span>
           </span>
           <svg className="switcher-caret" viewBox="0 0 12 12" aria-hidden="true">

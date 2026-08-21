@@ -10,7 +10,7 @@ import { Titlebar } from "./components/Titlebar";
 import { TooltipLayer } from "./components/Tooltip";
 import { InlineCode, plainMarks, Skeleton } from "./components/ui";
 import { isTauri, projectErrorMessage } from "./lib/api";
-import { formatDateTimeUtc } from "./lib/format";
+import { formatDateTime } from "./lib/format";
 import { t, useLocale } from "./lib/i18n";
 import { isModalOpen } from "./lib/modal";
 import { useScrollRestoration } from "./lib/useScrollRestoration";
@@ -139,7 +139,7 @@ function VaultTroubleBar() {
           {t(
             "shell.trouble.body",
             null,
-            formatDateTimeUtc(new Date(trouble.since).toISOString())
+            formatDateTime(new Date(trouble.since).toISOString())
           )}{" "}
           <span className="vault-alert-detail" title={plainMarks(message)}>
             <InlineCode text={headline} />
