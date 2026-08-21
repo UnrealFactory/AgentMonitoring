@@ -264,3 +264,7 @@
 {"ts":"2026-08-21T13:21:48Z","actor":"fable-updater-splash","type":"note_created","ref":"start-here","summary":"Start here — what every session reads before working"}
 {"ts":"2026-08-21T13:25:23Z","actor":"fable-updater-splash","type":"work_started","ref":"WORK-0059","summary":"Essential: a fifth note type that is required session-start reading, surfaced first everywhere"}
 {"ts":"2026-08-21T13:25:23Z","actor":"fable-updater-splash","type":"work_done","ref":"WORK-0059","summary":"Shipped. cargo test --workspace green (59 core incl. the new ordering test), mcp npm test 119/119 (tools/list 6917/7168 bytes), tsc clean, check-i18n exit 0…"}
+{"ts":"2026-08-21T13:32:10Z","actor":"fable-updater-splash","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description"}
+{"ts":"2026-08-21T13:32:27Z","actor":"fable-updater-splash","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: body"}
+{"ts":"2026-08-21T13:32:35Z","actor":"fable-updater-splash","type":"work_started","ref":"WORK-0060","summary":"v1.0.3 ships: essential notes reach installed apps"}
+{"ts":"2026-08-21T13:32:35Z","actor":"fable-updater-splash","type":"work_done","ref":"WORK-0060","summary":"v1.0.3 live: gh release view shows tag v1.0.3 @ main with AgentMonitoring_1.0.3_x64-setup.exe; release.mjs exit 0. Installed apps offer it on their next check."}
