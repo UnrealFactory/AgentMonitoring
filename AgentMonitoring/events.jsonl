@@ -248,3 +248,5 @@
 {"ts":"2026-08-21T11:56:14Z","actor":"claude","type":"work_done","ref":"WORK-0052","summary":"FB-0001 confirmed fixed by the WORK-0050 entry gate on the write path too; regression test added at the update_work level and the exact reported sequence…"}
 {"ts":"2026-08-21T12:33:41Z","actor":"claude","type":"work_started","ref":"WORK-0053","summary":"Scaffold CLAUDE.md and .mcp.json from the project menu, on any project"}
 {"ts":"2026-08-21T12:33:41Z","actor":"claude","type":"work_done","ref":"WORK-0053","summary":"Existing projects can (re)write CLAUDE.md and .mcp.json from the project menu, the CLI (project claude-md / mcp-json) and the browser route — one core…"}
+{"ts":"2026-08-21T12:38:02Z","actor":"claude","type":"work_started","ref":"WORK-0054","summary":"v1.0.1 ships: the session's five fixes reach the installed app"}
+{"ts":"2026-08-21T12:38:02Z","actor":"claude","type":"work_done","ref":"WORK-0054","summary":"v1.0.1 is live on GitHub with the NSIS installer asset (verified via gh release view, published 12:37:40Z). Commit 4ee6c10 pushed on main. Installed apps pick…"}
