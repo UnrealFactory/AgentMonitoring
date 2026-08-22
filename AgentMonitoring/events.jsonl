@@ -277,3 +277,6 @@
 {"ts":"2026-08-22T05:43:01Z","actor":"fable-feedback-patcher","type":"work_done","ref":"WORK-0063","summary":"Shipped on main (unreleased): the MCP note write and the CLI note update both warn — with the exact restore call — when a passed type takes essential off a…"}
 {"ts":"2026-08-22T05:43:31Z","actor":"fable-feedback-patcher","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body"}
 {"ts":"2026-08-22T05:43:38Z","actor":"fable-feedback-patcher","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title"}
+{"ts":"2026-08-22T05:54:38Z","actor":"fable-feedback-patcher","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body"}
+{"ts":"2026-08-22T05:54:50Z","actor":"fable-feedback-patcher","type":"work_started","ref":"WORK-0064","summary":"v1.0.5 ships: the FB-0001 guard reaches installed apps"}
+{"ts":"2026-08-22T05:54:50Z","actor":"fable-feedback-patcher","type":"work_done","ref":"WORK-0064","summary":"v1.0.5 is live: tag and asset both from main at 072ad52 — verified via gh release view (AgentMonitoring_1.0.5_x64-setup.exe, 8,008,286 bytes, target main).…"}
