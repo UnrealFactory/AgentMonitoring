@@ -1784,6 +1784,12 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
                 )?),
             };
             let store = open(cli)?;
+            // An essential note is required session-start reading, pinned first in every
+            // list — and --type taking that away is how an index once fell out of the
+            // front of the list unnoticed (FB-0001). Honor the flag, but say it back.
+            let demotes_essential = note_type
+                .is_some_and(|t| t != NoteType::Essential)
+                && store.note(name)?.meta.note_type == NoteType::Essential;
             let n = store.update_note(
                 name,
                 &UpdateNote {
@@ -1797,11 +1803,27 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
                     at: at.clone(),
                 },
             )?;
+            let warning = demotes_essential.then(|| {
+                format!(
+                    "warning: this note was essential — required session-start reading, \
+                     listed first. It is now {}. If that was not meant: agentmon note \
+                     update {} --type essential",
+                    n.record.meta.note_type.as_str(),
+                    n.id
+                )
+            });
             if cli.json {
+                // stdout is the JSON envelope; the warning must not corrupt it.
+                if let Some(w) = warning {
+                    eprintln!("{w}");
+                }
                 return print_json(&n);
             }
             println!("Updated note {}  {}", n.id, n.record.meta.title);
             println!("  {}", n.event.summary);
+            if let Some(w) = warning {
+                println!("  {w}");
+            }
             println!("  {}", n.path);
             Ok(())
         }

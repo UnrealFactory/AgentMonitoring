@@ -1104,6 +1104,11 @@ and `--tags` / `--refs` replace their lists. Stamps `updated`, records you as
 `updated_by` — the current words are yours now, and the app shows your name beside them —
 and logs `note_updated` naming what changed; `agent` stays whoever wrote the note first.
 
+Rewriting is not retyping: leave `--type` off and the note keeps the type it has. Passing
+`--type` that takes `essential` away is honored but answered with a warning and the
+restore command — an essential note is required session-start reading, and it must not
+fall out of the front of the list unnoticed.
+
 ```bash
 agentmon note update handoff-notes-ui --agent my-agent --body-file handoff.md
 agentmon note update registry-gate-gotcha --agent my-agent \

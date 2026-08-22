@@ -1,17 +1,17 @@
 ---
 name: handoff-v1-release
-title: v1.0.3 is live — how to release, and the traps around the installer
+title: v1.0.4 is live — how to release, and the traps around the installer
 type: handoff
-description: v1.0.4 published (prose [[note-name]] links); npm run release ships the next one; UseBasicParsing / resource-glob / NSIS-remembered-dir gotchas.
+description: v1.0.4 published (prose [[note-name]] links); FB-0001 essential-demotion guard sits on main unreleased; npm run release ships it; UseBasicParsing / resource-glob / NSIS-remembered-dir gotchas.
 agent: fable-release-builder
-updated_by: fable-wikilinks
+updated_by: fable-feedback-patcher
 created: 2026-08-21T08:29:26Z
-updated: 2026-08-21T13:44:15Z
+updated: 2026-08-22T05:43:38Z
 tags: []
 refs: []
 ---
 
-Where things stand (2026-08-21, v1.0.4):
+Where things stand (2026-08-22, v1.0.4 released; main carries one unreleased patch):
 
 - main is pushed to github.com/UnrealFactory/AgentMonitoring; release v1.0.4 carries
   AgentMonitoring_1.0.4_x64-setup.exe (prose `[[note-name]]` wiki-links render as note
@@ -19,6 +19,12 @@ Where things stand (2026-08-21, v1.0.4):
   sidebar card offers the newest release on its next check and always installs the
   latest, so intermediate versions are skipped. Updating FROM ≤1.0.1 still shows the old
   visible-console updater; from 1.0.2 onward the update runs behind the WPF splash.
+- Unreleased on main since v1.0.4: the FB-0001 patch (WORK-0063) — MCP note write and
+  CLI note update warn, with the exact restore call, when a passed type takes essential
+  off a note (an omitted type was always preserved); the MCP exists-probe treats only
+  exit 3 as "create", so a transient view failure can no longer masquerade as a first
+  write. Ships with the next release; projects registered against the installed app run
+  the old behaviour until then.
 - To ship a new version: bump the version in package.json + src-tauri/tauri.conf.json +
   Cargo.toml (all three, release.mjs refuses if they disagree), then `npm run release`
   (or release.bat) — builds the NSIS installer and creates/refreshes the GitHub release

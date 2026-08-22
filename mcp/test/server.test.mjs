@@ -12,7 +12,7 @@
 // never moved.
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -552,6 +552,43 @@ let noteName = "";
       `essential did not sort first:\n${list2.text}`
     );
   });
+  // FB-0001: a rewrite that leaves the type off must not demote the essential note,
+  // and one that takes essential away on purpose must say so back.
+  {
+    const bodyOnly = await client.call("note", {
+      action: "write",
+      name: "start-here",
+      body: "The index every session reads first. Rewritten with no type passed at all.",
+    });
+    budgeted("note (rewrite, type left off)", bodyOnly);
+    check("a body-only rewrite keeps the essential type", () => {
+      assert(!bodyOnly.isError, bodyOnly.text);
+      assert(!bodyOnly.text.toLowerCase().includes("warning"), `no demotion happened, no warning due: ${bodyOnly.text}`);
+      assertIncludes(readFileSync(path.join(DATA, "notes", "start-here.md"), "utf8"), "type: essential", "frontmatter");
+    });
+
+    const demote = await client.call("note", {
+      action: "write",
+      name: "start-here",
+      type: "memory",
+      body: "The same note, this time with the type explicitly handed in as memory.",
+    });
+    budgeted("note (rewrite, essential demoted)", demote);
+    check("demoting an essential note warns and names the way back", () => {
+      assert(!demote.isError, demote.text);
+      assertIncludes(demote.text, "warning", "result");
+      assertIncludes(demote.text, "essential", "result");
+      assertIncludes(demote.text, 'type="essential"', "the restore call");
+      assertIncludes(readFileSync(path.join(DATA, "notes", "start-here.md"), "utf8"), "type: memory", "frontmatter");
+    });
+
+    const restore = await client.call("note", { action: "write", name: "start-here", type: "essential" });
+    check("the warned restore call puts essential back, without a warning of its own", () => {
+      assert(!restore.isError, restore.text);
+      assert(!restore.text.toLowerCase().includes("warning"), `restoring is not a demotion: ${restore.text}`);
+      assertIncludes(readFileSync(path.join(DATA, "notes", "start-here.md"), "utf8"), "type: essential", "frontmatter");
+    });
+  }
   {
     const gone = await client.call("note", { action: "remove", name: "start-here" });
     check("the essential note removes like any other", () => assert(!gone.isError, gone.text));
@@ -587,6 +624,38 @@ let noteName = "";
     const events = readFileSync(path.join(DATA, "events.jsonl"), "utf8");
     for (const type of ["note_created", "note_updated"]) assertIncludes(events, type, "events");
   });
+
+  // A named write that misses is a first write and says so — not a bare demand for
+  // metadata that reads as if rewriting required it (the retry after that demand,
+  // type guessed, is how FB-0001's demotion started).
+  {
+    const miss = await client.call("note", {
+      action: "write",
+      name: "never-was",
+      body: "A body aimed at a name that does not exist in this project.",
+    });
+    check("a write against a missing name names the miss and the first-write shape", () => {
+      assert(miss.isError, miss.text);
+      assertIncludes(miss.text, "no note named 'never-was'", "error");
+      assertIncludes(miss.text, "first write", "error");
+    });
+
+    // A note that exists but cannot be read is that error, not a first write: falling
+    // through to create would conflict at best and teach the caller to re-send metadata.
+    const brokenPath = path.join(DATA, "notes", "broken-frontmatter.md");
+    writeFileSync(brokenPath, "no frontmatter fence at all\n");
+    const broken = await client.call("note", {
+      action: "write",
+      name: "broken-frontmatter",
+      body: "A rewrite aimed at a note whose file no longer parses.",
+    });
+    check("a note that fails to load surfaces its own error, not the first-write demand", () => {
+      assert(broken.isError, broken.text);
+      assert(!broken.text.includes("first write"), `masqueraded as a first write: ${broken.text}`);
+      assertIncludes(broken.text, "frontmatter", "error");
+    });
+    rmSync(brokenPath); // doctor --strict at the foot of this file must not trip on it
+  }
 
   const removed = await client.call("note", { action: "remove", name: noteName });
   budgeted("note (remove)", removed);

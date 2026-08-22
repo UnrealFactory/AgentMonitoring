@@ -463,9 +463,13 @@ async function note(args, ctx) {
     const { at, who } = ident(args, ctx);
     // One fact, one file: a write against a name that exists rewrites it in place, so a
     // caller never has to know whether it is creating or correcting.
-    const exists = name ? (await runCli(at, ["note", "view", name, "--json"])).ok : false;
+    const existing = name ? await runCli(at, ["note", "view", name, "--json"]) : null;
+    // Only "no such note" (exit 3) may mean create. Any other view failure falling
+    // through would demand first-write metadata for a note that exists — and a caller
+    // re-sent with a guessed type is how an essential index got demoted once (FB-0001).
+    if (existing && !existing.ok && existing.exitCode !== 3) return fail(cliErrorText(existing));
 
-    if (exists) {
+    if (existing?.ok) {
       const a = ["note", "update", name, "--agent", who, "--json"];
       flag(a, "--title", args.title ? oneLine(args.title) : null);
       flag(a, "--type", args.type);
@@ -477,14 +481,25 @@ async function note(args, ctx) {
       if (body) a.push("--body-file", "-");
       const r = await runCli(at, a, body || undefined);
       if (!r.ok) return fail(cliErrorText(r));
+      // A type left off is preserved; a type passed is honored — but taking `essential`
+      // away unpins required reading from every list, so it never happens silently.
+      const was = existing.json?.type;
+      const now = r.json?.record?.type ?? was;
       return lines(
         `${r.json?.id} rewritten · ${who}`,
         r.json?.event?.summary ?? "",
+        was === "essential" && now !== "essential"
+          ? `warning: this note was essential — required session-start reading, listed first — and is now ${now}; if that was not meant, restore with note(action="write", name="${r.json?.id}", type="essential")`
+          : null,
         r.json?.path ?? ""
       );
     }
 
-    need(args, ["title", "type", "description", "body"], "note(action=write)");
+    need(
+      args,
+      ["title", "type", "description", "body"],
+      name ? `no note named '${name}' here — this is a first write, and it` : "note(action=write)"
+    );
     const a = [
       "note", "add", "--agent", who,
       "--title", oneLine(args.title),

@@ -173,9 +173,13 @@ in one tool. The essential notes are required session-start reading and sort fir
   a session and read the essentials before working.
 - `read` — one note by `name`; `full: true` for the whole body.
 - `write` — **upsert**: against a `name` that exists it rewrites in place (only the fields
-  passed; `body` replaces wholesale), which is the one-fact-one-file discipline; against a
-  new name (or none — it derives one from the title) it creates, requiring `title`,
-  `type`, `description` and `body`.
+  passed — a `type` left off is preserved; `body` replaces wholesale), which is the
+  one-fact-one-file discipline; against a new name (or none — it derives one from the
+  title) it creates, requiring `title`, `type`, `description` and `body`. Passing a `type`
+  that takes `essential` off an existing note is honored but answered with a warning and
+  the restore call — required reading must not fall out of the index unnoticed. A named
+  write whose note cannot be *read* (lock, malformed file) fails with that error rather
+  than posing as a first write.
 - `remove` — retires a note that would mislead if kept. The `note_removed` event stays on
   the feed; work logs and bugs have no such verb, here or anywhere.
 

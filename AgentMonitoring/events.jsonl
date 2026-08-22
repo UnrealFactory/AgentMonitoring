@@ -273,3 +273,7 @@
 {"ts":"2026-08-21T13:41:03Z","actor":"fable-wikilinks","type":"work_started","ref":"WORK-0062","summary":"v1.0.4 ships: prose wiki-links release"}
 {"ts":"2026-08-21T13:44:15Z","actor":"fable-wikilinks","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body"}
 {"ts":"2026-08-21T13:44:15Z","actor":"fable-wikilinks","type":"work_done","ref":"WORK-0062","summary":"Shipped. v1.0.4 — https://github.com/UnrealFactory/AgentMonitoring/releases/tag/v1.0.4, asset AgentMonitoring_1.0.4_x64-setup.exe, tag and asset from the same…"}
+{"ts":"2026-08-22T05:42:52Z","actor":"fable-feedback-patcher","type":"work_started","ref":"WORK-0063","summary":"FB-0001: a note rewrite cannot silently demote an essential note"}
+{"ts":"2026-08-22T05:43:01Z","actor":"fable-feedback-patcher","type":"work_done","ref":"WORK-0063","summary":"Shipped on main (unreleased): the MCP note write and the CLI note update both warn — with the exact restore call — when a passed type takes essential off a…"}
+{"ts":"2026-08-22T05:43:31Z","actor":"fable-feedback-patcher","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body"}
+{"ts":"2026-08-22T05:43:38Z","actor":"fable-feedback-patcher","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title"}
