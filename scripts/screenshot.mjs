@@ -63,9 +63,10 @@ Options (flag, or environment variable):
   --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
   --width <n>      $SHOT_WIDTH    viewport width (default 1600; the shell is judged at 1152 too)
   --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail,
-                                  notes-list, note-detail, projects, palette, palette-vault,
-                                  menu-project, menu-record, menu-dashboard, menu-switcher,
-                                  menu-vault-feed
+                                  notes-list, note-detail, work-human, work-agent, bug-human,
+                                  note-human, human-empty, feedback-human, projects, palette,
+                                  palette-vault, menu-project, menu-record, menu-dashboard,
+                                  menu-switcher, menu-vault-feed
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
   --locale <ko|en> $SHOT_LOCALE   language to photograph the app in (default ko)
   --project <name> $SHOT_PROJECT  project to shoot, by name or id (default: the one with the most records)
@@ -80,6 +81,11 @@ Options (flag, or environment variable):
 
 Detail screens produce two files: work-detail.png at ${VIEWPORT_TEXT} (what a human sees on
 screen) and work-detail-full.png with the entire record in one tall image.
+
+Every record screen says which half of the record it is (SPEC, "The human area"): the
+detail keys press Agent, the -human keys press Human, and human-empty opens a record
+written before human areas existed. Keys whose project has no record to fill them are
+skipped with a line in the log.
 
 Two runs with different --port and --out are safe at the same time.`);
   process.exit(0);
@@ -138,6 +144,31 @@ const api = async (path) => {
   const res = await fetch(`${ORIGIN}/project-api${path}`);
   if (!res.ok) throw new Error(`GET /project-api${path} -> ${res.status} ${await res.text()}`);
   return res.json();
+};
+
+/**
+ * Press one half of the Agent / Human toggle, and wait for the page to swap.
+ *
+ * The reader's choice is a session value (src/lib/recordView.ts), so it follows the browser
+ * from screen to screen: a run that photographed the human view and then went on to a
+ * record-detail key would photograph the human view again. Every screen that draws a record
+ * therefore says which half it is of, and none of them inherits.
+ *
+ * By `data-value`, not by the segment's words — the app ships in two languages and a gate
+ * that reaches for "Human" only works in one of them (the same rule the bugs tab follows).
+ */
+const showView = (mode) => async (page) => {
+  await page.waitForSelector(".record-title, .feedback-list, .empty", { state: "visible" });
+  await page.waitForFunction(() => !document.querySelector(".skeleton"));
+  const segment = page.locator(`.view-toggle [role="tab"][data-value="${mode}"]`).first();
+  await segment.waitFor({ state: "visible", timeout: 15_000 });
+  await segment.click();
+  await page.waitForFunction(
+    (want) =>
+      document.querySelector(`.view-toggle [role="tab"][data-value="${want}"]`)
+        ?.getAttribute("aria-selected") === "true",
+    mode,
+  );
 };
 
 async function shoot(page, { name, path, waitFor, prepare, full }) {
@@ -274,10 +305,43 @@ try {
       `note-detail: ${note?.name ?? "(no notes)"} · language: ${LOCALE}`,
   );
 
+  /* ---- the second half of every record (SPEC, "The human area") ----------------------
+     The human view is a screen of its own, so it is chosen the way every other screen here
+     is: by asking the project which records can fill it, never by hard-coding an id. The
+     richest retelling is the one worth photographing — a two-sentence one shows the type
+     and none of the shape — and the *same* record is shot in both halves, so the pair can
+     be read against each other. A project whose records all predate the human area (or all
+     carry one) skips the key it cannot fill, with a line in the log, exactly as a project
+     with no notes skips the note screens. */
+  const richest = (records) =>
+    records.filter((r) => r.human && r.human.trim()).sort((a, b) => b.human.length - a.human.length)[0] ?? null;
+  const humanWork = richest(works);
+  const humanBug = richest(bugs);
+  const humanNote = richest(notes);
+  /* And a record with no retelling at all, for the empty state: a bug first, because a live
+     bug board is where they actually are. */
+  const legacy =
+    bugs.find((b) => !b.human) ?? works.find((w) => !w.human) ?? notes.find((n) => !n.human) ?? null;
+  const legacyPath = legacy
+    ? `/p/${slug}/${legacy.id ? (legacy.id.startsWith("BUG") ? "bugs" : "work") : "notes"}/${legacy.id ?? legacy.name}`
+    : null;
+  log(
+    `human view: work ${humanWork?.id ?? "—"} · bug ${humanBug?.id ?? "—"} · ` +
+      `note ${humanNote?.name ?? "—"} · empty state ${legacy?.id ?? legacy?.name ?? "—"}`,
+  );
+
   const all = [
     { name: "dashboard", path: `/p/${slug}`, waitFor: ".now-strip .now-hero-value" },
     { name: "work-list", path: `/p/${slug}/work`, waitFor: ".work-rows .work-row" },
-    { name: "work-detail", path: `/p/${slug}/work/${work.id}`, waitFor: ".record-title", full: true },
+    /* The record screens say which half of the record they are: the three that have always
+       been here are the agent's, which is what they have always photographed. */
+    {
+      name: "work-detail",
+      path: `/p/${slug}/work/${work.id}`,
+      waitFor: ".record-title",
+      prepare: showView("agent"),
+      full: true,
+    },
     {
       name: "bugs",
       path: `/p/${slug}/bugs`,
@@ -303,7 +367,13 @@ try {
         }
       },
     },
-    { name: "bug-detail", path: `/p/${slug}/bugs/${bug.id}`, waitFor: ".record-title", full: true },
+    {
+      name: "bug-detail",
+      path: `/p/${slug}/bugs/${bug.id}`,
+      waitFor: ".record-title",
+      prepare: showView("agent"),
+      full: true,
+    },
     /* The notes screens exist only when the project has notes; a project without any is
        legal, so the two keys are skipped with a line in the log rather than failed. */
     ...(notes.length
@@ -313,10 +383,76 @@ try {
             name: "note-detail",
             path: `/p/${slug}/notes/${note.name}`,
             waitFor: ".record-title",
+            prepare: showView("agent"),
             full: true,
           },
         ]
       : []),
+
+    /* ---- the human half ------------------------------------------------------------
+       The same four record screens read the other way, plus the box a record written
+       before the human area existed shows instead. `work-agent` is the twin of
+       `work-human` — the same record, the other half — so the pair answers "is this the
+       same record?" rather than "are these two screens?". */
+    ...(humanWork
+      ? [
+          {
+            name: "work-human",
+            path: `/p/${slug}/work/${humanWork.id}`,
+            waitFor: ".human-sheet",
+            prepare: showView("human"),
+            full: true,
+          },
+          {
+            name: "work-agent",
+            path: `/p/${slug}/work/${humanWork.id}`,
+            waitFor: ".record-section .section-title",
+            prepare: showView("agent"),
+            full: true,
+          },
+        ]
+      : []),
+    ...(humanBug
+      ? [
+          {
+            name: "bug-human",
+            path: `/p/${slug}/bugs/${humanBug.id}`,
+            waitFor: ".human-sheet",
+            prepare: showView("human"),
+            full: true,
+          },
+        ]
+      : []),
+    ...(humanNote
+      ? [
+          {
+            name: "note-human",
+            path: `/p/${slug}/notes/${humanNote.name}`,
+            waitFor: ".human-sheet",
+            prepare: showView("human"),
+            full: true,
+          },
+        ]
+      : []),
+    ...(legacyPath
+      ? [
+          {
+            name: "human-empty",
+            path: legacyPath,
+            waitFor: ".human-empty",
+            prepare: showView("human"),
+          },
+        ]
+      : []),
+    {
+      /* The app feedback board: the fourth surface that draws a record, and the one whose
+         records are the app's own. One toggle for the board, every row swapped. */
+      name: "feedback-human",
+      path: "/app-feedback",
+      waitFor: ".human-view",
+      prepare: showView("human"),
+    },
+
     { name: "projects", path: "/projects", waitFor: ".project-row" },
     {
       // The command palette is a screen like any other — it is what Ctrl+K opens — so it
@@ -415,6 +551,14 @@ try {
   ];
 
   if (!notes.length) log("no notes in this project — notes-list and note-detail are skipped");
+  for (const [key, missing] of [
+    ["work-human / work-agent", !humanWork],
+    ["bug-human", !humanBug],
+    ["note-human", !humanNote],
+    ["human-empty", !legacyPath],
+  ]) {
+    if (missing) log(`no record for ${key} in this project — the key is skipped`);
+  }
   const unknown = ONLY.filter((k) => !all.some((s) => s.name === k));
   if (unknown.length) {
     throw new Error(

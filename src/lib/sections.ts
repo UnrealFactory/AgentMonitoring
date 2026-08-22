@@ -39,6 +39,15 @@ export interface LabelledSection {
   id: string;
   /** The author's label, minus its trailing punctuation: "Root cause", "Fix". */
   label: string;
+  /**
+   * The same run of bold, exactly as it was written — full stop and all.
+   *
+   * A resolution's label is a heading, and a heading does not end in a full stop; a human
+   * area's lead-in is a **sentence** ("**We saved a number, not a place.**", see
+   * docs/HUMAN_STYLE.md) and stops being one the moment its stop is taken off. Both readings
+   * are of the same bytes, so both are handed back and the caller says which it is drawing.
+   */
+  raw: string;
   /** First clause of the label, for the contents rail: "Consequence", "Follow-up". */
   short: string;
   /** A clause that binds to the label rather than opening the prose (", in four parts:"). */
@@ -157,11 +166,17 @@ function clauseEnd(clause: string, line: string): number | null {
  * Split a record body into the sub-sections its author labelled.
  *
  * A section starts at a line that begins a paragraph (column 0, after a blank line, outside
- * a fence) with a short `**bold**` run. Fewer than two such labels means the body is not
+ * a fence) with a short `**bold**` run. Fewer than `min` such labels means the body is not
  * written in sections, and it is returned untouched as the preamble — a resolution written
  * as three plain paragraphs must not sprout headings it never had.
+ *
+ * `min` is 2 for a closing section, and the human area passes 1 (see lib/human.ts): there
+ * the bold lead-in is not a label somebody happened to write but the shape the style
+ * contract asks for — one bold sentence opening each beat of the retelling
+ * (docs/HUMAN_STYLE.md) — so a single one is already the author saying "a beat starts
+ * here", and promoting it costs the reader nothing.
  */
-export function splitLabelledSections(source: string): SplitResult {
+export function splitLabelledSections(source: string, { min = 2 }: { min?: number } = {}): SplitResult {
   const text = (source ?? "").replace(/\r\n/g, "\n");
   const lines = text.split("\n");
 
@@ -214,7 +229,7 @@ export function splitLabelledSections(source: string): SplitResult {
     starts.push({ line: i, label, trailer: "", head: rest, from });
   }
 
-  if (starts.length < 2) return { preamble: text, sections: [] };
+  if (starts.length < min) return { preamble: text, sections: [] };
 
   const used = new Set<string>();
   const sections = starts.map((start, idx) => {
@@ -237,6 +252,7 @@ export function splitLabelledSections(source: string): SplitResult {
     return {
       id,
       label,
+      raw: start.label.trim(),
       short,
       trailer: start.trailer,
       body,

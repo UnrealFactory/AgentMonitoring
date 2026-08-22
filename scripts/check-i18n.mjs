@@ -232,6 +232,12 @@ const AUTHOR = [
   ".dashboard .page-title", // the project's own name…
   ".dashboard .page-sub", // …and its description
   ".section-title.is-author", // a `## …` heading the agent wrote, above their own section
+  /* The human area's two runs that are drawn outside `.prose`: the sentence the author
+     bolded to open a beat, promoted to a heading, and the line they closed on
+     (src/lib/human.ts). Same bytes as the retelling around them, same exemption — the
+     renderer prints them, it does not translate them. */
+  ".human-beat-lead",
+  ".human-takeaway",
   ".res-part-title", // the labels the author bolded inside a resolution
   ".res-jump-text",
   ".res-jump-link", // …including the full label, which rides on the chip's tooltip
@@ -572,11 +578,15 @@ const SWEEP_SCREENS = (projects) => [
       wait: ".work-rows .bug-row",
       filled: [".work-row-title"],
     },
+    /* Each record screen says which half of the record it is (see pressView): the agent's,
+       which is the dense one this sweep was written for and the one whose boxes have broken
+       Korean words. */
     ...(work
       ? [{
           name: `work detail ${work}`,
           path: `/p/${slug}/work/${work}`,
           wait: ".record-title",
+          prepare: pressView("agent"),
           filled: [".record-title", ".prose", ".rel-title"],
         }]
       : []),
@@ -585,7 +595,22 @@ const SWEEP_SCREENS = (projects) => [
           name: `bug detail ${bug}`,
           path: `/p/${slug}/bugs/${bug}`,
           wait: ".record-title",
+          prepare: pressView("agent"),
           filled: [".record-title", ".prose", ".rel-title"],
+        }]
+      : []),
+    /* …and the human half, which is where a broken Korean word would hurt most: it is the
+       largest type in the app that a reader meets whole sentences in, in a fixed 560px
+       column that does not reflow with the window. `.human-beat-lead` is the box the
+       fixture exists to fill here — a heading built out of the author's own sentence, which
+       is the shape `.rel-title` was when it broke (P9 round 7). */
+    ...(work
+      ? [{
+          name: `work detail ${work} (human)`,
+          path: `/p/${slug}/work/${work}`,
+          wait: ".human-sheet, .human-empty",
+          prepare: pressView("human"),
+          filled: [".human-sheet"],
         }]
       : []),
     /* The notes list: the third record kind's index, whose rows carry two author-written
@@ -606,6 +631,7 @@ const SWEEP_SCREENS = (projects) => [
           name: `note detail ${note}`,
           path: `/p/${slug}/notes/${note}`,
           wait: ".record-title",
+          prepare: pressView("agent"),
           filled: [".record-title", ".note-lead", ".prose", ".rel-title"],
         }]
       : []),
@@ -617,6 +643,10 @@ const SWEEP_SCREENS = (projects) => [
           name: `resolved bug ${resolvedBug}`,
           path: `/p/${slug}/bugs/${resolvedBug}`,
           wait: ".outcome-card.is-resolution .outcome-when",
+          /* The card is in the agent half, and on a bug that carries a retelling the app
+             opens on the *other* half — so without this press the wait times out on every
+             bug written since the human area arrived. */
+          prepare: pressView("agent"),
           filled: [".record-title", ".prose", ".outcome-body .prose"],
         }]
       : []),
@@ -991,6 +1021,36 @@ const openTips = (keyboardFirst) => async (page) => {
   );
 };
 
+/**
+ * Press one half of the Agent / Human toggle, and wait for the swap.
+ *
+ * Every record now has two views (SPEC, "The human area") and the reader's choice is a
+ * *session* value (src/lib/recordView.ts), so it follows this walk from screen to screen:
+ * one screen that pressed Human would silently hand the human view to every record after
+ * it, and a gate that does not know which half it is reading is a gate reporting on a
+ * screen it did not choose. So every screen that draws a record says which half it is.
+ *
+ * By `data-value`, never by the segment's word — the same rule as the bugs tab.
+ */
+const pressView = (mode) => async (page) => {
+  await page.waitForSelector(".record-title, .feedback-list, .empty", {
+    state: "visible",
+    timeout: 15_000,
+  });
+  await page.waitForFunction(() => !document.querySelector(".skeleton"));
+  const segment = page.locator(`.view-toggle [role="tab"][data-value="${mode}"]`).first();
+  await segment.waitFor({ state: "visible", timeout: 15_000 });
+  await segment.click();
+  await page.waitForFunction(
+    (want) =>
+      document
+        .querySelector(`.view-toggle [role="tab"][data-value="${want}"]`)
+        ?.getAttribute("aria-selected") === "true",
+    mode,
+    { timeout: 5_000 },
+  );
+};
+
 let failures = 0;
 let checked = 0;
 let swept = 0;
@@ -1169,6 +1229,7 @@ try {
         name: `work detail ${w.id}`,
         path: `/p/${p.id}/work/${w.id}`,
         wait: ".record-title",
+        prepare: pressView("agent"),
       });
     }
     for (const b of bugs) {
@@ -1176,6 +1237,39 @@ try {
         name: `bug detail ${b.id}`,
         path: `/p/${p.id}/bugs/${b.id}`,
         wait: ".record-title",
+        prepare: pressView("agent"),
+      });
+    }
+    /* …and the other half of every record that has one, plus the box the ones written
+       before it existed show instead. The human view is drawn by one component for all four
+       record kinds, so one record of each kind answers for it — but the *empty* box is the
+       app talking, in a sentence with a command in it, and it is only reachable on a record
+       whose human area is missing. A vault where every record has one (or none has one)
+       reports the gap rather than walking one screen fewer. */
+    const humanOf = (rows, path) => {
+      const has = rows.find((r) => r.human && r.human.trim());
+      return has ? [{ id: has.id ?? has.name, path: `/p/${p.id}/${path}/${has.id ?? has.name}` }] : [];
+    };
+    for (const { id, path } of [
+      ...humanOf(works, "work"),
+      ...humanOf(bugs, "bugs"),
+      ...humanOf(notesList, "notes"),
+    ]) {
+      screens.push({
+        name: `human view ${id}`,
+        path,
+        wait: ".human-sheet",
+        prepare: pressView("human"),
+      });
+    }
+    const noHuman =
+      bugs.find((b) => !b.human) ?? works.find((w) => !w.human) ?? notesList.find((n) => !n.human);
+    if (noHuman) {
+      screens.push({
+        name: `human view, none written (${noHuman.id ?? noHuman.name})`,
+        path: `/p/${p.id}/${noHuman.id ? (noHuman.id.startsWith("BUG") ? "bugs" : "work") : "notes"}/${noHuman.id ?? noHuman.name}`,
+        wait: ".human-empty",
+        prepare: pressView("human"),
       });
     }
     /* The third record kind: its list, and every note in full — the same "every record,
@@ -1188,6 +1282,7 @@ try {
         name: `note detail ${n.name}`,
         path: `/p/${p.id}/notes/${n.name}`,
         wait: ".record-title",
+        prepare: pressView("agent"),
       });
     }
   }
@@ -1197,6 +1292,18 @@ try {
   screens.push(
     { name: "projects", path: "/projects", wait: ".project-row" },
     { name: "app feedback", path: "/app-feedback", wait: ".empty, .feedback-list" },
+    /* The fourth surface that draws a record, read the other way. One toggle for the whole
+       board, and whatever this machine's agents filed decides whether the rows show a
+       retelling or the box that says none was written. */
+    {
+      name: "app feedback (human)",
+      path: "/app-feedback",
+      wait: ".human-view, .empty",
+      prepare: async (page) => {
+        await page.waitForSelector(".feedback-list, .empty", { state: "visible", timeout: 15_000 });
+        if (await page.locator(".view-toggle").count()) await pressView("human")(page);
+      },
+    },
     { name: "not found", path: "/nowhere-at-all", wait: ".page-title" },
     {
       name: "command palette",

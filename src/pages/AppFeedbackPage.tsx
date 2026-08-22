@@ -14,6 +14,9 @@ import { api, failureTitle, nothingToRetry } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useUrlFilters } from "../lib/useUrlFilters";
 import { AgentChip, EmptyState, ErrorState, InlineCode, RichText, Skeleton } from "../components/ui";
+import { HumanArea, RecordViewToggle } from "../components/HumanView";
+import { hasHumanArea } from "../lib/human";
+import { useRecordView } from "../lib/recordView";
 import { Markdown } from "../lib/markdown";
 import { useNow } from "../components/charts";
 import { formatDateTimeUtc, formatRelative } from "../lib/format";
@@ -53,6 +56,14 @@ export function AppFeedbackPage() {
   }, [items]);
   const open = items.filter((f) => f.status === "open").length;
   const filtered = kind === "all" ? items : items.filter((f) => f.type === kind);
+  /* The board is a list of small records, so its toggle is the board's rather than each
+     row's: one control, and every row swaps to the same half. The default follows the same
+     rule a detail screen's does — the retelling if there is one to show. */
+  const { view, choose } = useRecordView(
+    data ? items.some((f) => hasHumanArea(f.human)) : null,
+    "app-feedback"
+  );
+  const human = view === "human";
 
   const toggle = async (f: FeedbackItem) => {
     setBusyId(f.id);
@@ -128,6 +139,13 @@ export function AppFeedbackPage() {
             </button>
           ))}
         </div>
+        <div className="toolbar-right">
+          <RecordViewToggle
+            view={view}
+            onChange={choose}
+            hasHuman={items.some((f) => hasHumanArea(f.human))}
+          />
+        </div>
       </div>
 
       {actionError && (
@@ -156,10 +174,26 @@ export function AppFeedbackPage() {
                 <h2 className="feedback-title">{f.title}</h2>
                 <span className="feedback-id tabular">{f.id}</span>
               </div>
-              {f.body && (
-                <div className="feedback-body">
-                  <Markdown source={f.body} />
+              {/* The item's two halves, the same way a record's detail screen draws them:
+                  what the agent filed, or the same wish said for the person who has to
+                  decide about it. The row itself is the card, so the sheet inside it gives
+                  up its frame (.feedback-human, src/styles/app.css). */}
+              {human ? (
+                <div className="feedback-body feedback-human">
+                  <HumanArea
+                    human={f.human}
+                    kind="feedback"
+                    id={f.id}
+                    agent={f.agent}
+                    onShowAgent={() => choose("agent")}
+                  />
                 </div>
+              ) : (
+                f.body && (
+                  <div className="feedback-body">
+                    <Markdown source={f.body} />
+                  </div>
+                )
               )}
               <div className="feedback-meta">
                 <AgentChip name={f.agent} />

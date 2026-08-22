@@ -23,7 +23,10 @@ import {
   type TocEntry,
 } from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
+import { HumanArea, RecordViewToggle } from "../components/HumanView";
 import { useContextMenu } from "../components/ContextMenu";
+import { hasHumanArea } from "../lib/human";
+import { useRecordView } from "../lib/recordView";
 import { useProjectMenu, useRecordMenu } from "../lib/menus";
 import {
   AgentChip,
@@ -80,6 +83,11 @@ export function WorkDetailPage() {
   const recordMenu = useRecordMenu();
   const projectMenu = useProjectMenu();
   const related = useRelated(projectId, id, work?.refs ?? EMPTY);
+  /* Which half of the record is on screen — the agent's areas or the retelling. The reader's
+     choice for the session; the record's own answer until they make one. `null` while it
+     loads: "not read yet" is not "has none" (lib/recordView.ts). */
+  const { view, choose } = useRecordView(work ? hasHumanArea(work.human) : null, id);
+  const human = view === "human";
   /** Notes their authors opened with "Correction:" — see src/lib/updates.ts. */
   const corrections = countCorrections(work?.updates ?? []);
   /** The outcome's own parts (Shipped / Verified / Known gaps), as its author labelled them. */
@@ -189,11 +197,21 @@ export function WorkDetailPage() {
             recordMenu({ kind: "work", id: work.id, title: work.title, projectId, here: true })
           )}
         >
-          <RecordTitle title={work.title} id={work.id} />
+          {/* The title and the toggle share a line: what this record is, and which half of
+              it is being read. Everything below them — status, agent, dates, tags — is the
+              record's identity and is the same in both views. */}
+          <div className="record-head-top">
+            <RecordTitle title={work.title} id={work.id} />
+            <RecordViewToggle view={view} onChange={choose} hasHuman={hasHumanArea(work.human)} />
+          </div>
 
           {/* Above What/Why/How, because a correction the reader meets after the sentence it
-              corrects is a correction they have already believed the wrong version of. */}
-          <CorrectionNotice count={corrections} href="#updates" where={t("rec.inUpdates")} />
+              corrects is a correction they have already believed the wrong version of. The
+              retelling is one story with no trail under it, so the notice belongs to the
+              agent view, where the notes it points at are. */}
+          {!human && (
+            <CorrectionNotice count={corrections} href="#updates" where={t("rec.inUpdates")} />
+          )}
 
           <div className="rec-byline">
             <WorkStatusPill status={work.status} />
@@ -260,19 +278,31 @@ export function WorkDetailPage() {
 
         <div className="detail-layout">
           <article className="detail-main">
+            {/* The two areas never share the page: the payload keeps them apart (the body
+                the API serves is the agent area only — SPEC), and so does the screen. */}
+            {human && (
+              <HumanArea
+                human={work.human}
+                kind="work"
+                id={work.id}
+                agent={work.agent}
+                onShowAgent={() => choose("agent")}
+              />
+            )}
+
             {/* `section` is the literal heading in the record file (`## What`), which stays
                 English because it is what the vault holds; `title` is what this screen calls
                 it. The empty-state sentence names the literal one, so a reader who goes to
                 fix the record knows what to type. */}
-            <Body id="what" title={t("wd.what")} section="What" source={work.what} />
-            <Body id="why" title={t("wd.why")} section="Why" source={work.why} />
-            <Body id="how" title={t("wd.how")} section="How" source={work.how} />
+            {!human && <Body id="what" title={t("wd.what")} section="What" source={work.what} />}
+            {!human && <Body id="why" title={t("wd.why")} section="Why" source={work.why} />}
+            {!human && <Body id="how" title={t("wd.how")} section="How" source={work.how} />}
 
-            {work.files.length > 0 && <FilesSection files={work.files} />}
+            {!human && work.files.length > 0 && <FilesSection files={work.files} />}
 
             {/* Outcome before the trail: the record's newest state is what a reader came
                 for, and the trail below it runs newest-first for the same reason. */}
-            {work.outcome && (
+            {!human && work.outcome && (
               <section className="record-section" id="outcome">
                 <div className="outcome-card">
                   <header className="outcome-head">
@@ -307,11 +337,13 @@ export function WorkDetailPage() {
               </section>
             )}
 
-            <UpdatesSection work={work} />
+            {!human && <UpdatesSection work={work} />}
 
+            {/* What this record is wired to is not the agent's half or the human's — it is
+                the record's own shape, and both readers follow it. */}
             <RelatedSection projectId={projectId} id={work.id} kind="work" related={related} />
 
-            {work.extraSections.map((s) => (
+            {!human && work.extraSections.map((s) => (
               <section className="record-section" key={s.title}>
                 {/* The heading is the author’s own `## …` line, not one of the app’s: it is
                     printed as written, in whatever language they wrote it (P6). Marked so
@@ -324,7 +356,10 @@ export function WorkDetailPage() {
           </article>
 
           <aside className="detail-side">
-            <ContentsRail entries={sections} active={active} />
+            {/* The rail lists the agent area's sections and its anchors point into them, so
+                it belongs to that view. The facts card below it is the record's identity and
+                stays in both. */}
+            {!human && <ContentsRail entries={sections} active={active} />}
 
             <div className="side-card">
               {/* The object's own noun, the way the bug page's twin card says Bug. "Record"

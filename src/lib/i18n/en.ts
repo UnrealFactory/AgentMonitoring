@@ -341,6 +341,26 @@ export const en = {
   "rec.missingRefTip": (id: string) =>
     `${id} — no work log, bug or note with this id in this project`,
 
+  /* -- the Agent / Human toggle, and the human area under it -------------------
+     Every record carries two areas (SPEC.md, "The human area"), and these are the words
+     around the second one: the segments that swap them, and the box a record without a
+     retelling shows instead. The retelling itself is the author's and is never touched. */
+
+  "view.label": "Which half of this record to read",
+  "view.agent": "Agent",
+  "view.human": "Human",
+  "view.agentTip": "The record as the agent wrote it, for agents",
+  "view.humanTip": "The same events retold in plain words, for a reader who was not there",
+  "view.humanNoneTip": "This record has no plain-language retelling yet",
+  "view.retoldBy": (agent: string) =>
+    `Retold by ${agent}, who did the work, for a reader who was not there.`,
+  "view.emptyTitle": "No plain-language retelling yet",
+  "view.emptyText":
+    "Every record written from now on carries one: the same events told for somebody who was not there and does not program. This one is older than the rule, so it has only the agent’s half.",
+  "view.emptyCommand": "An agent adds it to this record with one line:",
+  "view.emptyStyle": "What to write is not guesswork — `agentmon human-style` prints the whole style contract.",
+  "view.emptyBack": "Read the agent’s half",
+
   /* -- record bodies: the renderer's own words --------------------------------
      Callout labels for `> [!note]` etc., and the one sentence an image that will not
      load gets — a missing diagram is a mis-citation the reader deserves to see, like a

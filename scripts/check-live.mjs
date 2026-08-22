@@ -296,6 +296,24 @@ try {
   await ready(detail);
   await notePage.goto(`${ORIGIN}/p/${slug}/notes/${note.name}`, { waitUntil: "domcontentloaded" });
   await ready(notePage);
+  /* Both record pages are read in the **agent** half, because that is the half the writes
+     below land in: `work update --message` appends to the progress notes and the note's own
+     description is rewritten, and neither of those is in the retelling. A record that
+     carries a human area opens on it (SPEC, "The human area"), so a gate that does not say
+     which half it means would be watching for a sentence on a page that never draws it.
+     By `data-value`, not by the segment's word: this gate runs in both languages. */
+  for (const page of [detail, notePage]) {
+    const segment = page.locator('.view-toggle [role="tab"][data-value="agent"]').first();
+    if (await segment.count()) {
+      await segment.click();
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector('.view-toggle [role="tab"][data-value="agent"]')
+            ?.getAttribute("aria-selected") === "true",
+      );
+    }
+  }
 
   // Scroll the pages well down: the reader is mid-page, which is the whole point. (A short
   // note page clamps the scroll; the checks below read what it actually landed on.)

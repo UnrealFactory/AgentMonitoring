@@ -15,7 +15,10 @@ import { api, failureTitle, nothingToRetry } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { Markdown, RecordTitles } from "../lib/markdown";
 import { RelatedSection, useRelated } from "../components/Related";
+import { HumanArea, RecordViewToggle } from "../components/HumanView";
 import { useContextMenu } from "../components/ContextMenu";
+import { hasHumanArea } from "../lib/human";
+import { useRecordView } from "../lib/recordView";
 import { useProjectMenu, useRecordMenu } from "../lib/menus";
 import {
   AgentChip,
@@ -60,6 +63,9 @@ export function NoteDetailPage() {
   const recordMenu = useRecordMenu();
   const projectMenu = useProjectMenu();
   const related = useRelated(projectId, id, note?.refs ?? EMPTY);
+  /* Which half of the note is on screen — the reader's choice for the session. */
+  const { view, choose } = useRecordView(note ? hasHumanArea(note.human) : null, note?.name ?? id);
+  const human = view === "human";
   /* No memoized words on this page, but the sentences below are built at render and the
      subscription keeps a language change from leaving the last one behind. */
   useLocale();
@@ -132,7 +138,12 @@ export function NoteDetailPage() {
             recordMenu({ kind: "note", id: note.name, title: note.title, projectId, here: true })
           )}
         >
-          <RecordTitle title={note.title} id={note.name} />
+          {/* The note's name and which half of it is being read; the type, the author and
+              the dates below are the note's identity and are the same in both. */}
+          <div className="record-head-top">
+            <RecordTitle title={note.title} id={note.name} />
+            <RecordViewToggle view={view} onChange={choose} hasHuman={hasHumanArea(note.human)} />
+          </div>
 
           <div className="rec-byline">
             <NoteTypePill type={note.type} />
@@ -170,21 +181,41 @@ export function NoteDetailPage() {
 
         <div className="detail-layout">
           <article className="detail-main">
+            {/* The retelling stands alone: the description is the hook the *note* was
+                written with, for the agents who read this list, and the human area opens on
+                its own words (SPEC, "The human area"). */}
+            {human && (
+              <HumanArea
+                human={note.human}
+                kind="note"
+                id={note.name}
+                /* Whoever's words the note currently is — the same rule the byline uses. */
+                agent={note.updatedBy ?? note.agent}
+                onShowAgent={() => choose("agent")}
+              />
+            )}
+
             {/* The author's own hook, at the altitude it was written for: the line every
                 list shows, ahead of the body it summarises. */}
-            <p className="note-lead">{note.description}</p>
+            {!human && <p className="note-lead">{note.description}</p>}
 
-            <section className="record-section" id="body">
-              <Markdown source={note.body} />
-            </section>
+            {!human && (
+              <section className="record-section" id="body">
+                <Markdown source={note.body} />
+              </section>
+            )}
 
             <RelatedSection projectId={projectId} id={note.name} kind="note" related={related} />
 
             {/* The contract, said where a reader who wants to act on the note is looking:
-                notes are rewritten in place, and the feed keeps the trail. */}
-            <p className="note-foot muted">
-              <RichText text={t("nd.updateHint", note.name)} />
-            </p>
+                notes are rewritten in place, and the feed keeps the trail. It is a sentence
+                about editing the note, so it is drawn for the reader who is reading the
+                note's own words. */}
+            {!human && (
+              <p className="note-foot muted">
+                <RichText text={t("nd.updateHint", note.name)} />
+              </p>
+            )}
           </article>
 
           <aside className="detail-side">

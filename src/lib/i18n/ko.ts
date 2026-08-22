@@ -408,6 +408,25 @@ export const ko: Dict = {
      받으므로 어느 쪽도 이 파일이 고를 수 없다. */
   "rec.missingRefTip": (id) => `${id} — 이 프로젝트에 해당 ID의 작업 로그·버그·메모가 없습니다`,
 
+  /* -- the Agent / Human toggle, and the human area under it -------------------
+     기록은 두 벌로 남는다 (SPEC.md, "The human area"). 여기 있는 말은 그 둘을 바꿔 다는
+     세그먼트와, 사람을 위한 글이 아직 없는 기록이 대신 보여 주는 상자의 말이다. 글 자체는
+     쓴 사람의 것이라 손대지 않는다. */
+
+  "view.label": "이 기록을 어느 쪽으로 읽을지",
+  "view.agent": "에이전트",
+  "view.human": "사람",
+  "view.agentTip": "에이전트가 에이전트를 위해 쓴 그대로",
+  "view.humanTip": "같은 일을, 그 자리에 없던 사람을 위해 쉬운 말로 다시 쓴 글",
+  "view.humanNoneTip": "이 기록에는 아직 쉬운 말로 쓴 글이 없습니다",
+  "view.retoldBy": (agent) => `그 자리에 없던 사람을 위해, 이 일을 한 ${agent}가 다시 쓴 글입니다.`,
+  "view.emptyTitle": "아직 쉬운 말로 쓴 글이 없습니다",
+  "view.emptyText":
+    "이제 남기는 기록에는 모두 한 벌이 더 붙습니다. 같은 일을, 그 자리에 없었고 프로그램도 다루지 않는 사람을 위해 쓴 글입니다. 이 기록은 그 규칙보다 먼저 쓰여서 에이전트 쪽 한 벌만 있습니다.",
+  "view.emptyCommand": "에이전트가 이 기록에 한 줄로 덧붙입니다:",
+  "view.emptyStyle": "어떻게 쓰는지는 짐작할 일이 아닙니다. `agentmon human-style`이 규칙 전문을 출력합니다.",
+  "view.emptyBack": "에이전트 쪽 읽기",
+
   /* -- record bodies: the renderer's own words --------------------------------
      `> [!note]` 콜아웃의 이름표와, 이미지를 읽지 못했을 때의 한 문장 (lib/markdown.tsx). */
 

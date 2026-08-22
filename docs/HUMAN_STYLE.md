@@ -9,7 +9,7 @@ The human area retells this record for someone who was not there and does not pr
 Write it in the record's own language, and never make "the record" the subject — say "nobody wrote down why". Markdown sparingly; a `##` heading is refused.
 Name the thing this record is about — its id, file, setting name, colour code, the tool that ran — say plainly what that tool is for, and what goes wrong for a person when a check of that kind comes back no.
 Tell the chase in beats, in the order it happened, one short paragraph each. Cover all five:
-1. The problem or the want: what someone saw, or what had to be decided. Never open on an absence.
+1. The problem or the want: what someone saw, or what had to be decided. Never open on an absence. A scene is no wider than the record's own count — a record that names two rows gives you rows like these, never every row — and no deeper than its words: not what the thing is drawn as, not the wanting or the choosing that came before it. Where the record shows you no scene, open on the sentence it does give.
 2. What you actually did — the real change, not a category.
 3. What was tricky: the wrong guess you chased, what fooled you, what you tried and dropped.
 4. How you know: who or what looked, the check that would have caught this, its number, what its passing rules out.
@@ -66,17 +66,18 @@ Three kinds survive the first read:
 ## The shape a reader can follow
 
 - **Tell the chase in beats**, opening on what the reader could have witnessed — a wrong email, a blank screen, a question someone had to settle, never a definition —
-  then the wrong guess, the real cause, the fix, the proof, what is still open.
+  then the wrong guess, the real cause, the fix, the proof, what is still open. A scene is no wider than the record's own count — a record that names two rows gives you
+  rows like these, never every row — and no deeper than its words: not what the thing is drawn as, not the wanting or the choosing that came before it. Where the record
+  shows you no scene, open on the sentence it does give.
 - **A lead-in states something; it does not label the paragraph.** Every beat after the opening starts with one short bold sentence about a thing in this record: "**We
   threw away the name that knows the rule.**" A reader carries a claim and skips a label — "**The stored offset.**" is a label, "**How we know.**" is a stage of an
   essay and is a form. A thin record gets no lead-ins at all.
 - **Five sentences end a paragraph.** Nobody gives up on a long text; they give up on a long sentence and a nine-sentence block. The mechanism beat is where they are
   lost: give it the shortest sentences, the analogy — *like a key cut to open every door in the building, including the one you meant to lock* — and a second lead-in
   rather than one wall.
-- **Count the names as well as the words, and count the names first.** Words: 150 thin, 300 for most, 450 at the densest — a well-built 450 reads easier than a squeezed
-  300. Names: about one per fifty words, one per fact — nine or ten in a long piece, two or three in a short one. The second number is what decides whether a page feels
-  like work, and glossing does not buy it back: the reader still holds every noun you introduced while you use them. Over either count, cut in the order under
-  *Coverage* below.
+- **Count the names as well as the words, and count the names first.** Words: 150 thin, 300 for most, 450 at the densest — a well-built 450 reads easier than a squeezed 300.
+  Names: about one per fifty words, one per fact — nine or ten in a long piece, two or three in a short one. The second number is what decides whether a page feels like
+  work, and glossing does not buy it back: the reader still holds every noun you introduced while you use them. Over either count, cut in the order under *Coverage* below.
 - **Close on a rule of thumb, not a summary**: *a backup you have never restored is not a backup*.
 
 ## Stay inside the record
@@ -117,9 +118,11 @@ beat. A thin record works the other way — 150 honest words beat 300 padded one
 - **Work just started**: open on what is missing today for the people who will use it, then how far you got and what looks hard; "nothing is checked yet" belongs at
   item 4, and a plan is never written as a result. **Abandoned work**: open on what was wanted, give item 3 most of the text, and let item 5 be what did not ship and
   what the next person should not repeat.
-- **A decision or a note**: open on the choice, and name the thing it governs on sight — its colour code, its setting name, its file — glossed no further than the
+- **A decision or a note**: open on what was settled, and name the thing it governs on sight — its colour code, its setting name, its file — glossed no further than the
   record explains it, though what the tool that judged it is for, and what it guards against, are still yours to state plainly. Item 4 is whatever evidence exists,
-  sometimes only "we looked". A note is short and carries few names: cash out every one, and spend a sentence on why the question was worth settling at all.
+  sometimes only "we looked". A note is short and carries few names: cash out every one. Besides its subject it holds one fact — that somebody settled this and wrote it
+  down, and when — so state the decision with its date, rather than leaving the thing it governs standing loose in time. Say why it was worth settling in the record's own
+  words — if it does not say, say what was settled and stop; never supply the pick, the ordering or the all-clear that came before or after it.
 - **A handoff**: open on where the work stands and what the next person walks into; the traps are item 3, item 5 is what to do first. **A release**: open on what is in
   people's hands, then what they will notice.
 
@@ -140,11 +143,10 @@ zone" mail to everyone. **What fooled us.** CI runs in UTC, where offset and zon
 covered: those 612 rows, until support touches them.
 ```
 
-**Human area** — seven beats, six opening on a lead-in that states something, one analogy, one closing line, no paragraph over four sentences: 401 words and three
-names, `TASK-410`, `Europe/London`, `node check-offsets.mjs`. Numbers are facts, not names: 41,208 and 612 cost the reader nothing to hold. Every gloss traces to
-a line above or to what that kind of tool is for — `TASK-410` is the signup rewrite because the record says so; `check-offsets.mjs` compares answers against hours
-written down because that is what a check of that kind does, and the beat says what its failing would have looked like. What either holds inside is never
-described: nobody wrote it down.
+**Human area** — seven beats, six opening on a lead-in that states something, one analogy, one closing line, no paragraph over four sentences: 401 words and three names,
+`TASK-410`, `Europe/London`, `node check-offsets.mjs`. Numbers are facts, not names: 41,208 and 612 cost the reader nothing to hold. Every gloss traces to a line above or
+to what that kind of tool is for — `TASK-410` is the signup rewrite because the record says so; `check-offsets.mjs` compares answers against hours written down because
+that is what a check of that kind does, and the beat says what its failing would have looked like. What either holds inside is never described: nobody wrote it down.
 
 ```md
 Every night we send a reminder email. For about 1,100 people in Britain it started arriving at ten in the morning, not nine. It began the night the clocks went

@@ -157,6 +157,14 @@
   --text-sm: 12px;
   --text-base: 13px;
   --text-md: 14px;
+  /* One step above the body, and the only place it is used: the human area — a record
+     retold in plain language for somebody who was not there (SPEC). Every other surface in
+     this app is *scanned*, which is what 13–14px is for; that one is **read**, start to
+     finish, by a person who did not come here for a dashboard. 15 is the smallest step that
+     changes how a paragraph reads without changing what app you are in — 16 (`--text-lg`)
+     is already the size of a card heading here, and prose set at a heading's size stops
+     looking like this window. */
+  --text-read: 15px;
   --text-lg: 16px;
   --text-xl: 20px;
   --text-2xl: 26px;
@@ -213,6 +221,12 @@
   --sidebar-width: 232px;
   --content-max: 1240px;
   --prose-max: 78ch;
+  /* …and the measure of the one surface that is read rather than scanned. Narrower than
+     `--prose-max` on purpose: 78ch is right for a record body that is skimmed for the one
+     paragraph that matters, and too long a line to return from eight times in a row. At
+     `--text-read` this is ~560px, which leaves the sheet sitting inside the same column the
+     agent view uses rather than opening a second layout. */
+  --human-measure: 62ch;
   --header-height: 48px;
   /* The strip the desktop app draws where Windows used to draw a title bar. Only the
      desktop app has one (browser mode never renders it), so nothing else in this file
@@ -366,6 +380,15 @@ dt {
    scripts/check-i18n.mjs the first time that dialog was read at 1600px). */
 .modal-warn,
 .modal-note,
+/* The four lines the human view says in its own voice: the box a record with no retelling
+   shows (its headline, its paragraph, the line over the command and the line under it), and
+   the byline naming who retold the one that has it. Sentences, in a 560px column — the
+   width band this whole list exists for. */
+.human-empty-title,
+.human-empty-text,
+.human-empty-lead,
+.human-empty-foot,
+.human-foot,
 .note-foot {
   word-break: keep-all;
   overflow-wrap: break-word;
@@ -406,6 +429,12 @@ dt {
 .project-desc,
 .now-row-title,
 .feed-summary,
+/* The two runs of the human area that are drawn outside `.prose` — the sentence an author
+   bolded to open a beat, promoted to a heading, and the line they closed on. They are the
+   author's Korean exactly as `.prose` is, and they are the largest type in this app that a
+   reader meets a whole sentence in, so a syllable cut in half here is cut in half at 16px. */
+.human-beat-lead,
+.human-takeaway,
 .note-lead {
   word-break: keep-all;
   overflow-wrap: break-word;

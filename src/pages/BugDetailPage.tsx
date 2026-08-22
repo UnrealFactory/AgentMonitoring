@@ -28,7 +28,10 @@ import {
   type TocEntry,
 } from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
+import { HumanArea, RecordViewToggle } from "../components/HumanView";
 import { useContextMenu } from "../components/ContextMenu";
+import { hasHumanArea } from "../lib/human";
+import { useRecordView } from "../lib/recordView";
 import { useProjectMenu, useRecordMenu } from "../lib/menus";
 import {
   AgentChip,
@@ -82,6 +85,9 @@ export function BugDetailPage() {
   const recordMenu = useRecordMenu();
   const projectMenu = useProjectMenu();
   const related = useRelated(projectId, id, bug?.refs ?? EMPTY);
+  /* The reader's half of the record, for the session — the twin of the work log's. */
+  const { view, choose } = useRecordView(bug ? hasHumanArea(bug.human) : null, id);
+  const human = view === "human";
 
   /**
    * The resolution, split into the parts its author labelled (Root cause / Fix / Verified /
@@ -198,15 +204,24 @@ export function BugDetailPage() {
             recordMenu({ kind: "bug", id: bug.id, title: bug.title, projectId, here: true })
           )}
         >
-          <RecordTitle title={bug.title} id={bug.id} />
+          {/* The title, and which half of the bug is being read. The status, the severity,
+              the dates and the three-step strip below are the bug's identity: both views
+              open on the same header. */}
+          <div className="record-head-top">
+            <RecordTitle title={bug.title} id={bug.id} />
+            <RecordViewToggle view={view} onChange={choose} hasHuman={hasHumanArea(bug.human)} />
+          </div>
 
           {/* Same rule as a work log: a reader meets the correction before the report it
-              corrects, not thousands of pixels below it. */}
-          <CorrectionNotice
-            count={countCorrections(bug.comments)}
-            href="#thread"
-            where={t("rec.inThread")}
-          />
+              corrects, not thousands of pixels below it — and it points into the thread, so
+              it is drawn where the thread is. */}
+          {!human && (
+            <CorrectionNotice
+              count={countCorrections(bug.comments)}
+              href="#thread"
+              where={t("rec.inThread")}
+            />
+          )}
 
           <div className="rec-byline">
             <BugStatusPill status={bug.status} />
@@ -244,32 +259,48 @@ export function BugDetailPage() {
 
         <div className="detail-layout">
           <article className="detail-main">
-            <section className="record-section" id="report">
-              <h2 className="section-title">
-                {t("bd.report")}
-                <span className="section-byline">
-                  {t("bd.reportBy", bug.reporter, formatRelative(bug.created))}
-                </span>
-              </h2>
-              {bug.report.trim() ? (
-                <Markdown source={bug.report} />
-              ) : (
-                <p className="muted">
-                  <RichText text={t("bd.noReportSection")} />
-                </p>
-              )}
-            </section>
+            {/* One area or the other, never both — the payload keeps them apart and so does
+                the page (SPEC, "The human area"). */}
+            {human && (
+              <HumanArea
+                human={bug.human}
+                kind="bug"
+                id={bug.id}
+                /* The retelling of a bug is written by whoever last touched it: the agent who
+                   resolved it if it is resolved, otherwise the one who filed it. */
+                agent={bug.resolvedBy ?? bug.assignee ?? bug.reporter}
+                onShowAgent={() => choose("agent")}
+              />
+            )}
+
+            {!human && (
+              <section className="record-section" id="report">
+                <h2 className="section-title">
+                  {t("bd.report")}
+                  <span className="section-byline">
+                    {t("bd.reportBy", bug.reporter, formatRelative(bug.created))}
+                  </span>
+                </h2>
+                {bug.report.trim() ? (
+                  <Markdown source={bug.report} />
+                ) : (
+                  <p className="muted">
+                    <RichText text={t("bd.noReportSection")} />
+                  </p>
+                )}
+              </section>
+            )}
 
             {/* The fix before the thread: it is the newest thing on the record and the
                 thing a reader came for, and the thread below it runs newest-first for
                 the same reason. */}
-            {bug.resolution && (
+            {!human && bug.resolution && (
               <ResolutionCard bug={bug} openFor={openFor} resolution={resolution} />
             )}
 
-            <ThreadSection bug={bug} claimDelay={claimDelay} />
+            {!human && <ThreadSection bug={bug} claimDelay={claimDelay} />}
 
-            {bug.status === "closed" && !bug.resolution && (
+            {!human && bug.status === "closed" && !bug.resolution && (
               <section className="record-section">
                 <div className="notice">
                   <span className="notice-mark" aria-hidden="true" />
@@ -281,9 +312,10 @@ export function BugDetailPage() {
               </section>
             )}
 
+            {/* The record's own wiring, in both views (see the work log's twin). */}
             <RelatedSection projectId={projectId} id={bug.id} kind="bug" related={related} />
 
-            {bug.extraSections.map((s) => (
+            {!human && bug.extraSections.map((s) => (
               <section className="record-section" key={s.title}>
                 {/* The heading is the author’s own `## …` line, not one of the app’s: it is
                     printed as written, in whatever language they wrote it (P6). Marked so
@@ -296,7 +328,9 @@ export function BugDetailPage() {
           </article>
 
           <aside className="detail-side">
-            <ContentsRail entries={sections} active={active} />
+            {/* The rail's rows are the agent area's sections; the facts card under it is the
+                bug itself and is drawn in both views. */}
+            {!human && <ContentsRail entries={sections} active={active} />}
 
             <div className="side-card">
               <div className="side-card-title">{t("bd.bug")}</div>

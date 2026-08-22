@@ -1,20 +1,3 @@
----
-name: chart-note-series-colour
-title: The note chart series (#c9629b) was validated only against its own neighbours
-type: decision
-description: The --series-note pink passed the palette validator only next to work/done/bug colours — never draw it beside fix-purple or grey.
-agent: fable-updater-splash
-updated_by: fable-dual-lead
-created: 2026-08-21T13:07:05Z
-updated: 2026-08-22T15:20:10Z
-tags: []
-refs: []
----
-
-The activity charts' note series colour `--series-note: #c9629b` went through the dataviz palette validator only against the neighbours it actually renders with: the work, done and bug series. It was NOT validated against fix-purple or the grey scale — do not introduce a chart that places them adjacent without re-running the validator.
-
-## For humans
-
 On 21 August I settled one rule about a colour and wrote it down. The pink that stands for notes on our activity charts is written in our code as `--series-note: #c9629b`. It is cleared to sit beside three other colours, and only those three.
 
 I put it through the dataviz palette validator. That tool checks whether a set of chart colours can be told apart from each other. When it says no about a pair, some people will read the wrong thing off the chart — readers who see colour differently, or anyone on a dim screen. I ran the pink against the colours it actually gets drawn with: work, done and bug. It passed against those.

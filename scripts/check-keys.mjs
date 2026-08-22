@@ -136,6 +136,34 @@ const focused = (page) =>
     return `${el.tagName.toLowerCase()}.${(el.className || "").toString().split(" ")[0] || "(no class)"}`;
   });
 
+/**
+ * Press one half of the Agent / Human toggle and wait for the swap — by `data-value`, never
+ * by the segment's word, because this gate runs in two languages.
+ *
+ * The reader's choice is a session value (src/lib/recordView.ts) and follows the window from
+ * record to record, so anything here that reads a record body says which half it means.
+ */
+const showView = async (page, mode) => {
+  const segment = page.locator(`.view-toggle [role="tab"][data-value="${mode}"]`).first();
+  if (!(await segment.count())) return;
+  await segment.click();
+  await page.waitForFunction(
+    (want) =>
+      document
+        .querySelector(`.view-toggle [role="tab"][data-value="${want}"]`)
+        ?.getAttribute("aria-selected") === "true",
+    mode,
+    { timeout: 5_000 },
+  );
+};
+
+/** Which half the toggle says is on screen, as the app itself reports it. */
+const shownView = (page) =>
+  page.evaluate(
+    () =>
+      document.querySelector('.view-toggle [role="tab"][aria-selected="true"]')?.dataset.value ?? null,
+  );
+
 const paletteOpen = (page) => page.locator(".palette").isVisible();
 const highlight = (page) =>
   page.locator(".palette-item.is-active .palette-label").first().textContent();
@@ -586,6 +614,10 @@ try {
   // A record's head carries the same menu as its row, minus the Open it does not need.
   await page.goto(`${ORIGIN}/p/${slug}/work/${someWork.id}`, { waitUntil: "domcontentloaded" });
   await ready(page);
+  /* …read in the agent half, which is where the prose with the ids in it is. A record that
+     carries a retelling opens on the other half (SPEC, "The human area"), and the two checks
+     below are about a chip inside a record body. */
+  await showView(page, "agent");
   // The watcher does not survive a navigation, and half of what is measured below is what
   // the document did with an event that raised no menu.
   await watchContextMenu(page);
@@ -653,6 +685,139 @@ try {
       `${await page.getAttribute(".ctx-menu", "aria-label")} vs ${relId}`,
     );
     await page.keyboard.press("Escape");
+  }
+
+  /* 10. The Agent / Human toggle — the one control this app has that changes what a record
+     *says*, rather than where the reader is (SPEC, "The human area").
+     *
+     Three promises are measured, and all three are keyboard promises. It is **reachable**:
+     a control that only a mouse can find hides half of every record from anybody driving
+     this app from the keyboard, and it sits in a header full of links, so the only honest
+     test is to Tab there from the top of the page. It **works from the keyboard**: a
+     `<button>` answers ↵ and Space by being one, which is exactly why it is one and not a
+     div. And it is **visible when it has the focus**: `:focus-visible` in tokens.css draws
+     the ring, and a segment that took the ring off would be a control the keyboard can hold
+     and nobody can see it holding.
+
+     Then the fourth promise, which is not about the keyboard: the choice **persists across
+     records**. It is a session value, so a reader who asked for plain language once is not
+     asked again on the next record — including a record that has none, where the answer is
+     the box saying so rather than a silent flip back to the agent half. */
+  log("--- the Agent / Human toggle");
+  const humanWork = (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/worklogs`)).json())
+    .find((w) => w.human && w.human.trim());
+  if (!humanWork) {
+    check("a record with a human area to read the toggle on", false, "no work log in this project carries one");
+  } else {
+    await page.goto(`${ORIGIN}/p/${slug}/work/${humanWork.id}`, { waitUntil: "domcontentloaded" });
+    /* A window in which nobody has chosen yet — which is what the *default* is a claim
+       about. This page has been pressing Agent since the context-menu section above, and
+       that choice is a session value that outlives a navigation by design, so it is cleared
+       here rather than assumed away. (That it survives one is measured further down.) */
+    await page.evaluate(() => window.sessionStorage.removeItem("agentmon.recordView"));
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await ready(page);
+    check(
+      "a record with a human area opens on it",
+      (await shownView(page)) === "human" && (await page.locator(".human-sheet").count()) === 1,
+      `toggle says ${await shownView(page)}`,
+    );
+    /* The two areas never share a page (SPEC): the agent's sections are not drawn under the
+       retelling. `관련 항목` is not one of them — what a record is wired to is the record's
+       own shape and is drawn in both halves — so the agent area is named by its sections'
+       own anchors rather than by "every heading on the page". */
+    check(
+      "…and the agent's sections are not on the page under it",
+      (await page.locator("#what, #why, #how, #outcome, #updates, #report, #thread, #body").count()) === 0,
+      `${await page.locator("#what, #why, #how, #outcome, #updates, #report, #thread, #body").count()} agent sections drawn`,
+    );
+
+    // Reachable: Tab from the top of the document until something is focused inside it.
+    await page.locator(".breadcrumb a").first().focus();
+    let hops = 0;
+    let onToggle = false;
+    while (hops < 12 && !onToggle) {
+      await page.keyboard.press("Tab");
+      hops += 1;
+      onToggle = await page.evaluate(() => !!document.activeElement?.closest(".view-toggle"));
+    }
+    check("Tab from the breadcrumb reaches the toggle", onToggle, `${hops} tab stops and still ${await focused(page)}`);
+    check(
+      "…and the ring is drawn on it, so the reader can see where they are",
+      await page.evaluate(() => document.activeElement?.matches(":focus-visible") === true),
+    );
+
+    /* ↵ on the Agent segment. Tab lands on the first segment; the reader presses ↵ on the
+       one they want, which is the one the app is not already showing. */
+    while (!(await page.evaluate(() => document.activeElement?.dataset.value === "agent"))) {
+      await page.keyboard.press("Tab");
+    }
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".record-section .section-title", { state: "visible", timeout: 5_000 });
+    check(
+      "↵ on the Agent segment swaps the record to the agent's half",
+      (await shownView(page)) === "agent" && (await page.locator(".human-sheet").count()) === 0,
+      `toggle says ${await shownView(page)}`,
+    );
+    check(
+      "…and the record's identity is still on screen — the head is the same in both halves",
+      (await page.locator(".record-title").count()) === 1 &&
+        (await page.locator(".rec-byline .pill").count()) > 0,
+    );
+    check(
+      "…and the address did not change: this is one record, read another way",
+      page.url().endsWith(`/work/${humanWork.id}`),
+      page.url(),
+    );
+
+    // Space, on the other segment, from the keyboard alone. Each segment is its own tab
+    // stop, so the reader moves between them with Tab and presses the one they want.
+    await page.keyboard.press("Tab");
+    check(
+      "the other segment is the next tab stop",
+      await page.evaluate(() => document.activeElement?.dataset.value === "human"),
+      await focused(page),
+    );
+    await page.keyboard.press(" ");
+    await page.waitForSelector(".human-sheet", { state: "visible", timeout: 5_000 });
+    check("Space on the Human segment swaps it back", (await shownView(page)) === "human");
+
+    /* The choice follows the reader. A second record, opened by navigating rather than by
+       reloading, and then one that has no human area at all. */
+    const otherWork = (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/worklogs`)).json())
+      .find((w) => w.id !== humanWork.id && w.human && w.human.trim());
+    if (otherWork) {
+      await page.goto(`${ORIGIN}/p/${slug}/work/${otherWork.id}`, { waitUntil: "domcontentloaded" });
+      await ready(page);
+      check(
+        "the choice carries onto the next record",
+        (await shownView(page)) === "human" && (await page.locator(".human-sheet").count()) === 1,
+        `toggle says ${await shownView(page)}`,
+      );
+    }
+    const noHuman = (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/bugs`)).json())
+      .find((b) => !b.human);
+    if (noHuman) {
+      await page.goto(`${ORIGIN}/p/${slug}/bugs/${noHuman.id}`, { waitUntil: "domcontentloaded" });
+      await ready(page);
+      check(
+        "a record with no human area answers the same choice with the box that says so",
+        (await shownView(page)) === "human" && (await page.locator(".human-empty").count()) === 1,
+        `toggle says ${await shownView(page)}, ${await page.locator(".human-empty").count()} boxes`,
+      );
+      check(
+        "…naming the command that would add one, with this record's own id in it",
+        ((await page.locator(".human-empty .command-text").textContent()) ?? "").includes(noHuman.id),
+        await page.locator(".human-empty .command-text").textContent(),
+      );
+      check(
+        "…and offering the way back to the half that does exist",
+        (await page.locator(".human-empty-action .button").count()) === 1,
+      );
+      await page.locator(".human-empty-action .button").click();
+      await page.waitForSelector(".record-section .section-title", { state: "visible", timeout: 5_000 });
+      check("…which shows it", (await shownView(page)) === "agent");
+    }
   }
 
   /* 6b. The dashboard — /p/<slug>, the route the app lands on.

@@ -459,11 +459,39 @@ try {
     // The board opens on the bugs that still need someone; the dense view is All.
     screens.push({ path: `/p/${p.id}/bugs?tab=all` });
     screens.push({ path: `/p/${p.id}/notes` });
-    for (const w of works) screens.push({ path: `/p/${p.id}/work/${w.id}` });
-    for (const b of bugs) screens.push({ path: `/p/${p.id}/bugs/${b.id}` });
+    /* Every record, in the half this gate was written for — the dense one. `view` is not
+       decoration: a record that carries a human area *opens* on the other half now
+       (SPEC, "The human area"), and the reader's choice is a session value that follows the
+       page, so a screen that does not say which half it is is a screen measuring whichever
+       one the screen before it left behind. */
+    for (const w of works) screens.push({ path: `/p/${p.id}/work/${w.id}`, view: "agent" });
+    for (const b of bugs) screens.push({ path: `/p/${p.id}/bugs/${b.id}`, view: "agent" });
     // Every note too: a note's id is its kebab name, so its screens are addressed by name.
-    for (const n of notes) screens.push({ path: `/p/${p.id}/notes/${n.name}` });
+    for (const n of notes) screens.push({ path: `/p/${p.id}/notes/${n.name}`, view: "agent" });
+
+    /* …and the human half, wherever the two differ. One record of each kind that has a
+       retelling — the sheet is one component and a fixed measure, so the third work log
+       reading it adds no width the first did not — plus one record that has none, for the
+       box naming the command that would add it. Those boxes hold the longest unbroken
+       token this app prints (a command with an id and a handle in it) inside a 560px
+       column, which is exactly the shape this gate exists to catch. */
+    const withHuman = (rows, path) => {
+      const has = rows.find((r) => r.human && r.human.trim());
+      return has ? [{ path: `/p/${p.id}/${path}/${has.id ?? has.name}`, view: "human" }] : [];
+    };
+    screens.push(
+      ...withHuman(works, "work"),
+      ...withHuman(bugs, "bugs"),
+      ...withHuman(notes, "notes"),
+    );
+    const noHuman = bugs.find((b) => !b.human) ?? works.find((w) => !w.human) ?? notes.find((n) => !n.human);
+    if (noHuman) {
+      const kind = noHuman.id ? (noHuman.id.startsWith("BUG") ? "bugs" : "work") : "notes";
+      screens.push({ path: `/p/${p.id}/${kind}/${noHuman.id ?? noHuman.name}`, view: "human" });
+    }
   }
+  // The app's own board, both halves: its rows are records too.
+  screens.push({ path: "/app-feedback", view: "agent" }, { path: "/app-feedback", view: "human" });
   screens.push({ path: "/projects" });
 
   /* A record screen is a work log's or a bug's (uppercase id) — or a note's, whose name is
@@ -491,6 +519,18 @@ try {
         await page.goto(`${ORIGIN}${screen.path}`, { waitUntil: "domcontentloaded" });
         await page.waitForSelector(".page-title, .record-title", { state: "visible" });
         await page.waitForFunction(() => !document.querySelector(".skeleton"));
+        /* Which half of the record (see `view` above). By `data-value`: the segments are
+           words, and this gate runs in both languages. */
+        if (screen.view && (await page.locator(".view-toggle").count())) {
+          await page.locator(`.view-toggle [role="tab"][data-value="${screen.view}"]`).first().click();
+          await page.waitForFunction(
+            (want) =>
+              document
+                .querySelector(`.view-toggle [role="tab"][data-value="${want}"]`)
+                ?.getAttribute("aria-selected") === "true",
+            screen.view,
+          );
+        }
         // A chart is drawn at the measured pixel width of its container, so it lands one
         // frame after the data. Probing between the two would measure an empty card and
         // call it clean.
@@ -499,7 +539,8 @@ try {
         );
         await page.evaluate(() => document.fonts.ready);
         const { clipped, overlaps, truncated } = await page.evaluate(PROBE, SLACK);
-        const where = `${String(width).padEnd(5)} ${screen.path.padEnd(38)}`;
+        /* The half is part of the address: two findings on one path are two screens. */
+        const where = `${String(width).padEnd(5)} ${`${screen.path}${screen.view === "human" ? " [human]" : ""}`.padEnd(46)}`;
         for (const f of clipped) {
           failures += 1;
           lines.push(`CLIPPED ${where} ${f.clipper} cuts ${f.cut} by ${f.px}px — "${f.text}"`);
