@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELI5 — Why saving my code did nothing</title>
+<style>
+  :root {
+    --bg: #0f1220;
+    --card: #1a1f35;
+    --ink: #eef1ff;
+    --dim: #9aa3c7;
+    --good: #4ade80;
+    --bad: #f87171;
+    --warn: #fbbf24;
+    --accent: #818cf8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 80px;
+    line-height: 1.4;
+  }
+  h1 { font-size: 2.4rem; text-align: center; max-width: 800px; }
+  .sub { color: var(--dim); font-size: 1.2rem; margin-top: 12px; text-align: center; }
+  .card {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 40px;
+    margin-top: 40px;
+    width: min(860px, 100%);
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,.4);
+  }
+  .card h2 { font-size: 1.6rem; margin-bottom: 8px; }
+  .card p  { font-size: 1.15rem; color: var(--dim); max-width: 640px; margin: 8px auto 24px; }
+  .big { font-size: 5rem; line-height: 1; }
+  svg { max-width: 100%; height: auto; }
+  .tag {
+    display: inline-block;
+    font-size: .85rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+  .tag.good { background: rgba(74,222,128,.15); color: var(--good); }
+  .tag.bad  { background: rgba(248,113,113,.15); color: var(--bad); }
+  .tag.warn { background: rgba(251,191,36,.15); color: var(--warn); }
+  .tag.info { background: rgba(129,140,248,.15); color: var(--accent); }
+  code {
+    background: #0b0e1a;
+    padding: 3px 10px;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    color: var(--warn);
+  }
+  .arrow { font-size: 3rem; color: var(--dim); margin: 24px 0 0; }
+  .punch { font-size: 1.35rem; color: var(--ink); font-weight: 600; max-width: 640px; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>🔧 I saved my code… and nothing changed. Why?</h1>
+<p class="sub">A tiny story about a watcher who was accidentally told to close his eyes.</p>
+
+<!-- SCENE 1: How it should work -->
+<div class="card">
+  <span class="tag good">How it normally works</span>
+  <h2>A little watcher looks at your files</h2>
+  <p>When you save a file, the watcher sees it and instantly refreshes the app in your browser.</p>
+  <svg viewBox="0 0 760 220" role="img" aria-label="You save a file, the watcher sees it, the browser refreshes">
+    <!-- file -->
+    <g>
+      <rect x="30" y="50" width="120" height="150" rx="12" fill="#232a4a"/>
+      <rect x="50" y="80" width="80" height="10" rx="5" fill="#818cf8"/>
+      <rect x="50" y="102" width="60" height="10" rx="5" fill="#4ade80"/>
+      <rect x="50" y="124" width="70" height="10" rx="5" fill="#818cf8"/>
+      <text x="90" y="40" text-anchor="middle" font-size="30">💾</text>
+      <text x="90" y="225" text-anchor="middle" font-size="16" fill="#9aa3c7">you save</text>
+    </g>
+    <text x="205" y="135" font-size="36" fill="#9aa3c7">→</text>
+    <!-- watcher -->
+    <g>
+      <circle cx="330" cy="115" r="62" fill="#232a4a"/>
+      <ellipse cx="330" cy="115" rx="42" ry="26" fill="#eef1ff"/>
+      <circle cx="330" cy="115" r="15" fill="#4ade80"/>
+      <circle cx="330" cy="115" r="6" fill="#0f1220"/>
+      <text x="330" y="212" text-anchor="middle" font-size="16" fill="#9aa3c7">the watcher sees it</text>
+    </g>
+    <text x="435" y="135" font-size="36" fill="#9aa3c7">→</text>
+    <!-- browser -->
+    <g>
+      <rect x="500" y="45" width="220" height="150" rx="14" fill="#232a4a"/>
+      <rect x="500" y="45" width="220" height="34" rx="14" fill="#2f3860"/>
+      <circle cx="522" cy="62" r="6" fill="#f87171"/>
+      <circle cx="544" cy="62" r="6" fill="#fbbf24"/>
+      <circle cx="566" cy="62" r="6" fill="#4ade80"/>
+      <text x="610" y="140" text-anchor="middle" font-size="44">✨</text>
+      <text x="610" y="216" text-anchor="middle" font-size="16" fill="#9aa3c7">app updates instantly</text>
+    </g>
+  </svg>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- SCENE 2: The rule -->
+<div class="card">
+  <span class="tag warn">Someone added a rule</span>
+  <h2>“Ignore anything named <code>AgentMonitoring</code>”</h2>
+  <p>Good idea! There's a noisy data folder by that name — it changes constantly, and refreshing the app for every data write would be annoying.</p>
+  <svg viewBox="0 0 760 200" role="img" aria-label="A note saying ignore AgentMonitoring pinned next to a noisy folder">
+    <!-- note -->
+    <rect x="60" y="40" width="300" height="120" rx="10" fill="#fbf3c8" transform="rotate(-3 210 100)"/>
+    <text x="210" y="88" text-anchor="middle" font-size="20" fill="#5b4a00" transform="rotate(-3 210 100)">📝 ignore anything named</text>
+    <text x="210" y="122" text-anchor="middle" font-size="22" font-weight="bold" fill="#8a6d00" transform="rotate(-3 210 100)">“AgentMonitoring”</text>
+    <!-- noisy folder -->
+    <g>
+      <path d="M480 70 h70 l20 20 h110 a12 12 0 0 1 12 12 v70 a12 12 0 0 1 -12 12 h-200 a12 12 0 0 1 -12 -12 v-90 a12 12 0 0 1 12 -12z" fill="#fbbf24"/>
+      <text x="580" y="150" text-anchor="middle" font-size="34">📊🔔📊</text>
+      <text x="580" y="60" text-anchor="middle" font-size="16" fill="#9aa3c7">noisy data folder</text>
+    </g>
+  </svg>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- SCENE 3: The twist -->
+<div class="card">
+  <span class="tag bad">The twist</span>
+  <h2>The whole house has the same name 😱</h2>
+  <p>The entire project lives in a folder called… <code>AgentMonitoring</code>. So “anything named AgentMonitoring, anywhere” matched <b>every single file in the project</b>.</p>
+  <svg viewBox="0 0 760 300" role="img" aria-label="The big project folder is named AgentMonitoring, so everything inside it gets ignored">
+    <!-- big house folder -->
+    <path d="M110 70 h120 l30 30 h390 a16 16 0 0 1 16 16 v150 a16 16 0 0 1 -16 16 h-540 a16 16 0 0 1 -16 -16 v-180 a16 16 0 0 1 16 -16z" fill="#f87171" opacity="0.9"/>
+    <text x="380" y="55" text-anchor="middle" font-size="20" font-weight="bold" fill="#f87171">the WHOLE project: “AgentMonitoring”</text>
+    <!-- everything inside, greyed -->
+    <g opacity="0.85">
+      <rect x="150" y="135" width="110" height="100" rx="10" fill="#1a1f35"/>
+      <text x="205" y="195" text-anchor="middle" font-size="30">📄</text>
+      <text x="205" y="225" text-anchor="middle" font-size="14" fill="#9aa3c7">your code</text>
+      <rect x="290" y="135" width="110" height="100" rx="10" fill="#1a1f35"/>
+      <text x="345" y="195" text-anchor="middle" font-size="30">📄</text>
+      <text x="345" y="225" text-anchor="middle" font-size="14" fill="#9aa3c7">more code</text>
+      <rect x="430" y="135" width="110" height="100" rx="10" fill="#1a1f35"/>
+      <text x="485" y="195" text-anchor="middle" font-size="30">⚙️</text>
+      <text x="485" y="225" text-anchor="middle" font-size="14" fill="#9aa3c7">even settings</text>
+    </g>
+    <!-- big ignored stamp -->
+    <text x="380" y="200" text-anchor="middle" font-size="52" font-weight="bold" fill="#f87171" opacity="0.95" transform="rotate(-8 380 200)">IGNORED ✋</text>
+  </svg>
+  <p class="punch">The watcher closed his eyes to the entire codebase.</p>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- SCENE 4: What that felt like -->
+<div class="card">
+  <span class="tag bad">What you saw</span>
+  <h2>Save → nothing. Reload → still nothing.</h2>
+  <p>The server kept handing out the copy of your code it made when it started — forever. It even couldn't see changes to its own settings file, so it never restarted itself either.</p>
+  <svg viewBox="0 0 760 190" role="img" aria-label="Watcher with closed eyes, browser stuck showing old code">
+    <!-- sleeping watcher -->
+    <g>
+      <circle cx="180" cy="95" r="62" fill="#232a4a"/>
+      <path d="M138 95 q42 26 84 0" stroke="#eef1ff" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <text x="248" y="55" font-size="30">💤</text>
+      <text x="180" y="185" text-anchor="middle" font-size="16" fill="#9aa3c7">watcher: eyes shut</text>
+    </g>
+    <text x="330" y="110" font-size="36" fill="#9aa3c7">→</text>
+    <!-- stale browser -->
+    <g>
+      <rect x="420" y="25" width="240" height="140" rx="14" fill="#232a4a"/>
+      <rect x="420" y="25" width="240" height="32" rx="14" fill="#2f3860"/>
+      <text x="540" y="115" text-anchor="middle" font-size="40">🧟</text>
+      <text x="540" y="150" text-anchor="middle" font-size="15" fill="#9aa3c7">yesterday's code, every time</text>
+    </g>
+  </svg>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- SCENE 5: The fix -->
+<div class="card">
+  <span class="tag good">The fix</span>
+  <h2>Point at ONE folder, not a name</h2>
+  <p>Instead of “ignore anything with that name, anywhere,” the rule now says “ignore exactly <b>this one data folder, at this exact address</b>.”</p>
+  <svg viewBox="0 0 760 300" role="img" aria-label="Now only the one data folder inside the project is ignored; all code is watched">
+    <!-- project folder, healthy -->
+    <path d="M110 70 h120 l30 30 h390 a16 16 0 0 1 16 16 v150 a16 16 0 0 1 -16 16 h-540 a16 16 0 0 1 -16 -16 v-180 a16 16 0 0 1 16 -16z" fill="#232a4a"/>
+    <text x="380" y="55" text-anchor="middle" font-size="20" font-weight="bold" fill="#4ade80">the project — watched again ✅</text>
+    <!-- code files, bright -->
+    <g>
+      <rect x="150" y="135" width="110" height="100" rx="10" fill="#2f3860"/>
+      <text x="205" y="190" text-anchor="middle" font-size="30">📄</text>
+      <text x="205" y="222" text-anchor="middle" font-size="18" fill="#4ade80">👁️ seen</text>
+      <rect x="290" y="135" width="110" height="100" rx="10" fill="#2f3860"/>
+      <text x="345" y="190" text-anchor="middle" font-size="30">📄</text>
+      <text x="345" y="222" text-anchor="middle" font-size="18" fill="#4ade80">👁️ seen</text>
+    </g>
+    <!-- the one ignored data folder -->
+    <g>
+      <rect x="430" y="135" width="180" height="100" rx="10" fill="#1a1f35" stroke="#fbbf24" stroke-width="3" stroke-dasharray="8 6"/>
+      <text x="520" y="185" text-anchor="middle" font-size="30">📊</text>
+      <text x="520" y="222" text-anchor="middle" font-size="16" fill="#fbbf24">🙈 only THIS is ignored</text>
+    </g>
+  </svg>
+  <p class="punch">Save a file → it shows up in ~2 seconds. Verified live, both ways.</p>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- Takeaway -->
+<div class="card">
+  <span class="tag info">The one-line lesson</span>
+  <div class="big">🏠 = 🗂️</div>
+  <h2 style="margin-top:16px">Never ban a name your own house shares</h2>
+  <p>A “match this name at any depth” rule (<code>**/AgentMonitoring/**</code>) will also match the root folder if it has that name — and silently swallow everything inside. Anchor rules to an exact path instead.</p>
+</div>
+
+</body>
+</html>

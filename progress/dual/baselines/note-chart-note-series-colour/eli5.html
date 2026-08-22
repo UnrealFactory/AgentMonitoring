@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ELI5 · Note-Pink has a seating chart</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface-1: #fcfcfb;
+    --ink:       #0b0b0b;
+    --ink-2:     #52514e;
+    --muted:     #898781;
+    --grid:      #e1e0d9;
+    --baseline:  #c3c2b7;
+    --border:    rgba(11,11,11,0.10);
+    --note: #c9629b;          /* the real hex — the subject of this page */
+    --work: #2a78d6;          /* stand-in */
+    --done: #1baf7a;          /* stand-in */
+    --bug:  #e34948;          /* stand-in */
+    --fix:  #4a3aa7;          /* stand-in */
+    --grey-1: #e1e0d9;
+    --grey-2: #c3c2b7;
+    --grey-3: #898781;
+    --good:    #0ca30c;
+    --warning: #fab219;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:      #0d0d0d;
+      --surface-1: #1a1a19;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --muted:     #898781;
+      --grid:      #2c2c2a;
+      --baseline:  #383835;
+      --border:    rgba(255,255,255,0.10);
+      --work: #3987e5;
+      --done: #199e70;
+      --bug:  #e66767;
+      --fix:  #9085e9;
+      --grey-1: #2c2c2a;
+      --grey-2: #383835;
+      --grey-3: #898781;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:      #0d0d0d;
+    --surface-1: #1a1a19;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --muted:     #898781;
+    --grid:      #2c2c2a;
+    --baseline:  #383835;
+    --border:    rgba(255,255,255,0.10);
+    --work: #3987e5;
+    --done: #199e70;
+    --bug:  #e66767;
+    --fix:  #9085e9;
+    --grey-1: #2c2c2a;
+    --grey-2: #383835;
+    --grey-3: #898781;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.4;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 20px 64px; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    margin: 28px 0;
+    position: relative;
+  }
+
+  h1 { font-size: 2rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.35rem; margin: 0 0 16px; letter-spacing: -0.01em; }
+  p  { color: var(--ink-2); margin: 8px 0 0; font-size: 1.05rem; }
+  .kicker { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 24px; }
+
+  /* hero */
+  .hero { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+  .hero-dot {
+    width: 128px; height: 128px; border-radius: 50%;
+    background: var(--note); flex: none;
+  }
+  .hex {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.95rem; color: var(--ink-2);
+    background: var(--page); border: 1px solid var(--border);
+    border-radius: 6px; padding: 2px 8px;
+  }
+
+  /* badges */
+  .badge {
+    position: absolute; top: -18px; right: 24px;
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.7rem; font-weight: 700;
+    border: 3px solid var(--surface-1);
+  }
+  .badge.ok   { background: var(--good); color: #ffffff; }
+  .badge.warn { background: var(--warning); color: #0b0b0b; }
+
+  /* chart illustration */
+  figure { margin: 16px 0 0; }
+  figure svg { width: 100%; height: auto; display: block; }
+
+  /* benches (untested pairs) */
+  .benches { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; }
+  .bench {
+    flex: 1 1 240px;
+    background: var(--page); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; text-align: center;
+  }
+  .bench .q { font-size: 2.2rem; font-weight: 800; color: var(--ink); }
+  .chips { display: flex; justify-content: center; gap: 10px; margin: 12px 0 6px; }
+  .chip { width: 64px; height: 64px; border-radius: 12px; }
+  .chip.sm { width: 40px; height: 64px; }
+  .chip-label { font-size: 0.85rem; color: var(--ink-2); }
+  .vs { align-self: center; color: var(--muted); font-weight: 700; }
+
+  /* rule */
+  .rule-big { font-size: 1.5rem; font-weight: 700; margin: 4px 0 12px; letter-spacing: -0.01em; }
+  .pill {
+    display: inline-block;
+    font-family: ui-monospace, Consolas, monospace; font-size: 0.9rem;
+    color: var(--ink-2); background: var(--page);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 14px; margin-top: 4px;
+  }
+
+  footer { color: var(--muted); font-size: 0.82rem; margin-top: 36px; }
+  footer p { color: var(--muted); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<main>
+  <div class="kicker">Explain like I'm five · a colour decision</div>
+
+  <!-- hero -->
+  <section class="card">
+    <div class="hero">
+      <div class="hero-dot" role="img" aria-label="A big pink dot, colour #c9629b"></div>
+      <div>
+        <h1>This is Note‑Pink.</h1>
+        <p>It draws the <strong>Notes</strong> line on our activity charts. <span class="hex">#c9629b</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- scene 1: tested -->
+  <section class="card">
+    <div class="badge ok" aria-label="Passed">✓</div>
+    <h2>Pink passed the telling‑apart test…</h2>
+    <p>…but only next to the friends it actually sits with: <strong>Work</strong>, <strong>Done</strong> and <strong>Bug</strong>. Every pair of eyes can tell them apart <em>in this picture</em>.</p>
+    <figure>
+      <svg viewBox="0 0 680 260" role="img" aria-label="A small line chart with four lines labelled Work, Done, Bug and Notes, each a different colour, all easy to tell apart">
+        <line x1="24" y1="70"  x2="576" y2="70"  stroke="var(--grid)" stroke-width="1"/>
+        <line x1="24" y1="130" x2="576" y2="130" stroke="var(--grid)" stroke-width="1"/>
+        <line x1="24" y1="190" x2="576" y2="190" stroke="var(--grid)" stroke-width="1"/>
+        <line x1="24" y1="236" x2="576" y2="236" stroke="var(--baseline)" stroke-width="1.5"/>
+        <path d="M24 60 C 120 40, 220 80, 320 62 S 500 44, 576 58"   fill="none" stroke="var(--work)" stroke-width="3" stroke-linecap="round"/>
+        <path d="M24 118 C 130 100, 230 132, 330 114 S 500 98, 576 110" fill="none" stroke="var(--done)" stroke-width="3" stroke-linecap="round"/>
+        <path d="M24 176 C 120 160, 240 190, 340 172 S 500 158, 576 168" fill="none" stroke="var(--bug)" stroke-width="3" stroke-linecap="round"/>
+        <path d="M24 222 C 130 206, 240 232, 340 214 S 500 202, 576 212" fill="none" stroke="var(--note)" stroke-width="4" stroke-linecap="round"/>
+        <text x="588" y="62"  fill="var(--ink-2)" font-size="15" font-weight="600">Work</text>
+        <text x="588" y="114" fill="var(--ink-2)" font-size="15" font-weight="600">Done</text>
+        <text x="588" y="172" fill="var(--ink-2)" font-size="15" font-weight="600">Bug</text>
+        <text x="588" y="216" fill="var(--ink-2)" font-size="15" font-weight="700">Notes</text>
+      </svg>
+    </figure>
+  </section>
+
+  <!-- scene 2: never tested -->
+  <section class="card">
+    <div class="badge warn" aria-label="Never tested">?</div>
+    <h2>Nobody tested these seats</h2>
+    <p>Some eyes see close colours as almost the same. Pink was <strong>never</strong> checked next to these two — so we don't know if everyone could tell them apart.</p>
+    <div class="benches">
+      <div class="bench">
+        <div class="q" aria-hidden="true">?</div>
+        <div class="chips">
+          <div class="chip" style="background: var(--note)"></div>
+          <div class="vs">·</div>
+          <div class="chip" style="background: var(--fix)"></div>
+        </div>
+        <div class="chip-label"><strong>Pink</strong> next to <strong>Fix‑purple</strong> — colour cousins</div>
+      </div>
+      <div class="bench">
+        <div class="q" aria-hidden="true">?</div>
+        <div class="chips">
+          <div class="chip" style="background: var(--note)"></div>
+          <div class="vs">·</div>
+          <div class="chip sm" style="background: var(--grey-1)"></div>
+          <div class="chip sm" style="background: var(--grey-2)"></div>
+          <div class="chip sm" style="background: var(--grey-3)"></div>
+        </div>
+        <div class="chip-label"><strong>Pink</strong> next to <strong>the greys</strong> — quiet colours it could fade into</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- scene 3: the rule -->
+  <section class="card">
+    <h2>The rule</h2>
+    <div class="rule-big">Want pink beside purple or grey in a new chart?<br>Run the checker first.</div>
+    <p>The test is a little program, not a squint — it does the maths for every kind of eyes.</p>
+    <div class="pill">dataviz&nbsp;·&nbsp;scripts/validate_palette.js&nbsp;"#c9629b,…"</div>
+    <p style="font-size: 0.9rem;">Psst — open this page's console: the checker just ran on the four tested colours above.</p>
+  </section>
+
+  <footer>
+    <p>Only the pink is the real hex (<code>#c9629b</code>, <code>--series-note</code>). Work, Done, Bug, Fix and the greys are stand‑in colours — the project's own values live in its theme.</p>
+    <p>Decision · chart-note-series-colour · recorded 2026‑08‑21</p>
+  </footer>
+</main>
+
+<script>
+  // Feed the validator the palette this page's chart actually shows,
+  // stepped for whichever mode the page rendered in.
+  (function () {
+    var dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    var b = document.body;
+    b.dataset.mode = dark ? "dark" : "light";
+    b.dataset.surface = dark ? "#1a1a19" : "#fcfcfb";
+    b.dataset.palette = dark
+      ? "#3987e5,#199e70,#e66767,#c9629b"
+      : "#2a78d6,#1baf7a,#e34948,#c9629b";
+    b.dataset.pairs = "adjacent"; // line chart — neighbours in visual stacking order
+  })();
+</script>
+<script type="module">
+  // Inlined from the dataviz skill's scripts/validate_palette.js (categorical
+  // checks + browser auto-run; CLI and ordinal paths dropped). Thresholds and
+  // maths unchanged.
+  const BAND = { light: [0.43, 0.77], dark: [0.48, 0.67] };
+  const CHROMA_FLOOR = 0.10;
+  const CVD_TARGET = 8.0, CVD_FLOOR = 6.0;
+  const NORMAL_FLOOR = 15.0;
+  const CONTRAST_MIN = 3.0;
+  const DEFAULT_SURFACE = { light: "#fcfcfb", dark: "#1a1a19" };
+  const MACHADO = {
+    protan: [[0.152286, 1.052583, -0.204868],
+             [0.114503, 0.786281, 0.099216],
+             [-0.003882, -0.048116, 1.051998]],
+    deutan: [[0.367322, 0.860646, -0.227968],
+             [0.280085, 0.672501, 0.047413],
+             [-0.011820, 0.042940, 0.968881]],
+    tritan: [[1.255528, -0.076749, -0.178779],
+             [-0.078411, 0.930809, 0.147602],
+             [0.004733, 0.691367, 0.303900]],
+  };
+  const hex2srgb = (h) => { h = h.trim().replace(/^#/, ""); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255); };
+  const WS_RUN = "[ \\t\\n\\v\\f\\r\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]+";
+  const stripWs = (v) => v.replace(new RegExp(`^${WS_RUN}|${WS_RUN}$`, "g"), "");
+  const splitColors = (raw) => (raw || "").split(",").map(stripWs).filter(Boolean);
+  const isHexColor = (v) => /^#?[0-9a-fA-F]{6}$/.test(v);
+  const s2lin = (c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  const lin = (h) => hex2srgb(h).map(s2lin);
+  const relLum = (h) => { const [r, g, b] = lin(h); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const contrast = (a, b) => { const [hi, lo] = [relLum(a), relLum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  function oklabFromLin([r, g, b]) {
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [
+      0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+    ];
+  }
+  const oklab = (h) => oklabFromLin(lin(h));
+  const oklch = (h) => { const [L, a, b] = oklab(h); return [L, Math.hypot(a, b)]; };
+  function simulate(h, kind) {
+    const [r, g, b] = lin(h), M = MACHADO[kind];
+    const clamp = (c) => Math.max(0, Math.min(1, c));
+    return [
+      clamp(M[0][0] * r + M[0][1] * g + M[0][2] * b),
+      clamp(M[1][0] * r + M[1][1] * g + M[1][2] * b),
+      clamp(M[2][0] * r + M[2][1] * g + M[2][2] * b),
+    ];
+  }
+  function deltaE(h1, h2, kind) {
+    const a = oklabFromLin(kind ? simulate(h1, kind) : lin(h1));
+    const b = oklabFromLin(kind ? simulate(h2, kind) : lin(h2));
+    return 100 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  }
+  function validate(palette, { mode = "light", surface, pairs = "adjacent" } = {}) {
+    surface ??= DEFAULT_SURFACE[mode];
+    const [lo, hi] = BAND[mode];
+    const report = [];
+    let ok = true;
+    const offband = palette.filter(c => { const L = oklch(c)[0]; return L < lo || L > hi; })
+      .map(c => [c, +oklch(c)[0].toFixed(3)]);
+    if (offband.length) ok = false;
+    report.push(["Lightness band", !offband.length,
+      offband.length ? `outside band: ${JSON.stringify(offband)}` : `all ${palette.length} inside L ${lo}–${hi}`]);
+    const lowc = palette.filter(c => oklch(c)[1] < CHROMA_FLOOR).map(c => [c, +oklch(c)[1].toFixed(3)]);
+    if (lowc.length) ok = false;
+    report.push(["Chroma floor", !lowc.length,
+      lowc.length ? `below floor (reads gray): ${JSON.stringify(lowc)}` : `all ${palette.length} >= ${CHROMA_FLOOR}`]);
+    const n = palette.length;
+    const pairlist = pairs === "all"
+      ? Array.from({ length: n }, (_, i) => Array.from({ length: n - i - 1 }, (_, k) => [i, i + 1 + k])).flat()
+      : Array.from({ length: n - 1 }, (_, i) => [i, i + 1]);
+    const label = pairs === "all" ? "all-pairs" : "adjacent";
+    let worst = null;
+    for (const kind of ["protan", "deutan"]) {
+      for (const [i, j] of pairlist) {
+        const d = deltaE(palette[i], palette[j], kind);
+        if (worst === null || d < worst[0]) worst = [d, kind, palette[i], palette[j]];
+      }
+    }
+    const tri = pairlist.length ? Math.min(...pairlist.map(([i, j]) => deltaE(palette[i], palette[j], "tritan"))) : 99;
+    const wd = worst ? worst[0] : 99;
+    const cvdState = wd >= CVD_TARGET ? "pass" : wd >= CVD_FLOOR ? "floor" : "fail";
+    if (cvdState === "fail") ok = false;
+    report.push(["CVD separation", cvdState,
+      worst ? `worst ${label} ${worst[3]}↔${worst[2]} ΔE ${wd.toFixed(1)} (${worst[1]}) · tritan ${tri.toFixed(1)}` : "n/a"]);
+    let nworst = null;
+    for (const [i, j] of pairlist) {
+      const d = deltaE(palette[i], palette[j]);
+      if (nworst === null || d < nworst[0]) nworst = [d, palette[i], palette[j]];
+    }
+    const nd = nworst ? nworst[0] : 99;
+    const norState = nd >= NORMAL_FLOOR ? "pass" : "fail";
+    if (norState === "fail") ok = false;
+    report.push(["Normal-vision floor", norState,
+      nworst ? `worst ${label} ${nworst[2]}↔${nworst[1]} ΔE ${nd.toFixed(1)} (normal)`
+        + (nd >= NORMAL_FLOOR ? "" : ` — below ${NORMAL_FLOOR.toFixed(0)}, hard to tell apart even with full color vision`) : "n/a"]);
+    const low = palette.filter(c => contrast(c, surface) < CONTRAST_MIN).map(c => [c, +contrast(c, surface).toFixed(2)]);
+    report.push(["Contrast vs surface", low.length ? "relief" : "pass",
+      low.length ? `below ${CONTRAST_MIN}:1 — relief required (visible labels or table view): ${JSON.stringify(low)}`
+                 : `all ${palette.length} >= ${CONTRAST_MIN}:1`]);
+    return { report, ok };
+  }
+  const GLYPH = { true: "PASS", false: "FAIL", pass: "PASS", floor: "WARN", fail: "FAIL", relief: "WARN" };
+  const b = document.body;
+  if (b?.dataset.palette) {
+    const palette = splitColors(b.dataset.palette);
+    const mode = b.dataset.mode || "light";
+    const pairs = b.dataset.pairs || "adjacent";
+    const rawSurface = b.dataset.surface != null ? stripWs(b.dataset.surface) : "";
+    const surface = rawSurface || DEFAULT_SURFACE[mode];
+    const badEnum = !["light", "dark"].includes(mode) ? `data-mode ${JSON.stringify(mode)}`
+      : !["adjacent", "all"].includes(pairs) ? `data-pairs ${JSON.stringify(pairs)}` : null;
+    const badHex = [...palette, surface].filter((c) => !isHexColor(c));
+    if (!palette.length || badEnum || badHex.length) {
+      console.warn(`validate_palette: ${!palette.length ? "empty palette" : badEnum ? `unrecognized ${badEnum}` : `invalid hex value(s): ${badHex.join(", ")} — expected #rrggbb`} — not validating`);
+    } else {
+      const result = validate(palette, { mode, surface, pairs });
+      console.table(result.report.map(([name, state, detail]) => ({ check: name, result: GLYPH[state] ?? state, detail })));
+      if (!result.ok) console.warn("validate_palette: FAILED — fix the marked checks");
+    }
+  }
+</script>
+</body>
+</html>

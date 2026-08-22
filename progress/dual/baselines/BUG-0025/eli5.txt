@@ -1,0 +1,59 @@
+🔧 I saved my code… and nothing changed. Why?
+A tiny story about a watcher who was accidentally told to close his eyes.
+How it normally works
+A little watcher looks at your files
+When you save a file, the watcher sees it and instantly refreshes the app in your browser.
+💾
+you save
+→
+the watcher sees it
+→
+✨
+app updates instantly
+↓
+Someone added a rule
+“Ignore anything named AgentMonitoring ”
+Good idea! There's a noisy data folder by that name — it changes constantly, and refreshing the app for every data write would be annoying.
+📝 ignore anything named
+“AgentMonitoring”
+📊🔔📊
+noisy data folder
+↓
+The twist
+The whole house has the same name 😱
+The entire project lives in a folder called… AgentMonitoring . So “anything named AgentMonitoring, anywhere” matched every single file in the project .
+the WHOLE project: “AgentMonitoring”
+📄
+your code
+📄
+more code
+⚙️
+even settings
+IGNORED ✋
+The watcher closed his eyes to the entire codebase.
+↓
+What you saw
+Save → nothing. Reload → still nothing.
+The server kept handing out the copy of your code it made when it started — forever. It even couldn't see changes to its own settings file, so it never restarted itself either.
+💤
+watcher: eyes shut
+→
+🧟
+yesterday's code, every time
+↓
+The fix
+Point at ONE folder, not a name
+Instead of “ignore anything with that name, anywhere,” the rule now says “ignore exactly this one data folder, at this exact address .”
+the project — watched again ✅
+📄
+👁️ seen
+📄
+👁️ seen
+📊
+🙈 only THIS is ignored
+Save a file → it shows up in ~2 seconds. Verified live, both ways.
+↓
+The one-line lesson
+🏠 = 🗂️
+Never ban a name your own house shares
+A “match this name at any depth” rule ( **/AgentMonitoring/** ) will also match the root folder if it has that name — and silently swallow everything inside. Anchor rules to an exact path instead.

@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { highlightCode } from "../src/lib/highlight.ts";
 import { parseBlocks, parseInline, inlineText } from "../src/lib/markdown-parse.ts";
 import { splitLabelledSections } from "../src/lib/sections.ts";
+import { sections, splitHuman } from "./project-fs.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -369,6 +370,92 @@ console.log("fixtures");
   }
 }
 
+/* -------------------------------------- the reserved heading, across parsers */
+
+/**
+ * Three parsers, one answer: what is a `## For humans` heading?
+ *
+ *   * crates/agentmon-core/src/body.rs — the guard, and what the desktop app reads;
+ *   * scripts/project-fs.mjs — the browser transport;
+ *   * src/lib/markdown-parse.ts — what the app actually *draws*.
+ *
+ * They disagreed. The guard closed the hash run on `' '` alone while `parseBlocks` closes
+ * it on `\s`, so `##\tFor humans` in a `--body` was written at exit 0 and the Agent view
+ * drew a level-2 heading reading "For humans" over prose saying it was not the record's
+ * human area — the confusion the reserved section exists to prevent, right under the
+ * Agent/Human toggle. A leading U+FEFF split the two transports instead: JavaScript's
+ * `trim` strips it, Rust's does not, so browser mode served a reserved-titled section that
+ * desktop mode did not have.
+ *
+ * The list of spellings is shared with crates/agentmon-core/tests/human_area.rs, which
+ * drives every one of them through the real write path. Here we hold the other two
+ * parsers to it, and to the property that matters end to end: **whatever stays in a
+ * record's agent-area payload never renders as the reserved heading.**
+ */
+console.log("reserved heading");
+
+/**
+ * What paints nothing is not part of what the reader reads.
+ *
+ * Written out here rather than imported from the transport, so this file can disagree with
+ * the code it is checking. `\s` matches none of these characters, which is exactly why
+ * `## For humans` with a zero-width space after it was a different title to the guard and
+ * eight identical glyphs to the reader.
+ */
+const NO_INK = /[\u00ad\u200b-\u200f\u2060-\u2064\ufe00-\ufe0f\ufeff]/g;
+
+const drawnAsReserved = (md) =>
+  parseBlocks(md).some(
+    (b) =>
+      b.kind === "heading" &&
+      b.level === 2 &&
+      b.text
+        .replace(NO_INK, "")
+        .replace(/[#:\s]+$/, "")
+        .split(/\s+/)
+        .join(" ")
+        .toLowerCase() === "for humans",
+  );
+
+{
+  const shapesFile = join(root, "crates", "agentmon-core", "tests", "reserved-heading-shapes.json");
+  const { shapes } = JSON.parse(readFileSync(shapesFile, "utf8"));
+  check("the shared shape list is populated", shapes.length >= 20, `${shapes.length} shapes`);
+
+  for (const { line, reserved, why } of shapes) {
+    const body = `## What\n\nSomething real.\n\n${line}\n\nThis is NOT the human area.\n\n## Why\n\nA reason.\n`;
+    const label = JSON.stringify(line);
+
+    // 1. The browser transport reads the section exactly where the Rust guard refuses it.
+    const { agent, human } = splitHuman(body);
+    check(
+      `${label} is ${reserved ? "" : "not "}the human area to project-fs (${why})`,
+      (human !== null) === reserved,
+      `human=${JSON.stringify(human)}`,
+    );
+
+    // 2. …and whatever is left for the Agent view never draws the reserved heading.
+    check(`${label} never reaches the agent payload as a heading`, !drawnAsReserved(agent));
+
+    // 3. The agent area a record would store carries no reserved-titled section either.
+    check(
+      `${label} leaves no reserved-titled section behind`,
+      !sections(agent).some((s) => drawnAsReserved(`## ${s.title}`)),
+      JSON.stringify(sections(agent).map((s) => s.title)),
+    );
+  }
+
+  // A fenced example is an example in either marker, and a ``` block holds a ~~~ as
+  // content — the rule src/lib/markdown-parse.ts renders by, which a single toggled
+  // boolean got wrong in a way that hid a real heading from the guard.
+  eq("a fenced heading is not the human area", splitHuman("## What\n\n```md\n## For humans\n```\n").human, null);
+  eq("…in tildes either", splitHuman("## What\n\n~~~md\n## For humans\n~~~\n").human, null);
+  check(
+    "a ~~~ inside a ``` block cannot hide the heading",
+    splitHuman("```\na\n~~~\nb\n```\n## For humans\n\nReal.\n").human === "Real.",
+  );
+}
+
 /* ------------------------------------------------------- every vault record */
 
 console.log("record sweep");
@@ -395,6 +482,13 @@ function sweep(file) {
   const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
   const missing = lost(body, bare(rendered(body)));
   check(`${name} loses nothing`, missing.length === 0, missing.slice(0, 6).join(" · "));
+
+  // The two areas do not bleed: whatever this record hands the Agent view never draws a
+  // heading reading "For humans", whatever spelling the file uses.
+  check(
+    `${name} keeps the reserved heading out of its agent area`,
+    !drawnAsReserved(splitHuman(body).agent),
+  );
 
   // Every code block in the record, re-joined from its highlight spans: colour may be
   // wrong about a token, never about the bytes (lib/highlight.ts).

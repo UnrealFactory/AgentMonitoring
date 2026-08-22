@@ -1,0 +1,65 @@
+📦 v1.0.5 is out!
+A tiny picture book about the AgentMonitoring app:
+what shipped, how to ship the next one, and three traps to dodge.
+1 What just shipped?
+⭐📝
+Some notes wear a star: “essential.”
+😬 Before: changing a note's type could quietly knock the star off. Nobody noticed.
+✅ Now (v1.0.5): the app says “Careful — this removes the star!” and hands you the exact command to put it back. Leaving the type out never touched the star.
+🔍 Bonus fix: the app only treats a note as “brand new” when the check clearly says “not found” — a hiccup during the check no longer looks like a first write.
+2 How updates reach the app
+💻 installed:
+1.0.1
+➜
+1.0.2 skipped
+1.0.3 skipped
+1.0.4 skipped
+➜
+🆕 installs:
+1.0.5
+The app's sidebar card always offers the newest version.
+It jumps straight there — no stops in between.
+🪟 From 1.0.2 onward, the update hides behind a pretty splash screen.
+Updating from 1.0.1 or older still flashes the old black console window — one last time.
+3 How to ship the next version
+STEP A Write the same number in three files:
+📄
+package.json
+1.0.6
+📄
+tauri.conf.json
+1.0.6
+📄
+Cargo.toml
+1.0.6
+If they disagree, the release script refuses to run . That's on purpose.
+STEP B Run one command:
+npm run release
+🔨 builds the
+installer
+➜
+☁️ uploads to
+GitHub
+➜
+🔔 every app sees
+“update available”
+If something breaks mid-update: a message box pops up, and the full story is in
+%TEMP%\agentmonitoring-update.log
+4 Three traps (each bit us once)
+🧓💬
+Old PowerShell needs a magic word.
+Downloads via Invoke-WebRequest must add -UseBasicParsing , or PowerShell 5.1 chokes.
+🗂️➜🥞
+Wildcards flatten folders.
+Tauri's resources with a * glob dumps everything into one pile. Map folder → folder instead.
+🐘📌
+The installer never forgets.
+NSIS saves the last install folder in the registry ( HKCU\...\agentmonitoring ). One test-install to a scratch folder, and the next “default” install goes there too — until you delete the key.
+5 Two small things to know
+🚪
+Plugging into a project = .mcp.json
+The app's “New project” option or agentmon init --mcp-json writes it for you, without clobbering what's there. No more “register it yourself” instructions.
+🏷️
+One crooked old label.
+The v1.0.0 tag points one commit too early — but the uploaded installer was built from the fixed code, so it behaves fine. Every release since matches perfectly.
+That's the whole story: bump three numbers, run one command, dodge three traps. 🎉

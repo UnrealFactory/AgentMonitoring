@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELI5: v1.0.5 is out — how releases work</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --ink: #eef1f8;
+    --soft: #9aa3b5;
+    --accent: #6ea8fe;
+    --good: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --line: #2a2f3e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    line-height: 1.5;
+    padding: 40px 20px 80px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 2.4rem; text-align: center; margin-bottom: 8px; }
+  .sub { text-align: center; color: var(--soft); font-size: 1.1rem; margin-bottom: 48px; }
+  h2 {
+    font-size: 1.5rem; margin: 56px 0 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  h2 .num {
+    background: var(--accent); color: #0b1020;
+    width: 36px; height: 36px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 28px; margin-bottom: 16px;
+  }
+  .big { font-size: 4rem; text-align: center; display: block; margin-bottom: 12px; }
+  .caption { text-align: center; color: var(--soft); font-size: 1rem; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 240px; }
+  .arrow-line {
+    display: flex; align-items: center; justify-content: center; gap: 20px;
+    font-size: 2.6rem; margin: 12px 0; flex-wrap: wrap;
+  }
+  .arrow-line .step { text-align: center; }
+  .arrow-line .step small {
+    display: block; font-size: .95rem; color: var(--soft); margin-top: 6px;
+  }
+  .arrow { color: var(--accent); font-size: 2rem; }
+  .skip { color: var(--soft); opacity: .35; }
+  .tag {
+    display: inline-block; padding: 3px 12px; border-radius: 999px;
+    font-size: .85rem; font-weight: 600;
+  }
+  .tag.good { background: rgba(74,222,128,.15); color: var(--good); }
+  .tag.warn { background: rgba(251,191,36,.15); color: var(--warn); }
+  .tag.bad  { background: rgba(248,113,113,.15); color: var(--bad); }
+  code {
+    background: #10131c; border: 1px solid var(--line);
+    padding: 2px 8px; border-radius: 6px;
+    font-family: Consolas, monospace; font-size: .95em; color: #a5d8ff;
+  }
+  .speech {
+    background: #10131c; border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin-top: 14px;
+    font-size: 1rem; color: var(--ink); position: relative;
+  }
+  .speech::before {
+    content: ""; position: absolute; top: -8px; left: 32px;
+    border-left: 8px solid transparent; border-right: 8px solid transparent;
+    border-bottom: 8px solid var(--line);
+  }
+  .center { text-align: center; }
+  .files {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 16px 0;
+  }
+  .file {
+    background: #10131c; border: 2px solid var(--good);
+    border-radius: 12px; padding: 14px 18px; text-align: center;
+  }
+  .file .icon { font-size: 2.2rem; }
+  .file .name { font-size: .85rem; color: var(--soft); margin-top: 6px; font-family: Consolas, monospace; }
+  .file .ver { font-size: 1.2rem; font-weight: 700; color: var(--good); margin-top: 4px; }
+  .footnote { color: var(--soft); font-size: .95rem; margin-top: 40px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>📦 v1.0.5 is out!</h1>
+  <p class="sub">A tiny picture book about the AgentMonitoring app:<br>what shipped, how to ship the next one, and three traps to dodge.</p>
+
+  <!-- 1. WHAT SHIPPED -->
+  <h2><span class="num">1</span> What just shipped?</h2>
+  <div class="card">
+    <span class="big">⭐📝</span>
+    <p class="caption">Some notes wear a star: <b>“essential.”</b></p>
+    <div class="speech">
+      😬 Before: changing a note's <b>type</b> could quietly knock the star off. Nobody noticed.
+    </div>
+    <div class="speech">
+      ✅ Now (v1.0.5): the app says <b>“Careful — this removes the star!”</b> and hands you the exact command to put it back. Leaving the type out never touched the star.
+    </div>
+    <div class="speech">
+      🔍 Bonus fix: the app only treats a note as “brand new” when the check <i>clearly</i> says “not found” — a hiccup during the check no longer looks like a first write.
+    </div>
+  </div>
+
+  <!-- 2. HOW UPDATES REACH PEOPLE -->
+  <h2><span class="num">2</span> How updates reach the app</h2>
+  <div class="card">
+    <div class="arrow-line">
+      <div class="step">💻<small>installed:<br><b>1.0.1</b></small></div>
+      <span class="arrow">➜</span>
+      <div class="step skip">1.0.2<small>skipped</small></div>
+      <div class="step skip">1.0.3<small>skipped</small></div>
+      <div class="step skip">1.0.4<small>skipped</small></div>
+      <span class="arrow">➜</span>
+      <div class="step">🆕<small>installs:<br><b>1.0.5</b></small></div>
+    </div>
+    <p class="caption">The app's sidebar card always offers the <b>newest</b> version.<br>It jumps straight there — no stops in between.</p>
+    <div class="speech">
+      🪟 From 1.0.2 onward, the update hides behind a pretty splash screen.<br>
+      Updating <i>from</i> 1.0.1 or older still flashes the old black console window — one last time.
+    </div>
+  </div>
+
+  <!-- 3. HOW TO RELEASE -->
+  <h2><span class="num">3</span> How to ship the next version</h2>
+  <div class="card">
+    <p class="center"><span class="tag good">STEP A</span> &nbsp;Write the <b>same number</b> in three files:</p>
+    <div class="files">
+      <div class="file"><div class="icon">📄</div><div class="name">package.json</div><div class="ver">1.0.6</div></div>
+      <div class="file"><div class="icon">📄</div><div class="name">tauri.conf.json</div><div class="ver">1.0.6</div></div>
+      <div class="file"><div class="icon">📄</div><div class="name">Cargo.toml</div><div class="ver">1.0.6</div></div>
+    </div>
+    <p class="caption">If they disagree, the release script <b>refuses to run</b>. That's on purpose.</p>
+  </div>
+  <div class="card">
+    <p class="center"><span class="tag good">STEP B</span> &nbsp;Run one command:</p>
+    <p class="center" style="margin:14px 0"><code style="font-size:1.3rem; padding:10px 20px;">npm run release</code></p>
+    <div class="arrow-line" style="font-size:2.2rem">
+      <div class="step">🔨<small>builds the<br>installer</small></div>
+      <span class="arrow">➜</span>
+      <div class="step">☁️<small>uploads to<br>GitHub</small></div>
+      <span class="arrow">➜</span>
+      <div class="step">🔔<small>every app sees<br>“update available”</small></div>
+    </div>
+    <p class="caption">If something breaks mid-update: a message box pops up, and the full story is in<br><code>%TEMP%\agentmonitoring-update.log</code></p>
+  </div>
+
+  <!-- 4. THREE TRAPS -->
+  <h2><span class="num">4</span> Three traps (each bit us once)</h2>
+  <div class="row">
+    <div class="card">
+      <span class="big">🧓💬</span>
+      <p class="caption"><b>Old PowerShell needs a magic word.</b></p>
+      <div class="speech">Downloads via <code>Invoke-WebRequest</code> must add <code>-UseBasicParsing</code>, or PowerShell 5.1 chokes.</div>
+    </div>
+    <div class="card">
+      <span class="big">🗂️➜🥞</span>
+      <p class="caption"><b>Wildcards flatten folders.</b></p>
+      <div class="speech">Tauri's <code>resources</code> with a <code>*</code> glob dumps everything into one pile. Map <b>folder → folder</b> instead.</div>
+    </div>
+    <div class="card">
+      <span class="big">🐘📌</span>
+      <p class="caption"><b>The installer never forgets.</b></p>
+      <div class="speech">NSIS saves the last install folder in the registry (<code>HKCU\...\agentmonitoring</code>). One test-install to a scratch folder, and the <i>next</i> “default” install goes there too — until you delete the key.</div>
+    </div>
+  </div>
+
+  <!-- 5. SMALL PRINT -->
+  <h2><span class="num">5</span> Two small things to know</h2>
+  <div class="row">
+    <div class="card">
+      <span class="big">🚪</span>
+      <p class="caption"><b>Plugging into a project = <code>.mcp.json</code></b></p>
+      <div class="speech">The app's “New project” option or <code>agentmon init --mcp-json</code> writes it for you, without clobbering what's there. No more “register it yourself” instructions.</div>
+    </div>
+    <div class="card">
+      <span class="big">🏷️</span>
+      <p class="caption"><b>One crooked old label.</b></p>
+      <div class="speech">The v1.0.0 tag points one commit too early — but the uploaded installer was built from the <i>fixed</i> code, so it behaves fine. Every release since matches perfectly.</div>
+    </div>
+  </div>
+
+  <p class="footnote">That's the whole story: bump three numbers, run one command, dodge three traps. 🎉</p>
+
+</div>
+</body>
+</html>

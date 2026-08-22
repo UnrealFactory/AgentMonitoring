@@ -46,6 +46,7 @@ const ROOT_AFTER_HELP: &str = "\
 EXAMPLES
   agentmon work start --agent cli-builder \\
       --title \"Wire the change watcher into the desktop app\" \\
+      --human \"The app only noticed new records when you clicked something. ...\" \\
       --body \"$(cat <<'EOF'
   ## What
   ...
@@ -55,21 +56,28 @@ EXAMPLES
   ...
   EOF
   )\"
-  agentmon work done WORK-0003 --agent cli-builder --outcome \"...\"
+  agentmon work done WORK-0003 --agent cli-builder --outcome \"...\" --human \"...\"
   agentmon bug list --status open
   agentmon note list                    # what previous agents left for you — read first
   agentmon note add --agent cli-builder --type memory \\
-      --title \"...\" --description \"...\" --body \"...\"
+      --title \"...\" --description \"...\" --body \"...\" --human \"...\"
   agentmon status
   agentmon doctor
   agentmon app-feedback add --agent <you> --type idea \\
-      --title \"...\"                     # a bug/wish about this app itself, any directory
+      --title \"...\" --human \"...\"       # a bug/wish about this app itself, any directory
+
+THE HUMAN AREA (--human, on every verb above)
+  Every record carries two areas: the agent area (What/Why/How, Report, the note body)
+  and the human area — the same work retold for a reader who was not there and does not
+  program. Creating or closing a record requires one; `--human` alone on work update /
+  bug comment / note update / app-feedback update rewrites it and touches nothing else.
+  agentmon human-style              # the contract, printed when you need it
 
 ALREADY FINISHED THE WORK?
   Record it after the fact — every mutation takes the time it really happened:
-  agentmon work start --agent <you> --title \"...\" --body \"...\" \\
+  agentmon work start --agent <you> --title \"...\" --body \"...\" --human \"...\" \\
       --started-at 2026-08-18T09:12:00Z
-  agentmon work done WORK-0007 --agent <you> --outcome \"...\" \\
+  agentmon work done WORK-0007 --agent <you> --outcome \"...\" --human \"...\" \\
       --finished-at 2026-08-18T11:30:00Z
   Also: --created-at on `bug create`, --at on work update/abandon and bug claim/comment/resolve.
 
@@ -180,6 +188,16 @@ enum Command {
     /// any directory, belongs to no project, and --dir does not apply.
     #[command(subcommand)]
     AppFeedback(AppFeedbackCmd),
+    /// Print the human-area style contract (docs/HUMAN_STYLE.md, embedded in this binary).
+    #[command(
+        name = "human-style",
+        after_help = "EXAMPLES\n  agentmon human-style\n  agentmon human-style --json\n\n  \
+        Every record carries a human area: the same work retold for a reader who was not \
+        there and does not program (--human on the write verbs). This prints the contract \
+        that text is written to. It is write-time reading — open it when you are about to \
+        write one, not at the start of a session."
+    )]
+    HumanStyle,
     /// Snapshot of this project: active work, open bugs, recent events.
     #[command(after_help = "EXAMPLES\n  agentmon status\n  agentmon status --json")]
     Status,
@@ -273,10 +291,16 @@ enum AppFeedbackCmd {
     /// File a bug or a wish about this app — not about the project you are working in.
     #[command(after_help = "EXAMPLES\n  agentmon app-feedback add --agent my-agent --type bug \\\n    \
         --title \"status counts an abandoned log as in progress\" \\\n    \
-        --body \"Repro: abandon a log, run status — the in-progress count still includes it.\"\n  \
-        agentmon app-feedback add --agent my-agent --type idea \\\n    --title \"note list should filter by tag\"\n\n  \
-        --body is optional: a specific title can carry a whole wish. The human reads these \
-        on the app's App feedback board.")]
+        --body \"Repro: abandon a log, run status — the in-progress count still includes it.\" \\\n    \
+        --human \"If a task is stopped rather than finished, the summary still counts it as \
+        being worked on, so the numbers on the dashboard read high.\"\n  \
+        agentmon app-feedback add --agent my-agent --type idea \\\n    \
+        --title \"note list should filter by tag\" \\\n    \
+        --human \"There is no way to narrow the notes list to one subject, so finding one \
+        means reading all of them.\"\n\n  \
+        --body is optional: a specific title can carry a whole wish. --human is not — this \
+        board is read by the owner, so an item that speaks only to agents speaks to nobody \
+        (`agentmon human-style`).")]
     Add {
         /// bug (something is wrong) or idea (something is missing).
         #[arg(long, value_name = "bug|idea")]
@@ -289,7 +313,27 @@ enum AppFeedbackCmd {
         body: Option<String>,
         #[command(flatten)]
         agent: AgentArg,
+        #[command(flatten)]
+        human: HumanArg,
         /// When it was noticed (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
+    },
+    /// Rewrite an item's human area — the one thing about a filed item that can change.
+    #[command(after_help = "EXAMPLE\n  agentmon app-feedback update FB-0003 --agent my-agent \\\n    \
+        --human \"The board kept saying an item was open after I marked it done, so I \
+        filed this; here is what I saw and when.\"\n\n  \
+        Everything else about an item is fixed once filed. This exists so an item that \
+        speaks only to agents — or whose retelling turned out to be wrong — can be made \
+        readable by the person whose board it is. `agentmon human-style` prints the contract.")]
+    Update {
+        /// FB-NNNN.
+        id: String,
+        #[command(flatten)]
+        agent: AgentArg,
+        #[command(flatten)]
+        human: HumanArg,
+        /// When the rewrite happened (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
     },
@@ -327,6 +371,22 @@ struct AgentArg {
     agent: String,
 }
 
+/// The human area (SPEC.md, "The human area"): the same work retold for a reader who was
+/// not there and does not program.
+///
+/// One struct on every verb that takes one, so the flag pair reads the same everywhere and
+/// a rejection can name it without knowing which command was run. `agentmon human-style`
+/// prints the contract; a refusal prints the short version of it.
+#[derive(Args, Debug)]
+struct HumanArg {
+    /// Retell this record for a non-programmer reader (see `agentmon human-style`).
+    #[arg(long, value_name = "TEXT", conflicts_with = "human_file")]
+    human: Option<String>,
+    /// Read the human area from a file ('-' reads stdin).
+    #[arg(long, value_name = "FILE")]
+    human_file: Option<PathBuf>,
+}
+
 const WORK_START_HELP: &str = "\
 BODY CONTRACT
   The body must contain all three sections. Anything else you add is kept.
@@ -335,10 +395,18 @@ BODY CONTRACT
   ## Why    the problem, the constraint, the alternative you rejected
   ## How    the approach, and the parts a reviewer would otherwise reverse-engineer
 
+HUMAN AREA (required)
+  --human \"<text>\" (or --human-file <path>, '-' for stdin) retells the same work for a
+  reader who was not there and does not program. It is stored as the record's last
+  section, `## For humans`, which you may not write yourself. `agentmon human-style`
+  prints the contract; so does every refusal.
+
 EXAMPLE (Git Bash)
   agentmon work start --agent cli-builder \\
     --title \"Wire the change watcher into the desktop app\" \\
     --tags tauri,live-updates --refs BUG-0002 \\
+    --human \"The app used to show whatever it had read when you opened a screen, so a
+  record written a second ago looked missing. This makes it notice by itself.\" \\
     --body \"$(cat <<'EOF'
   ## What
 
@@ -360,7 +428,8 @@ EXAMPLE (Git Bash)
 ALREADY STARTED (or finished) THE WORK?
   Pass the real start time, then close the record with the real end time:
   agentmon work start ... --started-at 2026-08-18T09:12:00Z
-  agentmon work done WORK-0007 ... --finished-at 2026-08-18T11:30:00Z --outcome \"...\"
+  agentmon work done WORK-0007 ... --finished-at 2026-08-18T11:30:00Z --outcome \"...\" \\
+    --human \"...\"
 
 TIMESTAMPS (every --started-at / --finished-at / --at / --created-at)
   UTC ISO8601: 2026-08-18T09:12:00Z. Also accepted: 2026-08-18T09:12,
@@ -390,6 +459,8 @@ enum WorkCmd {
         /// Read the body from a file ('-' reads stdin).
         #[arg(long, value_name = "FILE")]
         body_file: Option<PathBuf>,
+        #[command(flatten)]
+        human: HumanArg,
         /// When the work actually began (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         started_at: Option<String>,
@@ -408,7 +479,13 @@ enum WorkCmd {
         this is how a record that turns out to state something false gets corrected inside \
         itself. Open the note with \"Correction:\" and the record page marks it and says so at \
         the top:\n\n  agentmon work update WORK-0011 --agent p6-curator \\\n    \
-        --message \"Correction: relay has four agents, not ten (BUG-0017).\"")]
+        --message \"Correction: relay has four agents, not ten (BUG-0017).\"\n\n\
+        REWRITING THE HUMAN AREA\n  --human alone changes only the record's plain-language \
+        telling: nothing is added to ## Updates, and the feed logs one human_updated line.\n  \
+        agentmon work update WORK-0011 --agent p6-curator \\\n    \
+        --human \"What this work actually did, said plainly.\"\n\n  A record written before \
+        the human area existed must gain one the first time it is touched, so a --message on \
+        such a record needs --human with it.")]
     Update {
         /// WORK-NNNN.
         id: String,
@@ -420,6 +497,8 @@ enum WorkCmd {
         /// Read the note from a file ('-' reads stdin). --message-file is the same flag.
         #[arg(long, value_name = "FILE", visible_alias = "message-file")]
         body_file: Option<PathBuf>,
+        #[command(flatten)]
+        human: HumanArg,
         /// When the note was written (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
@@ -427,7 +506,10 @@ enum WorkCmd {
     /// Stop a work log that will not be finished (status abandoned, with the reason).
     #[command(after_help = "EXAMPLE\n  agentmon work abandon WORK-0003 \\\n    \
         --agent cli-builder \\\n    --reason \"Superseded by WORK-0009, which solves the same \
-        problem in agentmon-core; nothing from this branch was kept.\"\n\n  Use it when work \
+        problem in agentmon-core; nothing from this branch was kept.\" \\\n    \
+        --human \"We stopped this one and did the same job in another place; nothing here \
+        was kept.\"\n\n  Stopping is an ending, so --human is required and replaces whatever \
+        the record said while it ran.\n\n  Use it when work \
         stops for good: leaving it in_progress shows an agent still working on something \
         nobody is doing. The reason is appended under ## Updates and `finished` is stamped \
         with the moment it stopped. --at backdates it.")]
@@ -442,6 +524,8 @@ enum WorkCmd {
         /// Read the reason from a file ('-' reads stdin).
         #[arg(long, value_name = "FILE")]
         reason_file: Option<PathBuf>,
+        #[command(flatten)]
+        human: HumanArg,
         /// When it stopped (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
@@ -450,8 +534,11 @@ enum WorkCmd {
     #[command(after_help = "EXAMPLE\n  agentmon work done WORK-0003 \\\n    \
         --agent cli-builder \\\n    --files src-tauri/src/lib.rs,src-tauri/Cargo.toml \\\n    \
         --outcome \"Shipped the debounced watcher; cargo check -p agentmonitoring clean and the \
-        dashboard refreshes within ~300ms of a CLI write.\"\n\n  The outcome is what a human \
-        reads first. Name the artifacts and the verification you actually ran.\n\n\
+        dashboard refreshes within ~300ms of a CLI write.\" \\\n    \
+        --human \"The window now notices a new record on its own, about a third of a second \
+        after it is written, instead of waiting for you to click.\"\n\n  The outcome is for \
+        the next agent; --human is for everyone else, and closing replaces whatever the \
+        record said while it was open (`agentmon human-style`).\n\n\
         RECORDING WORK THAT IS ALREADY OVER\n  --finished-at 2026-08-18T11:30:00Z stamps the \
         real end time; add --started-at to correct a start you had to guess at. Both land in \
         the frontmatter and in events.jsonl, so the duration and the feed agree.")]
@@ -466,6 +553,8 @@ enum WorkCmd {
         /// Read the outcome from a file ('-' reads stdin).
         #[arg(long, value_name = "FILE")]
         outcome_file: Option<PathBuf>,
+        #[command(flatten)]
+        human: HumanArg,
         /// Files this work touched, comma-separated (added to the record).
         #[arg(long, value_delimiter = ',')]
         files: Vec<String>,
@@ -507,10 +596,17 @@ const BUG_CREATE_HELP: &str = "\
 BODY CONTRACT
   Plain prose becomes the ## Report section. Write repro steps, expected, actual.
 
+HUMAN AREA (required)
+  --human \"<text>\" (or --human-file <path>) says what is wrong for a reader who does not
+  program: what they would see, and what it costs them. `agentmon human-style` is the
+  contract, and every refusal prints its short form.
+
 EXAMPLE (Git Bash)
   agentmon bug create --agent cli-builder \\
     --title \"work done exits 0 but leaves status in_progress\" \\
     --severity high --labels cli,data-loss \\
+    --human \"Finishing a task says it worked, but the task still shows as running
+  afterwards — so the board cannot be trusted to say what is done.\" \\
     --body \"$(cat <<'EOF'
   ## Report
 
@@ -549,6 +645,8 @@ enum BugCmd {
         /// Read the report from a file ('-' reads stdin).
         #[arg(long, value_name = "FILE")]
         body_file: Option<PathBuf>,
+        #[command(flatten)]
+        human: HumanArg,
         /// Comma-separated.
         #[arg(long, value_delimiter = ',')]
         labels: Vec<String>,
@@ -561,12 +659,18 @@ enum BugCmd {
     },
     /// Take ownership of a bug (sets assignee and status in_progress).
     #[command(after_help = "EXAMPLE\n  agentmon bug claim BUG-0002 --agent cli-builder\n\n  \
-        Claiming a bug someone else holds is refused — comment on it instead.")]
+        Claiming a bug someone else holds is refused — comment on it instead.\n\n  \
+        Claiming writes no prose, so --human is optional here — except on a bug filed \
+        before the human area existed, which gains one the first time anything touches it:\n  \
+        agentmon bug claim BUG-0002 --agent cli-builder \\\n    \
+        --human \"What this bug is, in plain words.\"")]
     Claim {
         /// BUG-NNNN.
         id: String,
         #[command(flatten)]
         agent: AgentArg,
+        #[command(flatten)]
+        human: HumanArg,
         /// When it was claimed (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
@@ -574,7 +678,11 @@ enum BugCmd {
     /// Add a comment to a bug's thread.
     #[command(after_help = "EXAMPLE\n  agentmon bug comment BUG-0002 \\\n    \
         --agent cli-builder \\\n    --message \"Root cause: setup() never started a watcher, so \
-        project-changed was never emitted.\"")]
+        project-changed was never emitted.\"\n\n  REWRITING THE HUMAN AREA\n  \
+        --human alone adds nothing to the thread; it rewrites the bug's plain-language \
+        telling and logs one human_updated line:\n  \
+        agentmon bug comment BUG-0002 --agent cli-builder \\\n    \
+        --human \"What this bug looks like to somebody using the app.\"")]
     Comment {
         /// BUG-NNNN.
         id: String,
@@ -586,6 +694,8 @@ enum BugCmd {
         /// Read the comment from a file ('-' reads stdin). --message-file is the same flag.
         #[arg(long, value_name = "FILE", visible_alias = "message-file")]
         body_file: Option<PathBuf>,
+        #[command(flatten)]
+        human: HumanArg,
         /// When the comment was written (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
@@ -594,9 +704,12 @@ enum BugCmd {
     #[command(after_help = "EXAMPLE\n  agentmon bug resolve BUG-0002 \\\n    \
         --agent cli-builder \\\n    --resolution \"Root cause: no watcher was ever started. Fix: \
         setup() spawns a debounced notify watcher that emits project-changed. Verified: cargo \
-        check -p agentmonitoring clean; dashboard refreshed on a CLI write.\"\n\n  Say the root \
+        check -p agentmonitoring clean; dashboard refreshed on a CLI write.\" \\\n    \
+        --human \"It works now: the window updates by itself when a record is written, and \
+        we checked that by writing one while it was open.\"\n\n  Say the root \
         cause, the fix, and the verification. Resolving a bug you did not claim assigns it to \
-        you.")]
+        you. --human is required and replaces the telling the bug had while it was open — \
+        the ending changed the story (`agentmon human-style`).")]
     Resolve {
         /// BUG-NNNN.
         id: String,
@@ -608,6 +721,8 @@ enum BugCmd {
         /// Read the resolution from a file ('-' reads stdin).
         #[arg(long, value_name = "FILE")]
         resolution_file: Option<PathBuf>,
+        #[command(flatten)]
+        human: HumanArg,
         /// When it was fixed (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
@@ -658,6 +773,8 @@ EXAMPLE (Git Bash)
     --title \"Gate scripts must sandbox the registry\" \\
     --description \"Any script that runs agentmon init must set AGENTMON_REGISTRY_DIR.\" \\
     --tags gates,registry --refs WORK-0035 \\
+    --human \"A test script that creates a pretend project can leave it in the list of
+  real projects on this machine, unless it is pointed at a scratch folder first.\" \\
     --body \"$(cat <<'EOF'
   agentmon init registers the new project in ~/.AgentMonitoring/registry.json, best
   effort. A gate script that inits a temp fixture therefore bookmarks that fixture in
@@ -670,7 +787,8 @@ NAMES
   derived from the title — the example above becomes gate-scripts-must-sandbox-the-registry
   — or passed explicitly with --name. Non-ascii titles need an explicit --name.
 
-  The body is free-form markdown: sections, lists and code fences are all yours.
+  The body is free-form markdown: sections, lists and code fences are all yours — except
+  `## For humans`, which is the reserved human area agentmon writes from --human.
   Refused (exit 5): a name that already exists — update that note instead.";
 
 #[derive(Subcommand, Debug)]
@@ -698,6 +816,8 @@ enum NoteCmd {
         /// Read the body from a file ('-' reads stdin).
         #[arg(long, value_name = "FILE")]
         body_file: Option<PathBuf>,
+        #[command(flatten)]
+        human: HumanArg,
         /// Comma-separated.
         #[arg(long, value_delimiter = ',')]
         tags: Vec<String>,
@@ -710,11 +830,15 @@ enum NoteCmd {
     },
     /// Rewrite parts of a note: any metadata flag, and/or the whole body.
     #[command(after_help = "EXAMPLES\n  agentmon note update handoff-p13 --agent ui-builder \\\n    \
-        --body-file handoff.md\n  agentmon note update registry-gate-gotcha --agent cli-builder \\\n    \
-        --description \"Every gate must set AGENTMON_REGISTRY_DIR; check-live now does too.\"\n\n  \
+        --body-file handoff.md --human \"Where this hand-over stands now, in plain words.\"\n  \
+        agentmon note update registry-gate-gotcha --agent cli-builder \\\n    \
+        --description \"Every gate must set AGENTMON_REGISTRY_DIR; check-live now does too.\"\n  \
+        agentmon note update handoff-p13 --agent ui-builder \\\n    \
+        --human \"A clearer telling of the same note.\"        # rewrites only that\n\n  \
         Only the flags you pass change. --body REPLACES the body — a note holds what is \
-        currently true, not a diary (history belongs in work logs). --tags and --refs \
-        replace their lists. The event log keeps who changed what and when.")]
+        currently true, not a diary (history belongs in work logs) — and a replaced body \
+        needs --human with it, because the old telling described knowledge that is gone. \
+        --tags and --refs replace their lists. The event log keeps who changed what and when.")]
     Update {
         /// The note's name (see `agentmon note list`).
         name: String,
@@ -741,6 +865,8 @@ enum NoteCmd {
         /// Read the replacement body from a file ('-' reads stdin).
         #[arg(long, value_name = "FILE")]
         body_file: Option<PathBuf>,
+        #[command(flatten)]
+        human: HumanArg,
         /// When the change happened (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
@@ -830,6 +956,9 @@ impl From<CoreError> for CliError {
             CoreError::Malformed { .. } => exit::INVALID_PROJECT,
             CoreError::Io { .. } => exit::IO,
             CoreError::InvalidId { .. } | CoreError::InvalidValue { .. } => exit::USAGE,
+            // SPEC.md fixes this one at 2: a missing human area is a call written wrong,
+            // not a body that failed validation.
+            CoreError::MissingHuman(_) => exit::USAGE,
         };
         CliError {
             code,
@@ -868,6 +997,7 @@ fn run(cli: &Cli) -> CliResult {
         Command::Bug(cmd) => run_bug(cli, cmd),
         Command::Note(cmd) => run_note(cli, cmd),
         Command::AppFeedback(cmd) => run_app_feedback(cli, cmd),
+        Command::HumanStyle => cmd_human_style(cli),
         Command::Status => cmd_status(cli, cli.json),
         Command::Doctor { strict } => cmd_doctor(cli, *strict, cli.json),
         Command::Migrate { from, project, to } => cmd_migrate(cli, from, project, to),
@@ -975,7 +1105,9 @@ fn cmd_init(
     }
     println!();
     println!("Next:");
-    println!("  agentmon work start --agent <you> --title \"<title>\" --body \"...\"");
+    println!(
+        "  agentmon work start --agent <you> --title \"<title>\" --body \"...\" --human \"...\""
+    );
     println!();
     println!(
         "Commands run from inside {} find this project automatically (like git).",
@@ -1205,12 +1337,17 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             refs,
             body,
             body_file,
+            human,
             started_at,
             finished_at,
         } => {
             if let Some(f) = finished_at {
                 return Err(finished_at_on_start(f));
             }
+            one_stdin(&[
+                ("--body-file", body_file.as_deref().map(is_stdin).unwrap_or(false)),
+                ("--human-file", human.wants_stdin()),
+            ])?;
             let body = read_text(
                 body.as_deref(),
                 body_file.as_deref(),
@@ -1222,6 +1359,7 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                     example: validate::WORK_EXAMPLE,
                 },
             )?;
+            let human = human.required()?;
             let store = open(cli)?;
             let w = store.start_work(&StartWork {
                 agent: agent.agent.clone(),
@@ -1229,6 +1367,7 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                 tags: tags.clone(),
                 refs: refs.clone(),
                 body,
+                human,
                 started_at: started_at.clone(),
             })?;
             if cli.json {
@@ -1243,7 +1382,8 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                 w.id, agent.agent
             );
             println!(
-                "  agentmon work done   {} --agent {} --outcome \"<what shipped, how verified>\"",
+                "  agentmon work done   {} --agent {} --outcome \"<what shipped, how verified>\" \\\n    \
+                 --human \"<the same, for a reader who does not program>\"",
                 w.id, agent.agent
             );
             Ok(())
@@ -1253,35 +1393,58 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             agent,
             message,
             body_file,
+            human,
             at,
         } => {
-            let message = read_text(
-                message.as_deref(),
-                body_file.as_deref(),
-                BodySource {
-                    what: "work update",
-                    inline_flag: "--message",
-                    file_flag: "--body-file (or --message-file)",
-                    template: "A sentence or two: what changed since the last note, what you \
-                               learned, what you are doing next.",
-                    example: "agentmon work update WORK-0003 \\\n  \
-                              --agent cli-builder \\\n  --message \"Debounce is in: one save \
-                              produced four notify events, now one reload.\"",
-                },
-            )?;
+            one_stdin(&[
+                ("--body-file", body_file.as_deref().map(is_stdin).unwrap_or(false)),
+                ("--human-file", human.wants_stdin()),
+            ])?;
+            // A note is optional here: `--human` alone is the refresh SPEC.md defines, and
+            // demanding a progress note for it would put a note in the record that never
+            // happened. Core refuses the case where neither was passed.
+            let message = match (message.as_deref(), body_file.as_deref()) {
+                (None, None) => None,
+                (inline, file) => Some(read_text(
+                    inline,
+                    file,
+                    BodySource {
+                        what: "work update",
+                        inline_flag: "--message",
+                        file_flag: "--body-file (or --message-file)",
+                        template: "A sentence or two: what changed since the last note, what \
+                                   you learned, what you are doing next.",
+                        example: "agentmon work update WORK-0003 \\\n  \
+                                  --agent cli-builder \\\n  --message \"Debounce is in: one \
+                                  save produced four notify events, now one reload.\"",
+                    },
+                )?),
+            };
+            let human = human.read()?;
             let store = open(cli)?;
-            let w = store.update_work(id, &agent.agent, &message, at.as_deref())?;
+            let w = store.update_work(
+                id,
+                &agent.agent,
+                message.as_deref(),
+                human.as_deref(),
+                at.as_deref(),
+            )?;
             if cli.json {
                 return print_json(&w);
             }
             let n = w.record.updates.len();
-            println!(
-                "Updated {}  ({} note{} now, latest {})",
-                w.id,
-                n,
-                if n == 1 { "" } else { "s" },
-                w.record.updates.last().map(|u| u.ts.as_str()).unwrap_or("—")
-            );
+            if message.is_none() {
+                println!("Rewrote the human area of {}", w.id);
+                println!("  ## Updates is untouched; the feed logs human_updated");
+            } else {
+                println!(
+                    "Updated {}  ({} note{} now, latest {})",
+                    w.id,
+                    n,
+                    if n == 1 { "" } else { "s" },
+                    w.record.updates.last().map(|u| u.ts.as_str()).unwrap_or("—")
+                );
+            }
             println!("  {}", w.path);
             // Say plainly what was and was not touched, because appending to a closed
             // record looks like editing history and is not.
@@ -1298,8 +1461,13 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             agent,
             reason,
             reason_file,
+            human,
             at,
         } => {
+            one_stdin(&[
+                ("--reason-file", reason_file.as_deref().map(is_stdin).unwrap_or(false)),
+                ("--human-file", human.wants_stdin()),
+            ])?;
             let reason = read_text(
                 reason.as_deref(),
                 reason_file.as_deref(),
@@ -1315,12 +1483,14 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                               this branch was kept.\"",
                 },
             )?;
+            let human = human.required()?;
             let store = open(cli)?;
             let w = store.abandon_work(
                 id,
                 &AbandonWork {
                     agent: agent.agent.clone(),
                     reason,
+                    human,
                     at: at.clone(),
                 },
             )?;
@@ -1341,11 +1511,16 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             agent,
             outcome,
             outcome_file,
+            human,
             files,
             refs,
             finished_at,
             started_at,
         } => {
+            one_stdin(&[
+                ("--outcome-file", outcome_file.as_deref().map(is_stdin).unwrap_or(false)),
+                ("--human-file", human.wants_stdin()),
+            ])?;
             let outcome = read_text(
                 outcome.as_deref(),
                 outcome_file.as_deref(),
@@ -1357,12 +1532,14 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                     example: validate::OUTCOME_EXAMPLE,
                 },
             )?;
+            let human = human.required()?;
             let store = open(cli)?;
             let w = store.finish_work(
                 id,
                 &FinishWork {
                     agent: agent.agent.clone(),
                     outcome,
+                    human,
                     files: files.clone(),
                     refs: refs.clone(),
                     finished_at: finished_at.clone(),
@@ -1402,7 +1579,10 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             }
             if works.is_empty() {
                 println!("No work logs match in {}. Start one:", store.root().display());
-                println!("  agentmon work start --agent <you> --title \"<title>\" --body \"...\"");
+                println!(
+                    "  agentmon work start --agent <you> --title \"<title>\" --body \"...\" \
+                     --human \"...\""
+                );
                 return Ok(());
             }
             println!(
@@ -1454,7 +1634,26 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                 println!("files: {}", w.meta.files.join(", "));
             }
             println!("\n{}", w.body);
+            print_human(w.human.as_deref(), &w.meta.id, "work update");
             Ok(())
+        }
+    }
+}
+
+/// Print the record's human area under its own heading, or say plainly that it has none
+/// and name the command that adds one.
+///
+/// The empty state is the point: a record that speaks only to agents is not finished, and
+/// the reader of `agentmon <kind> view` is exactly who can fix that.
+fn print_human(human: Option<&str>, id: &str, verb: &str) {
+    match human {
+        Some(text) => println!("\n## For humans\n\n{text}"),
+        None => {
+            println!("\n## For humans\n\n(none yet — this record speaks only to agents)");
+            println!(
+                "Add one:  agentmon {verb} {id} --agent <you> --human \"<retelling>\"   \
+                 (agentmon human-style)"
+            );
         }
     }
 }
@@ -1471,11 +1670,16 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             severity,
             body,
             body_file,
+            human,
             labels,
             refs,
             created_at,
         } => {
             let severity: Severity = agentmon_core::parse_severity(severity)?;
+            one_stdin(&[
+                ("--body-file", body_file.as_deref().map(is_stdin).unwrap_or(false)),
+                ("--human-file", human.wants_stdin()),
+            ])?;
             let body = read_text(
                 body.as_deref(),
                 body_file.as_deref(),
@@ -1487,6 +1691,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                     example: validate::BUG_EXAMPLE,
                 },
             )?;
+            let human = human.required()?;
             let store = open(cli)?;
             let b = store.create_bug(&NewBug {
                 agent: agent.agent.clone(),
@@ -1495,6 +1700,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                 labels: labels.clone(),
                 refs: refs.clone(),
                 body,
+                human,
                 created_at: created_at.clone(),
             })?;
             if cli.json {
@@ -1512,9 +1718,15 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             println!("  agentmon bug claim {} --agent {}", b.id, agent.agent);
             Ok(())
         }
-        BugCmd::Claim { id, agent, at } => {
+        BugCmd::Claim {
+            id,
+            agent,
+            human,
+            at,
+        } => {
+            let human = human.read()?;
             let store = open(cli)?;
-            let b = store.claim_bug(id, &agent.agent, at.as_deref())?;
+            let b = store.claim_bug(id, &agent.agent, human.as_deref(), at.as_deref())?;
             if cli.json {
                 return print_json(&b);
             }
@@ -1532,7 +1744,8 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                 b.id, agent.agent
             );
             println!(
-                "  agentmon bug resolve {} --agent {} --resolution \"<fix, why, verification>\"",
+                "  agentmon bug resolve {} --agent {} --resolution \"<fix, why, verification>\" \\\n    \
+                 --human \"<what is different now, for a reader who does not program>\"",
                 b.id, agent.agent
             );
             Ok(())
@@ -1542,34 +1755,57 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             agent,
             message,
             body_file,
+            human,
             at,
         } => {
-            let message = read_text(
-                message.as_deref(),
-                body_file.as_deref(),
-                BodySource {
-                    what: "bug comment",
-                    inline_flag: "--message",
-                    file_flag: "--body-file (or --message-file)",
-                    template: "A sentence or two: what you found, what you tried, what it means \
-                               for the fix.",
-                    example: "agentmon bug comment BUG-0002 \\\n  \
-                              --agent cli-builder \\\n  --message \"Root cause: setup() never \
-                              started a watcher, so project-changed was never emitted.\"",
-                },
-            )?;
+            one_stdin(&[
+                ("--body-file", body_file.as_deref().map(is_stdin).unwrap_or(false)),
+                ("--human-file", human.wants_stdin()),
+            ])?;
+            // `--human` alone is a refresh: it rewrites the human area and adds nothing to
+            // the thread. Core refuses the case where neither was passed.
+            let message = match (message.as_deref(), body_file.as_deref()) {
+                (None, None) => None,
+                (inline, file) => Some(read_text(
+                    inline,
+                    file,
+                    BodySource {
+                        what: "bug comment",
+                        inline_flag: "--message",
+                        file_flag: "--body-file (or --message-file)",
+                        template: "A sentence or two: what you found, what you tried, what it \
+                                   means for the fix.",
+                        example: "agentmon bug comment BUG-0002 \\\n  \
+                                  --agent cli-builder \\\n  --message \"Root cause: setup() \
+                                  never started a watcher, so project-changed was never \
+                                  emitted.\"",
+                    },
+                )?),
+            };
+            let human = human.read()?;
             let store = open(cli)?;
-            let b = store.comment_bug(id, &agent.agent, &message, at.as_deref())?;
+            let b = store.comment_bug(
+                id,
+                &agent.agent,
+                message.as_deref(),
+                human.as_deref(),
+                at.as_deref(),
+            )?;
             if cli.json {
                 return print_json(&b);
             }
-            let n = b.record.comments.len();
-            println!(
-                "Commented on {}  ({} comment{} now)",
-                b.id,
-                n,
-                if n == 1 { "" } else { "s" }
-            );
+            if message.is_none() {
+                println!("Rewrote the human area of {}", b.id);
+                println!("  ## Comments is untouched; the feed logs human_updated");
+            } else {
+                let n = b.record.comments.len();
+                println!(
+                    "Commented on {}  ({} comment{} now)",
+                    b.id,
+                    n,
+                    if n == 1 { "" } else { "s" }
+                );
+            }
             println!("  {}", b.path);
             Ok(())
         }
@@ -1578,8 +1814,16 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             agent,
             resolution,
             resolution_file,
+            human,
             at,
         } => {
+            one_stdin(&[
+                (
+                    "--resolution-file",
+                    resolution_file.as_deref().map(is_stdin).unwrap_or(false),
+                ),
+                ("--human-file", human.wants_stdin()),
+            ])?;
             let resolution = read_text(
                 resolution.as_deref(),
                 resolution_file.as_deref(),
@@ -1591,8 +1835,9 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                     example: validate::RESOLUTION_EXAMPLE,
                 },
             )?;
+            let human = human.required()?;
             let store = open(cli)?;
-            let b = store.resolve_bug(id, &agent.agent, &resolution, at.as_deref())?;
+            let b = store.resolve_bug(id, &agent.agent, &resolution, &human, at.as_deref())?;
             if cli.json {
                 return print_json(&b);
             }
@@ -1685,6 +1930,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                 println!("refs: {}", b.meta.refs.join(", "));
             }
             println!("\n{}", b.body);
+            print_human(b.human.as_deref(), &b.meta.id, "bug comment");
             Ok(())
         }
     }
@@ -1704,11 +1950,16 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
             name,
             body,
             body_file,
+            human,
             tags,
             refs,
             at,
         } => {
             let note_type: NoteType = agentmon_core::parse_note_type(note_type)?;
+            one_stdin(&[
+                ("--body-file", body_file.as_deref().map(is_stdin).unwrap_or(false)),
+                ("--human-file", human.wants_stdin()),
+            ])?;
             let body = read_text(
                 body.as_deref(),
                 body_file.as_deref(),
@@ -1720,6 +1971,7 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
                     example: validate::NOTE_EXAMPLE,
                 },
             )?;
+            let human = human.required()?;
             let store = open(cli)?;
             let n = store.add_note(&NewNote {
                 agent: agent.agent.clone(),
@@ -1730,6 +1982,7 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
                 tags: tags.clone(),
                 refs: refs.clone(),
                 body,
+                human,
                 at: at.clone(),
             })?;
             if cli.json {
@@ -1745,7 +1998,8 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
             println!();
             println!("Next:");
             println!(
-                "  agentmon note update {} --agent {} --body-file <file>   # when it changes",
+                "  agentmon note update {} --agent {} --body-file <file> --human \"<retelling>\"   \
+                 # when it changes",
                 n.id, agent.agent
             );
             println!("  agentmon note list   # what the project already knows");
@@ -1761,12 +2015,17 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
             refs,
             body,
             body_file,
+            human,
             at,
         } => {
             let note_type = note_type
                 .as_deref()
                 .map(agentmon_core::parse_note_type)
                 .transpose()?;
+            one_stdin(&[
+                ("--body-file", body_file.as_deref().map(is_stdin).unwrap_or(false)),
+                ("--human-file", human.wants_stdin()),
+            ])?;
             // Unlike the required bodies above, an update without a body is a metadata
             // edit — so only read a body when one of the two flags was actually passed.
             let body = match (body.as_deref(), body_file.as_deref()) {
@@ -1783,6 +2042,7 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
                     },
                 )?),
             };
+            let human = human.read()?;
             let store = open(cli)?;
             // An essential note is required session-start reading, pinned first in every
             // list — and --type taking that away is how an index once fell out of the
@@ -1800,6 +2060,7 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
                     tags: tags.clone(),
                     refs: refs.clone(),
                     body,
+                    human,
                     at: at.clone(),
                 },
             )?;
@@ -1930,6 +2191,7 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
                 println!("refs: {}", n.meta.refs.join(", "));
             }
             println!("\n{}", n.body);
+            print_human(n.human.as_deref(), &n.meta.name, "note update");
             Ok(())
         }
     }
@@ -1938,6 +2200,23 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
 // ---------------------------------------------------------------------------
 // status / doctor
 // ---------------------------------------------------------------------------
+
+/// `agentmon human-style` — the write-time reading, carried inside the binary.
+///
+/// Embedded rather than read off disk on purpose: an agent writing a record from an
+/// installed app, or from a repo that never shipped docs/, still gets the contract, and
+/// the compact rules every rejection prints are cut from this same text at build time.
+fn cmd_human_style(cli: &Cli) -> CliResult {
+    if cli.json {
+        return print_json(&serde_json::json!({
+            "ok": true,
+            "style": agentmon_core::HUMAN_STYLE,
+            "compactRules": agentmon_core::HUMAN_COMPACT_RULES,
+        }));
+    }
+    println!("{}", agentmon_core::HUMAN_STYLE.trim_end());
+    Ok(())
+}
 
 fn cmd_status(cli: &Cli, json: bool) -> CliResult {
     let store = open(cli)?;
@@ -2115,12 +2394,15 @@ fn run_app_feedback(cli: &Cli, cmd: &AppFeedbackCmd) -> CliResult {
             title,
             body,
             agent,
+            human,
             at,
         } => {
+            let human = human.required()?;
             let item = agentmon_core::add_feedback(&agentmon_core::NewFeedback {
                 kind: agentmon_core::parse_feedback_kind(r#type)?,
                 title: title.clone(),
                 body: body.clone().unwrap_or_default(),
+                human,
                 agent: agent.agent.clone(),
                 at: at.clone(),
             })?;
@@ -2132,6 +2414,24 @@ fn run_app_feedback(cli: &Cli, cmd: &AppFeedbackCmd) -> CliResult {
                 println!("  {}", dir.join(format!("{}.md", item.id)).display());
             }
             println!("  the human reads these on the app's App feedback board");
+            Ok(())
+        }
+        AppFeedbackCmd::Update {
+            id,
+            agent,
+            human,
+            at,
+        } => {
+            let human = human.required()?;
+            let item =
+                agentmon_core::set_feedback_human(id, &agent.agent, &human, at.as_deref())?;
+            if cli.json {
+                return print_json(&item);
+            }
+            println!("Rewrote the human area of {}  {}", item.id, item.title);
+            if let Some(dir) = agentmon_core::feedback_dir() {
+                println!("  {}", dir.join(format!("{}.md", item.id)).display());
+            }
             Ok(())
         }
         AppFeedbackCmd::List { status, r#type } => {
@@ -2179,9 +2479,13 @@ fn run_app_feedback(cli: &Cli, cmd: &AppFeedbackCmd) -> CliResult {
             if let Some(done) = &f.done {
                 println!("handled on {done}");
             }
+            if let Some(updated) = &f.updated {
+                println!("retold on {updated}");
+            }
             if !f.body.is_empty() {
                 println!("\n{}", f.body);
             }
+            print_human(f.human.as_deref(), &f.id, "app-feedback update");
             Ok(())
         }
         AppFeedbackCmd::Done { id } => {
@@ -2243,6 +2547,76 @@ fn finished_at_on_start(finished: &str) -> CliError {
              shipped, how it was verified>\""
         ),
     }
+}
+
+impl HumanArg {
+    /// The human area as text, or `None` when neither flag was passed.
+    ///
+    /// Absent is *not* rejected here: which verbs require one is core's rule (SPEC.md's
+    /// matrix), and core's refusal is the one that carries the style contract. The CLI
+    /// only turns two flags into one string.
+    fn read(&self) -> std::result::Result<Option<String>, CliError> {
+        match (self.human.as_deref(), self.human_file.as_deref()) {
+            (None, None) => Ok(None),
+            (inline, file) => Ok(Some(read_text(
+                inline,
+                file,
+                BodySource {
+                    what: "human area",
+                    inline_flag: "--human",
+                    file_flag: "--human-file",
+                    template: "The same work retold for a reader who was not there and does \
+                               not program.\nRun `agentmon human-style` for the contract.",
+                    example: "agentmon work done WORK-0003 --agent cli-builder \\\n  \
+                              --outcome \"...\" \\\n  --human \"The app used to lose a record \
+                              when two agents started work in the same second. It does not \
+                              any more: ...\"",
+                },
+            )?)),
+        }
+    }
+
+    /// What core needs for a verb that requires one: the empty string when nothing was
+    /// passed, so the refusal (and the style rules with it) comes from core.
+    fn required(&self) -> std::result::Result<String, CliError> {
+        Ok(self.read()?.unwrap_or_default())
+    }
+
+    /// Is this asking to read stdin?
+    fn wants_stdin(&self) -> bool {
+        self.human_file.as_deref().map(is_stdin).unwrap_or(false)
+    }
+}
+
+fn is_stdin(path: &Path) -> bool {
+    path.as_os_str() == "-"
+}
+
+/// Refuse a command that asks two different flags to read stdin.
+///
+/// Only one of them could win: the first read drains the pipe and the second silently gets
+/// an empty string, which would land as an empty body or an empty human area — a record
+/// written wrong by a command that looked like it worked.
+fn one_stdin(flags: &[(&str, bool)]) -> std::result::Result<(), CliError> {
+    let asking: Vec<&str> = flags
+        .iter()
+        .filter(|(_, yes)| *yes)
+        .map(|(name, _)| *name)
+        .collect();
+    if asking.len() < 2 {
+        return Ok(());
+    }
+    Err(CliError {
+        code: exit::USAGE,
+        kind: "invalid_argument",
+        message: format!(
+            "{} both ask to read stdin ('-'), and stdin can be read only once — whichever \
+             was read second would land empty.\n\nGive one of them another source: inline \
+             text (--human \"<text>\") or a real file (--body-file notes.md), and keep '-' \
+             for the other.",
+            asking.join(" and ")
+        ),
+    })
 }
 
 /// Everything needed to explain how to supply a missing body.
@@ -2418,6 +2792,19 @@ mod tests {
         let body_err: CliError = agentmon_core::validate::work_body("nope").unwrap_err().into();
         assert_eq!(body_err.code, exit::INVALID_BODY);
         assert_eq!(body_err.kind, "invalid_body");
+
+        // A missing human area is exit 2 (SPEC.md), and its message carries the contract.
+        let human_err: CliError = agentmon_core::human::require("", "this work log")
+            .unwrap_err()
+            .into();
+        assert_eq!(human_err.code, exit::USAGE);
+        assert_eq!(human_err.kind, "invalid_argument");
+        assert!(human_err.message.contains("--human"), "{}", human_err.message);
+        assert!(
+            human_err.message.contains("agentmon human-style"),
+            "{}",
+            human_err.message
+        );
     }
 
     /// Walk to a subcommand by path, e.g. `["work", "done"]`.
@@ -2511,6 +2898,76 @@ mod tests {
                 path.join(" ")
             );
         }
+    }
+
+    /// SPEC.md's CLI block: `--human s | --human-file f` on every verb that creates,
+    /// closes or rewrites a record — and nowhere else, because a flag that does nothing is
+    /// a flag an agent will pass and wonder about.
+    #[test]
+    fn the_human_flags_are_on_exactly_the_verbs_that_take_one() {
+        let takes: &[&[&str]] = &[
+            &["work", "start"],
+            &["work", "update"],
+            &["work", "done"],
+            &["work", "abandon"],
+            &["bug", "create"],
+            &["bug", "claim"],
+            &["bug", "comment"],
+            &["bug", "resolve"],
+            &["note", "add"],
+            &["note", "update"],
+            &["app-feedback", "add"],
+            &["app-feedback", "update"],
+        ];
+        for path in takes {
+            assert!(has_flag(path, "human"), "`agentmon {}` takes --human", path.join(" "));
+            assert!(
+                has_flag(path, "human-file"),
+                "`agentmon {}` takes --human-file",
+                path.join(" ")
+            );
+        }
+        // Removing a note writes no record, and neither does project metadata.
+        for path in [
+            vec!["note", "remove"],
+            vec!["project", "update"],
+            vec!["app-feedback", "done"],
+        ] {
+            assert!(!has_flag(&path, "human"), "`agentmon {}` has no --human", path.join(" "));
+        }
+    }
+
+    /// Two flags reading `-` would leave the second one empty — a command that looks like
+    /// it worked and wrote a record with a blank half.
+    #[test]
+    fn two_flags_cannot_both_read_stdin() {
+        let err = one_stdin(&[("--body-file", true), ("--human-file", true)]).unwrap_err();
+        assert_eq!(err.code, exit::USAGE);
+        assert!(err.message.contains("--body-file"), "{}", err.message);
+        assert!(err.message.contains("--human-file"), "{}", err.message);
+        assert!(err.message.contains("stdin"), "{}", err.message);
+        assert!(one_stdin(&[("--body-file", true), ("--human-file", false)]).is_ok());
+
+        // …and a real command is refused before it reads a byte or opens a project.
+        let cli = Cli::try_parse_from([
+            "agentmon", "work", "start", "--agent", "a", "--title", "t", "--body-file", "-",
+            "--human-file", "-",
+        ])
+        .expect("both flags parse, so the error can be a good one");
+        let err = run(&cli).unwrap_err();
+        assert_eq!(err.code, exit::USAGE);
+        assert!(err.message.contains("stdin"), "{}", err.message);
+    }
+
+    /// The style contract ships inside the binary, and the compact rules every rejection
+    /// prints are cut out of the same text at build time.
+    #[test]
+    fn human_style_is_embedded_and_printable() {
+        let cli = Cli::try_parse_from(["agentmon", "human-style"]).unwrap();
+        assert!(run(&cli).is_ok());
+        assert!(agentmon_core::HUMAN_STYLE.contains("<!-- compact-rules -->"));
+        assert!(!agentmon_core::HUMAN_COMPACT_RULES.trim().is_empty());
+        assert!(agentmon_core::HUMAN_STYLE.contains(agentmon_core::HUMAN_COMPACT_RULES.trim()));
     }
 
     #[test]

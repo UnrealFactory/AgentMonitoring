@@ -25,6 +25,7 @@ pub mod doctor;
 pub mod error;
 pub mod feedback;
 pub mod fsx;
+pub mod human;
 pub mod mcp_json;
 pub mod model;
 pub mod registry;
@@ -34,11 +35,12 @@ pub mod validate;
 pub mod write;
 
 pub use claude_md::{parse_claude_md_lang, write_claude_md, ClaudeMdLang, ClaudeMdOutcome};
-pub use error::{BodyRejection, CoreError, Result};
+pub use error::{BodyRejection, CoreError, HumanRejection, Result};
+pub use human::{COMPACT_RULES as HUMAN_COMPACT_RULES, STYLE as HUMAN_STYLE};
 pub use mcp_json::{find_mcp_server, write_mcp_json, McpJsonOutcome};
 pub use feedback::{
     add_feedback, delete_feedback, feedback_dir, list_feedback, parse_feedback_kind,
-    parse_feedback_status, set_feedback_status, view_feedback, NewFeedback,
+    parse_feedback_status, set_feedback_human, set_feedback_status, view_feedback, NewFeedback,
 };
 pub use model::{
     AgentActivity, Bug, BugComment, BugDetail, BugStatus, BugSummary, Event, FeedbackItem,

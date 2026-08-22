@@ -1,0 +1,41 @@
+🎭 The app now updates behind a pretty curtain
+WORK-0055 · what changed when the app installs a new version of itself
+BEFORE 😨
+C:\WINDOWS\...\powershell.exe
+PS> Invoke-WebRequest https://...
+Downloading........ 43%
+VERBOSE: extracting payload_x64.msi
+WARNING: 0x80070005 retrying...
+Stop-Process -Name agentmonitoring
+Installing............
+█▓▒░ ??? ░▒▓█
+_
+A scary robot window popped up,
+scrolling mystery text. 😵
+NOW 😌
+새 버전으로 업데이트하는 중
+Updating to the new version…
+One calm little card:
+“Updating to the new version” + a moving bar. ✨
+How it works — like a magic trick 🪄
+🕵️
+1. Invisible helper
+A hidden worker does the real job: download, install, restart the app. You never see it.
+🎭
+2. Pretty curtain
+The splash card is just decoration — it covers the gap while the old app closes and the new one opens.
+🎉
+3. Ta-da!
+The moment the fresh new app appears, the curtain sees it and quietly removes itself.
+And if something goes wrong? 🛟
+💬
+Friendly popup
+The curtain drops and a normal message box tells you the update failed — no cryptic console.
+📓
+Secret diary
+The hidden worker writes everything it did to a log file, so a human can check later.
+⏲️
+3-minute rule
+The card can never get stuck forever — after 3 minutes it gives up and closes itself.
+😨 → 🎭 → 😌
+WORK-0055 · fable-updater-splash · shipped 2026-08-21 · all 12 tests green ✅

@@ -28,23 +28,205 @@ pub fn split_frontmatter(text: &str) -> Option<(&str, &str)> {
     None
 }
 
-fn is_fence(line: &str) -> bool {
-    let t = line.trim_start();
-    t.starts_with("```") || t.starts_with("~~~")
+/// One space character, for every parser in this crate and its Node twin.
+///
+/// It exists because `str::trim` and JavaScript's `String.prototype.trim` are *not* the
+/// same function, and this crate's guard against a smuggled `## For humans` is only as
+/// wide as the narrower of the two. `U+FEFF` (the byte-order mark) was dropped from
+/// Unicode's `White_Space` property in 4.0.1, so Rust does not trim it and JavaScript
+/// (whose spec still lists `<ZWNBSP>`) does: `\u{feff}## For humans` in a `--body` was not
+/// a heading to Rust, sailed through the guard, and then came back out of
+/// scripts/project-fs.mjs as a reserved-titled section in the agent-area payload — the one
+/// thing SPEC.md says that payload never contains. `U+0085` splits them the other way.
+/// Both sides trim the **union**, so both sides see the same headings.
+pub(crate) fn is_space(c: char) -> bool {
+    c.is_whitespace() || c == '\u{feff}'
+}
+
+/// A code point that paints **nothing at all** — no glyph, no gap.
+///
+/// Unicode's `Default_Ignorable_Code_Point` set (the zero-width space and its family, the
+/// bidi marks, the soft hyphen, the variation selectors, the tag characters) plus the rest
+/// of general category `Cf`. Written out as ranges because this crate has no Unicode
+/// database dependency and these ranges do not move: a code point that is ignorable is
+/// ignorable forever, and new ones only ever add to the list.
+///
+/// It is not [`is_space`], and the difference is the whole point. A space *is* ink of a
+/// kind — it separates two words, and both trims and every `\s` in the app agree it is
+/// there. `U+200B` is not: it separates nothing, no renderer draws it, and no `trim` on
+/// either side of this codebase removes it. That made it the perfect smuggler's byte —
+/// `## For humans\u{200b}` is drawn by src/lib/markdown-parse.ts as a level-2 heading whose
+/// visible text is exactly `For humans`, while a title comparison that only collapsed
+/// whitespace read it as a *different* title and let it through `--body`. Titles are
+/// compared with these removed ([`crate::human`]), so a character the reader cannot see
+/// cannot make two identical-looking headings different.
+///
+/// Only *comparisons* drop these. Nothing that is stored does — `U+200D` (zero-width
+/// joiner) and `U+FE0F` (the variation selector that makes an emoji an emoji) are load
+/// bearing inside a real string, so [`heading`] and [`sections`] keep every byte an author
+/// wrote.
+pub(crate) fn is_ignorable(c: char) -> bool {
+    matches!(c as u32,
+        0x00ad                    // soft hyphen — drawn only at a line break
+        | 0x034f                  // combining grapheme joiner
+        | 0x061c                  // arabic letter mark
+        | 0x115f..=0x1160         // hangul choseong/jungseong fillers
+        | 0x17b4..=0x17b5         // khmer inherent vowels
+        | 0x180b..=0x180f         // mongolian variation selectors and separators
+        | 0x200b..=0x200f         // zero width space, non-joiner, joiner, LRM, RLM
+        | 0x202a..=0x202e         // bidi embedding and override controls
+        | 0x2060..=0x206f         // word joiner, invisible operators, deprecated formats
+        | 0x3164                  // hangul filler
+        | 0xfe00..=0xfe0f         // variation selectors
+        | 0xfeff                  // zero width no-break space (the byte-order mark)
+        | 0xffa0                  // halfwidth hangul filler
+        | 0xfff0..=0xfff8         // unassigned-but-reserved format range
+        | 0x1bca0..=0x1bca3       // shorthand format controls
+        | 0x1d173..=0x1d17a       // musical formatting controls
+        | 0xe0000..=0xe0fff       // tags and the variation selectors supplement
+        // …and the format characters that are not default-ignorable but still draw
+        // nothing on their own: the Arabic and Kaithi prefixed-format signs.
+        | 0x0600..=0x0605 | 0x06dd | 0x070f | 0x0890..=0x0891 | 0x08e2
+        | 0x110bd | 0x110cd | 0x13430..=0x1343f
+        // …and one Unicode does not call ignorable at all: the empty braille cell, six
+        // dots with none of them raised. It is a letter to Unicode and nothing to every
+        // font that draws it, which is why it is the character people paste when they want
+        // to send a message that looks empty.
+        | 0x2800
+    )
+}
+
+pub(crate) fn trim(s: &str) -> &str {
+    s.trim_matches(is_space)
+}
+
+pub(crate) fn trim_end(s: &str) -> &str {
+    s.trim_end_matches(is_space)
+}
+
+fn trim_start(s: &str) -> &str {
+    s.trim_start_matches(is_space)
+}
+
+/// The marker char of a fence line — `` ` `` or `~`, or `None` for an ordinary line.
+fn fence_marker(line: &str) -> Option<char> {
+    let t = trim_start(line);
+    if t.starts_with("```") {
+        Some('`')
+    } else if t.starts_with("~~~") {
+        Some('~')
+    } else {
+        None
+    }
+}
+
+/// A closing fence: three or more of the *opening* marker and nothing else on the line.
+fn closes_fence(line: &str, marker: char) -> bool {
+    let t = trim(line);
+    t.chars().count() >= 3 && t.chars().all(|c| c == marker)
+}
+
+/// Which lines are inside a fenced code block, by the rule the app's own renderer uses
+/// (src/lib/markdown-parse.ts: a block opened with ``` closes on a line of 3+ backticks
+/// and nothing else).
+///
+/// The naive version — one boolean toggled by any fence line — disagreed with that
+/// renderer, and the disagreement was a hole in the reserved-heading guard rather than a
+/// curiosity. Take a body whose lines are, in order: a backtick fence, `a`, a *tilde*
+/// fence, `b`, a backtick fence, `## For humans`, `x`, a tilde fence. The toggle flips
+/// four times and ends balanced, with the heading counted *inside* a fence, so nothing
+/// refused it — while `parseBlocks` closes the backtick block at the second backtick fence
+/// and draws a level-2 heading reading "For humans" over the agent's own words. Matching
+/// the marker char makes the two agree.
+#[derive(Default)]
+pub(crate) struct Fences {
+    open: Option<char>,
+}
+
+impl Fences {
+    /// Feed one line, in document order. `true` means the line is code — both fence lines
+    /// included, neither of which can be a heading anyway.
+    pub(crate) fn feed(&mut self, line: &str) -> bool {
+        match self.open {
+            None => match fence_marker(line) {
+                Some(marker) => {
+                    self.open = Some(marker);
+                    true
+                }
+                None => false,
+            },
+            Some(marker) => {
+                if closes_fence(line, marker) {
+                    self.open = None;
+                }
+                true
+            }
+        }
+    }
+
+    fn is_open(&self) -> bool {
+        self.open.is_some()
+    }
+}
+
+/// 1-based number of the fence line that `text` never closes, if there is one.
+///
+/// Text that ends *inside* a fence swallows every heading written after it. That is only a
+/// curiosity while the record is being read; it is a data loss while one is being written,
+/// because the reserved `## For humans` section is appended last — an agent that pastes a
+/// stack trace and forgets the closing ``` would get a record whose human area is code, and
+/// every repair would append another swallowed heading. [`crate::human`] turns this into a
+/// refusal before anything is written.
+pub(crate) fn open_fence_line(text: &str) -> Option<usize> {
+    let mut fences = Fences::default();
+    let mut opened_at: Option<usize> = None;
+    for (i, line) in text.lines().enumerate() {
+        let was_open = fences.is_open();
+        fences.feed(line);
+        match (was_open, fences.is_open()) {
+            (false, true) => opened_at = Some(i + 1),
+            (true, false) => opened_at = None,
+            _ => {}
+        }
+    }
+    opened_at
 }
 
 /// Heading level of a line (1..6), ignoring lines inside code fences.
-fn heading(line: &str) -> Option<(usize, &str)> {
-    let t = line.trim_end();
+///
+/// `pub(crate)` for [`crate::human`], which has to find the reserved `## For humans`
+/// heading by exactly the rules this module splits sections by.
+///
+/// Two rules, and both of them are the same rule: **this function must call a heading
+/// everything any reader downstream of it calls a heading**, because the reserved-heading
+/// guard is built on it and a reader it does not know about is a hole.
+///
+/// * **Leading whitespace is ignored**, exactly as a fence's is. They disagreed once:
+///   `heading` anchored at column 0, so `  ## For humans` inside `--body` was not a heading
+///   to [`crate::human::contains_heading`] and the write was allowed — but [`sections`]
+///   trims each section body, which strips the indent off its *first* line, so [`render`]
+///   then wrote that very heading back at column 0.
+/// * **The hash run is closed by any space, not by `' '` alone.** CommonMark says a space
+///   or a tab; the app's renderer (src/lib/markdown-parse.ts) says `\s`, which is both of
+///   those plus the no-break space. `##\tFor humans` and `##\u{a0}For humans` were
+///   therefore headings to the app and plain text here, and a `--body` carrying either was
+///   written without complaint — leaving the Agent view drawing a heading that reads "For
+///   humans" over prose saying it is not the record's human area.
+///
+/// Anything ambiguous is a heading here: this function only ever *refuses* a write, so
+/// seeing one heading too many costs an agent a reworded line, and seeing one too few
+/// costs the record its human area.
+pub(crate) fn heading(line: &str) -> Option<(usize, &str)> {
+    let t = trim(line);
     if !t.starts_with('#') {
         return None;
     }
     let hashes = t.chars().take_while(|c| *c == '#').count();
     let rest = &t[hashes..];
-    if !rest.starts_with(' ') && !rest.is_empty() {
+    if !rest.is_empty() && !rest.starts_with(is_space) {
         return None;
     }
-    Some((hashes, rest.trim()))
+    Some((hashes, trim(rest)))
 }
 
 /// Split a body into level-2 sections, in document order. Content before the first
@@ -55,12 +237,9 @@ pub fn sections(body: &str) -> Vec<Section> {
         title: String::new(),
         body: String::new(),
     };
-    let mut in_fence = false;
+    let mut fences = Fences::default();
     for line in body.lines() {
-        if is_fence(line) {
-            in_fence = !in_fence;
-        }
-        if !in_fence {
+        if !fences.feed(line) {
             if let Some((2, title)) = heading(line) {
                 if !current.title.is_empty() || !current.body.trim().is_empty() {
                     current.body = current.body.trim().to_string();
@@ -100,12 +279,9 @@ pub fn take_section(sections: &mut Vec<Section>, name: &str) -> Option<String> {
 fn entries(body: &str, is_entry: impl Fn(&str) -> bool) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
     let mut current: Option<(String, String)> = None;
-    let mut in_fence = false;
+    let mut fences = Fences::default();
     for line in body.lines() {
-        if is_fence(line) {
-            in_fence = !in_fence;
-        }
-        if !in_fence {
+        if !fences.feed(line) {
             if let Some((3, title)) = heading(line) {
                 if is_entry(title) {
                     if let Some((t, b)) = current.take() {
@@ -423,6 +599,82 @@ mod tests {
         assert!(secs[0].body.contains("## Why"));
     }
 
+    /// An indented `##` is a heading, and `render(sections(x))` is stable.
+    ///
+    /// The pair is the bug: `heading` used to anchor at column 0 while `sections` trimmed
+    /// each section body, so `  ## For humans` survived every guard as ordinary text and
+    /// then came back out of `render` as a real column-0 section — a record with two human
+    /// areas, an empty `## What`, and `doctor` failing the file the CLI had just accepted.
+    #[test]
+    fn an_indented_heading_is_a_heading_and_a_rendered_body_reparses_the_same() {
+        for indent in ["  ", "   ", "    ", "\t"] {
+            let secs = sections(&format!("## What\n\n{indent}## For humans\n\nSmuggled.\n"));
+            assert_eq!(secs.len(), 2, "{indent:?} -> {secs:?}");
+            assert_eq!(secs[1].title, "For humans", "{indent:?}");
+        }
+        // …and the round trip no longer promotes anything: parse, render, parse again
+        // gives the same sections, which is what makes checking the rendered bytes sound.
+        let src = "## What\n\n  ## For humans\n\nSmuggled.\n\n## Why\n\nBecause.\n";
+        let once = render(&sections(src));
+        assert_eq!(render(&sections(&once)), once, "render(sections(x)) is a fixed point");
+        // An indented fence still hides an indented heading, exactly as a flush one does.
+        let fenced = sections("## What\n\n  ```md\n  ## For humans\n  ```\n");
+        assert_eq!(fenced.len(), 1, "{fenced:?}");
+        assert!(fenced[0].body.contains("## For humans"));
+    }
+
+    /// The hash run is closed by **any** space, not by `' '` alone.
+    ///
+    /// `##\tFor humans` was not a heading here and was one to the app's own renderer
+    /// (src/lib/markdown-parse.ts, `/^(#{1,6})\s+(.*)$/`), so a `--body` carrying it was
+    /// written without complaint and the Agent view drew a level-2 heading reading "For
+    /// humans" over the agent's prose. `\u{a0}` (no-break space) split them the same way,
+    /// and `\u{feff}` split the two *transports*: JavaScript's `trim` strips it and Rust's
+    /// does not, so the browser reader saw a section the desktop reader did not.
+    #[test]
+    fn any_space_closes_the_hash_run_and_bom_never_hides_one() {
+        for gap in [" ", "\t", "\u{a0}", "\u{2003}", "  ", " \t"] {
+            assert_eq!(
+                heading(&format!("##{gap}For humans")),
+                Some((2, "For humans")),
+                "gap {gap:?} did not close the hash run",
+            );
+        }
+        // …and the byte-order mark is space to this crate too, wherever it sits.
+        assert_eq!(heading("\u{feff}## For humans"), Some((2, "For humans")));
+        assert_eq!(heading("## For humans\u{feff}"), Some((2, "For humans")));
+        assert_eq!(heading("##\u{feff}For humans"), Some((2, "For humans")));
+        assert_eq!(sections("## What\n\n\u{feff}## Why\n\nx\n").len(), 2);
+        // A hash run with nothing after it is still a heading; one glued to a word is not.
+        assert_eq!(heading("##"), Some((2, "")));
+        assert_eq!(heading("##For humans"), None);
+        assert_eq!(heading("plain text"), None);
+        // A BOM does not turn an ordinary line into a fence either.
+        assert_eq!(open_fence_line("\u{feff}```\nstill open\n"), Some(1));
+    }
+
+    /// A fence closes on its own marker, the way src/lib/markdown-parse.ts closes one.
+    ///
+    /// The naive toggle (any fence line flips a boolean) let a heading hide from this file
+    /// while staying visible to the app: in ```` ```/a/~~~/b/```/## For humans/x/~~~ ````
+    /// the toggle ends balanced with the heading inside a fence, so nothing refused it,
+    /// while `parseBlocks` closed the block at the second ``` and drew the heading.
+    #[test]
+    fn a_fence_closes_only_on_its_own_marker() {
+        let smuggled = "```\na\n~~~\nb\n```\n## For humans\nx\n~~~\n";
+        assert_eq!(open_fence_line(smuggled), Some(8), "the ~~~ on line 8 is the open one");
+        let secs = sections(smuggled);
+        assert!(
+            secs.iter().any(|s| s.title == "For humans"),
+            "the heading is outside the ``` block, exactly as the app reads it: {secs:?}",
+        );
+        // A tilde block holds a ``` as content, and vice versa.
+        assert_eq!(open_fence_line("~~~\n```\n~~~\n"), None);
+        assert_eq!(sections("## What\n\n~~~\n## Why\n~~~\n").len(), 1);
+        // An info string opens but never closes: ```` ```rust ```` is not a closing fence.
+        assert_eq!(open_fence_line("```\na\n```rust\n"), Some(1));
+    }
+
     #[test]
     fn comment_headings_split_on_em_dash() {
         let comments = bug_comments("### 2026-08-18T10:00:00Z — ui-builder\nReproduced.\n");
@@ -455,6 +707,17 @@ mod tests {
         assert!(starts_with_date("2026-08-18"));
         assert!(!starts_with_date("R7 빌더 — 정정"));
         assert!(!starts_with_date("2026년 8월 21일"));
+    }
+
+    #[test]
+    fn an_unclosed_fence_is_found_by_line_number() {
+        assert_eq!(open_fence_line("## How\n\n```\nthread main panicked\n"), Some(3));
+        assert_eq!(open_fence_line("## How\n\n```\nfine\n```\n"), None);
+        assert_eq!(open_fence_line("no fences here at all"), None);
+        // three fences: the third is the one left hanging
+        assert_eq!(open_fence_line("```\na\n```\ntext\n```rust\nb\n"), Some(5));
+        // …and an indented fence counts, exactly as `sections` counts it
+        assert_eq!(open_fence_line("  ```\nstill open\n"), Some(1));
     }
 
     #[test]

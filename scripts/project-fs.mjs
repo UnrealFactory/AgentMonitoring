@@ -199,24 +199,141 @@ export function splitFrontmatter(text) {
 
 // --- markdown sections ------------------------------------------------------
 
+// One space character, kept identical to is_space() in agentmon-core/src/body.rs.
+//
+// `String.prototype.trim` and Rust's `str::trim` are not the same function, and the two
+// transports have to agree byte for byte about where a record's sections begin. JavaScript
+// strips U+FEFF (its spec still lists `<ZWNBSP>`) and Rust does not (Unicode dropped it
+// from `White_Space` in 4.0.1); Rust strips U+0085 and JavaScript does not. So a `--body`
+// carrying a `## For humans` behind a byte-order mark was written by the CLI without
+// complaint and then served from here as `extraSections: [{ title: "For humans" }]` — a
+// reserved-titled section inside the agent-area payload, which SPEC.md says that payload
+// never holds. Both sides trim the union of the two sets: `\s` already covers U+FEFF
+// here, so U+0085 is the only one to add back.
+const SPACE = /[\s\u0085]/;
+const trimSpace = (s) => s.replace(/^[\s\u0085]+|[\s\u0085]+$/g, "");
+const trimSpaceStart = (s) => s.replace(/^[\s\u0085]+/, "");
+const trimSpaceEnd = (s) => s.replace(/[\s\u0085]+$/, "");
+
+// Twin of is_ignorable() in agentmon-core/src/body.rs: every code point that paints
+// nothing at all, which is the zero-width spaces, the bidi marks, the soft hyphen, the
+// variation selectors and the tag characters. Not the same set as SPACE, and that is the
+// point: a space separates two words and every `\s` in the app agrees it is there, while
+// U+200B separates nothing and no `trim` on either side of this codebase removes it, so
+// `## For humans` with one after the title was a different heading to the guard and the
+// same eight glyphs to the reader. U+2800, the empty braille cell, is in here too: Unicode
+// calls it a letter and every font draws it as nothing, which is why it is what people
+// paste to send a message that looks empty. Titles are compared with these gone; nothing
+// that is stored ever drops one (U+200D joins an emoji together, U+FE0F makes it an emoji).
+const IGNORABLE = /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\u2800\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufff8\u0600-\u0605\u06dd\u070f\u0890\u0891\u08e2\u{110bd}\u{110cd}\u{13430}-\u{1343f}\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0000}-\u{e0fff}]/u;
+const IGNORABLE_ALL = new RegExp(IGNORABLE.source, "gu");
+
+const visibleOnly = (s) => s.replace(IGNORABLE_ALL, "");
+
+/** Twin of human::is_blank(): does this text paint nothing at all, letters included? */
+const isBlank = (s) => trimSpace(visibleOnly(s)) === "";
+
+// Twin of fold_confusable() in agentmon-core/src/human.rs: the ASCII letter a character is
+// *drawn as*. Only the nine letters of `for humans`, because only those can turn some other
+// heading into the reserved one, and only shapes that really are identical (Cyrillic o,
+// Greek omicron; not Cyrillic en, which reads as `n` to nobody). Fullwidth Latin and the
+// mathematical alphabets are arithmetic instead of a list: the first sits 0xFEE0 above
+// ASCII, the second is thirteen styled copies of A..Z a..z laid out back to back.
+// Escapes, not the letters themselves: a source line of homoglyphs is a source line no
+// reviewer can check, which is the trick this function exists to refuse.
+const CONFUSABLE = new Map([
+  // a: Cyrillic A a, Greek Alpha alpha, Latin alpha
+  ["\u0410", "a"], ["\u0430", "a"], ["\u0391", "a"], ["\u03b1", "a"], ["\u0251", "a"],
+  // f: Greek digamma (both cases), the hooked f, script capital F
+  ["\u03dc", "f"], ["\u03dd", "f"], ["\u0192", "f"], ["\u2131", "f"],
+  // h: Cyrillic En and Shha (both cases), Greek Eta, Armenian ho, the four letterlike H
+  ["\u041d", "h"], ["\u04ba", "h"], ["\u04bb", "h"], ["\u0397", "h"], ["\u0570", "h"],
+  ["\u210b", "h"], ["\u210c", "h"], ["\u210d", "h"], ["\u210e", "h"],
+  // m: Cyrillic Em, Greek Mu, script M, the roman numeral for a thousand (both cases)
+  ["\u041c", "m"], ["\u039c", "m"], ["\u2133", "m"], ["\u216f", "m"], ["\u217f", "m"],
+  // n: Greek Nu, Armenian vo, double-struck N
+  ["\u039d", "n"], ["\u0578", "n"], ["\u2115", "n"],
+  // o: Cyrillic O, Greek Omicron, Armenian oh, Coptic O, script o (each in both cases)
+  ["\u041e", "o"], ["\u043e", "o"], ["\u039f", "o"], ["\u03bf", "o"], ["\u0555", "o"],
+  ["\u0585", "o"], ["\u2c9e", "o"], ["\u2c9f", "o"], ["\u2134", "o"],
+  // r: Armenian reh, the three letterlike R
+  ["\u0580", "r"], ["\u211b", "r"], ["\u211c", "r"], ["\u211d", "r"],
+  // s: Cyrillic Dze (both cases)
+  ["\u0405", "s"], ["\u0455", "s"],
+  // u: Greek upsilon, Armenian seh (both cases)
+  ["\u03c5", "u"], ["\u054d", "u"], ["\u057d", "u"],
+]);
+
+// Blank, but a whole cell wide: the Hangul fillers and the empty braille cell are drawn
+// the way a space is drawn, so between two words they are one. Twin of the same five
+// characters in normalize_title().
+const BLANK_CELL = new Set(["\u115f", "\u1160", "\u3164", "\uffa0", "\u2800"]);
+
+const foldConfusable = (ch) => {
+  const n = ch.codePointAt(0);
+  if (n < 0x80) return ch;
+  if ((n >= 0xff21 && n <= 0xff3a) || (n >= 0xff41 && n <= 0xff5a)) {
+    return String.fromCodePoint(n - 0xfee0);
+  }
+  if (n >= 0x1d400 && n <= 0x1d6a3) {
+    const off = (n - 0x1d400) % 52;
+    return String.fromCodePoint(off < 26 ? 0x41 + off : 0x61 + off - 26);
+  }
+  return CONFUSABLE.get(ch) ?? ch;
+};
+
+// Twin of heading() in agentmon-core/src/body.rs, down to the leading whitespace: an
+// indented `##` is a heading to both, exactly as an indented ``` is a fence to both.
+// The hash run is closed by any space — `##\tFor humans` is a heading to the app's own
+// renderer (src/lib/markdown-parse.ts) and so it is one here.
 function headingOf(line) {
-  const t = line.replace(/\s+$/, "");
+  const t = trimSpace(line);
   if (!t.startsWith("#")) return null;
   const hashes = t.match(/^#+/)[0].length;
   const rest = t.slice(hashes);
-  if (rest && !rest.startsWith(" ")) return null;
-  return { level: hashes, title: rest.trim() };
+  if (rest && !SPACE.test(rest[0])) return null;
+  return { level: hashes, title: trimSpace(rest) };
 }
 
-const isFence = (line) => /^\s*(```|~~~)/.test(line);
+// Twin of body::Fences: a block opened with ``` closes on a line of 3+ backticks and
+// nothing else, the rule src/lib/markdown-parse.ts renders by. A single toggle flipped by
+// any fence line disagreed with it, and the disagreement hid a `## For humans` heading
+// that the app then drew.
+const fenceMarker = (line) => {
+  const t = trimSpaceStart(line);
+  if (t.startsWith("```")) return "`";
+  if (t.startsWith("~~~")) return "~";
+  return null;
+};
+
+const closesFence = (line, marker) => {
+  const t = trimSpace(line);
+  return t.length >= 3 && [...t].every((c) => c === marker);
+};
+
+/** Feed lines in order; `feed` returns true when the line is code, both fences included. */
+function fenceTracker() {
+  let open = null;
+  return {
+    feed(line) {
+      if (open === null) {
+        const m = fenceMarker(line);
+        if (m === null) return false;
+        open = m;
+        return true;
+      }
+      if (closesFence(line, open)) open = null;
+      return true;
+    },
+  };
+}
 
 export function sections(body) {
   const out = [];
   let current = { title: "", body: "" };
-  let inFence = false;
+  const fences = fenceTracker();
   for (const line of body.split("\n")) {
-    if (isFence(line)) inFence = !inFence;
-    if (!inFence) {
+    if (!fences.feed(line)) {
       const h = headingOf(line);
       if (h && h.level === 2) {
         if (current.title || current.body.trim()) out.push({ title: current.title, body: current.body.trim() });
@@ -230,9 +347,57 @@ export function sections(body) {
   return out;
 }
 
+// Twin of crate::human::split (crates/agentmon-core/src/human.rs): the reserved
+// `## For humans` section is the record's *last* body section, and everything after that
+// heading is the human area. Code-fence aware, like every other heading rule here — a
+// record that quotes the heading inside a ``` block is quoting it, not carrying one.
+const HUMAN_HEADING = "for humans";
+
+// Twin of normalize_title() in human.rs: the title as a reader sees it *drawn*, not as it
+// is spelled. `## For humans` is one no-break space from the reserved heading in the
+// bytes and zero pixels from it on the screen, so it is the reserved heading to both sides.
+// What paints nothing is dropped first, then what is drawn alike becomes one letter: a
+// zero-width space after the title and a Cyrillic o inside it were each eight identical
+// glyphs on the screen and a title this function used to call different.
+const seenTitle = (title) =>
+  [...title]
+    .map((ch) => (BLANK_CELL.has(ch) ? " " : IGNORABLE.test(ch) ? "" : foldConfusable(ch)))
+    .join("");
+
+const normalizeTitle = (title) =>
+  trimSpace(trimSpace(trimSpace(seenTitle(title)).replace(/#+$/, "")).replace(/:+$/, ""))
+    .split(SPACE)
+    .filter(Boolean)
+    .join(" ")
+    // ASCII-only, because the Rust twin folds case with `to_ascii_lowercase`. It makes no
+    // difference to `for humans`, and it means the two cannot drift on a title that
+    // lowercases differently in Unicode (Kelvin sign, dotted capital I).
+    .replace(/[A-Z]/g, (c) => c.toLowerCase());
+
+const isHumanHeading = (title) => normalizeTitle(title) === HUMAN_HEADING;
+
+/** @returns {{ agent: string, human: string|null }} */
+export function splitHuman(body) {
+  const lines = body.split("\n");
+  const fences = fenceTracker();
+  let at = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (fences.feed(lines[i])) continue;
+    const h = headingOf(lines[i]);
+    if (h && h.level === 2 && isHumanHeading(h.title)) at = i;
+  }
+  if (at < 0) return { agent: body, human: null };
+  // trimSpace, not `.trim()`: JavaScript's trim takes U+FEFF off and Rust's does not, so a
+  // `--human` of byte-order marks was a human area to one transport and `null` to the other
+  // - the same record answering "does it have one" two ways. Both sides trim the union and
+  // both sides call a section that paints nothing no section at all.
+  const human = trimSpace(lines.slice(at + 1).join("\n"));
+  return { agent: trimSpaceEnd(lines.slice(0, at).join("\n")), human: isBlank(human) ? null : human };
+}
+
 function takeSection(secs, name) {
   const want = name.toLowerCase();
-  const i = secs.findIndex((s) => s.title.trim().replace(/:$/, "").toLowerCase() === want);
+  const i = secs.findIndex((s) => s.title.trim().replace(/:+$/, "").toLowerCase() === want);
   if (i < 0) return null;
   return secs.splice(i, 1)[0].body;
 }
@@ -249,10 +414,9 @@ function startsWithDate(text) {
 function entries(body) {
   const out = [];
   let current = null;
-  let inFence = false;
+  const fences = fenceTracker();
   for (const line of body.split("\n")) {
-    if (isFence(line)) inFence = !inFence;
-    if (!inFence) {
+    if (!fences.feed(line)) {
       const h = headingOf(line);
       if (h && h.level === 3 && startsWithDate(h.title)) {
         if (current) out.push({ head: current.head, body: current.body.trim() });
@@ -333,7 +497,8 @@ function parseWorklog(path) {
   const split = splitFrontmatter(raw);
   if (!split) throw new ProjectError(500, `${path}: missing YAML frontmatter (see SPEC.md)`);
   const fm = parseFrontmatter(split.frontmatter);
-  const secs = sections(split.body).filter((s) => s.title || s.body.trim());
+  const { agent: agentArea, human } = splitHuman(split.body);
+  const secs = sections(agentArea).filter((s) => s.title || s.body.trim());
   const what = takeSection(secs, "What") ?? "";
   const why = takeSection(secs, "Why") ?? "";
   const how = takeSection(secs, "How") ?? "";
@@ -365,7 +530,8 @@ function parseWorklog(path) {
     updates,
     outcome,
     extraSections: secs,
-    body: split.body.trim(),
+    human,
+    body: agentArea.trim(),
     lastActivity,
   };
 }
@@ -375,7 +541,8 @@ function parseBug(path) {
   const split = splitFrontmatter(raw);
   if (!split) throw new ProjectError(500, `${path}: missing YAML frontmatter (see SPEC.md)`);
   const fm = parseFrontmatter(split.frontmatter);
-  const secs = sections(split.body).filter((s) => s.title || s.body.trim());
+  const { agent: agentArea, human } = splitHuman(split.body);
+  const secs = sections(agentArea).filter((s) => s.title || s.body.trim());
   const report = takeSection(secs, "Report") ?? "";
   const commentsRaw = takeSection(secs, "Comments");
   const comments = commentsRaw
@@ -405,7 +572,16 @@ function parseBug(path) {
   for (const t of [meta.claimed, meta.resolved]) if (t && t > lastActivity) lastActivity = t;
   for (const c of comments) if (c.ts > lastActivity) lastActivity = c.ts;
 
-  return { ...meta, report, comments, resolution, extraSections: secs, body: split.body.trim(), lastActivity };
+  return {
+    ...meta,
+    report,
+    comments,
+    resolution,
+    extraSections: secs,
+    human,
+    body: agentArea.trim(),
+    lastActivity,
+  };
 }
 
 function parseNote(path) {
@@ -426,7 +602,10 @@ function parseNote(path) {
     refs: list(fm.refs),
   };
   const lastActivity = meta.updated > meta.created ? meta.updated : meta.created;
-  return { ...meta, body: split.body.trim(), lastActivity };
+  // A note's body is free-form, so the human area is split off rather than left in it —
+  // the note screens render `body` whole (parity with core's parse_note).
+  const { agent: agentArea, human } = splitHuman(split.body);
+  return { ...meta, body: agentArea.trim(), human, lastActivity };
 }
 
 // --- one store (one AgentMonitoring folder) ----------------------------------
@@ -514,6 +693,8 @@ export function openStore(root, source = "registry") {
             ...updates.map((u) => u.body),
             outcome,
             ...extraSections.map((s) => s.body),
+            // the human area too: those are the words a non-programmer remembers
+            d.human,
           ]),
           updateCount: updates.length,
         };
@@ -542,6 +723,7 @@ export function openStore(root, source = "registry") {
             ...comments.flatMap((c) => [c.agent, c.body]),
             resolution,
             ...extraSections.map((s) => s.body),
+            d.human,
           ]),
           commentCount: comments.length,
         };
@@ -569,7 +751,7 @@ export function openStore(root, source = "registry") {
         return {
           ...meta,
           excerpt: excerpt(body),
-          searchText: searchText([d.description, body, d.tags.join(" ")]),
+          searchText: searchText([d.description, body, d.human, d.tags.join(" ")]),
         };
       });
       // Parity: most recently updated first, name asc on ties — the newest handoff is

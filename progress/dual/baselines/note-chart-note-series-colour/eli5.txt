@@ -1,0 +1,27 @@
+Explain like I'm five · a colour decision
+This is Note‑Pink.
+It draws the Notes line on our activity charts. #c9629b
+✓
+Pink passed the telling‑apart test…
+…but only next to the friends it actually sits with: Work , Done and Bug . Every pair of eyes can tell them apart in this picture .
+Work
+Done
+Bug
+Notes
+?
+Nobody tested these seats
+Some eyes see close colours as almost the same. Pink was never checked next to these two — so we don't know if everyone could tell them apart.
+?
+·
+Pink next to Fix‑purple — colour cousins
+?
+·
+Pink next to the greys — quiet colours it could fade into
+The rule
+Want pink beside purple or grey in a new chart?
+Run the checker first.
+The test is a little program, not a squint — it does the maths for every kind of eyes.
+dataviz · scripts/validate_palette.js "#c9629b,…"
+Psst — open this page's console: the checker just ran on the four tested colours above.
+Only the pink is the real hex ( #c9629b , --series-note ). Work, Done, Bug, Fix and the greys are stand‑in colours — the project's own values live in its theme.
+Decision · chart-note-series-colour · recorded 2026‑08‑21

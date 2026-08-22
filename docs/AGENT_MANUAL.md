@@ -29,15 +29,16 @@ is fully supported — go to
 3. [Finding the project](#finding-the-project)
 4. [Identifying yourself](#identifying-yourself)
 5. [The body contract](#the-body-contract) — the part agents get wrong
-6. [Notes — shared agent knowledge](#notes--shared-agent-knowledge) — essential (read first), memory, handoffs, decisions
-7. [Recipes](#recipes) — copy, paste, edit the prose
-8. [Backdating](#backdating) — recording things after they happened
-9. [Command reference](#command-reference)
-10. [JSON output](#json-output)
-11. [Exit codes](#exit-codes)
-12. [Writing records worth reading](#writing-records-worth-reading)
-13. [Troubleshooting](#troubleshooting)
-14. [Multiple agents at once](#multiple-agents-at-once)
+6. [The human area](#the-human-area) — `--human`, on every record
+7. [Notes — shared agent knowledge](#notes--shared-agent-knowledge) — essential (read first), memory, handoffs, decisions
+8. [Recipes](#recipes) — copy, paste, edit the prose
+9. [Backdating](#backdating) — recording things after they happened
+10. [Command reference](#command-reference)
+11. [JSON output](#json-output)
+12. [Exit codes](#exit-codes)
+13. [Writing records worth reading](#writing-records-worth-reading)
+14. [Troubleshooting](#troubleshooting)
+15. [Multiple agents at once](#multiple-agents-at-once)
 
 ---
 
@@ -65,6 +66,7 @@ Three record types, and the differences matter:
 | What it is | something *you* are doing | something that is *broken* | something you *know* |
 | Lifecycle | `in_progress` → `done` (or `abandoned`) | `open` → `in_progress` → `resolved` | rewritten in place; removed when wrong |
 | Body | `## What` `## Why` `## How` + `## Updates` + `## Outcome` | `## Report` + `## Comments` + `## Resolution` | free-form markdown |
+| Last section | `## For humans` — written from `--human`, on all three ([The human area](#the-human-area)) |||
 | Created by | `agentmon work start` | `agentmon bug create` | `agentmon note add` |
 
 Work logs and bugs are **history**: append-only, corrected by dated notes, never removed.
@@ -315,9 +317,66 @@ The same three forms exist for every prose flag — inline, from a file, or from
 | `bug resolve` | `--resolution` | `--resolution-file` |
 | `note add` | `--body` | `--body-file` |
 | `note update` | `--body` | `--body-file` |
+| every verb above, and `bug claim` / `app-feedback add` / `app-feedback update` | `--human` | `--human-file` |
 
 (`--message-file` exists because `--message`'s file form being called `--body-file` is a
 surprise; both spellings work and always will.)
+
+Only **one** of those files may be `-`: stdin is read once, so a command that asks two
+flags for it is refused with exit `2` rather than writing one of them blank.
+
+---
+
+## The human area
+
+Every record has two areas. Everything above — What/Why/How, the report, the note body —
+is the **agent area**: written for whoever picks the work up next. The **human area** is
+the same events retold by you, for a reader who was not there and does not program: the
+owner, a teammate, somebody six months from now. It is the last section of the record
+file, under the reserved heading `## For humans`, and you never write that heading
+yourself — `--human` does.
+
+```bash
+agentmon human-style        # the contract. Read it when you are about to write one.
+```
+
+That command prints the whole thing, and it is **write-time** reading, not session-start
+reading: open it when a record needs a human area, not before. Every refusal for a missing
+one prints its short form, so a rejected command teaches the rules on the spot.
+
+**Where it is required**
+
+| Verb | `--human` |
+|---|---|
+| `work start`, `work done`, `work abandon` | required — closing verbs **replace** it |
+| `bug create`, `bug resolve` | required — `bug resolve` replaces it |
+| `note add`; `note update --body` | required |
+| `app-feedback add` | required |
+| `work update`, `bug comment`, `note update`, `app-feedback update` | optional — **alone**, it rewrites the human area and nothing else |
+| `bug claim` | optional |
+| any verb above, on a record that has **no** human area yet | required (older records gain one on the first touch) |
+| `app-feedback done` / `reopen` / `delete` | takes none — they are the owner's own buttons on the board, and they neither ask for a human area nor disturb one |
+
+A `--human` on its own is a *refresh*: nothing is appended to `## Updates` or
+`## Comments`, and the feed logs one `human_updated` line. When the human area changes as
+part of a real mutation, that mutation's own event covers it — never two lines for one
+command.
+
+Records written before this existed read fine and report `human: null`; `agentmon doctor`
+lists them as a warning with their ids, and `--json` carries `human` (string or null) on
+every view and every list row.
+
+Three things that are refused, all with exit `2`:
+
+- a missing or blank human area on a verb that requires one;
+- `## For humans` inside a body, outcome, resolution, message or reason — the heading is
+  reserved, and agentmon owns where it goes;
+- prose that leaves a code fence open (a ``` with no partner). The human area is appended
+  *after* your text, so an unclosed fence would swallow it and the record would save with
+  no human area at all. The error names the flag and the line that opened it; close the
+  fence and re-run. A record already on disk in that state (hand-edited, or written by an
+  older build) refuses the same way until the fence is closed in the file — `agentmon
+  doctor` lists those separately, because `--human` alone cannot repair them.
 
 ---
 
@@ -400,6 +459,9 @@ agentmon work start \
   --agent my-agent \
   --title "Cache project counts so the sidebar stops re-reading every record" \
   --tags performance,frontend \
+  --human "Moving between screens had got slow — about a fifth of a second — because the
+app counted every record again each time you clicked. It will now remember the counts
+until something changes them." \
   --body "$(cat <<'EOF'
 ## What
 
@@ -425,10 +487,14 @@ agentmon work update WORK-0004 \
   --agent my-agent \
   --message "Cache is in and the sidebar no longer re-parses. Measured on the live records: screen switch went from 180ms to 12ms. Invalidation on project-changed works; clearing it when the roster changes is next."
 
-# 3. Finish. The outcome is what a human reads first.
+# 3. Finish. The outcome is for the next agent; --human is for everyone else, and
+#    closing replaces whatever the record said while it was open.
 agentmon work done WORK-0004 \
   --agent my-agent \
   --files src/lib/api.ts,src/AppContext.tsx \
+  --human "It is done: switching screens went from about a fifth of a second to almost
+nothing, measured on the 41 records this project has. We checked it by hand on every
+screen while another agent was writing records." \
   --outcome "$(cat <<'EOF'
 Shipped the project-count cache in src/lib/api.ts, cleared from AppContext on
 `project-changed` and on a roster change.
@@ -463,7 +529,8 @@ agentmon work start \
   --title "Cache project counts so the sidebar stops re-reading every record" \
   --tags performance,frontend \
   --started-at 2026-08-18T09:12:00Z \
-  --body-file plan.md
+  --body-file plan.md \
+  --human-file plain.md      # or --human "..." inline
 
 # 2. Optional: the notes you would have written along the way, each with its own time.
 agentmon work update WORK-0004 --agent my-agent \
@@ -474,8 +541,12 @@ agentmon work update WORK-0004 --agent my-agent \
 agentmon work done WORK-0004 --agent my-agent \
   --files src/lib/api.ts,src/AppContext.tsx \
   --finished-at 2026-08-18T11:30:00Z \
-  --outcome-file outcome.md
+  --outcome-file outcome.md \
+  --human-file plain-outcome.md
 ```
+
+Only one of those files may be `-`: stdin can be read once, and a command that asks two
+flags to read it is refused (exit `2`) rather than silently writing a blank half.
 
 That is a record a human cannot tell apart from one written live: `started`, `finished`,
 every note, **and every line in `events.jsonl`** carry the times you gave, so the
@@ -501,7 +572,8 @@ on the dashboard with your name on it:
 ```bash
 agentmon work abandon WORK-0004 \
   --agent my-agent \
-  --reason "Superseded by WORK-0009, which caches at the API layer instead and covers the same screens; nothing from this branch was kept."
+  --reason "Superseded by WORK-0009, which caches at the API layer instead and covers the same screens; nothing from this branch was kept." \
+  --human "We stopped this one. The same job is being done in another place, and nothing written here was kept."
 ```
 
 Status becomes `abandoned`, the reason is appended under `## Updates`, and the clock stops
@@ -523,6 +595,8 @@ agentmon bug create \
   --severity medium \
   --labels frontend,filters \
   --refs WORK-0004 \
+  --human "If you narrow the list of tasks and then open one and press back, the
+narrowing is gone and you have to set it again — every time." \
   --body "$(cat <<'EOF'
 ## Report
 
@@ -578,9 +652,12 @@ agentmon bug comment BUG-0002 \
   --agent my-agent \
   --message "Root cause: the Tauri shell never started a filesystem watcher, so the project-changed event the frontend listens for was never emitted. Browser mode looked live only because the dev server polls."
 
-# 5. Resolve it — after the fix actually works.
+# 5. Resolve it — after the fix actually works. --human is required here and replaces
+#    what the bug said while it was open: the ending changed the story.
 agentmon bug resolve BUG-0002 \
   --agent my-agent \
+  --human "It works now: the window updates by itself when a record is written, about a
+third of a second later, and we checked that by writing one while it was open." \
   --resolution "$(cat <<'EOF'
 Root cause: no filesystem watcher existed in the Tauri shell, so `project-changed` was
 never emitted and the desktop app only re-read records when a route change re-ran the
@@ -630,6 +707,8 @@ agentmon note add \
   --description "Any script that runs agentmon init must set AGENTMON_REGISTRY_DIR to a scratch dir." \
   --tags gates,registry \
   --refs WORK-0035 \
+  --human "A test script that creates a pretend project can leave it sitting in the list
+of real projects on this machine, unless it is pointed at a scratch folder first." \
   --body "$(cat <<'EOF'
 `agentmon init` registers the new project in ~/.AgentMonitoring/registry.json, best
 effort. A gate script that inits a temp fixture therefore bookmarks that fixture in the
@@ -641,8 +720,11 @@ EOF
 # prints: Added note gate-scripts-must-sandbox-the-registry  [memory]  ...
 
 # Stopping mid-work: rewrite the handoff so it describes NOW, not last week.
+# --body replaces what the note knows, so it comes with a fresh --human.
 agentmon note update handoff-notes-ui \
   --agent my-agent \
+  --human "Where this hand-over stands today: the list screen is finished, the detail
+screen still has no 'related records' block on it." \
   --body "$(cat <<'EOF'
 ## State
 
@@ -845,6 +927,7 @@ agentmon project list
 agentmon work start --agent <name> --title <t>
                     [--tags a,b] [--refs WORK-0001,BUG-0002]
                     (--body <markdown> | --body-file <file|->)
+                    (--human <text> | --human-file <file|->)
                     [--started-at <ISO8601>] [--json]
 ```
 
@@ -857,18 +940,25 @@ is what makes "this work fixed that bug" visible in the app.
 `--finished-at` here: a work log gains its end time from `work done`.
 
 ```bash
+`--human` is required: the same work retold for a reader who was not there and does not
+program ([The human area](#the-human-area)).
+
+```bash
 agentmon work start --agent my-agent \
   --title "Wire the change watcher into the desktop app" \
   --tags tauri,live-updates --refs BUG-0002 \
   --started-at 2026-08-18T09:12:00Z \
-  --body-file plan.md
+  --body-file plan.md \
+  --human "The window only noticed new records when you clicked something, so work
+another agent had just written looked missing. This makes it notice on its own."
 ```
 
 ### `agentmon work update`
 
 ```
 agentmon work update <WORK-ID> --agent <name>
-                     (--message <text> | --body-file <file|-> | --message-file <file|->)
+                     (--message <text> | --body-file <file|-> | --message-file <file|->
+                      | --human <text> | --human-file <file|->)
                      [--at <ISO8601>] [--json]
 ```
 
@@ -897,13 +987,23 @@ agentmon work update WORK-0004 --agent my-agent \
 # a correction to work that finished days ago, written by somebody else
 agentmon work update WORK-0004 --agent reviewer \
   --message "Correction: the note above says the debounce window is 500ms; it is 250ms (src-tauri/src/lib.rs)."
+
+# --human alone: rewrites the human area and nothing else. No note is added to
+# ## Updates, and the feed logs one human_updated line.
+agentmon work update WORK-0004 --agent my-agent \
+  --human "What this work actually changed, said plainly."
 ```
+
+A record written before the human area existed has none, and a mutation may not leave it
+that way: a `--message` on such a record needs `--human` with it
+([The human area](#the-human-area)).
 
 ### `agentmon work done`
 
 ```
 agentmon work done <WORK-ID> --agent <name>
                    (--outcome <text> | --outcome-file <file|->)
+                   (--human <text> | --human-file <file|->)
                    [--files a,b] [--refs ...]
                    [--finished-at <ISO8601>] [--started-at <ISO8601>] [--json]
 ```
@@ -916,15 +1016,20 @@ needs at least ~24 characters of real content; `"done"` is rejected.
 at or after the last note). `--started-at` corrects a start time on a record you created
 late — use it when `work start` stamped "now" for work that began hours earlier.
 
+`--human` is required and **replaces** the record's human area: the ending changed the
+story ([The human area](#the-human-area)).
+
 ```bash
 agentmon work done WORK-0004 --agent my-agent \
   --files src-tauri/src/lib.rs \
-  --outcome "Shipped the debounced watcher; cargo test --workspace green and one CLI write now produces exactly one UI refresh."
+  --outcome "Shipped the debounced watcher; cargo test --workspace green and one CLI write now produces exactly one UI refresh." \
+  --human "The window now notices a new record about a quarter of a second after it is
+written, and it refreshes once instead of four times."
 
 # the same work, written up two hours after it ended
 agentmon work done WORK-0004 --agent my-agent \
   --started-at 2026-08-18T09:12:00Z --finished-at 2026-08-18T11:30:00Z \
-  --outcome-file outcome.md
+  --outcome-file outcome.md --human-file plain.md
 ```
 
 ### `agentmon work abandon`
@@ -946,8 +1051,12 @@ record referencing it instead), and so does abandoning it twice.
 
 ```bash
 agentmon work abandon WORK-0004 --agent my-agent \
-  --reason "Superseded by WORK-0009, which caches at the API layer instead and covers the same screens; nothing from this branch was kept."
+  --reason "Superseded by WORK-0009, which caches at the API layer instead and covers the same screens; nothing from this branch was kept." \
+  --human "We stopped this one. The same job is being done in another place, and nothing written here was kept."
 ```
+
+Stopping is an ending, so `--human` is required and replaces what the record said while it
+ran ([The human area](#the-human-area)).
 
 ### `agentmon work list`
 
@@ -975,8 +1084,9 @@ agentmon work view WORK-0003
 
 ```
 agentmon bug create --agent <name> --title <t> --severity <critical|high|medium|low>
-                    (--body <text> | --body-file <file|->) [--labels a,b] [--refs ...]
-                    [--created-at <ISO8601>] [--json]
+                    (--body <text> | --body-file <file|->)
+                    (--human <text> | --human-file <file|->)
+                    [--labels a,b] [--refs ...] [--created-at <ISO8601>] [--json]
 ```
 
 Plain prose becomes `## Report`. See [Recipe 2](#recipe-2--file-a-bug).
@@ -985,27 +1095,35 @@ Plain prose becomes `## Report`. See [Recipe 2](#recipe-2--file-a-bug).
 agentmon bug create --agent my-agent \
   --title "Work list drops the tag filter when you navigate back" \
   --severity medium --labels frontend,filters \
-  --body "Repro: filter by tag, open a record, go back. Expected the filter to survive; it is cleared because filter state lives in the component, not the URL."
+  --body "Repro: filter by tag, open a record, go back. Expected the filter to survive; it is cleared because filter state lives in the component, not the URL." \
+  --human "If you narrow the list and then open something and press back, the narrowing is gone and you have to set it again."
 ```
 
 ### `agentmon bug claim`
 
 ```
-agentmon bug claim <BUG-ID> --agent <name> [--at <ISO8601>] [--json]
+agentmon bug claim <BUG-ID> --agent <name> [--human <text> | --human-file <file|->]
+                   [--at <ISO8601>] [--json]
 ```
 
 Sets `assignee` and moves the bug to `in_progress`. `--at` records when you took it (at or
-after the bug's `created`).
+after the bug's `created`). Claiming writes no prose of its own, so `--human` is optional —
+except on a bug filed before the human area existed, which gains one on this first touch
+([The human area](#the-human-area)).
 
 ```bash
 agentmon bug claim BUG-0002 --agent my-agent
+
+agentmon bug claim BUG-0002 --agent my-agent \
+  --human "What this bug is, in plain words."
 ```
 
 ### `agentmon bug comment`
 
 ```
 agentmon bug comment <BUG-ID> --agent <name>
-                     (--message <text> | --body-file <file|-> | --message-file <file|->)
+                     (--message <text> | --body-file <file|-> | --message-file <file|->
+                      | --human <text> | --human-file <file|->)
                      [--at <ISO8601>] [--json]
 ```
 
@@ -1016,6 +1134,10 @@ Appends `### <timestamp> — <agent>` to the thread. Allowed in any state.
 ```bash
 agentmon bug comment BUG-0002 --agent my-agent \
   --message "Reproduced on Windows 11. The watcher never starts, so nothing is ever emitted."
+
+# --human alone: rewrites the bug's human area and adds nothing to the thread
+agentmon bug comment BUG-0002 --agent my-agent \
+  --human "What this bug looks like to somebody using the app."
 ```
 
 ### `agentmon bug resolve`
@@ -1023,6 +1145,7 @@ agentmon bug comment BUG-0002 --agent my-agent \
 ```
 agentmon bug resolve <BUG-ID> --agent <name>
                      (--resolution <text> | --resolution-file <file|->)
+                     (--human <text> | --human-file <file|->)
                      [--at <ISO8601>] [--json]
 ```
 
@@ -1030,9 +1153,13 @@ Writes `## Resolution`, sets `status: resolved`, stamps `resolved` and `resolved
 `--at` records when it was actually fixed; it must be at or after everything already on the
 bug (created, claimed, the last comment).
 
+`--human` is required and **replaces** the bug's human area — the ending changed the story
+([The human area](#the-human-area)).
+
 ```bash
 agentmon bug resolve BUG-0002 --agent my-agent \
-  --resolution-file resolution.md
+  --resolution-file resolution.md \
+  --human "It works now: the window updates by itself when a record is written."
 ```
 
 **Label the parts in bold, not with `##`.** Your text goes *inside* `## Resolution`, so a
@@ -1071,6 +1198,7 @@ agentmon bug view BUG-0002
 agentmon note add --agent <name> --title <t> --type <essential|memory|handoff|decision|reference>
                   --description <one line>
                   (--body <markdown> | --body-file <file|->)
+                  (--human <text> | --human-file <file|->)
                   [--name <kebab>] [--tags a,b] [--refs ...] [--at <ISO8601>] [--json]
 ```
 
@@ -1085,7 +1213,8 @@ WORK-/BUG- ids and other notes' names (note names must exist).
 agentmon note add --agent my-agent --type decision \
   --title "Notes use their name as identity, not a NOTE-NNNN sequence" \
   --description "A note is looked up by what it is about; numbered ids were rejected." \
-  --body "We considered NOTE-NNNN ids for symmetry with work logs and bugs, and rejected them: a note is addressed by topic, and a stable kebab name doubles as the file name, the URL and the refs value."
+  --body "We considered NOTE-NNNN ids for symmetry with work logs and bugs, and rejected them: a note is addressed by topic, and a stable kebab name doubles as the file name, the URL and the refs value." \
+  --human "Notes are filed under a short name that says what they are about, rather than a number, so anyone can find one without a list."
 ```
 
 ### `agentmon note update`
@@ -1095,6 +1224,7 @@ agentmon note update <name> --agent <name>
                      [--title <t>] [--type <ty>] [--description <d>]
                      [--tags a,b] [--refs ...]
                      [--body <markdown> | --body-file <file|->]
+                     [--human <text> | --human-file <file|->]
                      [--at <ISO8601>] [--json]
 ```
 
@@ -1109,10 +1239,17 @@ Rewriting is not retyping: leave `--type` off and the note keeps the type it has
 restore command — an essential note is required session-start reading, and it must not
 fall out of the front of the list unnoticed.
 
+`--body` replaces what the note knows, so it needs `--human` with it: the old retelling
+described knowledge that is gone. `--human` on its own is a refresh — it rewrites only the
+human area and logs `human_updated` ([The human area](#the-human-area)).
+
 ```bash
-agentmon note update handoff-notes-ui --agent my-agent --body-file handoff.md
+agentmon note update handoff-notes-ui --agent my-agent --body-file handoff.md \
+  --human "Where this hand-over stands today, in plain words."
 agentmon note update registry-gate-gotcha --agent my-agent \
   --description "Every gate must set AGENTMON_REGISTRY_DIR; check-live now does too."
+agentmon note update registry-gate-gotcha --agent my-agent \
+  --human "A clearer telling of the same note."
 ```
 
 ### `agentmon note remove`
@@ -1160,7 +1297,10 @@ agentmon note view registry-gate-gotcha
 ### `agentmon app-feedback`
 
 ```
-agentmon app-feedback add    --agent <name> --type bug|idea --title <t> [--body <prose>] [--at T]
+agentmon app-feedback add    --agent <name> --type bug|idea --title <t>
+                             (--human <text> | --human-file <file|->) [--body <prose>] [--at T]
+agentmon app-feedback update <FB-ID> --agent <name>
+                             (--human <text> | --human-file <file|->) [--at T]
 agentmon app-feedback list   [--status open|done] [--type bug|idea] [--json]
 agentmon app-feedback view   <FB-ID> [--json]
 agentmon app-feedback done   <FB-ID>
@@ -1172,7 +1312,12 @@ A bug in, or a wish for, **AgentMonitoring itself** — the CLI, the MCP tools, 
 screens — as opposed to the project you are working in. Machine-level: items live in
 `~/.AgentMonitoring/feedback/FB-NNNN.md` beside the registry, so the commands work from
 any directory, need no project, and ignore `--dir`. `--body` is optional — a specific
-title can carry a whole wish.
+title can carry a whole wish. `--human` is not: this board is read by the person who
+maintains the app, so an item that speaks only to agents speaks to nobody
+([The human area](#the-human-area)). `app-feedback update` exists for exactly one thing —
+rewriting that retelling on an item already filed. It takes `--at` like every other
+mutation, and because this board has no `events.jsonl` the time is kept in the item's own
+`updated:` key. Over MCP the same verb is `app_feedback` with an `id`.
 
 Filing is the everyday verb; `done` and `delete` are for **working the board**, which
 the human does in the app (**App feedback** in the sidebar) or delegates: "go through
@@ -1184,9 +1329,15 @@ of fact here like everywhere else: mark nothing done that you did not actually h
 ```bash
 agentmon app-feedback add --agent my-agent --type bug \
   --title "status counts an abandoned log as in progress" \
-  --body "Repro: abandon a log, run status — the in-progress count still includes it."
+  --body "Repro: abandon a log, run status — the in-progress count still includes it." \
+  --human "If a task is stopped rather than finished, the summary still counts it as being worked on, so the number reads high."
 agentmon app-feedback add --agent my-agent --type idea \
-  --title "note list should filter by tag"
+  --title "note list should filter by tag" \
+  --human "There is no way to narrow the notes list to one subject, so finding one means reading all of them."
+
+# rewrite the retelling on an item already filed
+agentmon app-feedback update FB-0003 --agent my-agent \
+  --human "A clearer version of what I meant."
 ```
 
 ### `agentmon status`
@@ -1217,7 +1368,10 @@ first problem. Two levels:
   note's name) that does not match its filename, a duplicate id, a note whose `updated`
   predates its `created`, a broken line in `events.jsonl`.
 - **warning** — readable, but off: an event referencing a record that no longer exists, a
-  write lock left behind by a killed process, an event type this build has not heard of.
+  write lock left behind by a killed process, an event type this build has not heard of,
+  or a record with no `## For humans` section ([The human area](#the-human-area)) — one
+  warning naming the count and the ids, with the complete list in `--json` under
+  `missingHuman`.
 
 Exit `1` if there is any error; `--strict` makes warnings fail too. Run it after a batch of
 writes, and before you hand work to a human.
@@ -1225,6 +1379,21 @@ writes, and before you hand work to a human.
 ```bash
 agentmon doctor
 agentmon doctor --strict --json
+```
+
+### `agentmon human-style`
+
+```
+agentmon human-style [--json]
+```
+
+Prints the human-area style contract (docs/HUMAN_STYLE.md), embedded in the binary so it
+works from any directory. **Write-time reading**: open it when a record needs a human
+area, not at the start of a session. `--json` returns `{ style, compactRules }` — the
+second is the short form every refusal already prints.
+
+```bash
+agentmon human-style
 ```
 
 ### `agentmon migrate`
@@ -1267,9 +1436,13 @@ Success on a mutation:
     "ref": "WORK-0004",
     "summary": "Cache project counts so the sidebar stops re-reading every record"
   },
-  "record": { "id": "WORK-0004", "title": "...", "status": "in_progress", "what": "...", "...": "..." }
+  "record": { "id": "WORK-0004", "title": "...", "status": "in_progress", "what": "...",
+              "human": "the same work, retold for a reader who does not program", "...": "..." }
 }
 ```
+
+Every record view and every list row carries `human`: the text of the record's human area,
+or `null` on a record written before it existed ([The human area](#the-human-area)).
 
 Failure, on any command:
 
@@ -1292,7 +1465,8 @@ Capturing the new id in a script:
 
 ```bash
 id=$(agentmon work start --agent my-agent \
-       --title "..." --body-file plan.md --json | grep -o '"id": "[^"]*"' | head -1 | cut -d'"' -f4)
+       --title "..." --body-file plan.md --human-file plain.md --json \
+       | grep -o '"id": "[^"]*"' | head -1 | cut -d'"' -f4)
 echo "started $id"
 ```
 
@@ -1309,7 +1483,7 @@ not an envelope — those are the shapes the desktop app consumes.
 |---|---|---|
 | `0` | Success | — |
 | `1` | The project has problems (`doctor` found errors) | Read the listed problems; each one names its fix |
-| `2` | Usage error: unknown flag, missing argument, bad value — including a timestamp that will not parse, is in the future, or is out of order | Re-read the message; it names the flag and the allowed values |
+| `2` | Usage error: unknown flag, missing argument, bad value — including a timestamp that will not parse, is in the future, or is out of order, a missing or blank `--human`, and `## For humans` written into an agent-area flag | Re-read the message; it names the flag and the allowed values (a human-area refusal prints the style rules too) |
 | `3` | Not found: project folder or record | `agentmon project list` / `work list` to see what exists |
 | `4` | Body rejected: missing sections, or placeholder text | The message prints the template — rewrite and re-run |
 | `5` | Conflict: already done, already claimed, already exists | The message says the alternative command to run |

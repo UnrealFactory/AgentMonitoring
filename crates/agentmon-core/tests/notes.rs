@@ -45,6 +45,7 @@ fn new_note(title: &str, body: &str) -> NewNote {
         tags: vec!["test".into()],
         refs: vec![],
         body: body.into(),
+        human: "A short note in plain words, so this fixture is a legal record.".into(),
         at: None,
     }
 }
@@ -102,6 +103,7 @@ fn update_replaces_in_place_and_stamps_updated() {
     let (location, store) = project("update");
     let added = store
         .add_note(&NewNote {
+            human: "A short note in plain words, so this fixture is a legal record.".into(),
             at: Some("2026-08-19T10:00:00Z".into()),
             ..new_note("Handoff for the next builder", "State: the list page is done.")
         })
@@ -114,6 +116,13 @@ fn update_replaces_in_place_and_stamps_updated() {
                 agent: "second-agent".into(),
                 body: Some("State: list and detail pages are done; wire the events next.".into()),
                 description: Some("Read this before touching the notes UI.".into()),
+                // A replaced body needs a replaced retelling — SPEC.md's rule, and the
+                // reason `--body` without `--human` is refused below.
+                human: Some(
+                    "Where this hand-over stands now: the list and the detail screens are \
+                     finished, and the next job is the live updates."
+                        .into(),
+                ),
                 at: Some("2026-08-19T12:00:00Z".into()),
                 ..Default::default()
             },
@@ -198,6 +207,7 @@ fn refs_may_point_at_records_by_shape_and_at_notes_only_if_they_exist() {
             title: "Use the decision note".into(),
             refs: vec!["the-decision-behind-the-notes-design".into()],
             body: "## What\nWork that leans on a decision.\n## Why\nBecause the note says so.\n## How\nBy reading it.".into(),
+            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
             ..Default::default()
         })
         .expect("a work log can ref an existing note");
@@ -209,6 +219,7 @@ fn refs_may_point_at_records_by_shape_and_at_notes_only_if_they_exist() {
             title: "Ref a note that is not there".into(),
             refs: vec!["no-such-note".into()],
             body: "## What\nA doomed record.\n## Why\nTo prove the guard.\n## How\nBy failing loudly.".into(),
+            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
             ..Default::default()
         })
         .expect_err("a dangling note ref is refused");

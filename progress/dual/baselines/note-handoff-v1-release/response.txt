@@ -1,0 +1,11 @@
+The ELI5 explainer is ready: `C:\Users\User\AppData\Local\Temp\eli5-work\run-handoff-v1-release\eli5-handoff-v1-release.html` (opening it in the browser needed approval, so just double-click the file to view it).
+
+It turns the handoff into a five-part picture book, big emoji and few words:
+
+1. **What shipped in v1.0.5** — notes can wear an "essential" star; the app now warns you (with the exact restore command) before a type change knocks the star off, and a flaky existence-check can no longer masquerade as a first write.
+2. **How updates travel** — the machine on 1.0.1 jumps straight to 1.0.5, skipping everything in between; updates from ≤1.0.1 show the old console one last time, newer ones hide behind the splash.
+3. **How to release** — same version number in three files (the script refuses if they disagree), then `npm run release` builds the installer and pushes it to GitHub.
+4. **The three traps** — old PowerShell needs `-UseBasicParsing`, Tauri resource globs flatten folders into one pile, and NSIS remembers the last install directory in the registry.
+5. **Small print** — `.mcp.json` is now the registration path, and the v1.0.0 tag points one commit early but the shipped installer is fine.
+
+One note: I couldn't read the skill's SKILL.md (permission denied), so I followed the instruction embedded in the command itself — HTML artifact, big pictures, few words.

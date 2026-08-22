@@ -137,6 +137,24 @@ function parseJson(text) {
   }
 }
 
+/**
+ * The one refusal whose length is the point.
+ *
+ * A missing or blank human area is refused with the compact style rules inside the
+ * message — that error *is* how the contract reaches an agent at write time (SPEC.md,
+ * "The human area"). Trimming it to the usual 600 characters would cut the rules off and
+ * leave a demand with no way to satisfy it, so this one is not length-capped at all.
+ *
+ * Not capped rather than capped generously, because any number here is a guess about a
+ * file this module cannot see: the rules are cut out of docs/HUMAN_STYLE.md at build time
+ * (crates/agentmon-core/build.rs), so the message grows whenever that doc does. A 2500
+ * ceiling held until the doc was rewritten and then cut the last line off — which is the
+ * line naming `agentmon human-style`, the way to the rest of the contract. The shell-tail
+ * cut and the blank-run collapse still apply; only the length ceiling is lifted.
+ */
+const HUMAN_CONTRACT = "agentmon human-style";
+const HUMAN_CAP = Number.POSITIVE_INFINITY;
+
 /** One short line an agent can act on: what failed, which exit code, why. */
 export function cliErrorText(result) {
   if (result.spawnFailed) return trimCliMessage(result.stderr);
@@ -144,7 +162,8 @@ export function cliErrorText(result) {
   const kind = envelope?.kind ? ` (${envelope.kind})` : "";
   const meaning = EXIT_MEANING[result.exitCode] ? `, ${EXIT_MEANING[result.exitCode]}` : "";
   const body = envelope?.message ?? result.stderr ?? result.stdout ?? "agentmon failed";
-  return `agentmon exit ${result.exitCode}${kind}${meaning}: ${trimCliMessage(body)}`;
+  const cap = String(body).includes(HUMAN_CONTRACT) ? HUMAN_CAP : undefined;
+  return `agentmon exit ${result.exitCode}${kind}${meaning}: ${trimCliMessage(body, cap)}`;
 }
 
 /** Comma-joined list flag value, from either an array or an already-joined string. */

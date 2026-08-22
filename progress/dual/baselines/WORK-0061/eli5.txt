@@ -1,0 +1,36 @@
+🔗 Double brackets become buttons
+One tiny change: [[note-name]] in your notes is now a clickable chip.
+What changed
+Before
+See [[cookie-recipes]] for details.
+😕 dead gray text
+After
+See cookie-recipes for details.
+🎉 a button that opens the note
+The brackets are the magic word
+[[cookie-recipes]]
+→
+cookie-recipes
+Brackets say “this IS a link.” ✅
+cookie-recipes
+→
+cookie-recipes
+No brackets? Stays plain text — maybe you just meant words. 🤷
+WORK-0004
+→
+WORK-0004
+Task IDs always linked — they look special enough on their own.
+Why bother?
+✍️ → 🔍 → 🖱️
+People (and AI agents) were already writing [[links]] in real notes.
+The app just ignored them. Now it plays along.
+Did they check it works?
+443
+automatic tests passed ✅
+106
+checks on a real project ✅
+📸
+screenshot of it working live ✅
+Tricky cases too: brackets inside code, links with brackets in them,
+even Korean words glued to the brackets — nothing gets broken or lost.
+ELI5 of WORK-0061 · “Prose [[note-name]] wiki-links render as record chips”

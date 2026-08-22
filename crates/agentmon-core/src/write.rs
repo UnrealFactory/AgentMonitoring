@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use crate::body;
 use crate::error::{CoreError, Result};
 use crate::fsx::{self, ProjectLock};
+use crate::human;
 use crate::model::*;
 use crate::time;
 use crate::validate::{self, BUG_SECTIONS, WORK_SECTIONS};
@@ -98,6 +99,9 @@ pub struct StartWork {
     pub refs: Vec<String>,
     /// Raw markdown; must contain `## What`, `## Why`, `## How`.
     pub body: String,
+    /// The human area (SPEC.md, "The human area") — required on every record that is
+    /// created or closed. Empty is refused, and the refusal teaches the style contract.
+    pub human: String,
     /// `--started-at`: when the work actually began. `None` means now.
     pub started_at: Option<String>,
 }
@@ -106,6 +110,9 @@ pub struct StartWork {
 pub struct FinishWork {
     pub agent: String,
     pub outcome: String,
+    /// The human area, rewritten: closing changed the story, so the ending replaces
+    /// whatever the record said while it was open.
+    pub human: String,
     pub files: Vec<String>,
     pub refs: Vec<String>,
     /// `--finished-at`: when the work actually ended. `None` means now.
@@ -121,6 +128,8 @@ pub struct AbandonWork {
     pub agent: String,
     /// Why it stopped, and what a reader should do instead. Appended under `## Updates`.
     pub reason: String,
+    /// The human area, rewritten: stopping is an ending too.
+    pub human: String,
     pub at: Option<String>,
 }
 
@@ -133,6 +142,8 @@ pub struct NewBug {
     pub refs: Vec<String>,
     /// Raw markdown; `## Report` is added around plain prose.
     pub body: String,
+    /// The human area — required when the bug is filed.
+    pub human: String,
     /// `--created-at`: when the bug was found. `None` means now.
     pub created_at: Option<String>,
 }
@@ -149,6 +160,8 @@ pub struct NewNote {
     pub refs: Vec<String>,
     /// Free-form markdown — a note has no mandated sections.
     pub body: String,
+    /// The human area — required when the note is created.
+    pub human: String,
     /// `--at`: when the note was written. `None` means now.
     pub at: Option<String>,
 }
@@ -166,6 +179,10 @@ pub struct UpdateNote {
     /// Replaces the refs list.
     pub refs: Option<Vec<String>>,
     pub body: Option<String>,
+    /// Replaces the human area. Required when `body` is given (the retelling of a note
+    /// whose knowledge just changed is stale by definition) and on the first touch of a
+    /// note that has none; on its own it is a refresh, which logs `human_updated`.
+    pub human: Option<String>,
     pub at: Option<String>,
 }
 
@@ -258,6 +275,11 @@ pub const EV_NOTE_UPDATED: &str = "note_updated";
 /// Notes are knowledge, not history: a wrong note misleads every agent that reads it, so
 /// agents may remove one — and the removal is itself an event, which is the audit trail.
 pub const EV_NOTE_REMOVED: &str = "note_removed";
+/// A mutation that changed **only** the human area (SPEC.md, "The human area": a refresh
+/// never writes into `## Updates`/`## Comments`). When the human area changes as part of a
+/// real mutation, that mutation's own event covers it — this line exists so a refresh is
+/// not silent, and so it is not mistaken for a progress note that never happened.
+pub const EV_HUMAN_UPDATED: &str = "human_updated";
 
 /// Where the project data goes for a location the human picked: the location itself when
 /// it already *is* the data folder, otherwise its `AgentMonitoring` child.
@@ -469,13 +491,20 @@ impl Store {
         let dir = self.root().to_path_buf();
         let agent = require_agent(&req.agent)?;
         let title = require_title(&req.title, "work log")?;
+        human::check_agent_text(&req.body, "--body/--body-file")?;
         let parsed = validate::work_body(&req.body)?;
+        let human_text = human::require(&req.human, "this work log")?;
         let refs = self.normalize_refs(&req.refs)?;
 
         let started = time::stamp(req.started_at.as_deref(), "--started-at")?;
 
         let _lock = ProjectLock::acquire(&dir)?;
         let worklogs = dir.join("worklogs");
+
+        // Rendered (and proved readable) once, before any id is taken: a body that cannot
+        // carry its human area must fail without burning a WORK number.
+        let mut sections = parsed.sections.clone();
+        let rendered = human::render_body(&mut sections, &human_text, "this work log")?;
 
         let mut id = next_id(&record_ids(&worklogs, "WORK")?, "WORK");
         let mut path;
@@ -491,11 +520,7 @@ impl Store {
                 refs: refs.clone(),
                 files: Vec::new(),
             };
-            let text = format!(
-                "---\n{}---\n\n{}",
-                meta.to_frontmatter(),
-                body::render(&parsed.sections)
-            );
+            let text = format!("---\n{}---\n\n{rendered}", meta.to_frontmatter());
             path = worklogs.join(format!("{id}.md"));
             if fsx::write_new(&path, &text)? {
                 break;
@@ -523,48 +548,87 @@ impl Store {
     /// the end of the timeline, its timestamp must be at or after everything already in the
     /// record (including `finished`, so a note cannot pretend to predate the close), the
     /// status does not change, and the event is still `work_updated`.
+    /// `human` alone is a **refresh**: nothing is appended to `## Updates`, only the human
+    /// area is rewritten, and the one event logged is `human_updated`. That is how a record
+    /// written before the human area existed gains one without inventing a progress note
+    /// that never happened.
     pub fn update_work(
         &self,
         id: &str,
         agent: &str,
-        message: &str,
+        message: Option<&str>,
+        human_arg: Option<&str>,
         at: Option<&str>,
     ) -> Result<Written<WorklogDetail>> {
         let dir = self.root().to_path_buf();
         let agent = require_agent(agent)?;
-        let note = validate::note(
-            message,
-            "work update",
-            "agentmon work update WORK-0003 --agent cli-builder \\\n  \
-             --message \"Lock + temp-file writes are in; two concurrent starts now produce \
-             two ids.\"",
-        )?;
+        if message.is_none() && human_arg.is_none() {
+            return Err(CoreError::conflict(
+                "nothing to update",
+                "pass --message \"<what changed>\" for a progress note, --human \"<text>\" to \
+                 rewrite the human area, or both",
+            ));
+        }
+        let note = match message {
+            Some(m) => {
+                human::check_agent_text(m, "--message/--message-file")?;
+                Some(validate::note(
+                    m,
+                    "work update",
+                    "agentmon work update WORK-0003 --agent cli-builder \\\n  \
+                     --message \"Lock + temp-file writes are in; two concurrent starts now \
+                     produce two ids.\"",
+                )?)
+            }
+            None => None,
+        };
         let id = validate_id(id, "WORK")?;
+        let supplied_human = match human_arg {
+            Some(h) => Some(human::require(h, &id)?),
+            None => None,
+        };
         let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("worklogs").join(format!("{id}.md"));
         let (fm, meta, md) = read_work(&path, &id)?;
+        let (agent_md, existing_human) = human::split(&md);
 
-        require_note_time(&ts, &meta, &md)?;
+        // Ordering rules apply to a refresh too: the human area is part of the record, and
+        // a rewrite dated before the record's last activity would be a lie about when.
+        require_note_time(&ts, &meta, &agent_md)?;
+        let human_text = resolve_human(supplied_human, existing_human, &id)?;
 
-        let entry = if agent == meta.agent {
-            note.clone()
-        } else {
-            // Keep the `### <timestamp>` heading exactly as SPEC.md defines it, but do not
-            // lose who wrote the note.
-            format!("_Update by {agent}._\n\n{note}")
+        let mut sections = body::sections(&agent_md);
+        if let Some(note) = &note {
+            let entry = if agent == meta.agent {
+                note.clone()
+            } else {
+                // Keep the `### <timestamp>` heading exactly as SPEC.md defines it, but do
+                // not lose who wrote the note.
+                format!("_Update by {agent}._\n\n{note}")
+            };
+            body::append_entry(&mut sections, "Updates", &ts, &entry, WORK_SECTIONS);
+        }
+        write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &mut sections, &human_text)?;
+
+        // One line, never two: a refresh logs `human_updated`, a note logs `work_updated`
+        // and carries the human change with it.
+        let event = match &note {
+            Some(note) => self.append_event_at(
+                &agent,
+                EV_WORK_UPDATED,
+                Some(&id),
+                &body::excerpt(note, 160),
+                &ts,
+            )?,
+            None => self.append_event_at(
+                &agent,
+                EV_HUMAN_UPDATED,
+                Some(&id),
+                &body::excerpt(&human_text, 160),
+                &ts,
+            )?,
         };
-        let mut sections = body::sections(&md);
-        body::append_entry(&mut sections, "Updates", &ts, &entry, WORK_SECTIONS);
-        write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &sections)?;
-
-        let event = self.append_event_at(
-            &agent,
-            EV_WORK_UPDATED,
-            Some(&id),
-            &body::excerpt(&note, 160),
-            &ts,
-        )?;
         let record = self.worklog(&id)?;
         Ok(Written::new(id, &path, event, record))
     }
@@ -577,6 +641,7 @@ impl Store {
     pub fn abandon_work(&self, id: &str, req: &AbandonWork) -> Result<Written<WorklogDetail>> {
         let dir = self.root().to_path_buf();
         let agent = require_agent(&req.agent)?;
+        human::check_agent_text(&req.reason, "--reason/--reason-file")?;
         let reason = validate::note(
             &req.reason,
             "abandon reason",
@@ -585,10 +650,12 @@ impl Store {
              crate; nothing from this branch was kept.\"",
         )?;
         let id = validate_id(id, "WORK")?;
+        let human_text = human::require(&req.human, &id)?;
         let ts = time::stamp(req.at.as_deref(), "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("worklogs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_work(&path, &id)?;
+        let (md, _) = human::split(&md);
 
         match meta.status {
             WorkStatus::InProgress => {}
@@ -621,7 +688,8 @@ impl Store {
         };
         let mut sections = body::sections(&md);
         body::append_entry(&mut sections, "Updates", &ts, &entry, WORK_SECTIONS);
-        write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &sections)?;
+        // Closing verbs replace the human area: the ending changed the story.
+        write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &mut sections, &human_text)?;
 
         let event = self.append_event_at(
             &agent,
@@ -637,9 +705,11 @@ impl Store {
     pub fn finish_work(&self, id: &str, req: &FinishWork) -> Result<Written<WorklogDetail>> {
         let dir = self.root().to_path_buf();
         let agent = require_agent(&req.agent)?;
+        human::check_agent_text(&req.outcome, "--outcome/--outcome-file")?;
         let outcome = validate::outcome(&req.outcome)?;
         let extra_refs = self.normalize_refs(&req.refs)?;
         let id = validate_id(id, "WORK")?;
+        let human_text = human::require(&req.human, &id)?;
         let finished = time::stamp(req.finished_at.as_deref(), "--finished-at")?;
         let restart = req
             .started_at
@@ -649,6 +719,7 @@ impl Store {
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("worklogs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_work(&path, &id)?;
+        let (md, _) = human::split(&md);
 
         match meta.status {
             WorkStatus::InProgress => {}
@@ -702,7 +773,8 @@ impl Store {
             format!("_Completed by {agent}._\n\n{outcome}")
         };
         body::upsert_section(&mut sections, "Outcome", &outcome_body, WORK_SECTIONS);
-        write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &sections)?;
+        // Closing verbs replace the human area: the ending changed the story.
+        write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &mut sections, &human_text)?;
 
         let event = self.append_event_at(
             &agent,
@@ -721,7 +793,11 @@ impl Store {
         let dir = self.root().to_path_buf();
         let agent = require_agent(&req.agent)?;
         let title = require_title(&req.title, "bug")?;
-        let sections = validate::bug_body(&req.body)?;
+        human::check_agent_text(&req.body, "--body/--body-file")?;
+        let mut sections = validate::bug_body(&req.body)?;
+        let human_text = human::require(&req.human, "this bug")?;
+        // Same as `start_work`: prove the human area reads back before an id is taken.
+        let rendered = human::render_body(&mut sections, &human_text, "this bug")?;
         let refs = self.normalize_refs(&req.refs)?;
 
         let created = time::stamp(req.created_at.as_deref(), "--created-at")?;
@@ -746,11 +822,7 @@ impl Store {
                 resolved_by: None,
                 refs: refs.clone(),
             };
-            let text = format!(
-                "---\n{}---\n\n{}",
-                meta.to_frontmatter(),
-                body::render(&sections)
-            );
+            let text = format!("---\n{}---\n\n{rendered}", meta.to_frontmatter());
             path = bugs.join(format!("{id}.md"));
             if fsx::write_new(&path, &text)? {
                 break;
@@ -763,14 +835,29 @@ impl Store {
         Ok(Written::new(id, &path, event, record))
     }
 
-    pub fn claim_bug(&self, id: &str, agent: &str, at: Option<&str>) -> Result<Written<BugDetail>> {
+    /// Claiming writes no prose of its own, so `human` is optional here — but the rule
+    /// that no mutation may leave a record without a human area still holds, which is why
+    /// the flag exists at all: claiming a bug filed before the human area existed is the
+    /// moment that bug gains one.
+    pub fn claim_bug(
+        &self,
+        id: &str,
+        agent: &str,
+        human_arg: Option<&str>,
+        at: Option<&str>,
+    ) -> Result<Written<BugDetail>> {
         let dir = self.root().to_path_buf();
         let agent = require_agent(agent)?;
         let id = validate_id(id, "BUG")?;
+        let supplied_human = match human_arg {
+            Some(h) => Some(human::require(h, &id)?),
+            None => None,
+        };
         let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("bugs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_bug(&path, &id)?;
+        let (md, existing_human) = human::split(&md);
 
         match meta.status {
             BugStatus::Open => {}
@@ -800,6 +887,7 @@ impl Store {
         }
 
         time::require_at_or_after(&ts, "--at", &meta.created, "the bug's created time")?;
+        let human_text = resolve_human(supplied_human, existing_human, &id)?;
 
         let already_mine = meta.status == BugStatus::InProgress;
         meta.status = BugStatus::InProgress;
@@ -807,8 +895,8 @@ impl Store {
         if meta.claimed.is_none() {
             meta.claimed = Some(ts.clone());
         }
-        let sections = body::sections(&md);
-        write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &sections)?;
+        let mut sections = body::sections(&md);
+        write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &mut sections, &human_text)?;
 
         let summary = if already_mine {
             format!("Re-confirmed the claim on {id} — {}", meta.title)
@@ -820,47 +908,80 @@ impl Store {
         Ok(Written::new(id, &path, event, record))
     }
 
+    /// `human` alone is a **refresh**: no comment is added to the thread, only the human
+    /// area changes, and the event is `human_updated`.
     pub fn comment_bug(
         &self,
         id: &str,
         agent: &str,
-        message: &str,
+        message: Option<&str>,
+        human_arg: Option<&str>,
         at: Option<&str>,
     ) -> Result<Written<BugDetail>> {
         let dir = self.root().to_path_buf();
         let agent = require_agent(agent)?;
-        let note = validate::note(
-            message,
-            "bug comment",
-            "agentmon bug comment BUG-0002 --agent cli-builder \\\n  \
-             --message \"Root cause: the watcher was never started, so no change \
-             event was ever emitted.\"",
-        )?;
+        if message.is_none() && human_arg.is_none() {
+            return Err(CoreError::conflict(
+                "nothing to add",
+                "pass --message \"<what you found>\" for the thread, --human \"<text>\" to \
+                 rewrite the human area, or both",
+            ));
+        }
+        let note = match message {
+            Some(m) => {
+                human::check_agent_text(m, "--message/--message-file")?;
+                Some(validate::note(
+                    m,
+                    "bug comment",
+                    "agentmon bug comment BUG-0002 --agent cli-builder \\\n  \
+                     --message \"Root cause: the watcher was never started, so no change \
+                     event was ever emitted.\"",
+                )?)
+            }
+            None => None,
+        };
         let id = validate_id(id, "BUG")?;
+        let supplied_human = match human_arg {
+            Some(h) => Some(human::require(h, &id)?),
+            None => None,
+        };
         let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("bugs").join(format!("{id}.md"));
         let (fm, meta, md) = read_bug(&path, &id)?;
+        let (md, existing_human) = human::split(&md);
         time::require_at_or_after(&ts, "--at", &meta.created, "the bug's created time")?;
         time::require_at_or_after(&ts, "--at", &last_comment(&md), "the previous comment")?;
+        let human_text = resolve_human(supplied_human, existing_human, &id)?;
 
         let mut sections = body::sections(&md);
-        body::append_entry(
-            &mut sections,
-            "Comments",
-            &format!("{ts} — {agent}"),
-            &note,
-            BUG_SECTIONS,
-        );
-        write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &sections)?;
+        if let Some(note) = &note {
+            body::append_entry(
+                &mut sections,
+                "Comments",
+                &format!("{ts} — {agent}"),
+                note,
+                BUG_SECTIONS,
+            );
+        }
+        write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &mut sections, &human_text)?;
 
-        let event = self.append_event_at(
-            &agent,
-            EV_BUG_COMMENTED,
-            Some(&id),
-            &body::excerpt(&note, 160),
-            &ts,
-        )?;
+        let event = match &note {
+            Some(note) => self.append_event_at(
+                &agent,
+                EV_BUG_COMMENTED,
+                Some(&id),
+                &body::excerpt(note, 160),
+                &ts,
+            )?,
+            None => self.append_event_at(
+                &agent,
+                EV_HUMAN_UPDATED,
+                Some(&id),
+                &body::excerpt(&human_text, 160),
+                &ts,
+            )?,
+        };
         let record = self.bug(&id)?;
         Ok(Written::new(id, &path, event, record))
     }
@@ -870,16 +991,20 @@ impl Store {
         id: &str,
         agent: &str,
         resolution: &str,
+        human_arg: &str,
         at: Option<&str>,
     ) -> Result<Written<BugDetail>> {
         let dir = self.root().to_path_buf();
         let agent = require_agent(agent)?;
+        human::check_agent_text(resolution, "--resolution/--resolution-file")?;
         let text = validate::resolution(resolution)?;
         let id = validate_id(id, "BUG")?;
+        let human_text = human::require(human_arg, &id)?;
         let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("bugs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_bug(&path, &id)?;
+        let (md, _) = human::split(&md);
 
         match meta.status {
             BugStatus::Open | BugStatus::InProgress => {}
@@ -926,7 +1051,8 @@ impl Store {
 
         let mut sections = body::sections(&md);
         body::upsert_section(&mut sections, "Resolution", &text, BUG_SECTIONS);
-        write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &sections)?;
+        // Closing verbs replace the human area: the ending changed the story.
+        write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &mut sections, &human_text)?;
 
         let event = self.append_event_at(
             &agent,
@@ -955,7 +1081,9 @@ impl Store {
         let agent = require_agent(&req.agent)?;
         let title = require_title(&req.title, "note")?;
         let description = validate::note_description(&req.description)?;
+        human::check_agent_text(&req.body, "--body/--body-file")?;
         let body_text = validate::note_body(&req.body)?;
+        let human_text = human::require(&req.human, "this note")?;
         let name = match &req.name {
             Some(n) => validate_note_name(n)?,
             None => slugify_note_name(&title).ok_or_else(|| {
@@ -990,7 +1118,11 @@ impl Store {
             tags: clean_list(&req.tags),
             refs,
         };
-        let text = format!("---\n{}---\n\n{}\n", meta.to_frontmatter(), body_text.trim());
+        let text = format!(
+            "---\n{}---\n\n{}",
+            meta.to_frontmatter(),
+            human::compose(&body_text, &human_text, &name)?
+        );
         let path = dir.join("notes").join(format!("{name}.md"));
         if !fsx::write_new(&path, &text)? {
             return Err(CoreError::conflict(
@@ -1028,13 +1160,30 @@ impl Store {
             && req.tags.is_none()
             && req.refs.is_none()
             && req.body.is_none()
+            && req.human.is_none()
         {
             return Err(CoreError::conflict(
                 "nothing to update",
                 "pass at least one of --title, --type, --description, --tags, --refs, \
-                 --body/--body-file",
+                 --body/--body-file, --human/--human-file",
             ));
         }
+        if let Some(b) = &req.body {
+            human::check_agent_text(b, "--body/--body-file")?;
+        }
+        // A rewritten body is new knowledge, so the retelling of the old knowledge is
+        // stale by definition — SPEC.md requires a human area with every `--body`.
+        let supplied_human = match (&req.human, &req.body) {
+            (Some(h), _) => Some(human::require(h, &name)?),
+            (None, Some(_)) => {
+                return Err(human::missing(
+                    &name,
+                    "--body replaces what this note knows, so the human area has to be \
+                     rewritten with it",
+                ))
+            }
+            (None, None) => None,
+        };
         let ts = time::stamp(req.at.as_deref(), "--at")?;
         let new_refs = match &req.refs {
             Some(refs) => {
@@ -1048,7 +1197,9 @@ impl Store {
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("notes").join(format!("{name}.md"));
         let (fm, mut meta, md) = read_note(&path, &name)?;
+        let (md, existing_human) = human::split(&md);
         time::require_at_or_after(&ts, "--at", &meta.updated, "the note's last update")?;
+        let human_text = resolve_human(supplied_human.clone(), existing_human, &name)?;
 
         let mut changed: Vec<&str> = Vec::new();
         if let Some(title) = &req.title {
@@ -1080,20 +1231,36 @@ impl Store {
             }
             None => md.trim().to_string(),
         };
+        // A refresh is the one shape that changes nothing else: it rewrites the human area
+        // and logs `human_updated` instead of pretending the knowledge itself moved.
+        let refresh_only = changed.is_empty() && supplied_human.is_some();
+        if supplied_human.is_some() && !refresh_only {
+            changed.push("human area");
+        }
         meta.updated = ts.clone();
         // The note now says what this agent made it say; the author stays who it was.
         meta.updated_by = Some(agent.clone());
 
         let extra = body::extra_frontmatter(&fm, NOTE_KEYS);
         let text = format!(
-            "---\n{}{extra}---\n\n{}\n",
+            "---\n{}{extra}---\n\n{}",
             meta.to_frontmatter(),
-            body_text.trim()
+            human::compose(&body_text, &human_text, &name)?
         );
         fsx::write_atomic(&path, &text)?;
 
-        let summary = format!("Updated note {name}: {}", changed.join(", "));
-        let event = self.append_event_at(&agent, EV_NOTE_UPDATED, Some(&name), &summary, &ts)?;
+        let event = if refresh_only {
+            self.append_event_at(
+                &agent,
+                EV_HUMAN_UPDATED,
+                Some(&name),
+                &body::excerpt(&human_text, 160),
+                &ts,
+            )?
+        } else {
+            let summary = format!("Updated note {name}: {}", changed.join(", "));
+            self.append_event_at(&agent, EV_NOTE_UPDATED, Some(&name), &summary, &ts)?
+        };
         let record = self.note(&name)?;
         Ok(Written::new(name, &path, event, record))
     }
@@ -1415,16 +1582,51 @@ fn read_record(path: &Path, id: &str) -> Result<String> {
 
 /// Frontmatter (canonical keys + anything unknown carried across) plus rendered body,
 /// written atomically.
+///
+/// The human area is attached **here**, not by the callers, so the one function that puts
+/// a work log or a bug on disk is also the one that proves the record can be read back with
+/// its human area intact ([`human::render_body`]). A caller cannot forget the check, and a
+/// record whose agent area would swallow the reserved section is refused before the
+/// temp-file write starts — invariant 1 at the head of this module, applied to the half of
+/// the record a human reads.
 fn write_record(
     path: &Path,
     frontmatter: &str,
     original_frontmatter: &str,
     known_keys: &[&str],
-    sections: &[Section],
+    sections: &mut Vec<Section>,
+    human: &str,
 ) -> Result<()> {
+    let subject = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.display().to_string());
+    let rendered = human::render_body(sections, human, &subject)?;
     let extra = body::extra_frontmatter(original_frontmatter, known_keys);
-    let text = format!("---\n{frontmatter}{extra}---\n\n{}", body::render(sections));
+    let text = format!("---\n{frontmatter}{extra}---\n\n{rendered}");
     fsx::write_atomic(path, &text)
+}
+
+/// The human area a mutation writes: the one it was given, else the one already on the
+/// record — and a refusal when there is neither.
+///
+/// This is the whole "legacy gains it on first touch" rule of SPEC.md in four lines. A
+/// record written before the human area existed reads fine forever; the moment an agent
+/// *changes* it, the change comes with a retelling, because otherwise the record would be
+/// edited by an agent that had a chance to speak to the human and declined.
+fn resolve_human(
+    supplied: Option<String>,
+    existing: Option<String>,
+    subject: &str,
+) -> Result<String> {
+    match (supplied, existing) {
+        (Some(new), _) => Ok(new),
+        (None, Some(old)) => Ok(old),
+        (None, None) => Err(human::missing(
+            subject,
+            "this record has none yet, and a mutation that touches it has to leave one",
+        )),
+    }
 }
 
 fn require_agent(agent: &str) -> Result<String> {
@@ -1441,15 +1643,35 @@ fn require_agent(agent: &str) -> Result<String> {
             "use a short stable handle, e.g. --agent cli-builder",
         ));
     }
+    // Same reason as `require_title`: this lands as one YAML scalar on one line.
+    if a.contains(['\n', '\r']) {
+        return Err(CoreError::conflict(
+            "--agent contains a line break",
+            "use a short stable handle on one line, e.g. --agent cli-builder",
+        ));
+    }
     Ok(a.to_string())
 }
 
-fn require_title(title: &str, kind: &str) -> Result<String> {
+pub(crate) fn require_title(title: &str, kind: &str) -> Result<String> {
     let t = title.trim();
     if t.is_empty() {
         return Err(CoreError::conflict(
             format!("--title is empty, and a {kind} without a title is unreadable in a list"),
             "pass a specific title, e.g. --title \"Wire the change watcher into the desktop app\"",
+        ));
+    }
+    // A title is one YAML scalar on one frontmatter line, so a line break in it is not a
+    // formatting choice — it is a second frontmatter line. The record was written anyway,
+    // its event appended, and only then did reading it back fail (exit 6): a file no
+    // parser accepts, an event pointing at it, and `work list` failing for the whole
+    // project. With the right newline the record's first section became `## For humans`
+    // holding agent prose, which is the one thing the reserved heading exists to prevent.
+    if t.contains(['\n', '\r']) {
+        return Err(CoreError::conflict(
+            format!("--title for this {kind} contains a line break, and a title is one line"),
+            "keep the title to a single line and put the rest in the body \
+             (--body / --body-file)",
         ));
     }
     if t.chars().count() > 160 {
@@ -1632,13 +1854,21 @@ mod tests {
                 agent: "tester".into(),
                 title: "Prove the writes work without a vault".into(),
                 body: "## What\nA record for the round-trip test.\n## Why\nBecause the layout changed.\n## How\nBy writing it through the CLI path.".into(),
+                human: "We checked that saving a record still works now that each project \
+                        keeps its own folder.".into(),
                 ..Default::default()
             })
             .expect("work start");
         assert_eq!(started.id, "WORK-0001");
 
         store
-            .update_work(&started.id, "tester", "Halfway there and nothing is on fire.", None)
+            .update_work(
+                &started.id,
+                "tester",
+                Some("Halfway there and nothing is on fire."),
+                None,
+                None,
+            )
             .expect("work update");
         let done = store
             .finish_work(
@@ -1646,6 +1876,7 @@ mod tests {
                 &FinishWork {
                     agent: "tester".into(),
                     outcome: "Shipped; verified by this very test.".into(),
+                    human: "It works: a record written this way comes back out the same.".into(),
                     files: vec!["crates/agentmon-core/src/write.rs".into()],
                     ..Default::default()
                 },
@@ -1661,12 +1892,23 @@ mod tests {
                 labels: vec![],
                 refs: vec![started.id.clone()],
                 body: "## Report\nRepro: run the test. Expected: pass. Actual: pass.".into(),
+                human: "A pretend problem, filed so we can watch the whole life of a bug \
+                        report."
+                    .into(),
                 created_at: None,
             })
             .expect("bug create");
-        store.claim_bug(&bug.id, "tester", None).expect("bug claim");
         store
-            .resolve_bug(&bug.id, "tester", "Fixed by existing; verified by assertion.", None)
+            .claim_bug(&bug.id, "tester", None, None)
+            .expect("bug claim");
+        store
+            .resolve_bug(
+                &bug.id,
+                "tester",
+                "Fixed by existing; verified by assertion.",
+                "There was nothing really wrong, and the test says so.",
+                None,
+            )
             .expect("bug resolve");
 
         let p = store.project().unwrap();
@@ -1755,6 +1997,7 @@ mod tests {
             tags: vec![],
             refs: vec![],
             body: "a body long enough to pass validation".into(),
+            human: "A short note in plain words, so this fixture is a legal record.".into(),
             at: Some(at.into()),
         };
         // The essential note is the OLDEST write; recency alone would bury it.

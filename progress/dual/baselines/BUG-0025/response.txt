@@ -1,0 +1,11 @@
+Done — I created the explainer at `C:\Users\User\AppData\Local\Temp\eli5-work\run-B25\eli5-BUG-0025.html` (open it in any browser; auto-opening it needed a permission you didn't grant).
+
+The ELI5 version of BUG-0025, in five picture-scenes:
+
+1. **Normal life:** a little watcher stares at your files; you save, it sees, the browser refreshes.
+2. **The rule:** someone told it "ignore anything named `AgentMonitoring`" — reasonable, because a noisy data folder by that name shouldn't trigger reloads.
+3. **The twist:** the *entire project folder* is also named `AgentMonitoring`, so "anything with that name, at any depth" matched the house itself — every code file got stamped IGNORED.
+4. **The symptom:** save → nothing, reload → still nothing. The server handed out the code copy it made at startup forever, and couldn't even see its own config change to restart.
+5. **The fix:** the ignore rule now points at the one exact data-folder path instead of a name, so code is watched again (edits appear in ~2s) while data writes still stay quiet.
+
+The takeaway card sums it up: never ban a name your own house shares — anchor ignore rules to exact paths, because `**/name/**` also matches a root folder with that name.

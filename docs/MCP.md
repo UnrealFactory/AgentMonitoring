@@ -117,8 +117,8 @@ when a thing really happened — pass them when writing up work after the fact.
 
 Records a piece of work, start and finish, in one call.
 
-`title*`, `what*`, `why*`, `how*`, `outcome`, `files`, `tags`, `refs`, `started_at`,
-`finished_at`
+`title*`, `what*`, `why*`, `how*`, `human*`, `outcome`, `files`, `tags`, `refs`,
+`started_at`, `finished_at`
 
 The three body sections are three fields, so the body contract cannot be got wrong — the
 server assembles the markdown. With an `outcome` the log is opened and closed in one call
@@ -126,13 +126,21 @@ and comes back `done`; without one it stays `in_progress` and the reply carries 
 `WORK-NNNN` id to close later. `files` is recorded when the log closes, which is the CLI's
 rule. Backdating a whole record is `started_at` + `finished_at` in the same call.
 
+`human` is the record's [human area](AGENT_MANUAL.md#the-human-area): the same work retold for a reader
+who does not program. One field covers both halves of the call — closing replaces the
+human area, and the same retelling is what goes back.
+
 ### `update_work`
 
 Progress, close, or stop — on an existing `WORK-NNNN`.
 
-`id*`, `note`, `outcome`, `abandon`, `files`, `at`
+`id*`, `note`, `outcome`, `abandon`, `human`, `files`, `at`
 
-Exactly one of the three is the point of the call: `note` appends a timestamped note,
+`human` is required with `outcome` or `abandon` (closing replaces the human area) and on a
+record that has none yet; **alone** it is a refresh — it rewrites the human area, appends
+nothing, and the feed logs one `human_updated` line.
+
+Otherwise one of the three is the point of the call: `note` appends a timestamped note,
 `outcome` closes the log, `abandon` marks it abandoned with a reason. A note on an
 already-closed log is allowed and is how a shipped record gets corrected — open the note
 with `Correction:` and the app marks it.
@@ -141,10 +149,12 @@ with `Correction:` and the app marks it.
 
 Files a bug.
 
-`title*`, `severity*` (`critical|high|medium|low`), `report*`, `labels`, `refs`,
+`title*`, `severity*` (`critical|high|medium|low`), `report*`, `human*`, `labels`, `refs`,
 `created_at`
 
-`report` is prose — repro, expected, actual. It becomes the `## Report` section. Use `refs`
+`report` is prose — repro, expected, actual. It becomes the `## Report` section. `human`
+says the same thing for a reader who does not program: what they would see, and what it
+costs them. Use `refs`
 rather than only prose to link the work log it came out of: the link then works in both
 directions.
 
@@ -152,12 +162,15 @@ directions.
 
 Claim, comment and resolve, in any combination.
 
-`id*`, `comment`, `resolution`, `claim`, `at`
+`id*`, `comment`, `resolution`, `human`, `claim`, `at`
 
 Passing a `resolution` claims the bug first unless you pass `claim: false`, so the usual
 fix is one call: root-cause `comment` plus `resolution`. Claim-only (`claim: true`) and
 comment-only (`claim: false`, `comment`) are both valid single calls. If another agent
 holds the bug the claim fails and the reply names the way past it.
+
+`human` is required with a `resolution` and on a bug that has no human area yet; alone it
+is a refresh, exactly as in `update_work`.
 
 ### `note`
 
@@ -165,8 +178,8 @@ The shared agent knowledge — essential, memory, handoff, decision and referenc
 in one tool. The essential notes are required session-start reading and sort first.
 
 `action` (`list` default, `read`, `write`, `remove`), `name`, `title`, `type`
-(`essential|memory|handoff|decision|reference`), `description`, `body`, `tags`, `refs`,
-`query`, `full`, `at`
+(`essential|memory|handoff|decision|reference`), `description`, `body`, `human`, `tags`,
+`refs`, `query`, `full`, `at`
 
 - `list` — the index: every note's name, type, author and one-line description —
   essential notes first, then newest. `type` and `query` filter. Run it at the start of
@@ -175,7 +188,9 @@ in one tool. The essential notes are required session-start reading and sort fir
 - `write` — **upsert**: against a `name` that exists it rewrites in place (only the fields
   passed — a `type` left off is preserved; `body` replaces wholesale), which is the
   one-fact-one-file discipline; against a new name (or none — it derives one from the
-  title) it creates, requiring `title`, `type`, `description` and `body`. Passing a `type`
+  title) it creates, requiring `title`, `type`, `description`, `body` and `human`. A
+  `body` on an existing note needs a `human` with it — the old retelling described
+  knowledge that is gone — and `human` alone is a refresh. Passing a `type`
   that takes `essential` off an existing note is honored but answered with a warning and
   the restore call — required reading must not fall out of the index unnoticed. A named
   write whose note cannot be *read* (lock, malformed file) fails with that error rather
@@ -203,15 +218,19 @@ The one read tool for work and bugs.
 A bug or a wish **about the AgentMonitoring app itself** — its tools, CLI or boards —
 not about the project being worked on.
 
-`type*` (`bug|idea`), `title*`, `body`, `at`, `agent`
+`human*`, `type` (`bug|idea`), `title`, `body`, `at`, `agent`, `id`
 
 The one tool with no `dir`: app feedback is machine-level, stored beside the registry
 (`~/.AgentMonitoring/feedback/FB-NNNN.md`), because it belongs to no project. `body` is
 optional — a specific title can carry a whole wish, and friction here would cost real
-feedback. This tool only files. Working the board — `done`, `reopen`, and `delete`
-(done items only) — happens in the app or through the CLI when the human delegates the
-cleanup; those verbs would spend every conversation's tokens on what is an occasional
-chore, so they are not tools.
+feedback. `human` is not optional: this board is read by the person who maintains the app.
+
+Without `id` this files a new item and `type` and `title` are required. **With `id`
+(`FB-0009`) it is `agentmon app-feedback update`**: it rewrites that item's human area and
+nothing else, which is how an item filed before the human area existed gains one. Working
+the board — `done`, `reopen`, and `delete` (done items only) — happens in the app or
+through the CLI when the human delegates the cleanup; those verbs would spend every
+conversation's tokens on what is an occasional chore, so they are not tools.
 
 ## Errors
 
@@ -226,12 +245,16 @@ Every message names the CLI's exit code, so the meaning is recoverable:
 |---|---|---|
 | `0` | Success | — |
 | `1` | Project has problems | `doctor`-level errors in the records |
-| `2` | Usage or timestamp rejected | A time in the future, or one before the state it follows |
+| `2` | Usage or timestamp rejected | A time in the future, one before the state it follows, or a missing `human` |
 | `3` | Not found | An unknown project folder, or an id that does not exist |
 | `4` | Body rejected | A `what`/`why`/`how`/`outcome` that is a placeholder or too short |
 | `5` | Conflict | Closing a closed log, claiming a bug another agent holds |
 | `6` | Invalid project | Corrupt frontmatter or `project.json` |
 | `7` | I/O error | Permissions, or the path is gone |
+
+A refusal for a missing human area is the exception to the trimming above: it carries the
+compact style rules the CLI prints, because that error is how the contract reaches an
+agent at write time. `agentmon human-style` prints the whole of it.
 
 Two failures come from the server rather than the CLI, and say so plainly: no agent
 available for the call, and `update_work` with nothing to say. A failed call writes

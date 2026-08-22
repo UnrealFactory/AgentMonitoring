@@ -1,0 +1,13 @@
+The ELI5 explainer is ready: `C:\Users\User\AppData\Local\Temp\eli5-work\run-chart-note-series-colour\chart-note-series-colour.html` — open it in a browser to view.
+
+It tells the colour-decision story in four big-picture scenes with minimal words:
+
+1. **Hero** — a giant pink dot introduces Note-Pink `#c9629b`, the colour that draws the Notes line on the activity charts.
+2. **The ✓ scene** — a small four-line chart (Work, Done, Bug, Notes) with a green check badge: pink passed the "telling-apart test", but only next to the neighbours it actually renders with.
+3. **The ? scene** — two "benches" nobody tested: pink beside Fix-purple ("colour cousins") and pink beside the grey scale ("quiet colours it could fade into"), each under a big question mark, with a one-line note that some eyes see close colours as the same.
+4. **The rule** — "Want pink beside purple or grey in a new chart? Run the checker first," pointing at the dataviz palette validator.
+
+Two honesty details worth knowing:
+
+- Only `#c9629b` is the real project hex. The note never records the actual work/done/bug/fix/grey values, so those swatches use stand-ins from the dataviz skill's validated reference palette, and a footnote in the artifact says so explicitly.
+- I couldn't execute the palette validator directly — `node` needs command approval that wasn't available in this autonomous run — so I used the skill's documented browser fallback instead: the validator is inlined in the page and auto-runs on the four chart colours (in light or dark mode to match your system), logging its real pass/fail table to the browser console when you open the file. The page supports dark mode with the reference palette's dark steps. I also wasn't able to screenshot the rendered page for a visual check, so a label collision is the one thing I couldn't rule out — worth a two-second glance when you open it.

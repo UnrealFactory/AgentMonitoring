@@ -67,6 +67,7 @@ fn work(store: &Store) {
                    it, not an empty folder.\n\n## How\n\nWritten by the test harness \
                    through the same core write path the CLI uses.\n"
                 .into(),
+            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
             ..Default::default()
         })
         .expect("start work");

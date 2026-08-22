@@ -74,6 +74,7 @@ fn start(tp: &TempProject, title: &str) -> String {
             tags: vec!["tauri".into(), "rust".into()],
             refs: vec![],
             body: BODY.into(),
+            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
             started_at: None,
         })
         .expect("work start")
@@ -95,6 +96,7 @@ fn work_start_writes_a_record_the_reader_understands() {
             tags: vec!["tauri".into(), "live-updates".into()],
             refs: vec!["bug-0002".into()], // lowercase in, canonical out
             body: BODY.into(),
+            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
             started_at: None,
         })
         .unwrap();
@@ -130,16 +132,10 @@ fn update_then_done_round_trips_through_the_reader() {
     let id = start(&tp, "Wire the change watcher into the desktop app");
 
     tp.store
-        .update_work(
-            &id,
-            "cli-builder",
-            "Watcher is running; a single save produced four raw notify events, so the debounce \
-             is not optional.",
-            None,
-        )
+        .update_work(&id, "cli-builder", Some("Watcher is running; a single save produced four raw notify events, so the debounce is not optional."), None, None)
         .unwrap();
     tp.store
-        .update_work(&id, "cli-builder", "Debounce set to 250ms; one reload per save.", None)
+        .update_work(&id, "cli-builder", Some("Debounce set to 250ms; one reload per save."), None, None)
         .unwrap();
     tp.store
         .finish_work(
@@ -149,6 +145,7 @@ fn update_then_done_round_trips_through_the_reader() {
                 outcome: OUTCOME.into(),
                 files: vec!["src-tauri/src/lib.rs".into(), "src-tauri/Cargo.toml".into()],
                 refs: vec!["BUG-0002".into()],
+                human: "The work is finished. In plain words: it does what it set out to do, and the tests say so.".into(),
                 finished_at: None,
                 started_at: None,
             },
@@ -203,6 +200,7 @@ fn a_finished_work_log_takes_corrections_but_never_changes_state() {
                 outcome: OUTCOME.into(),
                 files: vec![],
                 refs: vec![],
+                human: "The work is finished. In plain words: it does what it set out to do, and the tests say so.".into(),
                 finished_at: Some("2026-01-05T12:00:00Z".into()),
                 started_at: Some("2026-01-05T09:00:00Z".into()),
             },
@@ -215,19 +213,14 @@ fn a_finished_work_log_takes_corrections_but_never_changes_state() {
     // closed at 12:00 and a note before that would draw itself inside a finished run.
     let err = tp
         .store
-        .update_work(&id, "reviewer", "Backdated afterthought.", Some("2026-01-05T10:00:00Z"))
+        .update_work(&id, "reviewer", Some("Backdated afterthought."), None, Some("2026-01-05T10:00:00Z"))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument");
     assert!(err.to_string().contains("closed"), "says what it is behind: {err}");
 
     let w = tp
         .store
-        .update_work(
-            &id,
-            "reviewer",
-            "Correction: the note above says four workers; the config says two.",
-            None,
-        )
+        .update_work(&id, "reviewer", Some("Correction: the note above says four workers; the config says two."), None, None)
         .expect("a correction may be appended to a finished record");
     assert_eq!(w.event.event_type, "work_updated", "still a work_updated event");
     let after = tp.store.worklog(&id).unwrap();
@@ -254,6 +247,7 @@ fn a_finished_work_log_takes_corrections_but_never_changes_state() {
                 outcome: OUTCOME.into(),
                 files: vec![],
                 refs: vec![],
+                human: "The work is finished. In plain words: it does what it set out to do, and the tests say so.".into(),
                 finished_at: None,
                 started_at: None,
             },
@@ -276,6 +270,7 @@ fn done_requires_a_real_outcome_and_prints_the_template() {
                     outcome: bad.into(),
                     files: vec![],
                     refs: vec![],
+                    human: "The work is finished. In plain words: it does what it set out to do, and the tests say so.".into(),
                     finished_at: None,
                     started_at: None,
                 },
@@ -300,6 +295,7 @@ fn start_rejects_a_body_without_what_why_how() {
             tags: vec![],
             refs: vec![],
             body: "## What\n\nI did the thing and it works now.\n".into(),
+            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
             started_at: None,
         })
         .unwrap_err();
@@ -334,6 +330,7 @@ fn file_bug(tp: &TempProject) -> String {
             labels: vec!["tauri".into(), "live-updates".into()],
             refs: vec![],
             body: REPORT.into(),
+            human: "Something is wrong with the app, written out for someone who does not read code.".into(),
             created_at: None,
         })
         .expect("bug create")
@@ -354,20 +351,14 @@ fn bug_lifecycle_round_trips() {
     assert!(b.report.contains("npm run tauri:dev"));
     assert!(b.resolution.is_none());
 
-    tp.store.claim_bug(&id, "cli-builder", None).unwrap();
+    tp.store.claim_bug(&id, "cli-builder", None, None).unwrap();
     let b = tp.store.bug(&id).unwrap();
     assert_eq!(b.meta.status, BugStatus::InProgress);
     assert_eq!(b.meta.assignee.as_deref(), Some("cli-builder"));
     assert!(b.meta.claimed.is_some());
 
     tp.store
-        .comment_bug(
-            &id,
-            "cli-builder",
-            "Root cause: the Tauri shell never started a watcher, so `project-changed` was never \
-             emitted.",
-            None,
-        )
+        .comment_bug(&id, "cli-builder", Some("Root cause: the Tauri shell never started a watcher, so `project-changed` was never emitted."), None, None)
         .unwrap();
     let b = tp.store.bug(&id).unwrap();
     assert_eq!(b.comments.len(), 1);
@@ -376,13 +367,7 @@ fn bug_lifecycle_round_trips() {
     assert!(b.comments[0].body.contains("never started a watcher"));
 
     tp.store
-        .resolve_bug(
-            &id,
-            "cli-builder",
-            "Started a debounced notify watcher in setup() and re-armed it on registry change. \
-             Verified with cargo check and by watching the dashboard refresh.",
-            None,
-        )
+        .resolve_bug(&id, "cli-builder", "Started a debounced notify watcher in setup() and re-armed it on registry change. Verified with cargo check and by watching the dashboard refresh.", "A plain-words retelling for whoever reads this later.", None)
         .unwrap();
     let b = tp.store.bug(&id).unwrap();
     assert_eq!(b.meta.status, BugStatus::Resolved);
@@ -408,9 +393,9 @@ fn bug_lifecycle_round_trips() {
 fn a_bug_claimed_by_someone_else_cannot_be_stolen() {
     let tp = TempProject::new("claim");
     let id = file_bug(&tp);
-    tp.store.claim_bug(&id, "cli-builder", None).unwrap();
+    tp.store.claim_bug(&id, "cli-builder", None, None).unwrap();
 
-    let err = tp.store.claim_bug(&id, "other-agent", None).unwrap_err();
+    let err = tp.store.claim_bug(&id, "other-agent", None, None).unwrap_err();
     assert_eq!(err.kind(), "conflict");
     assert!(err.to_string().contains("already claimed by cli-builder"), "{err}");
     assert!(err.to_string().contains("agentmon bug comment"), "suggests the fix: {err}");
@@ -418,7 +403,7 @@ fn a_bug_claimed_by_someone_else_cannot_be_stolen() {
     // the original claim is intact
     assert_eq!(tp.store.bug(&id).unwrap().meta.assignee.as_deref(), Some("cli-builder"));
     // and re-claiming by the same agent is a no-op, not an error (scripts get re-run)
-    tp.store.claim_bug(&id, "cli-builder", None).unwrap();
+    tp.store.claim_bug(&id, "cli-builder", None, None).unwrap();
 }
 
 #[test]
@@ -427,18 +412,18 @@ fn resolving_twice_is_refused_and_resolving_unclaimed_assigns_the_fixer() {
     let id = file_bug(&tp);
     let res = "Fixed by starting the watcher in setup(); verified with cargo check and a live \
                dashboard refresh.";
-    tp.store.resolve_bug(&id, "cli-builder", res, None).unwrap();
+    tp.store.resolve_bug(&id, "cli-builder", res, "A plain-words retelling for whoever reads this later.", None).unwrap();
 
     let b = tp.store.bug(&id).unwrap();
     assert_eq!(b.meta.assignee.as_deref(), Some("cli-builder"));
     assert!(b.meta.claimed.is_some(), "resolving unclaimed records the claim too");
 
-    let err = tp.store.resolve_bug(&id, "other", res, None).unwrap_err();
+    let err = tp.store.resolve_bug(&id, "other", res, "A plain-words retelling for whoever reads this later.", None).unwrap_err();
     assert_eq!(err.kind(), "conflict");
     assert!(err.to_string().contains("already resolved by cli-builder"), "{err}");
     // a comment on a resolved bug is still allowed — threads outlive the fix
     tp.store
-        .comment_bug(&id, "reviewer", "Confirmed on my machine after a rebuild.", None)
+        .comment_bug(&id, "reviewer", Some("Confirmed on my machine after a rebuild."), None, None)
         .unwrap();
     assert_eq!(tp.store.bug(&id).unwrap().comments.len(), 1);
 }
@@ -463,6 +448,7 @@ fn ids_are_zero_padded_and_scoped_per_project() {
                     tags: vec![],
                     refs: vec![],
                     body: BODY.into(),
+                    human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
                     started_at: None,
                 })
                 .unwrap();
@@ -477,6 +463,7 @@ fn ids_are_zero_padded_and_scoped_per_project() {
                 labels: vec![],
                 refs: vec![],
                 body: REPORT.into(),
+                human: "Something is wrong with the app, written out for someone who does not read code.".into(),
                 created_at: None,
             })
             .unwrap();
@@ -521,6 +508,7 @@ fn concurrent_writers_never_share_an_id_or_lose_an_event() {
                             tags: vec![],
                             refs: vec![],
                             body: BODY.into(),
+                            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
                             started_at: None,
                         })
                         .expect("concurrent start");
@@ -564,7 +552,7 @@ fn unknown_frontmatter_keys_survive_a_rewrite() {
     fs::write(&path, patched).unwrap();
 
     tp.store
-        .update_work(&id, "cli-builder", "Rewrote the record through the CLI.", None)
+        .update_work(&id, "cli-builder", Some("Rewrote the record through the CLI."), None, None)
         .unwrap();
     let after = fs::read_to_string(&path).unwrap();
     assert!(after.contains("reviewers: [human-1]"), "unknown key kept:\n{after}");
@@ -577,7 +565,7 @@ fn an_update_from_another_agent_is_attributed_in_the_body() {
     let tp = TempProject::new("attribution");
     let id = start(&tp, "Wire the change watcher into the desktop app");
     tp.store
-        .update_work(&id, "reviewer", "Picked this up while the author was offline.", None)
+        .update_work(&id, "reviewer", Some("Picked this up while the author was offline."), None, None)
         .unwrap();
     let d = tp.store.worklog(&id).unwrap();
     assert_eq!(d.updates[0].ts.len(), 20, "the heading stays a bare timestamp");
@@ -603,7 +591,7 @@ fn doctor_is_clean_on_a_project_the_cli_wrote() {
     let tp = TempProject::new("doctor-clean");
     let id = start(&tp, "Wire the change watcher into the desktop app");
     tp.store
-        .update_work(&id, "cli-builder", "Halfway: the watcher fires.", None)
+        .update_work(&id, "cli-builder", Some("Halfway: the watcher fires."), None, None)
         .unwrap();
     tp.store
         .finish_work(
@@ -613,14 +601,15 @@ fn doctor_is_clean_on_a_project_the_cli_wrote() {
                 outcome: OUTCOME.into(),
                 files: vec!["src-tauri/src/lib.rs".into()],
                 refs: vec![],
+                human: "The work is finished. In plain words: it does what it set out to do, and the tests say so.".into(),
                 finished_at: None,
                 started_at: None,
             },
         )
         .unwrap();
     let bug = file_bug(&tp);
-    tp.store.claim_bug(&bug, "cli-builder", None).unwrap();
-    tp.store.resolve_bug(&bug, "cli-builder", OUTCOME, None).unwrap();
+    tp.store.claim_bug(&bug, "cli-builder", None, None).unwrap();
+    tp.store.resolve_bug(&bug, "cli-builder", OUTCOME, "A plain-words retelling for whoever reads this later.", None).unwrap();
 
     let report = doctor::check(&tp.store).unwrap();
     assert_eq!(report.errors(), 0, "{:#?}", report.problems);
@@ -791,4 +780,89 @@ fn doctor_reports_levels_separately() {
     assert_eq!(report.errors(), 0, "{:#?}", report.problems);
     assert_eq!(report.warnings(), 1, "{:#?}", report.problems);
     assert_eq!(report.problems[0].level, Level::Warning);
+}
+
+/// A title is one line, and a title that is not one is refused before anything is written.
+///
+/// The title lands as a YAML scalar on one frontmatter line, so a `\n` in it opened a
+/// second line and the file it wrote had no parser. The order made it worse than a bad
+/// error: the record was written, its event appended, and only the read-back failed —
+/// exit 6 over a file on disk, an event pointing at it, and `work list` failing for the
+/// whole project from then on. With the newline placed just so, the record's first body
+/// section came out as `## For humans` carrying agent prose, which is exactly what the
+/// reserved heading exists to prevent.
+#[test]
+fn a_title_with_a_line_break_is_refused_and_leaves_nothing_behind() {
+    let tp = TempProject::new("title-newline");
+    let events_before = tp.store.events(None).unwrap().len();
+
+    for title in [
+        "Line one\n## For humans\nsmuggled",
+        "Line one\r\nLine two",
+        "Trailing\n",
+    ] {
+        let err = tp
+            .store
+            .start_work(&StartWork {
+                agent: "cli-builder".into(),
+                title: title.into(),
+                tags: vec![],
+                refs: vec![],
+                body: BODY.into(),
+                human: "We are starting a piece of work; this line says in plain words what it \
+                        is for."
+                    .into(),
+                started_at: None,
+            })
+            .err();
+        match title {
+            // A trailing newline is trimmed, not a second line: that one is legal.
+            "Trailing\n" => assert!(err.is_none(), "{err:?}"),
+            _ => {
+                let err = err.expect("a line break in a title is refused");
+                // The same kind (and exit code) as every other `--title` rule here.
+                assert_eq!(err.kind(), "conflict", "{err}");
+                assert!(err.to_string().contains("line break"), "{err}");
+                assert!(err.to_string().contains("--title"), "{err}");
+            }
+        }
+    }
+
+    // Exactly one record and one event were created — by the legal title.
+    let logs = tp.store.worklogs().unwrap();
+    assert_eq!(logs.len(), 1, "{logs:#?}");
+    assert_eq!(logs[0].meta.title, "Trailing");
+    assert_eq!(tp.store.events(None).unwrap().len(), events_before + 1);
+    assert_eq!(doctor::check(&tp.store).unwrap().errors(), 0);
+
+    // The same rule on the other kinds' titles, and on an agent handle.
+    assert!(tp
+        .store
+        .create_bug(&NewBug {
+            agent: "cli-builder".into(),
+            title: "One\ntwo".into(),
+            severity: Severity::Low,
+            labels: vec![],
+            refs: vec![],
+            body: "## Report\n\nA real report sentence that says what happened.".into(),
+            human: "A real retelling of the problem, in words a reader can follow.".into(),
+            created_at: None,
+        })
+        .is_err());
+    assert!(tp
+        .store
+        .start_work(&StartWork {
+            agent: "cli\nbuilder".into(),
+            title: "A perfectly good title".into(),
+            tags: vec![],
+            refs: vec![],
+            body: BODY.into(),
+            human: "We are starting a piece of work; this line says in plain words what it is \
+                    for."
+                .into(),
+            started_at: None,
+        })
+        .is_err());
+    assert_eq!(tp.store.worklogs().unwrap().len(), 1);
+    assert!(tp.store.bugs().unwrap().is_empty());
 }

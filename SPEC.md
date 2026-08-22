@@ -15,6 +15,7 @@ registered on the machine at once.
 
 | Piece | Bar (real, publicly viewable) |
 |---|---|
+| Human area (every record) | Beats the default `eli5` plugin's output on the same record in a blind A/B — omits less *and* reads easier; a non-expert can retell what happened accurately (jvns.ca bar); the human view looks native to this app next to its other screens |
 | Work log detail | A well-written merged PR page on github.com/microsoft/vscode |
 | Bug board | github.com/microsoft/vscode/issues |
 | Status dashboard | play.grafana.org |
@@ -66,7 +67,9 @@ One project = one `AgentMonitoring` folder inside a directory the human picked
                                   # type ∈ work_started|work_updated|work_done|work_abandoned|
                                   #        bug_created|bug_claimed|bug_commented|bug_resolved|
                                   #        bug_closed|note_created|note_updated|note_removed|
-                                  #        project_created|project_updated
+                                  #        human_updated|project_created|project_updated
+                                  #        (human_updated: a mutation that changed only the
+                                  #         human area — see "The human area" below)
     worklogs/WORK-0001.md         # zero-padded per-project sequence
     bugs/BUG-0001.md
     notes/<name>.md               # shared agent notes — kebab-case name IS the identity
@@ -95,7 +98,10 @@ project…** on the cloned repo registers it.
 
 ```
 ~/.AgentMonitoring/feedback/FB-NNNN.md   # frontmatter: id, title, type (bug|idea),
-                                         #   agent, status (open|done), created, done;
+                                         #   agent, status (open|done), created, done,
+                                         #   updated (when the human area was last
+                                         #   rewritten — this board has no events.jsonl,
+                                         #   so the frontmatter carries `--at` itself);
                                          #   body = free markdown prose (may be empty)
 ```
 
@@ -222,6 +228,52 @@ In record **prose**, the app links `WORK-`/`BUG-` ids written bare, and notes wr
 sentence is usually just a word). Either shape naming a record that does not exist renders
 as a visibly-stale chip, same as a missing `refs` entry.
 
+### The human area — every record speaks to two audiences (owner directive, 2026-08-22)
+
+Every record — work log, bug, note, app feedback — carries two areas. The **agent
+area** is everything above: What/Why/How/Updates/Outcome, Report/Comments/Resolution,
+the note body. The **human area** is the same events retold by the agent that did the
+work, for a reader who was not there and does not program: jvns.ca-plain, concrete,
+omitting nothing that matters. The full style contract lives in `docs/HUMAN_STYLE.md`;
+it is **write-time reading** — embedded in the binary, printed by `agentmon human-style`
+and inside every rejection — never session-start reading. Human areas are written in
+the record's own language.
+
+Storage: the last body section of the record file, under the reserved heading
+`## For humans`. Supplied agent bodies/messages may not contain that heading (exit 2,
+"reserved"), nor may they leave a code fence open — the heading is appended *after* the
+agent area, so an unclosed ``` swallows it and the record saves with no human area at all
+(exit 2, naming the flag and the line; a record already in that state on disk refuses
+every mutation until the fence is closed, and `agentmon doctor` lists those separately).
+Legacy files without it parse fine (`human: null`) — reading is lenient,
+**writing is not** (`agentmon migrate` copies v1 record files across untouched, so a
+migrated project arrives as legacy records and gains its human areas on first touch):
+
+- Mutations that create or close a record **require** the human area
+  (`--human s | --human-file f`): `work start`, `work done`, `work abandon`,
+  `bug create`, `bug resolve`, `note add`, `note update` when `--body` is given,
+  `app-feedback add`. Closing verbs **replace** it — the ending changed the story.
+- Any mutation touching a record that still lacks a human area must supply one
+  (legacy records gain it on first touch). The exception is the three flagless
+  status flips `app-feedback done` / `reopen` / `delete`: they take no `--agent`
+  and no arguments because they are the owner's own board buttons in the app, and
+  the person clicking Done has no retelling to write and nowhere to type one. An
+  item filed before this change gains its human area through `app-feedback update`.
+- Update verbs accept `--human` **alone** to refresh it with no other change
+  (`work update`, `bug comment`, `note update`, `app-feedback update` — the last
+  exists for this). A refresh never writes into `## Updates`/`## Comments`; a
+  refresh-only mutation logs a `human_updated` event, otherwise the mutation's own
+  event covers it.
+- Missing or blank → exit 2, and the error itself prints the compact style rules
+  plus how to read the full contract — the teaching cost is paid only on failure.
+  The MCP tools mirror all of this: `human` fields with the same required-ness, and
+  the rejection text carries the same rules.
+- `human` is a `string | null` field in every `--json` view and both app transports.
+  In every JSON/API payload the `body` (and parsed sections) is the agent area ONLY —
+  the `## For humans` section is stripped from it; the record file is the one place
+  the two areas cohabit. `agentmon <kind> view` (human-readable output) shows both,
+  labelled.
+
 ## CLI surface (`agentmon`, gh-style)
 
 ```
@@ -237,29 +289,32 @@ agentmon project view [--json]
 agentmon project update [--name <n>] [--description <d>] [--tags a,b] [--at T]
 agentmon project list                     # the machine's registry (informational)
 agentmon project mcp-json [--agent h]     # write/refresh .mcp.json for an existing project
-agentmon work start   --agent <name> --title <t> [--tags] [--body-file f | --body s] [--started-at T]
-agentmon work update  <WORK-ID> --agent <name> (--message s | --body-file|--message-file f) [--at T]
-agentmon work done    <WORK-ID> --agent <name> (--outcome s | --outcome-file f) [--files a,b] [--finished-at T] [--started-at T]
-agentmon work abandon <WORK-ID> --agent <name> (--reason s | --reason-file f) [--at T]
+agentmon work start   --agent <name> --title <t> --human s|--human-file f [--tags] [--body-file f | --body s] [--started-at T]
+agentmon work update  <WORK-ID> --agent <name> (--message s | --body-file|--message-file f | --human s|--human-file f) [--at T]
+agentmon work done    <WORK-ID> --agent <name> (--outcome s | --outcome-file f) --human s|--human-file f [--files a,b] [--finished-at T] [--started-at T]
+agentmon work abandon <WORK-ID> --agent <name> (--reason s | --reason-file f) --human s|--human-file f [--at T]
 agentmon work list    [--status s] [--agent a] [--json]
 agentmon work view    <WORK-ID> [--json]
-agentmon bug create   --agent <name> --title <t> --severity <s> (--body s | --body-file f) [--labels] [--created-at T]
-agentmon bug claim    <BUG-ID> --agent <name> [--at T]
-agentmon bug comment  <BUG-ID> --agent <name> (--message s | --body-file|--message-file f) [--at T]
-agentmon bug resolve  <BUG-ID> --agent <name> (--resolution s | --resolution-file f) [--at T]
+agentmon bug create   --agent <name> --title <t> --severity <s> (--body s | --body-file f) --human s|--human-file f [--labels] [--created-at T]
+agentmon bug claim    <BUG-ID> --agent <name> [--human s|--human-file f] [--at T]
+agentmon bug comment  <BUG-ID> --agent <name> (--message s | --body-file|--message-file f | --human s|--human-file f) [--at T]
+agentmon bug resolve  <BUG-ID> --agent <name> (--resolution s | --resolution-file f) --human s|--human-file f [--at T]
 agentmon bug list     [--status s] [--severity] [--label] [--json]
 agentmon bug view     <BUG-ID> [--json]
 agentmon note add     --agent <name> --title <t> --type <ty> --description <d> (--body s | --body-file f)
-                      [--name <kebab>] [--tags] [--refs] [--at T]     # alias: note create
+                      --human s|--human-file f [--name <kebab>] [--tags] [--refs] [--at T]     # alias: note create
 agentmon note update  <name> --agent <name> [--title] [--type] [--description] [--tags] [--refs]
-                      (--body s | --body-file f) [--at T]             # --body REPLACES; --tags/--refs replace their lists
+                      [--body s | --body-file f] [--human s|--human-file f] [--at T]
+                      # --body REPLACES and then requires --human; --tags/--refs replace their lists
 agentmon note remove  <name> --agent <name> [--at T]                  # alias: note rm — logs note_removed
 agentmon note list    [--type t] [--tag] [--agent] [--search text] [--json]
 agentmon note view    <name> [--json]
 agentmon status                           # snapshot: active work, open bugs, latest notes, recent events
 agentmon doctor                           # validate project integrity, exit non-zero on problems
 agentmon migrate --from <vault> --project <slug> --to <folder>   # v1 → v2 bridge
-agentmon app-feedback add     --agent <name> --type bug|idea --title <t> [--body s] [--at T]
+agentmon human-style                      # print docs/HUMAN_STYLE.md (embedded) — the write-time style contract
+agentmon app-feedback add     --agent <name> --type bug|idea --title <t> --human s|--human-file f [--body s] [--at T]
+agentmon app-feedback update  <FB-ID> --agent <name> --human s|--human-file f [--at T]
 agentmon app-feedback list    [--status open|done] [--type bug|idea] [--json]
 agentmon app-feedback view    <FB-ID> [--json]
 agentmon app-feedback done    <FB-ID>     # also: reopen
@@ -307,6 +362,14 @@ before the note's last `updated`).
    who wrote it and when it last changed. The app **reads** notes; writing is the CLI's
    and MCP's (agents' hands, not the human's mouse) — the human curates by telling agents,
    or by editing the plain file.
+Every record detail screen (4, 6, 8, and App feedback's) carries an **Agent / Human
+toggle**: Agent shows the areas above; Human renders the record's human area — the
+eli5 friendly-explainer concept reinterpreted strictly through this app's design
+tokens, so it reads as native next to every other screen. The toggle defaults to
+Human when the record has a human area, the choice persists for the session, and a
+record without one shows a designed empty state naming the exact CLI command that
+adds it.
+
 9. **Projects** — every registered folder as a row (unavailable ones dimmed, with the last
    name the registry saw); **New project** with a location picker (creates
    `<location>/AgentMonitoring`); **Open project…** (registers an existing folder);

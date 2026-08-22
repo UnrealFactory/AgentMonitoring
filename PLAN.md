@@ -15,6 +15,26 @@ All subagents: opus5, effort max. Builders NEVER self-grade. Critics get fresh c
 | P5 | Shell/nav + Projects mgmt + portability (vault relocation) | critic: copies vault elsewhere, reopens, verifies continuity; design critic on shell/projects | linear.app |
 | P6 | Final gate: real Tauri build, all bars re-judged fresh, full-app coherence | fresh critics, all bars | all of the above |
 
+## Dual-record initiative (owner directive, 2026-08-22) — pieces D1–D6
+
+Every record gains a human area beside the agent area (SPEC "The human area" section is
+the contract). Same loop protocol; same rounds.jsonl; critics compare real artifacts
+against the bar: the default `/eli5` plugin output for the same record (cached under
+progress/dual/baselines/), jvns.ca-grade retellability, and the app's own screens.
+
+| ID | Piece | Judged by |
+|---|---|---|
+| D1 | Human-area style contract (docs/HUMAN_STYLE.md) + exemplars | Fresh writer given ONLY the doc + a raw record → blind A/B panel vs eli5 baseline (must win: omits less, reads easier) + non-expert retell graded for accuracy |
+| D2 | Storage + validation + CLI + MCP enforcement (core; reject saves without human area on every path) | Fresh critic drives real CLI+MCP in a sandboxed fixture: rejection matrix, teaching errors, legacy leniency, --json contract, events, doctor, cargo tests |
+| D3 | Agent/Human toggle on all 4 detail screens + human-view visual (eli5 concept re-tokenized) | Fresh critic screenshots real screens (browser mode) and judges "native to this app" next to the other screens + vs eli5's rendered HTML concept |
+| D4 | Backfill: every live ./AgentMonitoring record gets its human area, CLI only | Coverage = 100% (doctor/--json sweep) + random-sample A/B vs freshly generated eli5 baselines + retell accuracy + no invented facts vs agent area |
+| D5 | Instruction diet: CLAUDE.md line(s), core claude-md templates, MCP tool descriptions, manual | Ablation: critic deletes each added always-on line → fresh writer sim still meets bar ⇒ line was bloat (gap); full-diet sim must still meet bar (gap if not). Counts real added bytes. |
+| D6 | Final gate: end-to-end fresh-agent session writes a real record through shipped instructions; desktop build; live data on real screens | Fresh critics, all D-bars re-judged |
+
+In-loop A/B records: WORK-0061, BUG-0025, note chart-note-series-colour.
+Held-out (D5/D6 only — the style doc must generalize, not memorize): WORK-0055,
+BUG-0004, note handoff-v1-release.
+
 ## Loop protocol (every piece)
 
 1. Builder (opus/max) implements against SPEC.md + the critic's last "biggest gap".

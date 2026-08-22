@@ -75,6 +75,7 @@ fn start_at(tp: &TempProject, when: Option<&str>) -> String {
             agent: "cli-builder".into(),
             title: "Record work that was already finished".into(),
             body: BODY.into(),
+            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
             started_at: when.map(str::to_string),
             ..Default::default()
         })
@@ -94,6 +95,7 @@ fn finish(
             &FinishWork {
                 agent: "cli-builder".into(),
                 outcome: OUTCOME.into(),
+                human: "The work is finished. In plain words: it does what it set out to do, and the tests say so.".into(),
                 finished_at: finished_at.map(str::to_string),
                 started_at: started_at.map(str::to_string),
                 ..Default::default()
@@ -121,12 +123,7 @@ fn work_finished_earlier_can_be_recorded_now() {
     let tp = TempProject::new("work");
     let id = start_at(&tp, Some(T0));
     tp.store
-        .update_work(
-            &id,
-            "cli-builder",
-            "Halfway: the parser round-trips, the writer still drops unknown keys.",
-            Some(T1),
-        )
+        .update_work(&id, "cli-builder", Some("Halfway: the parser round-trips, the writer still drops unknown keys."), None, Some(T1))
         .unwrap();
     finish(&tp, &id, Some(T2), None).unwrap();
 
@@ -175,6 +172,7 @@ fn a_timestamp_that_will_not_parse_names_the_flag_and_the_forms() {
             agent: "cli-builder".into(),
             title: "Yesterday".into(),
             body: BODY.into(),
+            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
             started_at: Some("yesterday afternoon".into()),
             ..Default::default()
         })
@@ -197,6 +195,7 @@ fn a_timestamp_in_the_future_is_refused_everywhere() {
             agent: "cli-builder".into(),
             title: "Work from the future".into(),
             body: BODY.into(),
+            human: "We are starting a piece of work; this line says in plain words what it is for.".into(),
             started_at: Some(future.into()),
             ..Default::default()
         })
@@ -208,7 +207,7 @@ fn a_timestamp_in_the_future_is_refused_everywhere() {
     let id = start_at(&tp, Some(T0));
     let err = tp
         .store
-        .update_work(&id, "cli-builder", "From the future.", Some(future))
+        .update_work(&id, "cli-builder", Some("From the future."), None, Some(future))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument", "{err}");
     let err = finish(&tp, &id, Some(future), None).unwrap_err();
@@ -227,7 +226,7 @@ fn a_timestamp_before_the_state_it_follows_is_refused() {
     // an update before the work started
     let err = tp
         .store
-        .update_work(&id, "cli-builder", "Time travel.", Some(T0))
+        .update_work(&id, "cli-builder", Some("Time travel."), None, Some(T0))
         .unwrap_err();
     assert!(
         err.to_string().contains("at or after the work log's started time"),
@@ -237,11 +236,11 @@ fn a_timestamp_before_the_state_it_follows_is_refused() {
 
     // an update before the previous update
     tp.store
-        .update_work(&id, "cli-builder", "First note, in order.", Some(T2))
+        .update_work(&id, "cli-builder", Some("First note, in order."), None, Some(T2))
         .unwrap();
     let err = tp
         .store
-        .update_work(&id, "cli-builder", "Second note, backwards.", Some(T1))
+        .update_work(&id, "cli-builder", Some("Second note, backwards."), None, Some(T1))
         .unwrap_err();
     assert!(err.to_string().contains("at or after the previous note"), "{err}");
     assert_eq!(tp.store.worklog(&id).unwrap().updates.len(), 1);
@@ -273,16 +272,11 @@ fn a_subheading_in_a_note_does_not_brick_the_record() {
     let id = start_at(&tp, Some(T0));
 
     tp.store
-        .update_work(
-            &id,
-            "cli-builder",
-            "### R7 빌더 — 삼항 어휘의 거짓 문장 3곳 정정\n\nRound detail.",
-            Some(T1),
-        )
+        .update_work(&id, "cli-builder", Some("### R7 빌더 — 삼항 어휘의 거짓 문장 3곳 정정\n\nRound detail."), None, Some(T1))
         .unwrap();
     // The very shape that was permanently refused: a later note, and a later close.
     tp.store
-        .update_work(&id, "cli-builder", "Next round, later the same day.", Some(T2))
+        .update_work(&id, "cli-builder", Some("Next round, later the same day."), None, Some(T2))
         .unwrap();
     let d = tp.store.worklog(&id).unwrap();
     assert_eq!(d.updates.len(), 2, "{:?}", d.updates);
@@ -302,7 +296,7 @@ fn work_done_can_correct_the_start_but_not_break_the_order() {
 
     // --started-at after a note that is already on the record
     tp.store
-        .update_work(&id, "cli-builder", "A note at T1.", Some(T1))
+        .update_work(&id, "cli-builder", Some("A note at T1."), None, Some(T1))
         .unwrap();
     let err = finish(&tp, &id, Some(T2), Some(T2)).unwrap_err();
     assert!(
@@ -331,6 +325,7 @@ fn file_bug(tp: &TempProject, created_at: Option<&str>) -> String {
             labels: vec![],
             refs: vec![],
             body: REPORT.into(),
+            human: "Something is wrong with the app, written out for someone who does not read code.".into(),
             created_at: created_at.map(str::to_string),
         })
         .expect("bug create")
@@ -341,22 +336,12 @@ fn file_bug(tp: &TempProject, created_at: Option<&str>) -> String {
 fn a_bug_can_be_filed_claimed_and_resolved_after_the_fact() {
     let tp = TempProject::new("bug");
     let id = file_bug(&tp, Some(T0));
-    tp.store.claim_bug(&id, "cli-builder", Some(T1)).unwrap();
+    tp.store.claim_bug(&id, "cli-builder", None, Some(T1)).unwrap();
     tp.store
-        .comment_bug(
-            &id,
-            "cli-builder",
-            "Root cause: the Tauri shell never started a watcher.",
-            Some(T1),
-        )
+        .comment_bug(&id, "cli-builder", Some("Root cause: the Tauri shell never started a watcher."), None, Some(T1))
         .unwrap();
     tp.store
-        .resolve_bug(
-            &id,
-            "cli-builder",
-            "Started the watcher in setup(); verified with cargo test and a live refresh.",
-            Some(T2),
-        )
+        .resolve_bug(&id, "cli-builder", "Started the watcher in setup(); verified with cargo test and a live refresh.", "A plain-words retelling for whoever reads this later.", Some(T2))
         .unwrap();
 
     let b = tp.store.bug(&id).unwrap();
@@ -377,7 +362,7 @@ fn out_of_order_bug_mutations_are_refused() {
     let tp = TempProject::new("bug-order");
     let id = file_bug(&tp, Some(T1));
 
-    let err = tp.store.claim_bug(&id, "cli-builder", Some(T0)).unwrap_err();
+    let err = tp.store.claim_bug(&id, "cli-builder", None, Some(T0)).unwrap_err();
     assert!(
         err.to_string().contains("at or after the bug's created time"),
         "{err}"
@@ -388,10 +373,10 @@ fn out_of_order_bug_mutations_are_refused() {
         "the rejected claim wrote nothing"
     );
 
-    tp.store.claim_bug(&id, "cli-builder", Some(T2)).unwrap();
+    tp.store.claim_bug(&id, "cli-builder", None, Some(T2)).unwrap();
     let err = tp
         .store
-        .resolve_bug(&id, "cli-builder", OUTCOME, Some(T1))
+        .resolve_bug(&id, "cli-builder", OUTCOME, "A plain-words retelling for whoever reads this later.", Some(T1))
         .unwrap_err();
     assert!(
         err.to_string()
@@ -401,7 +386,7 @@ fn out_of_order_bug_mutations_are_refused() {
 
     let err = tp
         .store
-        .comment_bug(&id, "cli-builder", "Backwards comment.", Some(T0))
+        .comment_bug(&id, "cli-builder", Some("Backwards comment."), None, Some(T0))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument", "{err}");
     assert!(tp.store.bug(&id).unwrap().comments.is_empty());
@@ -416,7 +401,7 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
     let tp = TempProject::new("abandon");
     let id = start_at(&tp, Some(T0));
     tp.store
-        .update_work(&id, "cli-builder", "Tried the naive approach first.", Some(T1))
+        .update_work(&id, "cli-builder", Some("Tried the naive approach first."), None, Some(T1))
         .unwrap();
 
     let w = tp
@@ -428,6 +413,7 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
                 reason: "Superseded by WORK-0009, which solves the same problem in \
                          agentmon-core; nothing from this branch was kept."
                     .into(),
+                human: "We stopped this one. In plain words: it is not being finished, and here is what to read instead.".into(),
                 at: Some(T2.into()),
             },
         )
@@ -456,12 +442,12 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
     // an abandoned record is closed: no second abandon, no completion. A later note is
     // still allowed — it is how the record gets corrected — but it cannot predate the stop.
     tp.store
-        .update_work(&id, "cli-builder", "Correction: WORK-0009 is WORK-0010.", None)
+        .update_work(&id, "cli-builder", Some("Correction: WORK-0009 is WORK-0010."), None, None)
         .expect("a closed record still takes a correction");
     assert_eq!(tp.store.worklog(&id).unwrap().meta.status, WorkStatus::Abandoned);
     let err = tp
         .store
-        .update_work(&id, "cli-builder", "Backwards in time.", Some(T1))
+        .update_work(&id, "cli-builder", Some("Backwards in time."), None, Some(T1))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument");
     let err = tp
@@ -471,6 +457,7 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
             &AbandonWork {
                 agent: "cli-builder".into(),
                 reason: "Abandoning it twice for good measure.".into(),
+                human: "We stopped this one. In plain words: it is not being finished, and here is what to read instead.".into(),
                 at: None,
             },
         )
@@ -491,6 +478,7 @@ fn abandon_needs_a_real_reason_and_refuses_finished_work() {
                 &AbandonWork {
                     agent: "cli-builder".into(),
                     reason: bad.into(),
+                    human: "We stopped this one. In plain words: it is not being finished, and here is what to read instead.".into(),
                     at: None,
                 },
             )
@@ -508,6 +496,7 @@ fn abandon_needs_a_real_reason_and_refuses_finished_work() {
             &AbandonWork {
                 agent: "cli-builder".into(),
                 reason: "Changed my mind about this one.".into(),
+                human: "We stopped this one. In plain words: it is not being finished, and here is what to read instead.".into(),
                 at: None,
             },
         )

@@ -134,6 +134,11 @@ pub struct WorklogSummary {
     #[serde(default)]
     pub search_text: String,
     pub update_count: usize,
+    /// The record's human area (SPEC.md, "The human area"), or `None` on a record written
+    /// before it existed. Lists carry it so a screen can say which records still speak to
+    /// only one audience without opening every file.
+    #[serde(default)]
+    pub human: Option<String>,
     pub last_activity: String,
 }
 
@@ -152,7 +157,11 @@ pub struct WorklogDetail {
     /// Sections we do not know about are kept verbatim (forward compatibility).
     #[serde(default)]
     pub extra_sections: Vec<Section>,
-    /// The untouched markdown body, for "view raw".
+    /// The record retold for a reader who was not there and does not program — the
+    /// reserved `## For humans` section. `None` on a record written before it existed.
+    #[serde(default)]
+    pub human: Option<String>,
+    /// The agent area's markdown, for "view raw" — the human area is `human`, not here.
     pub body: String,
     pub last_activity: String,
 }
@@ -244,6 +253,9 @@ pub struct NoteSummary {
     /// Description + body flattened, so search reaches the whole note.
     #[serde(default)]
     pub search_text: String,
+    /// The note's human area (SPEC.md, "The human area"), or `None` on an older note.
+    #[serde(default)]
+    pub human: Option<String>,
     pub last_activity: String,
 }
 
@@ -254,7 +266,11 @@ pub struct NoteSummary {
 pub struct NoteDetail {
     #[serde(flatten)]
     pub meta: Note,
+    /// The knowledge itself — the agent area. The reserved `## For humans` section is
+    /// split off into `human`, so a renderer never prints it twice.
     pub body: String,
+    #[serde(default)]
+    pub human: Option<String>,
     pub last_activity: String,
 }
 
@@ -349,6 +365,9 @@ pub struct BugSummary {
     #[serde(default)]
     pub search_text: String,
     pub comment_count: usize,
+    /// The bug's human area (SPEC.md, "The human area"), or `None` on an older record.
+    #[serde(default)]
+    pub human: Option<String>,
     pub last_activity: String,
 }
 
@@ -363,6 +382,11 @@ pub struct BugDetail {
     pub resolution: Option<String>,
     #[serde(default)]
     pub extra_sections: Vec<Section>,
+    /// The bug retold for a reader who was not there and does not program — the reserved
+    /// `## For humans` section. `None` on a record written before it existed.
+    #[serde(default)]
+    pub human: Option<String>,
+    /// The agent area's markdown, for "view raw" — the human area is `human`, not here.
     pub body: String,
     pub last_activity: String,
 }
@@ -416,6 +440,12 @@ fn yaml_scalar(value: &str) -> String {
         || value.ends_with(' ')
         || value.contains(": ")
         || value.contains(" #")
+        // A line break here is a *second frontmatter line*, not a formatting choice: the
+        // file it writes has no parser, and the caller found out only when the record was
+        // read back — after it and its event were on disk. Escaped, the value stays one
+        // line and the file stays readable. The write paths refuse a title or an agent
+        // name with one before it gets this far; this is the floor under every other key.
+        || value.contains(['\n', '\r', '\t'])
         || value.starts_with(['"', '\'', '[', ']', '{', '}', '&', '*', '!', '|', '>', '%', '@', '`'])
         || matches!(
             value.to_ascii_lowercase().as_str(),
@@ -423,7 +453,15 @@ fn yaml_scalar(value: &str) -> String {
         )
         || value.ends_with(':');
     if needs_quotes {
-        format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+        format!(
+            "\"{}\"",
+            value
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\r', "\\r")
+                .replace('\n', "\\n")
+                .replace('\t', "\\t")
+        )
     } else {
         value.to_string()
     }
@@ -560,16 +598,32 @@ pub struct FeedbackItem {
     /// When the human marked it handled; cleared by reopen.
     #[serde(default)]
     pub done: Option<String>,
+    /// When an agent last rewrote the human area (`app-feedback update`), or `None` on an
+    /// item nobody has retold since it was filed.
+    ///
+    /// It exists because `--at` had nowhere to go. SPEC.md's backdating rule is that the
+    /// supplied time is written into the record's frontmatter *and* its event line; the
+    /// board is machine-level and has no event feed, so without this key the flag was
+    /// validated against `created` and then dropped — a timestamp an agent passed in good
+    /// faith, recorded nowhere.
+    #[serde(default)]
+    pub updated: Option<String>,
     /// Markdown after the frontmatter fence; may be empty — a good title can be the
     /// whole report, and friction here would cost real feedback.
     #[serde(default)]
     pub body: String,
+    /// The item retold for a reader who was not there and does not program — the reserved
+    /// `## For humans` section (SPEC.md, "The human area"). `None` on an item filed before
+    /// it existed; required on everything filed since.
+    #[serde(default)]
+    pub human: Option<String>,
 }
 
 impl FeedbackItem {
     pub fn to_frontmatter(&self) -> String {
         format!(
-            "id: {}\ntitle: {}\ntype: {}\nagent: {}\nstatus: {}\ncreated: {}\ndone: {}\n",
+            "id: {}\ntitle: {}\ntype: {}\nagent: {}\nstatus: {}\ncreated: {}\ndone: {}\n\
+             updated: {}\n",
             yaml_scalar(&self.id),
             yaml_scalar(&self.title),
             self.kind.as_str(),
@@ -577,6 +631,7 @@ impl FeedbackItem {
             self.status.as_str(),
             yaml_scalar(&self.created),
             yaml_opt(&self.done),
+            yaml_opt(&self.updated),
         )
     }
 }
@@ -658,5 +713,34 @@ mod tests {
         let back: Bug = serde_yaml::from_str(&yaml).expect("frontmatter parses back");
         assert_eq!(back.severity, Severity::High);
         assert!(back.status.is_open());
+    }
+
+    /// A frontmatter value stays on its own line, whatever is in it.
+    ///
+    /// A line break in one is not formatting — it is a second frontmatter line, and the
+    /// file it wrote had no parser at all. The record and its event were on disk before
+    /// anything noticed (the read-back failed, exit 6), one such record made `work list`
+    /// fail for the whole project, and with the newline in the right place the record's
+    /// first body section came out as `## For humans` holding agent prose.
+    #[test]
+    fn a_line_break_in_a_value_never_opens_a_second_frontmatter_line() {
+        let w = Worklog {
+            id: "WORK-0001".into(),
+            title: "Line one\n## For humans\nsmuggled".into(),
+            agent: "a\rb".into(),
+            status: WorkStatus::InProgress,
+            started: "2026-08-18T09:12:00Z".into(),
+            finished: None,
+            tags: vec!["one\ttwo".into()],
+            refs: vec![],
+            files: vec![],
+        };
+        let yaml = w.to_frontmatter();
+        assert_eq!(yaml.lines().count(), 9, "one line per key: {yaml}");
+        assert!(!yaml.contains("\n## For humans"), "{yaml}");
+        let back: Worklog = serde_yaml::from_str(&yaml).expect("frontmatter parses back");
+        assert_eq!(back.title, w.title, "and the bytes survive the escape");
+        assert_eq!(back.agent, w.agent);
+        assert_eq!(back.tags, w.tags);
     }
 }

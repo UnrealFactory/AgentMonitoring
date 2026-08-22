@@ -2175,14 +2175,19 @@ a.button {
   padding: var(--space-2) var(--space-1);
 }
 
+/* A path has no spaces to break at, so it wraps anywhere rather than ellipsising.
+   The ellipsis was the wrong end of the trade here: it eats the tail of the string, which
+   is the half that names the file, and the chip is 300px at its narrowest. WORK-0067
+   listed `reserved-heading-shapes.json` — 28 characters, five more than the longest file
+   name any record had carried before it — and `npm run check:clipping` measured 29.6px of
+   it cut off at 960px and 11.6px at 1280px. A second line costs a row of this grid some
+   height and loses nothing. */
 .file-item {
   display: block;
   padding: 3px var(--space-3);
   font-size: var(--text-sm);
   line-height: 1.6;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .file-dir {

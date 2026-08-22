@@ -1,0 +1,72 @@
+ELI5 · BUG-0004 · fixed ✓
+The screen that rewrote the notebook
+One page in the app has one job: show a saved note exactly as written. It didn’t. It erased a number and made up a new one.
+1
+What the notebook really says
+A long sentence wraps onto a second line. The second line happens to start with “ 200. ” — the end of the sentence, not a list.
+Saved note · the truth
+…returns 503 for three hours, then
+200.
+Without jitter, all deliveries…
+one sentence, wrapped onto two lines
+“…returns 503 for three hours, then 200 .” — the 200 is just the next word of the sentence.
+2
+What the screen showed instead
+The app saw a line starting with “number + dot” and thought: “Ooh, a numbered list!” So it threw the 200 away and stamped its own “1.” there.
+Notebook
+…for three hours, then
+200.
+Without jitter…
+😌
+The truth: 200 is in the sentence.
+Screen
+…for three hours, then
+1.
+Without jitter…
+200
+🗑️
+😨
+The lie: 200 is gone, and a “1.” that nobody wrote appears.
+The page deleted a real number and printed a fake one — and looked perfectly normal doing it.
+3
+Why? The app used one dumb rule
+Its whole test for “is this a list?” was: does the line start with a number and a dot? That catches real lists… and also any wrapped sentence that lands on a number.
+“Number + dot? LIST!”
+1. buy milk
+2. buy eggs
+✅
+a real list — fine
+…hours, then
+200. Without jitter…
+💥
+a wrapped sentence — mangled
+Same stamp for both. It can’t tell a shopping list from the middle of a sentence.
+4
+The fix: a smarter rule
+The Markdown standard already solved this exact problem: mid-paragraph, only a line starting with “ 1. ” may begin a numbered list. “200.”? “503.”? “2026.”? Those stay in the sentence.
+New rule
+LIST
+GATE
+🚧
+mid-sentence?
+only “1.” enters
+1.
+may start a list ✅
+200.
+stays in the sentence ↩
+…hours, then 200.
+Without jitter… 😌
+Plus two bonus repairs: a list the author starts at “3.” now really shows “3.”, and **bold with `code` inside** finally renders both.
+5
+How we know it’s really fixed
+A new test reads every saved note and fails if even one word of the original goes missing from the screen. 55 checks, all green — and when the old bug was put back on purpose, the test caught it instantly.
+📓 all 30
+saved notes
+word-by-word
+checker 🔍
+🖥️ what the
+screen shows
+✅ 55 / 55 checks pass — no word left behind
+Now the screen shows exactly what the notebook says . Nothing erased, nothing invented.
+BUG-0004 · severity high · resolved 2026-08-18 · fix in src/lib/markdown-parse.ts ·
+the one screen whose job is faithfulness is faithful again.

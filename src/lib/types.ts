@@ -25,8 +25,12 @@ export interface FeedbackItem {
   created: string;
   /** When the human marked it handled; null while open. */
   done: string | null;
+  /** When an agent last rewrote the human area (`app-feedback update`), else null. */
+  updated: string | null;
   /** Short markdown prose; may be empty — a title can carry a whole wish. */
   body: string;
+  /** The item's human area, or null on one filed before it existed. */
+  human: string | null;
 }
 
 export interface ProjectCounts {
@@ -98,6 +102,8 @@ export type EventType =
   | "note_created"
   | "note_updated"
   | "note_removed"
+  /** A mutation that changed only the record's human area (SPEC.md, "The human area"). */
+  | "human_updated"
   | "project_created"
   | "project_updated";
 
@@ -124,6 +130,12 @@ interface WorklogMeta {
   tags: string[];
   refs: string[];
   files: string[];
+  /**
+   * The record's human area: the same work retold by the agent for a reader who was not
+   * there and does not program (SPEC.md, "The human area"). `null` on a record written
+   * before it existed — the detail screens show a designed empty state for those.
+   */
+  human: string | null;
   lastActivity: string;
 }
 
@@ -165,6 +177,8 @@ interface BugMeta {
   resolved: string | null;
   resolvedBy: string | null;
   refs: string[];
+  /** The bug's human area, or null on a record written before it existed. */
+  human: string | null;
   lastActivity: string;
 }
 
@@ -213,6 +227,8 @@ interface NoteMeta {
   updated: string;
   tags: string[];
   refs: string[];
+  /** The note's human area, or null on a note written before it existed. */
+  human: string | null;
   lastActivity: string;
 }
 

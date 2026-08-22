@@ -196,10 +196,16 @@ impl Store {
                 parts.push(o);
             }
             parts.extend(detail.extra_sections.iter().map(|s| s.body.as_str()));
+            // The human area is part of the record a reader can read, so the list's search
+            // reaches it too — the words a non-programmer remembers are usually in there.
+            if let Some(h) = &detail.human {
+                parts.push(h);
+            }
             out.push(WorklogSummary {
                 excerpt: body::excerpt(&detail.what, 180),
                 search_text: body::search_text(&parts),
                 update_count: detail.updates.len(),
+                human: detail.human.clone(),
                 last_activity: detail.last_activity.clone(),
                 meta: detail.meta,
             });
@@ -231,6 +237,10 @@ impl Store {
         let meta: Worklog = serde_yaml::from_str(fm)
             .map_err(|e| CoreError::malformed(path, format!("invalid worklog frontmatter: {e}")))?;
 
+        // The human area first: it is the reserved last section, and everything below
+        // parses the agent area alone (so it never lands in `extra_sections` as well).
+        let (md, human) = crate::human::split(md);
+        let md = md.as_str();
         let mut secs = body::sections(md);
         secs.retain(|s| !(s.title.is_empty() && s.body.trim().is_empty()));
         let what = body::take_section(&mut secs, "What").unwrap_or_default();
@@ -261,6 +271,7 @@ impl Store {
             updates,
             outcome,
             extra_sections: secs,
+            human,
             body: md.trim().to_string(),
             last_activity: last,
         })
@@ -283,10 +294,14 @@ impl Store {
                 parts.push(r);
             }
             parts.extend(detail.extra_sections.iter().map(|s| s.body.as_str()));
+            if let Some(h) = &detail.human {
+                parts.push(h);
+            }
             out.push(BugSummary {
                 excerpt: body::excerpt(&detail.report, 180),
                 search_text: body::search_text(&parts),
                 comment_count: detail.comments.len(),
+                human: detail.human.clone(),
                 last_activity: detail.last_activity.clone(),
                 meta: detail.meta,
             });
@@ -325,6 +340,8 @@ impl Store {
         let meta: Bug = serde_yaml::from_str(fm)
             .map_err(|e| CoreError::malformed(path, format!("invalid bug frontmatter: {e}")))?;
 
+        let (md, human) = crate::human::split(md);
+        let md = md.as_str();
         let mut secs = body::sections(md);
         secs.retain(|s| !(s.title.is_empty() && s.body.trim().is_empty()));
         let report = body::take_section(&mut secs, "Report").unwrap_or_default();
@@ -352,6 +369,7 @@ impl Store {
             comments,
             resolution,
             extra_sections: secs,
+            human,
             body: md.trim().to_string(),
             last_activity: last,
         })
@@ -371,8 +389,10 @@ impl Store {
                 search_text: body::search_text(&[
                     &detail.meta.description,
                     &detail.body,
+                    detail.human.as_deref().unwrap_or(""),
                     &detail.meta.tags.join(" "),
                 ]),
+                human: detail.human.clone(),
                 last_activity: detail.last_activity.clone(),
                 meta: detail.meta,
             });
@@ -416,9 +436,14 @@ impl Store {
         } else {
             meta.created.clone()
         };
+        // A note's body is free-form markdown, so the human area is split off here rather
+        // than left in it: the note screens render `body` whole, and printing the human
+        // area inside the agent area would show it twice.
+        let (body_text, human) = crate::human::split(md);
         Ok(NoteDetail {
             meta,
-            body: md.trim().to_string(),
+            body: body_text.trim().to_string(),
+            human,
             last_activity: last,
         })
     }

@@ -718,8 +718,17 @@ try {
   await page.locator('.ctx-item[data-item="copy-title"]').click();
   await page.waitForSelector(".toast", { state: "visible", timeout: 5_000 });
   const feedTitle = await page.evaluate(() => navigator.clipboard.readText());
+  // A feed ref is one of three shapes — BUG-NNNN, WORK-NNNN, or a note's kebab name (the
+  // feed links all three). Asking worklogs/ for a note name got a 400 and compared the
+  // clipboard against `undefined`, which failed the moment an agent's newest event was a
+  // note rewrite. The shape decides the collection, exactly as the app's own router does.
+  const collection = feedId.startsWith("BUG-")
+    ? "bugs"
+    : feedId.startsWith("WORK-")
+      ? "worklogs"
+      : "notes";
   const realTitle = await (
-    await fetch(`${ORIGIN}/project-api/projects/${slug}/${feedId.startsWith("BUG") ? "bugs" : "worklogs"}/${feedId}`)
+    await fetch(`${ORIGIN}/project-api/projects/${slug}/${collection}/${feedId}`)
   ).json();
   check(
     "Copy title on a feed row copies the record's title, which the feed line does not print",
@@ -1263,6 +1272,8 @@ try {
     execFileSync(bin, [
       "--dir", locOf(slug), "--json", "work", "start", "--agent", "check-keys",
       "--title", "Work that is on the screen when the folder leaves the disk",
+      "--human",
+      "A made-up task, written so a window sitting on this project's list has a row to lose when the folder is deleted.",
       "--body",
       "## What\nA work log, written by scripts/check-keys.mjs.\n\n" +
         "## Why\nSo a window parked on this project's work list has a row to lose.\n\n" +
@@ -1272,6 +1283,8 @@ try {
       "--dir", locOf(slug), "--json", "bug", "create", "--agent", "check-keys",
       "--severity", "high",
       "--title", "A bug that is on the board when the folder leaves the disk",
+      "--human",
+      "A made-up problem, filed so a bug board somebody is looking at has a row to lose when the folder is deleted.",
       "--body", "Filed by scripts/check-keys.mjs so a parked bug board has a row to lose.",
     ], { env: scratchEnv });
     execFileSync(bin, [
@@ -1280,6 +1293,8 @@ try {
       "--name", "note-on-screen-when-the-folder-leaves",
       "--title", "A note that is on the screen when the folder leaves the disk",
       "--description", "Left by scripts/check-keys.mjs so a parked notes screen has a row to lose.",
+      "--human",
+      "A made-up note, left so a notes screen somebody is looking at has a row to lose when the folder is deleted.",
       "--body", "A parked note page keeps this copy under the bar that says the note is gone.",
     ], { env: scratchEnv });
   };

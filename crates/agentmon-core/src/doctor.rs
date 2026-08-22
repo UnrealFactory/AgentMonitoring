@@ -70,6 +70,11 @@ pub struct Report {
     #[serde(default)]
     pub notes: usize,
     pub events: usize,
+    /// Ids (and note names) of records with no `## For humans` section — the complete
+    /// list, so a coverage sweep can be scripted off `agentmon doctor --json` instead of
+    /// re-reading every file. The text report prints a count and the first few.
+    #[serde(default)]
+    pub missing_human: Vec<String>,
     pub problems: Vec<Problem>,
 }
 
@@ -108,6 +113,7 @@ const EVENT_TYPES: &[&str] = &[
     "note_created",
     "note_updated",
     "note_removed",
+    "human_updated",
 ];
 
 pub fn check(store: &Store) -> Result<Report> {
@@ -163,12 +169,16 @@ pub fn check(store: &Store) -> Result<Report> {
         },
     }
 
+    // Records that speak to only one audience. Collected across all three kinds and
+    // reported once, because the fix is one sweep and 60 identical warnings are noise.
+    let mut gaps = HumanGaps::default();
+
     // -- worklogs -----------------------------------------------------------
     let mut n_work = 0usize;
     let mut work_ids: HashMap<String, String> = HashMap::new();
     for path in md_files(&dir.join("worklogs")) {
         n_work += 1;
-        check_worklog(&path, &mut problems, &mut work_ids);
+        check_worklog(&path, &mut problems, &mut work_ids, &mut gaps);
     }
 
     // -- bugs ---------------------------------------------------------------
@@ -176,14 +186,63 @@ pub fn check(store: &Store) -> Result<Report> {
     let mut bug_ids: HashMap<String, String> = HashMap::new();
     for path in md_files(&dir.join("bugs")) {
         n_bugs += 1;
-        check_bug(&path, &mut problems, &mut bug_ids);
+        check_bug(&path, &mut problems, &mut bug_ids, &mut gaps);
     }
 
     // -- notes --------------------------------------------------------------
     let mut n_notes = 0usize;
     for path in md_files(&dir.join("notes")) {
         n_notes += 1;
-        check_note(&path, &mut problems);
+        check_note(&path, &mut problems, &mut gaps);
+    }
+
+    // -- the human area -----------------------------------------------------
+    //
+    // A warning, never an error: a record written before the human area existed is not
+    // corrupt, it is incomplete, and the app renders it with a designed empty state. It
+    // becomes actionable the next time an agent touches that record, which is exactly
+    // when the write path refuses to leave it without one.
+    const SHOWN: usize = 10;
+    let listing = |ids: &[String]| {
+        let listed = ids.iter().take(SHOWN).cloned().collect::<Vec<_>>().join(", ");
+        let rest = ids.len().saturating_sub(SHOWN);
+        if rest > 0 {
+            format!("{listed}, and {rest} more (agentmon doctor --json lists them all)")
+        } else {
+            listed
+        }
+    };
+    if !gaps.missing.is_empty() {
+        problems.push(Problem::warn(
+            "human area",
+            format!(
+                "{} record(s) have no `## For humans` section, so the app can show them to \
+                 agents only: {}",
+                gaps.missing.len(),
+                listing(&gaps.missing)
+            ),
+            "write one for each: `agentmon work update <id> --agent <you> --human \"…\"`, \
+             `agentmon bug comment <id> --agent <you> --human \"…\"`, `agentmon note update \
+             <name> --agent <you> --human \"…\"` — `agentmon human-style` prints the contract",
+        ));
+    }
+    // The subset that `--human` alone cannot fix: an unclosed ``` in the agent area would
+    // swallow the section, so the write path refuses it. Said separately because the fix is
+    // a different action by a different hand — this is the one human-area repair that is
+    // not a command an agent can run.
+    if !gaps.unclosed_fence.is_empty() {
+        problems.push(Problem::warn(
+            "human area",
+            format!(
+                "{} of those record(s) leave a code fence (```) open in the agent area, so a \
+                 `## For humans` section written after it would read back as code: {}",
+                gaps.unclosed_fence.len(),
+                listing(&gaps.unclosed_fence)
+            ),
+            "close the fence in the record file itself (every ``` needs a partner), then \
+             write the human area with the usual `--human`; agentmon refuses the write until \
+             then rather than saving a record whose human area is invisible",
+        ));
     }
 
     // -- events.jsonl -------------------------------------------------------
@@ -283,11 +342,34 @@ pub fn check(store: &Store) -> Result<Report> {
         bugs: n_bugs,
         notes: n_notes,
         events: n_events,
+        missing_human: gaps.missing,
         problems,
     })
 }
 
-fn check_note(path: &Path, problems: &mut Vec<Problem>) {
+/// What the human-area sweep found: which records have no `## For humans` section, and
+/// which of those cannot gain one until a person edits the file.
+#[derive(Default)]
+struct HumanGaps {
+    /// Records with no human area — the `missingHuman` list in `--json`.
+    missing: Vec<String>,
+    /// The subset whose agent area leaves a code fence open. The write path refuses to add
+    /// a human area to these (it would be swallowed by the fence and read back as code),
+    /// so the repair is a person closing the fence, not another `--human`.
+    unclosed_fence: Vec<String>,
+}
+
+/// Note the record if its body carries no human area (SPEC.md, "The human area").
+fn note_human(md: &str, id: &str, gaps: &mut HumanGaps) {
+    if crate::human::split(md).1.is_none() {
+        gaps.missing.push(id.to_string());
+        if crate::human::has_open_fence(md) {
+            gaps.unclosed_fence.push(id.to_string());
+        }
+    }
+}
+
+fn check_note(path: &Path, problems: &mut Vec<Problem>, gaps: &mut HumanGaps) {
     let file = file_name(path);
     let scope = file.clone();
     let raw = match fs::read_to_string(path) {
@@ -301,7 +383,7 @@ fn check_note(path: &Path, problems: &mut Vec<Problem>) {
             return;
         }
     };
-    let Some((fm, _md)) = body::split_frontmatter(&raw) else {
+    let Some((fm, md)) = body::split_frontmatter(&raw) else {
         problems.push(Problem::error(
             scope,
             "has no YAML frontmatter (the file must start with a `---` fenced block)",
@@ -322,6 +404,8 @@ fn check_note(path: &Path, problems: &mut Vec<Problem>) {
             return;
         }
     };
+
+    note_human(md, &meta.name, gaps);
 
     let stem = file.trim_end_matches(".md");
     if meta.name != stem {
@@ -389,7 +473,12 @@ fn check_note(path: &Path, problems: &mut Vec<Problem>) {
     }
 }
 
-fn check_worklog(path: &Path, problems: &mut Vec<Problem>, seen: &mut HashMap<String, String>) {
+fn check_worklog(
+    path: &Path,
+    problems: &mut Vec<Problem>,
+    seen: &mut HashMap<String, String>,
+    gaps: &mut HumanGaps,
+) {
     let file = file_name(path);
     let scope = file.clone();
     let raw = match fs::read_to_string(path) {
@@ -425,6 +514,9 @@ fn check_worklog(path: &Path, problems: &mut Vec<Problem>, seen: &mut HashMap<St
         }
     };
 
+    note_human(md, &meta.id, gaps);
+    let (md, _) = crate::human::split(md);
+
     let stem = file.trim_end_matches(".md");
     if meta.id != stem {
         problems.push(Problem::error(
@@ -442,7 +534,7 @@ fn check_worklog(path: &Path, problems: &mut Vec<Problem>, seen: &mut HashMap<St
         ));
     }
 
-    let mut secs = body::sections(md);
+    let mut secs = body::sections(&md);
     for name in ["What", "Why", "How"] {
         let mut probe = secs.clone();
         match body::take_section(&mut probe, name) {
@@ -535,7 +627,12 @@ fn check_worklog(path: &Path, problems: &mut Vec<Problem>, seen: &mut HashMap<St
     }
 }
 
-fn check_bug(path: &Path, problems: &mut Vec<Problem>, seen: &mut HashMap<String, String>) {
+fn check_bug(
+    path: &Path,
+    problems: &mut Vec<Problem>,
+    seen: &mut HashMap<String, String>,
+    gaps: &mut HumanGaps,
+) {
     let file = file_name(path);
     let scope = file.clone();
     let raw = match fs::read_to_string(path) {
@@ -571,6 +668,9 @@ fn check_bug(path: &Path, problems: &mut Vec<Problem>, seen: &mut HashMap<String
         }
     };
 
+    note_human(md, &meta.id, gaps);
+    let (md, _) = crate::human::split(md);
+
     let stem = file.trim_end_matches(".md");
     if meta.id != stem {
         problems.push(Problem::error(
@@ -587,7 +687,7 @@ fn check_bug(path: &Path, problems: &mut Vec<Problem>, seen: &mut HashMap<String
         ));
     }
 
-    let mut secs = body::sections(md);
+    let mut secs = body::sections(&md);
     match body::take_section(&mut secs, "Report") {
         Some(s) if !s.trim().is_empty() => {}
         _ => problems.push(Problem::error(

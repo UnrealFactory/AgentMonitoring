@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELI5 — The app updates behind a pretty curtain</title>
+<style>
+  :root{
+    --bg:#0f1117; --card:#1a1d27; --card2:#232735; --ink:#eef1f8; --dim:#9aa3b5;
+    --good:#4ade80; --bad:#f87171; --accent:#818cf8; --amber:#fbbf24;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{
+    font-family:"Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+    background:var(--bg); color:var(--ink);
+    display:flex; flex-direction:column; align-items:center;
+    padding:48px 20px 80px; gap:56px;
+  }
+  h1{font-size:2.4rem; text-align:center; line-height:1.25}
+  h1 small{display:block; font-size:1.05rem; color:var(--dim); font-weight:400; margin-top:10px}
+  h2{font-size:1.5rem; margin-bottom:22px; text-align:center}
+  section{width:100%; max-width:980px}
+  .row{display:flex; gap:28px; justify-content:center; flex-wrap:wrap}
+  .panel{
+    background:var(--card); border-radius:20px; padding:28px;
+    flex:1 1 380px; max-width:460px; text-align:center;
+    border:2px solid transparent;
+  }
+  .panel.bad{border-color:rgba(248,113,113,.45)}
+  .panel.good{border-color:rgba(74,222,128,.45)}
+  .tag{display:inline-block; font-weight:700; font-size:.95rem; padding:6px 18px;
+       border-radius:999px; margin-bottom:18px}
+  .tag.bad{background:rgba(248,113,113,.15); color:var(--bad)}
+  .tag.good{background:rgba(74,222,128,.15); color:var(--good)}
+  .caption{color:var(--dim); font-size:1.05rem; margin-top:16px; line-height:1.5}
+  .big{font-size:3rem; line-height:1}
+  svg{width:100%; height:auto; display:block}
+  .steps{display:flex; gap:24px; flex-wrap:wrap; justify-content:center}
+  .step{
+    background:var(--card); border-radius:20px; padding:26px 22px;
+    flex:1 1 260px; max-width:300px; text-align:center;
+  }
+  .step .big{margin-bottom:14px}
+  .step b{display:block; font-size:1.15rem; margin-bottom:8px}
+  .step span{color:var(--dim); line-height:1.5}
+  .arrowline{display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:2rem}
+  footer{color:var(--dim); font-size:.9rem; text-align:center}
+  @keyframes slide{0%{transform:translateX(-60px)}100%{transform:translateX(150px)}}
+  .barclip rect.mover{animation:slide 1.4s ease-in-out infinite alternate}
+</style>
+</head>
+<body>
+
+<h1>🎭 The app now updates behind a pretty curtain
+  <small>WORK-0055 · what changed when the app installs a new version of itself</small>
+</h1>
+
+<!-- BEFORE / AFTER -->
+<section>
+  <div class="row">
+
+    <div class="panel bad">
+      <span class="tag bad">BEFORE 😨</span>
+      <!-- scary black console -->
+      <svg viewBox="0 0 400 260" role="img" aria-label="A scary black console window full of scrolling text">
+        <rect x="10" y="10" width="380" height="240" rx="10" fill="#000"/>
+        <rect x="10" y="10" width="380" height="34" rx="10" fill="#2b2b2b"/>
+        <circle cx="366" cy="27" r="7" fill="#f87171"/>
+        <text x="26" y="33" fill="#bbb" font-size="15" font-family="Consolas,monospace">C:\WINDOWS\...\powershell.exe</text>
+        <g font-family="Consolas,monospace" font-size="13" fill="#3bd23b">
+          <text x="26" y="72">PS&gt; Invoke-WebRequest https://...</text>
+          <text x="26" y="94">Downloading........ 43%</text>
+          <text x="26" y="116">VERBOSE: extracting payload_x64.msi</text>
+          <text x="26" y="138">WARNING: 0x80070005 retrying...</text>
+          <text x="26" y="160">Stop-Process -Name agentmonitoring</text>
+          <text x="26" y="182">Installing............</text>
+          <text x="26" y="204">█▓▒░ ??? ░▒▓█</text>
+          <text x="26" y="230" fill="#3bd23b">_</text>
+        </g>
+      </svg>
+      <p class="caption">A scary robot window popped up,<br>scrolling mystery text. 😵</p>
+    </div>
+
+    <div class="panel good">
+      <span class="tag good">NOW 😌</span>
+      <!-- pretty splash card -->
+      <svg viewBox="0 0 400 260" role="img" aria-label="A clean splash card saying updating, with a moving progress bar">
+        <rect x="10" y="10" width="380" height="240" rx="16" fill="#1e2230"/>
+        <rect x="60" y="55" width="280" height="150" rx="14" fill="#2a2f42" stroke="#818cf8" stroke-width="2"/>
+        <text x="200" y="105" text-anchor="middle" fill="#eef1f8" font-size="19" font-weight="600">새 버전으로 업데이트하는 중</text>
+        <text x="200" y="130" text-anchor="middle" fill="#9aa3b5" font-size="13">Updating to the new version…</text>
+        <g class="barclip">
+          <clipPath id="bar"><rect x="100" y="155" width="200" height="12" rx="6"/></clipPath>
+          <rect x="100" y="155" width="200" height="12" rx="6" fill="#3a405a"/>
+          <rect class="mover" x="100" y="155" width="90" height="12" rx="6" fill="#818cf8" clip-path="url(#bar)"/>
+        </g>
+      </svg>
+      <p class="caption">One calm little card:<br>“Updating to the new version” + a moving bar. ✨</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section>
+  <h2>How it works — like a magic trick 🪄</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="big">🕵️</div>
+      <b>1. Invisible helper</b>
+      <span>A hidden worker does the real job: download, install, restart the app. You never see it.</span>
+    </div>
+    <div class="step">
+      <div class="big">🎭</div>
+      <b>2. Pretty curtain</b>
+      <span>The splash card is just decoration — it covers the gap while the old app closes and the new one opens.</span>
+    </div>
+    <div class="step">
+      <div class="big">🎉</div>
+      <b>3. Ta-da!</b>
+      <span>The moment the fresh new app appears, the curtain sees it and quietly removes itself.</span>
+    </div>
+  </div>
+</section>
+
+<!-- SAFETY -->
+<section>
+  <h2>And if something goes wrong? 🛟</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="big">💬</div>
+      <b>Friendly popup</b>
+      <span>The curtain drops and a normal message box tells you the update failed — no cryptic console.</span>
+    </div>
+    <div class="step">
+      <div class="big">📓</div>
+      <b>Secret diary</b>
+      <span>The hidden worker writes everything it did to a log file, so a human can check later.</span>
+    </div>
+    <div class="step">
+      <div class="big">⏲️</div>
+      <b>3-minute rule</b>
+      <span>The card can never get stuck forever — after 3 minutes it gives up and closes itself.</span>
+    </div>
+  </div>
+</section>
+
+<div class="arrowline">😨 → 🎭 → 😌</div>
+
+<footer>WORK-0055 · fable-updater-splash · shipped 2026-08-21 · all 12 tests green ✅</footer>
+
+</body>
+</html>

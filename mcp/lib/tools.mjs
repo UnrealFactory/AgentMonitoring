@@ -32,6 +32,12 @@ const strList = { type: "array", items: { type: "string" } };
 const dir = { type: "string", description: "Another project folder; overrides the server default." };
 const agent = { type: "string", description: "Override the server default." };
 const when = { type: "string", description: "UTC ISO8601 of when it really happened." };
+/**
+ * The human area (SPEC.md). One clause per tool and nothing more: the rules live in
+ * `agentmon human-style`, and the refusal for a missing one prints their short form — so
+ * the schema carries the requirement and the error carries the contract.
+ */
+const human = { type: "string", description: "Retold for a non-programmer." };
 
 export const TOOLS = [
   {
@@ -46,6 +52,7 @@ export const TOOLS = [
         why: { type: "string", description: "The problem, the constraint, the option rejected." },
         how: { type: "string", description: "The approach and the tricky parts." },
         outcome: { type: "string", description: "What shipped and how it was verified; closes the log." },
+        human: { ...human, description: "Required; retold for a non-programmer." },
         files: { ...strList, description: "Paths touched; recorded when the log closes." },
         tags: strList,
         refs: { ...strList, description: "Related WORK/BUG ids." },
@@ -54,7 +61,7 @@ export const TOOLS = [
         dir,
         agent,
       },
-      required: ["title", "what", "why", "how"],
+      required: ["title", "what", "why", "how", "human"],
     },
   },
   {
@@ -68,6 +75,7 @@ export const TOOLS = [
         note: { type: "string", description: "Progress note, or a correction on a closed log." },
         outcome: { type: "string", description: "What shipped and how it was verified; closes the log." },
         abandon: { type: "string", description: "Why the work stopped for good; marks it abandoned." },
+        human: { ...human, description: "Retold for a non-programmer; alone, it rewrites that." },
         files: { ...strList, description: "Paths touched." },
         at: when,
         dir,
@@ -85,13 +93,14 @@ export const TOOLS = [
         title: { type: "string", description: "One specific line." },
         severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
         report: { type: "string", description: "Repro steps, expected, actual." },
+        human: { ...human, description: "Required; retold for a non-programmer." },
         labels: strList,
         refs: { ...strList, description: "Related WORK/BUG ids." },
         created_at: when,
         dir,
         agent,
       },
-      required: ["title", "severity", "report"],
+      required: ["title", "severity", "report", "human"],
     },
   },
   {
@@ -104,6 +113,7 @@ export const TOOLS = [
         id: { type: "string", description: "BUG-NNNN." },
         comment: { type: "string", description: "Root cause or a finding, for the thread." },
         resolution: { type: "string", description: "The fix, why it works, how it was verified." },
+        human: { ...human, description: "Retold for a non-programmer; required to resolve." },
         claim: { type: "boolean", description: "Take the bug; refuses if another agent holds it." },
         at: when,
         dir,
@@ -129,6 +139,7 @@ export const TOOLS = [
         },
         description: { type: "string", description: "One line a scanner reads instead of the body." },
         body: { type: "string", description: "Free-form markdown; write replaces it." },
+        human: { ...human, description: "Retold for a non-programmer; required with body." },
         tags: strList,
         refs: { ...strList, description: "Related WORK/BUG ids or note names." },
         query: { type: "string", description: "list: match name, title, description, body." },
@@ -168,13 +179,19 @@ export const TOOLS = [
       type: "object",
       // No dir: feedback about the app is machine-level and belongs to no project.
       properties: {
+        // `type` and `title` are required for a new item and meaningless for a rewrite, so
+        // the schema cannot require them and the handler asks for them instead. Without
+        // this, an agent with only MCP had no way to give a legacy item a human area at
+        // all, which SPEC.md ("the MCP tools mirror all of this") says it must.
+        id: { type: "string", description: "FB id: rewrite that item's human area instead of filing." },
         type: { type: "string", enum: ["bug", "idea"] },
         title: { type: "string", description: "One specific line." },
         body: { type: "string", description: "Repro for a bug; the situation behind an idea." },
+        human: { ...human, description: "Required; retold for a non-programmer." },
         at: when,
         agent,
       },
-      required: ["type", "title"],
+      required: ["human"],
     },
   },
 ];
@@ -187,6 +204,30 @@ const fail = (s) => ({ content: [{ type: "text", text: s }], isError: true });
 function need(args, names, tool) {
   const missing = names.filter((n) => !String(args?.[n] ?? "").trim());
   if (missing.length) throw new ToolError(`${tool} needs ${missing.join(", ")}.`);
+}
+
+/**
+ * The human area exactly as the client sent it — a string, or nothing.
+ *
+ * Never `String(args.human)`: an object stringifies to `[object Object]` and a
+ * one-element array to its element, both long enough to satisfy every check the CLI
+ * makes. A client whose schema slipped would then file a record whose plain-language
+ * half is punctuation, and it reaches the app that way. Absent is *not* rejected here —
+ * whether this verb requires one is the CLI's rule, and the CLI's refusal is the one
+ * that carries the style contract.
+ */
+function humanText(args, tool) {
+  const value = args?.human;
+  if (value == null) return "";
+  if (typeof value !== "string") {
+    const got = Array.isArray(value) ? "an array" : `a ${typeof value}`;
+    throw new ToolError(
+      `${tool}: human must be a string, and this call sent ${got}. It is the record's ` +
+        "plain-language retelling for a reader who was not there and does not program — " +
+        "one piece of text. Run `agentmon human-style` for the contract."
+    );
+  }
+  return value.trim();
 }
 
 function ident(args, ctx, wantAgent = true) {
@@ -214,8 +255,12 @@ async function logWork(args, ctx) {
   const { at, who } = ident(args, ctx);
   need(args, ["title", "what", "why", "how"], "log_work");
   const body = `## What\n\n${args.what.trim()}\n\n## Why\n\n${args.why.trim()}\n\n## How\n\n${args.how.trim()}\n`;
+  // One human field for a call that may open *and* close the record: closing replaces the
+  // human area, and the same retelling is the honest thing to put back.
+  const human = humanText(args, "log_work");
 
   const startArgs = ["work", "start", "--agent", who, "--title", oneLine(args.title), "--body-file", "-", "--json"];
+  flag(startArgs, "--human", human);
   flag(startArgs, "--tags", listArg(args.tags));
   flag(startArgs, "--refs", listArg(args.refs));
   flag(startArgs, "--started-at", args.started_at);
@@ -239,6 +284,7 @@ async function logWork(args, ctx) {
   }
 
   const doneArgs = ["work", "done", id, "--agent", who, "--outcome-file", "-", "--json"];
+  flag(doneArgs, "--human", human);
   flag(doneArgs, "--files", listArg(args.files));
   flag(doneArgs, "--finished-at", args.finished_at);
   const done = await runCli(at, doneArgs, String(args.outcome).trim());
@@ -262,7 +308,11 @@ async function updateWork(args, ctx) {
   const note = String(args.note ?? "").trim();
   const outcome = String(args.outcome ?? "").trim();
   const abandon = String(args.abandon ?? "").trim();
-  if (!note && !outcome && !abandon) throw new ToolError("update_work needs one of note, outcome or abandon.");
+  // `human` alone is a legal call: it rewrites the record's human area and touches nothing
+  // else (SPEC.md's refresh), which is how a record written before it existed gains one.
+  const human = humanText(args, "update_work");
+  if (!note && !outcome && !abandon && !human)
+    throw new ToolError("update_work needs one of note, outcome, abandon or human.");
   if (abandon && (note || outcome)) throw new ToolError("abandon cannot be combined with note or outcome.");
 
   const done = [];
@@ -272,12 +322,15 @@ async function updateWork(args, ctx) {
   // CLI reports back — appending to a closed log must not read as "in_progress" (FB-0001).
   let state = "in_progress";
 
-  if (note) {
-    const a = ["work", "update", id, "--agent", who, "--message-file", "-", "--json"];
+  if (note || (human && !outcome && !abandon)) {
+    // A note with no message is the refresh: `work update --human` alone.
+    const a = ["work", "update", id, "--agent", who, "--json"];
+    if (note) a.push("--message-file", "-");
+    flag(a, "--human", human);
     flag(a, "--at", args.at);
-    const r = await runCli(at, a, note);
+    const r = await runCli(at, a, note || undefined);
     if (!r.ok) return fail(cliErrorText(r));
-    done.push("note added");
+    done.push(note ? "note added" : "human area rewritten");
     file = r.json?.path ?? file;
     stamp = r.json?.event?.ts ?? stamp;
     state = r.json?.record?.status ?? state;
@@ -285,6 +338,7 @@ async function updateWork(args, ctx) {
 
   if (outcome) {
     const a = ["work", "done", id, "--agent", who, "--outcome-file", "-", "--json"];
+    flag(a, "--human", human);
     flag(a, "--files", listArg(args.files));
     flag(a, "--finished-at", args.at);
     const r = await runCli(at, a, outcome);
@@ -297,6 +351,7 @@ async function updateWork(args, ctx) {
 
   if (abandon) {
     const a = ["work", "abandon", id, "--agent", who, "--reason-file", "-", "--json"];
+    flag(a, "--human", human);
     flag(a, "--at", args.at);
     const r = await runCli(at, a, abandon);
     if (!r.ok) return fail(cliErrorText(r));
@@ -318,6 +373,7 @@ async function reportBug(args, ctx) {
     "--severity", String(args.severity).trim(),
     "--body-file", "-", "--json",
   ];
+  flag(a, "--human", humanText(args, "report_bug"));
   flag(a, "--labels", listArg(args.labels));
   flag(a, "--refs", listArg(args.refs));
   flag(a, "--created-at", args.created_at);
@@ -337,16 +393,23 @@ async function resolveBug(args, ctx) {
   const id = String(args.id).trim().toUpperCase();
   const comment = String(args.comment ?? "").trim();
   const resolution = String(args.resolution ?? "").trim();
+  // Passed to every step that runs, not only the last: each step is a mutation, and a bug
+  // filed before the human area existed has to gain one on the first of them.
+  const human = humanText(args, "resolve_bug");
   const wantClaim = args.claim === undefined ? Boolean(resolution) : Boolean(args.claim);
-  if (!wantClaim && !comment && !resolution)
-    throw new ToolError("resolve_bug needs one of claim, comment or resolution.");
+  if (!wantClaim && !comment && !resolution && !human)
+    throw new ToolError("resolve_bug needs one of claim, comment, resolution or human.");
 
   const done = [];
   let file = "";
   let stamp = "";
+  // The status the CLI reports back, not the one this call assumed: a refresh alone leaves
+  // the bug wherever it was, and a header that guessed "in_progress" would be a lie.
+  let state = "";
 
   if (wantClaim) {
     const a = ["bug", "claim", id, "--agent", who, "--json"];
+    flag(a, "--human", human);
     flag(a, "--at", args.at);
     const r = await runCli(at, a);
     if (!r.ok) {
@@ -362,17 +425,22 @@ async function resolveBug(args, ctx) {
     file = r.json?.path ?? file;
   }
 
-  if (comment) {
-    const a = ["bug", "comment", id, "--agent", who, "--message-file", "-", "--json"];
+  if (comment || (human && !wantClaim && !resolution)) {
+    // A comment with no message is the refresh: `bug comment --human` alone.
+    const a = ["bug", "comment", id, "--agent", who, "--json"];
+    if (comment) a.push("--message-file", "-");
+    flag(a, "--human", human);
     flag(a, "--at", args.at);
-    const r = await runCli(at, a, comment);
+    const r = await runCli(at, a, comment || undefined);
     if (!r.ok) return fail(stepFailure(done, cliErrorText(r)));
-    done.push("commented");
+    done.push(comment ? "commented" : "human area rewritten");
     file = r.json?.path ?? file;
+    state = r.json?.record?.status ?? state;
   }
 
   if (resolution) {
     const a = ["bug", "resolve", id, "--agent", who, "--resolution-file", "-", "--json"];
+    flag(a, "--human", human);
     flag(a, "--at", args.at);
     const r = await runCli(at, a, resolution);
     if (!r.ok) return fail(stepFailure(done, cliErrorText(r)));
@@ -381,8 +449,8 @@ async function resolveBug(args, ctx) {
     stamp = r.json?.record?.resolved ?? r.json?.event?.ts ?? "";
   }
 
-  const state = resolution ? "resolved" : "in_progress";
-  return lines(`${id} ${state} · ${done.join(", ")} · ${who}`, stamp ? `resolved ${stamp}` : null, file);
+  const shown = resolution ? "resolved" : state || "in_progress";
+  return lines(`${id} ${shown} · ${done.join(", ")} · ${who}`, stamp ? `resolved ${stamp}` : null, file);
 }
 
 async function status(args, ctx) {
@@ -474,6 +542,8 @@ async function note(args, ctx) {
       flag(a, "--title", args.title ? oneLine(args.title) : null);
       flag(a, "--type", args.type);
       flag(a, "--description", args.description ? oneLine(args.description) : null);
+      // Alone, this is the refresh: it rewrites the human area and nothing else.
+      flag(a, "--human", humanText(args, "note(action=write)"));
       flag(a, "--tags", listArg(args.tags));
       flag(a, "--refs", listArg(args.refs));
       flag(a, "--at", args.at);
@@ -495,6 +565,11 @@ async function note(args, ctx) {
       );
     }
 
+    // `human` is deliberately not in this list. Every other refusal of a missing human
+    // area in this server comes back from the CLI, which prints the compact style rules
+    // and the way to the full contract; a local `needs human.` here would be the one
+    // rejection in the whole surface that teaches nothing. Leave it off and `note add`
+    // refuses it — the message an agent needs, not the message we could afford to write.
     need(
       args,
       ["title", "type", "description", "body"],
@@ -507,6 +582,7 @@ async function note(args, ctx) {
       "--description", oneLine(args.description),
       "--body-file", "-", "--json",
     ];
+    flag(a, "--human", humanText(args, "note(action=write)"));
     flag(a, "--name", name || null);
     flag(a, "--tags", listArg(args.tags));
     flag(a, "--refs", listArg(args.refs));
@@ -537,6 +613,20 @@ async function note(args, ctx) {
 
 async function appFeedback(args, ctx) {
   const { at, who } = ident(args, ctx);
+
+  // With an id this is `app-feedback update`: the one verb that can give an item filed
+  // before the human area existed a good one. The board has no other update and no event
+  // feed, so nothing else about the item moves.
+  const id = String(args?.id ?? "").trim();
+  if (id) {
+    const u = ["app-feedback", "update", id, "--agent", who, "--json"];
+    flag(u, "--human", humanText(args, "app_feedback"));
+    flag(u, "--at", args.at);
+    const r = await runCli(at, u);
+    if (!r.ok) return fail(cliErrorText(r));
+    return lines(`${r.json?.id} retold · ${who}`, "only the human area changed");
+  }
+
   need(args, ["type", "title"], "app_feedback");
   const a = [
     "app-feedback", "add", "--agent", who,
@@ -544,6 +634,7 @@ async function appFeedback(args, ctx) {
     "--title", oneLine(args.title),
     "--json",
   ];
+  flag(a, "--human", humanText(args, "app_feedback"));
   flag(a, "--body", String(args.body ?? "").trim() || null);
   flag(a, "--at", args.at);
   const r = await runCli(at, a);

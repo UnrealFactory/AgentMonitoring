@@ -36,6 +36,16 @@ pub enum CoreError {
     #[error("{}", .0)]
     InvalidBody(Box<BodyRejection>),
 
+    /// The human area is missing, blank, or an agent body tried to write the reserved
+    /// `## For humans` heading itself.
+    ///
+    /// Its own variant because this rejection *is* the delivery mechanism of the style
+    /// contract: the message names the flag to pass, prints the compact rules extracted
+    /// from docs/HUMAN_STYLE.md, and says where the full contract is. Exit code 2 (usage),
+    /// per SPEC.md "The human area".
+    #[error("{}", .0)]
+    MissingHuman(Box<HumanRejection>),
+
     /// A mutation that the record's current state does not allow (already done, already
     /// claimed by someone else, project already exists, ...).
     #[error("{what} (fix: {fix})")]
@@ -64,6 +74,39 @@ pub struct BodyRejection {
     pub template: String,
     /// A complete, copy-pasteable command that would have worked.
     pub example: String,
+}
+
+/// Why a human area was refused, and everything the next attempt needs.
+///
+/// The three parts are fixed by SPEC.md: what is wrong, the exact flag that fixes it, then
+/// the compact style rules and one line pointing at the full contract. Nothing else — an
+/// agent reading this is mid-write, and the cost of the lesson is paid only here.
+#[derive(Debug)]
+pub struct HumanRejection {
+    /// One line: what is wrong, e.g. "no human area supplied for this work log".
+    pub problem: String,
+    /// The exact flags to pass, e.g. `--human "<text>"` or `--human-file <path>`.
+    pub fix: String,
+    /// The compact rules, extracted from docs/HUMAN_STYLE.md at build time — or empty for
+    /// a refusal about the record's *shape* (an unclosed code fence), where the style
+    /// contract is not the lesson and printing it would bury the one-line fix.
+    pub rules: &'static str,
+}
+
+impl std::fmt::Display for HumanRejection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{}", self.problem)?;
+        write!(f, "\nFix: {}", self.fix)?;
+        if !self.rules.trim().is_empty() {
+            write!(f, "\n\nHow to write it:\n\n{}", indent(self.rules, "    "))?;
+        }
+        // The rules usually end by naming the command themselves; saying it twice in one
+        // rejection reads as noise, and this line must never be the thing an agent skips.
+        if !self.rules.contains("agentmon human-style") {
+            write!(f, "\n\nThe full contract: agentmon human-style")?;
+        }
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for BodyRejection {
@@ -121,6 +164,10 @@ impl CoreError {
             CoreError::RecordNotFound { .. } => "record_not_found",
             CoreError::Malformed { .. } => "invalid_project",
             CoreError::InvalidId { .. } | CoreError::InvalidValue { .. } => "invalid_argument",
+            // A missing human area is a usage mistake (exit 2), so it wears the kind the
+            // app and `npm run check:errors` already map for exit 2 — a rejection that
+            // never reaches a screen must not invent a class nothing classifies.
+            CoreError::MissingHuman(_) => "invalid_argument",
             CoreError::InvalidBody(_) => "invalid_body",
             CoreError::Conflict { .. } => "conflict",
             CoreError::Locked { .. } => "locked",

@@ -900,6 +900,9 @@ export const ko: Dict = {
   /* 제거이지 삭제가 아니다 — 삭제는 프로젝트 폴더가 디스크에서 사라질 때 하나뿐인 말이고,
      메모 제거는 그 흔적(이 이벤트)이 기록에 남는 정리다(이 파일 머리말). */
   "verb.note_removed": "메모 제거",
+  /* 사람용 영역만 다시 쓴 변경. Updates/Comments에는 아무것도 남기지 않으므로
+     이 피드 줄이 그 사실을 보여 주는 유일한 자리다. */
+  "verb.human_updated": "사람용 설명 수정",
   "verb.project_created": "프로젝트 생성",
   "verb.project_updated": "프로젝트 수정",
 

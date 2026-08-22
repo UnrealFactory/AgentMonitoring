@@ -1,0 +1,9 @@
+The explainer is ready: `C:\Users\User\AppData\Local\Temp\eli5-work\run-WORK-0055\eli5-WORK-0055.html` (opening it in the browser needed an approval you hadn't granted, so just double-click the file to view it).
+
+It's a single-page, picture-first HTML artifact that tells the WORK-0055 story in the simplest possible terms:
+
+- **Before 😨 / Now 😌** — two big side-by-side drawings: the old scary black PowerShell console full of scrolling text, versus the new calm splash card showing "새 버전으로 업데이트하는 중" with an animated indeterminate progress bar.
+- **How it works 🪄** — three steps: an *invisible helper* (the hidden CREATE_NO_WINDOW worker) does the real download/install/relaunch, a *pretty curtain* (the WPF splash, pure decoration) covers the gap, and *ta-da* — the curtain notices the fresh app process and closes itself.
+- **Safety nets 🛟** — if the update fails you get a friendly message box instead of console errors, the worker keeps a "secret diary" (the log in `%TEMP%`), and a 3-minute failsafe guarantees the card can never get stuck on screen.
+
+Everything is self-contained (inline SVG + CSS, no external assets), so it renders offline in any browser.

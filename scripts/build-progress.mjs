@@ -17,6 +17,12 @@ const PIECES = {
   P4: "Dashboard",
   P5: "Shell/projects/portability",
   P6: "Final gate",
+  D1: "Dual: human-area style contract",
+  D2: "Dual: storage + validation + CLI/MCP",
+  D3: "Dual: Agent/Human toggle UI",
+  D4: "Dual: live-data backfill",
+  D5: "Dual: instruction diet",
+  D6: "Dual: final gate",
 };
 
 const rounds = existsSync(roundsPath)

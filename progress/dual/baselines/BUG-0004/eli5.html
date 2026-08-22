@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELI5 — BUG-0004: The screen that rewrote the notebook</title>
+<style>
+  :root {
+    --ink: #1a1d23;
+    --paper: #faf8f4;
+    --card: #ffffff;
+    --red: #d64545;
+    --red-soft: #fdeaea;
+    --green: #2e8b57;
+    --green-soft: #e8f5ee;
+    --blue: #3b6fd4;
+    --blue-soft: #e9f0fc;
+    --amber: #c98a1b;
+    --amber-soft: #fdf3e0;
+    --muted: #6b7280;
+    --line: #e5e1d8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.5;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+  .kicker {
+    font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; margin-bottom: 12px;
+  }
+  h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.15; margin-bottom: 12px; }
+  .subtitle { font-size: clamp(17px, 2.5vw, 21px); color: var(--muted); max-width: 640px; }
+  section { margin-top: 72px; }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--ink); color: var(--paper);
+    font-size: 20px; font-weight: 800; margin-bottom: 14px;
+  }
+  h2 { font-size: clamp(24px, 3.5vw, 32px); margin-bottom: 8px; }
+  .lede { font-size: clamp(16px, 2.2vw, 19px); color: var(--muted); max-width: 620px; margin-bottom: 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  figure svg { display: block; width: 100%; height: auto; }
+  .caption { margin-top: 14px; font-size: 15px; color: var(--muted); text-align: center; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+  .tag {
+    display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 4px 12px; border-radius: 999px; margin-bottom: 12px;
+  }
+  .tag.good { background: var(--green-soft); color: var(--green); }
+  .tag.bad { background: var(--red-soft); color: var(--red); }
+  .tag.fix { background: var(--blue-soft); color: var(--blue); }
+  .bigline {
+    font-size: clamp(18px, 2.8vw, 24px); font-weight: 700; text-align: center;
+    max-width: 640px; margin: 28px auto 0;
+  }
+  .bigline em { font-style: normal; color: var(--red); }
+  .bigline strong { color: var(--green); }
+  .footer-note {
+    margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--line);
+    font-size: 14px; color: var(--muted); text-align: center;
+  }
+  .mono { font-family: "Cascadia Code", Consolas, Menlo, monospace; }
+</style>
+</head>
+<body>
+<main>
+
+  <header>
+    <div class="kicker">ELI5 · BUG-0004 · fixed ✓</div>
+    <h1>The screen that rewrote the notebook</h1>
+    <p class="subtitle">One page in the app has one job: show a saved note <b>exactly</b> as written. It didn’t. It erased a number and made up a new one.</p>
+  </header>
+
+  <!-- STEP 1: What the notebook says -->
+  <section>
+    <div class="step-num">1</div>
+    <h2>What the notebook really says</h2>
+    <p class="lede">A long sentence wraps onto a second line. The second line happens to start with “<b>200.</b>” — the end of the sentence, not a list.</p>
+    <div class="card">
+      <span class="tag good">Saved note · the truth</span>
+      <figure>
+        <svg viewBox="0 0 800 260" role="img" aria-label="A notebook page with one wrapped sentence">
+          <!-- notebook page -->
+          <rect x="60" y="20" width="680" height="220" rx="14" fill="#fffdf7" stroke="#d8d2c4" stroke-width="2"/>
+          <line x1="120" y1="20" x2="120" y2="240" stroke="#f2c4c4" stroke-width="2"/>
+          <!-- ruled lines -->
+          <line x1="80" y1="90" x2="720" y2="90" stroke="#e9e4d8" stroke-width="1.5"/>
+          <line x1="80" y1="150" x2="720" y2="150" stroke="#e9e4d8" stroke-width="1.5"/>
+          <line x1="80" y1="210" x2="720" y2="210" stroke="#e9e4d8" stroke-width="1.5"/>
+          <!-- sentence line 1 -->
+          <text x="140" y="80" font-size="22" font-family="Consolas, monospace" fill="#1a1d23">…returns 503 for three hours, then</text>
+          <!-- sentence line 2 with 200 highlighted -->
+          <rect x="134" y="112" width="64" height="34" rx="8" fill="#e8f5ee" stroke="#2e8b57" stroke-width="2"/>
+          <text x="140" y="138" font-size="22" font-weight="bold" font-family="Consolas, monospace" fill="#2e8b57">200.</text>
+          <text x="210" y="138" font-size="22" font-family="Consolas, monospace" fill="#1a1d23">Without jitter, all deliveries…</text>
+          <!-- wrap arrow -->
+          <path d="M 700 72 C 760 90, 760 120, 700 132" fill="none" stroke="#3b6fd4" stroke-width="3" stroke-dasharray="6 5"/>
+          <path d="M 712 126 L 698 133 L 708 141 Z" fill="#3b6fd4"/>
+          <text x="758" y="108" font-size="15" fill="#3b6fd4" font-weight="bold" text-anchor="end"></text>
+          <!-- label -->
+          <text x="400" y="245" font-size="15" fill="#6b7280" text-anchor="middle" font-style="italic">one sentence, wrapped onto two lines</text>
+        </svg>
+      </figure>
+      <p class="caption">“…returns 503 for three hours, then <b>200</b>.” — the 200 is just the next word of the sentence.</p>
+    </div>
+  </section>
+
+  <!-- STEP 2: What the screen showed -->
+  <section>
+    <div class="step-num">2</div>
+    <h2>What the screen showed instead</h2>
+    <p class="lede">The app saw a line starting with “number + dot” and thought: <i>“Ooh, a numbered list!”</i> So it threw the 200 away and stamped its own “1.” there.</p>
+    <div class="two-col">
+      <div class="card">
+        <span class="tag good">Notebook</span>
+        <figure>
+          <svg viewBox="0 0 380 190" role="img" aria-label="The saved text, correct">
+            <rect x="10" y="10" width="360" height="170" rx="12" fill="#fffdf7" stroke="#d8d2c4" stroke-width="2"/>
+            <text x="30" y="60" font-size="18" font-family="Consolas, monospace" fill="#1a1d23">…for three hours, then</text>
+            <rect x="24" y="82" width="52" height="30" rx="7" fill="#e8f5ee" stroke="#2e8b57" stroke-width="2"/>
+            <text x="30" y="104" font-size="18" font-weight="bold" font-family="Consolas, monospace" fill="#2e8b57">200.</text>
+            <text x="86" y="104" font-size="18" font-family="Consolas, monospace" fill="#1a1d23">Without jitter…</text>
+            <text x="190" y="160" font-size="26" text-anchor="middle">😌</text>
+          </svg>
+        </figure>
+        <p class="caption">The truth: 200 is in the sentence.</p>
+      </div>
+      <div class="card">
+        <span class="tag bad">Screen</span>
+        <figure>
+          <svg viewBox="0 0 380 190" role="img" aria-label="The rendered text, wrong: 200 replaced by list item 1">
+            <rect x="10" y="10" width="360" height="170" rx="12" fill="#fff" stroke="#d64545" stroke-width="2.5"/>
+            <text x="30" y="60" font-size="18" font-family="Consolas, monospace" fill="#1a1d23">…for three hours, then</text>
+            <!-- the fabricated 1. -->
+            <rect x="44" y="82" width="40" height="30" rx="7" fill="#fdeaea" stroke="#d64545" stroke-width="2"/>
+            <text x="52" y="104" font-size="18" font-weight="bold" font-family="Consolas, monospace" fill="#d64545">1.</text>
+            <text x="94" y="104" font-size="18" font-family="Consolas, monospace" fill="#1a1d23">Without jitter…</text>
+            <!-- crossed-out 200 floating away -->
+            <text x="290" y="150" font-size="20" font-weight="bold" font-family="Consolas, monospace" fill="#b9b3a6" text-decoration="line-through">200</text>
+            <text x="322" y="150" font-size="20">🗑️</text>
+            <text x="190" y="160" font-size="26" text-anchor="middle">😨</text>
+          </svg>
+        </figure>
+        <p class="caption">The lie: 200 is gone, and a “1.” that nobody wrote appears.</p>
+      </div>
+    </div>
+    <p class="bigline">The page <em>deleted a real number</em> and <em>printed a fake one</em> — and looked perfectly normal doing it.</p>
+  </section>
+
+  <!-- STEP 3: Why it happened -->
+  <section>
+    <div class="step-num">3</div>
+    <h2>Why? The app used one dumb rule</h2>
+    <p class="lede">Its whole test for “is this a list?” was: <b>does the line start with a number and a dot?</b> That catches real lists… and also any wrapped sentence that lands on a number.</p>
+    <div class="card">
+      <figure>
+        <svg viewBox="0 0 800 300" role="img" aria-label="A robot applies the same stamp to a real list and to a wrapped sentence">
+          <!-- robot -->
+          <g>
+            <rect x="330" y="30" width="140" height="100" rx="16" fill="#e9f0fc" stroke="#3b6fd4" stroke-width="3"/>
+            <circle cx="375" cy="70" r="10" fill="#3b6fd4"/>
+            <circle cx="425" cy="70" r="10" fill="#3b6fd4"/>
+            <rect x="370" y="98" width="60" height="10" rx="5" fill="#3b6fd4"/>
+            <line x1="400" y1="30" x2="400" y2="12" stroke="#3b6fd4" stroke-width="3"/>
+            <circle cx="400" cy="10" r="6" fill="#3b6fd4"/>
+            <text x="400" y="160" font-size="16" font-weight="bold" fill="#3b6fd4" text-anchor="middle">“Number + dot? LIST!”</text>
+          </g>
+          <!-- left: real list -->
+          <g>
+            <rect x="40" y="190" width="320" height="90" rx="12" fill="#e8f5ee" stroke="#2e8b57" stroke-width="2"/>
+            <text x="60" y="225" font-size="17" font-family="Consolas, monospace" fill="#1a1d23">1. buy milk</text>
+            <text x="60" y="255" font-size="17" font-family="Consolas, monospace" fill="#1a1d23">2. buy eggs</text>
+            <text x="345" y="215" font-size="26" text-anchor="end">✅</text>
+            <text x="200" y="298" font-size="14" fill="#2e8b57" text-anchor="middle" font-weight="bold">a real list — fine</text>
+          </g>
+          <!-- right: wrapped sentence -->
+          <g>
+            <rect x="440" y="190" width="320" height="90" rx="12" fill="#fdeaea" stroke="#d64545" stroke-width="2"/>
+            <text x="460" y="225" font-size="17" font-family="Consolas, monospace" fill="#1a1d23">…hours, then</text>
+            <text x="460" y="255" font-size="17" font-family="Consolas, monospace" fill="#1a1d23">200. Without jitter…</text>
+            <text x="745" y="215" font-size="26" text-anchor="end">💥</text>
+            <text x="600" y="298" font-size="14" fill="#d64545" text-anchor="middle" font-weight="bold">a wrapped sentence — mangled</text>
+          </g>
+          <!-- arrows from robot -->
+          <path d="M 350 140 C 280 160, 240 170, 210 188" fill="none" stroke="#6b7280" stroke-width="2.5"/>
+          <path d="M 216 178 L 206 190 L 220 192 Z" fill="#6b7280"/>
+          <path d="M 450 140 C 520 160, 560 170, 590 188" fill="none" stroke="#6b7280" stroke-width="2.5"/>
+          <path d="M 580 192 L 594 190 L 584 178 Z" fill="#6b7280"/>
+        </svg>
+      </figure>
+      <p class="caption">Same stamp for both. It can’t tell a shopping list from the middle of a sentence.</p>
+    </div>
+  </section>
+
+  <!-- STEP 4: The fix -->
+  <section>
+    <div class="step-num">4</div>
+    <h2>The fix: a smarter rule</h2>
+    <p class="lede">The Markdown standard already solved this exact problem: mid-paragraph, only a line starting with “<b>1.</b>” may begin a numbered list. “200.”? “503.”? “2026.”? Those stay in the sentence.</p>
+    <div class="card">
+      <span class="tag fix">New rule</span>
+      <figure>
+        <svg viewBox="0 0 800 240" role="img" aria-label="A bouncer lets 1. start a list mid-paragraph but sends 200. back into the sentence">
+          <!-- gate -->
+          <rect x="360" y="30" width="80" height="180" rx="10" fill="#e9f0fc" stroke="#3b6fd4" stroke-width="3"/>
+          <text x="400" y="70" font-size="15" font-weight="bold" fill="#3b6fd4" text-anchor="middle">LIST</text>
+          <text x="400" y="90" font-size="15" font-weight="bold" fill="#3b6fd4" text-anchor="middle">GATE</text>
+          <text x="400" y="135" font-size="30" text-anchor="middle">🚧</text>
+          <text x="400" y="190" font-size="13" fill="#3b6fd4" text-anchor="middle">mid-sentence?</text>
+          <text x="400" y="206" font-size="13" fill="#3b6fd4" text-anchor="middle">only “1.” enters</text>
+          <!-- 1. passes -->
+          <rect x="60" y="55" width="70" height="42" rx="9" fill="#e8f5ee" stroke="#2e8b57" stroke-width="2.5"/>
+          <text x="95" y="84" font-size="22" font-weight="bold" font-family="Consolas, monospace" fill="#2e8b57" text-anchor="middle">1.</text>
+          <path d="M 140 76 L 350 76" stroke="#2e8b57" stroke-width="3"/>
+          <path d="M 340 68 L 356 76 L 340 84 Z" fill="#2e8b57"/>
+          <text x="245" y="62" font-size="15" font-weight="bold" fill="#2e8b57" text-anchor="middle">may start a list ✅</text>
+          <!-- 200. bounced -->
+          <rect x="60" y="150" width="90" height="42" rx="9" fill="#fdeaea" stroke="#d64545" stroke-width="2.5"/>
+          <text x="105" y="179" font-size="22" font-weight="bold" font-family="Consolas, monospace" fill="#d64545" text-anchor="middle">200.</text>
+          <path d="M 160 171 L 300 171" stroke="#d64545" stroke-width="3"/>
+          <path d="M 300 171 C 330 171, 330 150, 300 150 L 240 150" stroke="#d64545" stroke-width="3" fill="none"/>
+          <path d="M 250 142 L 234 150 L 250 158 Z" fill="#d64545"/>
+          <text x="245" y="215" font-size="15" font-weight="bold" fill="#d64545" text-anchor="middle">stays in the sentence ↩</text>
+          <!-- result -->
+          <rect x="490" y="80" width="270" height="80" rx="12" fill="#fffdf7" stroke="#d8d2c4" stroke-width="2"/>
+          <text x="625" y="112" font-size="16" font-family="Consolas, monospace" fill="#1a1d23" text-anchor="middle">…hours, then 200.</text>
+          <text x="625" y="140" font-size="16" font-family="Consolas, monospace" fill="#1a1d23" text-anchor="middle">Without jitter… 😌</text>
+        </svg>
+      </figure>
+      <p class="caption">Plus two bonus repairs: a list the author starts at “3.” now really shows “3.”, and <span class="mono">**bold with `code` inside**</span> finally renders both.</p>
+    </div>
+  </section>
+
+  <!-- STEP 5: Proof -->
+  <section>
+    <div class="step-num">5</div>
+    <h2>How we know it’s really fixed</h2>
+    <p class="lede">A new test reads <b>every saved note</b> and fails if even one word of the original goes missing from the screen. 55 checks, all green — and when the old bug was put back on purpose, the test caught it instantly.</p>
+    <div class="card">
+      <figure>
+        <svg viewBox="0 0 800 200" role="img" aria-label="A checker compares notebook and screen word by word">
+          <!-- notebook -->
+          <rect x="50" y="45" width="180" height="110" rx="12" fill="#fffdf7" stroke="#d8d2c4" stroke-width="2"/>
+          <text x="140" y="90" font-size="16" text-anchor="middle" fill="#1a1d23">📓 all 30</text>
+          <text x="140" y="115" font-size="16" text-anchor="middle" fill="#1a1d23">saved notes</text>
+          <!-- checker -->
+          <circle cx="400" cy="100" r="52" fill="#e9f0fc" stroke="#3b6fd4" stroke-width="3"/>
+          <text x="400" y="93" font-size="15" font-weight="bold" fill="#3b6fd4" text-anchor="middle">word-by-word</text>
+          <text x="400" y="113" font-size="15" font-weight="bold" fill="#3b6fd4" text-anchor="middle">checker 🔍</text>
+          <!-- screen -->
+          <rect x="570" y="45" width="180" height="110" rx="12" fill="#fff" stroke="#d8d2c4" stroke-width="2"/>
+          <text x="660" y="90" font-size="16" text-anchor="middle" fill="#1a1d23">🖥️ what the</text>
+          <text x="660" y="115" font-size="16" text-anchor="middle" fill="#1a1d23">screen shows</text>
+          <!-- arrows -->
+          <path d="M 240 100 L 338 100" stroke="#6b7280" stroke-width="2.5"/>
+          <path d="M 330 92 L 346 100 L 330 108 Z" fill="#6b7280"/>
+          <path d="M 462 100 L 560 100" stroke="#6b7280" stroke-width="2.5"/>
+          <path d="M 552 92 L 568 100 L 552 108 Z" fill="#6b7280"/>
+          <!-- verdict -->
+          <text x="400" y="185" font-size="18" font-weight="bold" fill="#2e8b57" text-anchor="middle">✅ 55 / 55 checks pass — no word left behind</text>
+        </svg>
+      </figure>
+    </div>
+    <p class="bigline">Now the screen shows <strong>exactly what the notebook says</strong>. Nothing erased, nothing invented.</p>
+  </section>
+
+  <p class="footer-note">
+    BUG-0004 · severity high · resolved 2026-08-18 · fix in <span class="mono">src/lib/markdown-parse.ts</span> ·
+    the one screen whose job is faithfulness is faithful again.
+  </p>
+
+</main>
+</body>
+</html>

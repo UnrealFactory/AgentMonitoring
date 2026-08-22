@@ -209,6 +209,7 @@ try {
   const allBugs = await (await fetch(`${ORIGIN}/project-api/projects/${slug}/bugs`)).json();
   const allWork = await (await fetch(`${ORIGIN}/project-api/projects/${slug}/worklogs`)).json();
   const allNotes = await (await fetch(`${ORIGIN}/project-api/projects/${slug}/notes`)).json();
+  const noteAgent = (n) => n?.updatedBy ?? n?.agent;
   const firstNoteTag = allNotes.flatMap((n) => n.tags)[0];
   const real = [
     { screen: "bugs", key: "label", value: allBugs.flatMap((b) => b.labels)[0], control: T("filter.byLabel") },
@@ -224,12 +225,16 @@ try {
        `rows < baseline` is not checkable here: every live note is by one agent, so the
        honest claim is "choosing the value gives exactly the records that carry it" —
        which is stronger than the strict-subset check, not a relaxation of it. */
+    /* The notes screen slices on the agent its rows *show* — `updatedBy ?? agent`, the one
+       whose words are on the page (src/pages/NotesPage.tsx). Reading `agent` here instead
+       asked for a value the dropdown does not offer as soon as any note has been rewritten
+       by a second agent, and counted rows the app never claimed. Mirror the screen. */
     {
       screen: "notes",
       key: "agent",
-      value: allNotes[0]?.agent,
+      value: noteAgent(allNotes[0]),
       control: T("filter.byAgent"),
-      rows: allNotes.filter((n) => n.agent === allNotes[0]?.agent).length,
+      rows: allNotes.filter((n) => noteAgent(n) === noteAgent(allNotes[0])).length,
     },
     {
       screen: "notes",

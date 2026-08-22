@@ -1,0 +1,8 @@
+The ELI5 explainer is ready: `C:\Users\User\AppData\Local\Temp\eli5-work\run-WORK-0061\eli5-WORK-0061.html` — open it in any browser (auto-opening it needed an approval I didn't get, so it's just saved).
+
+The page explains WORK-0061 in four big-picture panels with almost no text:
+
+1. **What changed** — a before/after note: `[[cookie-recipes]]` used to render as dead gray text; now it becomes a clickable chip that opens that note.
+2. **The brackets are the magic word** — three rules side by side: double brackets → chip, the same word *without* brackets → stays plain text (on purpose, so ordinary words don't accidentally become links), and task IDs like `WORK-0004` → always chips, as before.
+3. **Why bother** — people and agents were already writing `[[links]]` in real notes; the app just ignored them until now.
+4. **Proof it works** — 443 automatic tests, 106 checks against a real project, and a live screenshot, including tricky cases like brackets inside code and Korean particles glued to the closing brackets.

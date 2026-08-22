@@ -843,6 +843,9 @@ export const en = {
      and knowledge that went wrong is taken down — with this line left behind saying who
      and when. Work logs and bugs never take this verb; nothing removes them. */
   "verb.note_removed": "removed the note",
+  /* A mutation that changed only the human area — the record retold for whoever is not an
+     agent. It writes nothing into Updates or Comments, so the feed is where it shows. */
+  "verb.human_updated": "rewrote the plain-language telling of",
   "verb.project_created": "created this project",
   "verb.project_updated": "updated the project",
 

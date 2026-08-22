@@ -1,0 +1,11 @@
+I created the explainer: `eli5-BUG-0004.html` in the working directory — a single scrollable page with five big illustrated panels and minimal text. Open it in any browser to view.
+
+The story it tells, in kid-simple terms:
+
+1. **What the notebook says** — a long sentence wraps onto a second line that happens to start with "200." (the end of the sentence, shown highlighted on a drawn notebook page).
+2. **What the screen showed** — a side-by-side before/after: the real "200" gets tossed in a trash can and a fabricated red "1." appears in its place.
+3. **Why** — a robot with one dumb rule ("number + dot? LIST!") stamps a real shopping list and a wrapped sentence exactly the same way.
+4. **The fix** — a "list gate" bouncer: mid-sentence, only "1." may start a numbered list; "200." gets bounced back into the sentence (the actual CommonMark rule). A caption notes the two bonus repairs: lists keep the author's start number, and bold-with-code-inside now renders both.
+5. **Proof** — a word-by-word checker reads all 30 saved notes and compares them to the screen; 55/55 checks pass, and the test was verified to catch the bug when it was deliberately reintroduced.
+
+Everything is inline SVG, so the file is self-contained with no external assets.

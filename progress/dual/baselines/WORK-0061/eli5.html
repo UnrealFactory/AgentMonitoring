@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELI5 — Double Brackets Become Buttons</title>
+<style>
+  :root {
+    --ink: #1a2233;
+    --muted: #6b7487;
+    --paper: #f6f7fb;
+    --card: #ffffff;
+    --chip-bg: #e8f0fe;
+    --chip-ink: #1a56db;
+    --chip-border: #b6cdfa;
+    --good: #0e9f6e;
+    --bad: #c81e1e;
+    --dead: #9aa1af;
+    --accent: #6d4df6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.4;
+    padding: 48px 20px 80px;
+  }
+  main { max-width: 860px; margin: 0 auto; display: grid; gap: 40px; }
+
+  h1 { font-size: clamp(30px, 5.5vw, 48px); text-align: center; letter-spacing: -0.02em; }
+  .sub { text-align: center; font-size: clamp(17px, 2.5vw, 22px); color: var(--muted); }
+
+  section {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 36px 32px;
+    box-shadow: 0 2px 14px rgba(26,34,51,.07);
+  }
+  section h2 {
+    font-size: clamp(21px, 3vw, 28px);
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .big { font-size: clamp(40px, 8vw, 72px); text-align: center; line-height: 1.1; }
+
+  /* fake note paper */
+  .note {
+    background: #fbfbfd;
+    border: 2px solid #e4e7ee;
+    border-radius: 16px;
+    padding: 22px 24px;
+    font-size: clamp(18px, 2.8vw, 24px);
+  }
+  .note .line { margin: 10px 0; }
+
+  /* dead text */
+  .deadtext {
+    color: var(--dead);
+    font-family: Consolas, monospace;
+    text-decoration: line-through transparent; /* no strike, just gray */
+  }
+
+  /* the chip */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--chip-bg);
+    color: var(--chip-ink);
+    border: 2px solid var(--chip-border);
+    border-radius: 999px;
+    padding: 4px 16px;
+    font-weight: 600;
+    font-size: 0.95em;
+    white-space: nowrap;
+    box-shadow: 0 2px 5px rgba(26,86,219,.15);
+  }
+  .chip::before { content: "📄"; font-size: 0.9em; }
+  .chip.work::before { content: "🔧"; }
+
+  .row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: stretch;
+  }
+  @media (max-width: 640px) { .row2 { grid-template-columns: 1fr; } }
+
+  .tag {
+    display: block;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .tag.before { color: var(--bad); }
+  .tag.after { color: var(--good); }
+
+  .verdict { text-align: center; font-size: 40px; margin-top: 14px; }
+
+  .arrow-big { text-align: center; font-size: 52px; color: var(--accent); }
+
+  /* rule cards */
+  .rules { display: grid; gap: 18px; }
+  .rule {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 60px minmax(0,1fr);
+    align-items: center;
+    gap: 12px;
+    background: #fbfbfd;
+    border: 2px solid #e4e7ee;
+    border-radius: 16px;
+    padding: 18px 20px;
+    font-size: clamp(17px, 2.6vw, 22px);
+  }
+  .rule .in { font-family: Consolas, monospace; overflow-wrap: anywhere; }
+  .rule .mid { text-align: center; font-size: 30px; color: var(--accent); }
+  .rule .out { text-align: left; }
+  .plain { color: var(--ink); }
+  .why { color: var(--muted); font-size: 15px; margin-top: 6px; }
+
+  .checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 18px;
+  }
+  .check {
+    background: #f2fbf7;
+    border: 2px solid #bfe8d6;
+    border-radius: 16px;
+    padding: 22px 16px;
+    text-align: center;
+  }
+  .check .n { font-size: clamp(30px, 5vw, 44px); font-weight: 800; color: var(--good); }
+  .check .l { color: var(--muted); font-size: 16px; margin-top: 6px; }
+
+  footer { text-align: center; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>🔗 Double brackets become buttons</h1>
+  <p class="sub">One tiny change: <code style="font-family:Consolas,monospace">[[note-name]]</code> in your notes is now a clickable chip.</p>
+
+  <!-- BEFORE / AFTER -->
+  <section>
+    <h2>What changed</h2>
+    <div class="row2">
+      <div>
+        <span class="tag before">Before</span>
+        <div class="note">
+          <div class="line">See <span class="deadtext">[[cookie-recipes]]</span> for details.</div>
+        </div>
+        <div class="verdict">😕 dead gray text</div>
+      </div>
+      <div>
+        <span class="tag after">After</span>
+        <div class="note">
+          <div class="line">See <span class="chip">cookie-recipes</span> for details.</div>
+        </div>
+        <div class="verdict">🎉 a button that opens the note</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY BRACKETS -->
+  <section>
+    <h2>The brackets are the magic word</h2>
+    <div class="rules">
+      <div class="rule">
+        <div class="in">[[cookie-recipes]]</div>
+        <div class="mid">→</div>
+        <div class="out"><span class="chip">cookie-recipes</span>
+          <div class="why">Brackets say “this IS a link.” ✅</div>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="in plain">cookie-recipes</div>
+        <div class="mid">→</div>
+        <div class="out"><span class="plain">cookie-recipes</span>
+          <div class="why">No brackets? Stays plain text — maybe you just meant words. 🤷</div>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="in">WORK-0004</div>
+        <div class="mid">→</div>
+        <div class="out"><span class="chip work">WORK-0004</span>
+          <div class="why">Task IDs always linked — they look special enough on their own.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE STORY -->
+  <section>
+    <h2>Why bother?</h2>
+    <p class="big">✍️ → 🔍 → 🖱️</p>
+    <p style="text-align:center; font-size: clamp(17px, 2.6vw, 21px); margin-top: 18px; color: var(--muted);">
+      People (and AI agents) were <b style="color:var(--ink)">already writing</b> <span style="font-family:Consolas,monospace">[[links]]</span> in real notes.
+      The app just ignored them. Now it plays along.
+    </p>
+  </section>
+
+  <!-- PROOF -->
+  <section>
+    <h2>Did they check it works?</h2>
+    <div class="checks">
+      <div class="check"><div class="n">443</div><div class="l">automatic tests passed ✅</div></div>
+      <div class="check"><div class="n">106</div><div class="l">checks on a real project ✅</div></div>
+      <div class="check"><div class="n">📸</div><div class="l">screenshot of it working live ✅</div></div>
+    </div>
+    <p style="text-align:center; color:var(--muted); margin-top:20px; font-size:16px;">
+      Tricky cases too: brackets inside code, links with brackets in them,<br>
+      even Korean words glued to the brackets — nothing gets broken or lost.
+    </p>
+  </section>
+
+  <footer>ELI5 of WORK-0061 · “Prose [[note-name]] wiki-links render as record chips”</footer>
+
+</main>
+</body>
+</html>

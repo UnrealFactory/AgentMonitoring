@@ -981,6 +981,7 @@ const VERB_KEY: Record<EventType, `verb.${EventType}`> = {
   note_created: "verb.note_created",
   note_updated: "verb.note_updated",
   note_removed: "verb.note_removed",
+  human_updated: "verb.human_updated",
   project_created: "verb.project_created",
   project_updated: "verb.project_updated",
 };

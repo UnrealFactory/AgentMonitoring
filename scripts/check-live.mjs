@@ -244,6 +244,8 @@ try {
       "check-live",
       "--title",
       "Liveness gate: a record to post an update on",
+      "--human",
+      "This task exists only so the liveness check has something open to write to while a page is watching it.",
       "--body",
       "## What\n\nA work log the liveness gate posts an update to.\n\n## Why\n\nThe gate needs a record that is open before the browser opens it.\n\n## How\n\nStarted by scripts/check-live.mjs against a copy of the vault.\n",
     ]);
@@ -337,6 +339,8 @@ try {
     `Liveness gate marker ${marker}`,
     "--severity",
     "low",
+    "--human",
+    "A pretend problem, filed by the liveness check to see whether a dashboard someone is already looking at notices a new one on its own.",
     "--body",
     `## Report\n\nFiled by scripts/check-live.mjs to prove an open dashboard notices a new record. Marker ${marker}.\n`,
   ]);
@@ -348,6 +352,8 @@ try {
     "check-live",
     "--message",
     `Liveness gate note ${marker}: this sentence was written while the record page was already open.`,
+    "--human",
+    "A line added to the open task while somebody was looking at it, to see whether the page brings itself up to date.",
   ]);
 
   const expectedBugs = String(Number(factsBefore.openBugs) + 1);
@@ -469,6 +475,8 @@ try {
     "check-live",
     "--message",
     `Second liveness note ${second}.`,
+    "--human",
+    "A second line added the same way, so a page that caught the first one cannot have been luck.",
   ]);
   const again = await waitFor(
     detail,
@@ -491,6 +499,8 @@ try {
     "check-live",
     "--description",
     `Liveness gate: this description was rewritten while the page was open (${noteMarker}).`,
+    "--human",
+    "The one-line summary of this note was rewritten while its page was open, to see whether the reader's screen follows along.",
   ]);
   const noteResult = await waitFor(
     notePage,
@@ -533,6 +543,8 @@ try {
     "Filed by scripts/check-live.mjs to prove a note event reaches an open feed.",
     "--body",
     "The open dashboard's activity feed should gain a note_created event whose ref is this note's kebab name and whose row links to the note's own page.",
+    "--human",
+    "A note written while the dashboard was open, to check that it turns up by itself in the list of what happened recently.",
   ]);
   const feedNote = await waitFor(
     dash,
