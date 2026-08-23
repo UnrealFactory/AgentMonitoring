@@ -76,6 +76,26 @@ Three kinds survive the first read:
 - **Five sentences end a paragraph.** Nobody gives up on a long text; they give up on a long sentence and a nine-sentence block. The mechanism beat is where they are
   lost: give it the shortest sentences, the analogy — *like a key cut to open every door in the building, including the one you meant to lock* — and a second lead-in
   rather than one wall.
+- **A picture earns its place or it is decoration.** Reach for one only where the fact is a shape — two things side by side, a path that forks and rejoins, a name that
+  matched more than it meant — and words would spend more than about three sentences drawing it. One picture per fact: a second, where the first already carries it,
+  goes the way a second name goes. Draw it as an SVG under the project's `assets/` folder and put it in with `![what it shows](assets/thing.svg)`, inside the beat it
+  serves and after that beat's words; the alt text is the caption a reader is left holding, so say what the picture shows. The page it lands on is dark, so bake this
+  app's own colours in — `#121317` behind the whole picture, the shade of the well it drops into, `#16171a` for the panels you set on that, rounded, hairlines at
+  `rgba(255,255,255,.09)`, `#e8e9eb` for what must be read and `#8a8f98` for what holds it up, `#5e6ad2` where you point and `#a5adf0` when the thing you point at is a
+  word, `#4cb782` for what is right and `#f2994a` for what went wrong. The type is the one thing you cannot bake in. The page hangs your file in an `<img>`, and an
+  image is a document of its own, so it never reaches the Inter this app carries: ask for that by name and the reader gets a face that is not it, sitting under prose
+  that is. Ask instead for `system-ui, "Segoe UI", sans-serif` and the picture is set in the reader's own interface face — a different width on every machine, so keep
+  the words inside a picture few and leave a fifth of every label's box empty. Size those labels for the narrowest column a record page ever gives a picture, and that
+  column is not the one in the smallest window: it is 525 across in the window this app opens in and wider in a maximized one, but it falls to 395 in two bands in the
+  middle — just above 1100, where a record's rail comes back beside a page still too narrow to hold it, and just above 820, where the sidebar does the same. On both
+  sides of each band it is 525 again, so a wide shot and a narrow one can both look right while a reader at half a screen gets the picture at its smallest; 1152 and
+  1104 sit in the upper band, and this app is already photographed and measured at both. A 700-wide drawing arrives there a shade over half size, and 11 is the bottom
+  of this app's type scale. So draw on a grid you can halve — 700 across, nothing under 22, and no taller than half again that, past which the page's own 560-pixel
+  ceiling shrinks it below what the halving promised — then halve every number you wrote: that is the narrow band's scale, rounded the safe way, and what comes back
+  must still be 11. Settle it by arithmetic and never by how the file looks opened on its own, because nothing downstream catches this: the words in a picture sit
+  inside an `<img>`, and the check that hunts this app for cut text reads the page, not the picture. Then read the picture back the way you read the draft: every box,
+  every arrow and every label is a sentence of this record, and a picture may not introduce a name the words have not cashed out. A plain tree is a fenced ASCII
+  tree instead, and never a drawing.
 - **Count the names as well as the words, and count the names first.** Words: 150 thin, 300 for most, 450 at the densest — a well-built 450 reads easier than a squeezed 300.
   Names: about one per fifty words, one per fact — nine or ten in a long piece, two or three in a short one. That second number is a budget the facts spend, not a target
   to undershoot: every fact's actor is named, and an anonymous actor — "a script", "one of the three" — is a missing name, not a simpler sentence, because a nameless
