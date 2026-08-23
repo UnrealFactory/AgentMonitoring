@@ -801,7 +801,8 @@ enum NoteCmd {
         /// One line, shown in every list. Be specific.
         #[arg(long)]
         title: String,
-        /// memory | handoff | decision | reference
+        /// essential | memory | handoff | decision | reference — `essential` is required
+        /// session-start reading and every list surfaces it first.
         #[arg(long = "type", value_name = "TYPE")]
         note_type: String,
         /// One line: what this note knows and when to read it. Lists show it.
@@ -847,7 +848,8 @@ enum NoteCmd {
         /// New one-line title.
         #[arg(long)]
         title: Option<String>,
-        /// memory | handoff | decision | reference
+        /// essential | memory | handoff | decision | reference — `essential` is required
+        /// session-start reading and every list surfaces it first.
         #[arg(long = "type", value_name = "TYPE")]
         note_type: Option<String>,
         /// New one-line description.
@@ -894,7 +896,8 @@ enum NoteCmd {
         The list is the index: scan the descriptions, then `agentmon note view <name>` \
         the ones that matter for your task.")]
     List {
-        /// memory | handoff | decision | reference
+        /// essential | memory | handoff | decision | reference — `essential` is required
+        /// session-start reading and every list surfaces it first.
         #[arg(long = "type", value_name = "TYPE")]
         note_type: Option<String>,
         /// Only notes carrying this tag.
@@ -1480,7 +1483,9 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                     example: "agentmon work abandon WORK-0003 \\\n  \
                               --agent cli-builder \\\n  --reason \"Superseded by WORK-0009, \
                               which solves the same problem in agentmon-core; nothing from \
-                              this branch was kept.\"",
+                              this branch was kept.\" \\\n  \
+                              --human \"We stopped this one and did the same job in another \
+                              place; nothing here was kept.\"",
                 },
             )?;
             let human = human.required()?;
@@ -2137,7 +2142,9 @@ fn run_note(cli: &Cli, cmd: &NoteCmd) -> CliResult {
                 println!(
                     "  agentmon note add --agent <you> --type memory --title \"<fact>\" \\"
                 );
-                println!("    --description \"<one line>\" --body \"...\"");
+                println!(
+                    "    --description \"<one line>\" --body \"...\" --human \"<retelling>\""
+                );
                 return Ok(());
             }
             let essentials = notes
@@ -2348,6 +2355,19 @@ fn cmd_doctor(cli: &Cli, strict: bool, json: bool) -> CliResult {
             "{} — {} work log(s), {} bug(s), {} note(s), {} event(s)",
             report.path, report.worklogs, report.bugs, report.notes, report.events
         );
+        // Printed before the problem list and outside it: these are not problems — a note
+        // in the project accounts for each one — but the feed is still claiming a progress
+        // note the record does not hold, and that fact does not stop being true because
+        // someone wrote it down. Every run says so, so nobody rediscovers it as news.
+        if !report.reconciled_events.is_empty() {
+            println!(
+                "\n{} event(s) announce a progress note their record does not hold, each \
+                 accounted for in the {} note: {}",
+                report.reconciled_events.len(),
+                doctor::RECONCILE_NOTE,
+                report.reconciled_events.join(", ")
+            );
+        }
         if report.problems.is_empty() {
             println!("\nNo problems found.");
         } else {
@@ -2544,7 +2564,8 @@ fn finished_at_on_start(finished: &str) -> CliError {
              it is closed.\n\nRecord work that is already over in two steps:\n\n  \
              agentmon work start ... --started-at <when it began>       # prints the new id\n  \
              agentmon work done <ID> ... --finished-at {finished} \\\n    --outcome \"<what \
-             shipped, how it was verified>\""
+             shipped, how it was verified>\" \\\n    --human \"<the same, for a reader who \
+             does not program>\""
         ),
     }
 }

@@ -219,6 +219,19 @@ or bugs, anywhere.
 
 Every CLI mutation also appends one line to `events.jsonl`. Timestamps: UTC ISO8601.
 IDs are immutable and per-project. Parsing must be lenient on unknown keys (forward compat).
+
+**An event's claim must match the record it names.** `work_updated` is the strict case:
+the writer emits it in the same call that appends the `### <ts>` entry under `## Updates`,
+so an event with no entry at that exact timestamp cannot have come from agentmon, and the
+dashboard is announcing a progress note a reader cannot open. `doctor` pairs every
+`work_updated` against its record and reports an unpaired one as an **error** — checking an
+event's shape (valid JSON, known type, resolvable `ref`, parseable timestamp) was never
+integrity. Where an orphan cannot be repaired — the note text is gone and the event's
+truncated `summary` is all that survives — it is accounted for by name in the project's
+`notes/event-reconciliation.md`, one exact `WORK-NNNN@<ts>` token per orphan plus the
+reason. Tokens there stop it being an error; `doctor` still prints every accounted event on
+every run, because the feed and the files do still disagree. No wildcards: a bare record id
+accounts for nothing. Inventing a note body from the summary is never the repair.
 `refs` values are validated at write time: record ids by shape, note names by existence —
 a ref to a note that is later removed simply renders as a missing reference, which is the
 legal lifecycle, not corruption.
@@ -235,16 +248,20 @@ area** is everything above: What/Why/How/Updates/Outcome, Report/Comments/Resolu
 the note body. The **human area** is the same events retold by the agent that did the
 work, for a reader who was not there and does not program: jvns.ca-plain, concrete,
 omitting nothing that matters. The full style contract lives in `docs/HUMAN_STYLE.md`;
-it is **write-time reading** — embedded in the binary, printed by `agentmon human-style`
-and inside every rejection — never session-start reading. Human areas are written in
-the record's own language.
+it is **write-time reading** — embedded in the binary, printed whole by
+`agentmon human-style`, and a compact extract of it is printed by a rejection that
+better writing would fix — never session-start reading. (The one rejection whose repair
+is neither writing nor rewriting, an agent area that leaves a code fence open, names the
+command instead of spending the lines.) Human areas are written in the record's own
+language.
 
 Storage: the last body section of the record file, under the reserved heading
 `## For humans`. Supplied agent bodies/messages may not contain that heading (exit 2,
 "reserved"), nor may they leave a code fence open — the heading is appended *after* the
 agent area, so an unclosed ``` swallows it and the record saves with no human area at all
 (exit 2, naming the flag and the line; a record already in that state on disk refuses
-every mutation until the fence is closed, and `agentmon doctor` lists those separately).
+every mutation until the fence is closed, and `agentmon doctor` lists those separately, as
+an **error** — a record no write can reach is a broken project, not an untidy one).
 Legacy files without it parse fine (`human: null`) — reading is lenient,
 **writing is not** (`agentmon migrate` copies v1 record files across untouched, so a
 migrated project arrives as legacy records and gains its human areas on first touch):
@@ -261,9 +278,11 @@ migrated project arrives as legacy records and gains its human areas on first to
   item filed before this change gains its human area through `app-feedback update`.
 - Update verbs accept `--human` **alone** to refresh it with no other change
   (`work update`, `bug comment`, `note update`, `app-feedback update` — the last
-  exists for this). A refresh never writes into `## Updates`/`## Comments`; a
-  refresh-only mutation logs a `human_updated` event, otherwise the mutation's own
-  event covers it.
+  exists for this). A refresh never writes into `## Updates`/`## Comments`; in a
+  project, a refresh-only mutation logs a `human_updated` event, otherwise the
+  mutation's own event covers it. `app-feedback update` logs nothing at all: the
+  app-feedback board is machine-level, has no `events.jsonl`, and carries the time
+  of the refresh in the item's own `updated` frontmatter instead.
 - Missing or blank → exit 2, and the error itself prints the compact style rules
   plus how to read the full contract — the teaching cost is paid only on failure.
   The MCP tools mirror all of this: `human` fields with the same required-ness, and
@@ -289,7 +308,7 @@ agentmon project view [--json]
 agentmon project update [--name <n>] [--description <d>] [--tags a,b] [--at T]
 agentmon project list                     # the machine's registry (informational)
 agentmon project mcp-json [--agent h]     # write/refresh .mcp.json for an existing project
-agentmon work start   --agent <name> --title <t> --human s|--human-file f [--tags] [--body-file f | --body s] [--started-at T]
+agentmon work start   --agent <name> --title <t> (--body s | --body-file f) --human s|--human-file f [--tags] [--started-at T]
 agentmon work update  <WORK-ID> --agent <name> (--message s | --body-file|--message-file f | --human s|--human-file f) [--at T]
 agentmon work done    <WORK-ID> --agent <name> (--outcome s | --outcome-file f) --human s|--human-file f [--files a,b] [--finished-at T] [--started-at T]
 agentmon work abandon <WORK-ID> --agent <name> (--reason s | --reason-file f) --human s|--human-file f [--at T]
@@ -310,7 +329,8 @@ agentmon note remove  <name> --agent <name> [--at T]                  # alias: n
 agentmon note list    [--type t] [--tag] [--agent] [--search text] [--json]
 agentmon note view    <name> [--json]
 agentmon status                           # snapshot: active work, open bugs, latest notes, recent events
-agentmon doctor                           # validate project integrity, exit non-zero on problems
+agentmon doctor       [--strict] [--json]  # validate project integrity, exit non-zero on problems
+                      # errors always fail; --strict fails on warnings too
 agentmon migrate --from <vault> --project <slug> --to <folder>   # v1 → v2 bridge
 agentmon human-style                      # print docs/HUMAN_STYLE.md (embedded) — the write-time style contract
 agentmon app-feedback add     --agent <name> --type bug|idea --title <t> --human s|--human-file f [--body s] [--at T]

@@ -147,14 +147,24 @@ function renderInline(nodes: Inline[], keyPrefix: string, opts: Opts): ReactNode
           />
         );
       case "link": {
-        // Only web links are followed; anything else keeps its text and loses its href.
+        // Only web links are followed. An href this app will not follow is still something
+        // the author wrote, so the source spelling stays on screen — the same stance
+        // {@link RecordImage} takes for a src it will not fetch. Swallowing it deleted
+        // `](url)` out of a live sentence (WORK-0061, which is *about* this grammar), and
+        // a renderer may reformat what a record says, never delete part of it.
         const safe = /^(https?:|mailto:)/i.test(node.href);
-        return safe ? (
-          <a key={key} href={node.href} target="_blank" rel="noreferrer noopener">
+        if (safe)
+          return (
+            <a key={key} href={node.href} target="_blank" rel="noreferrer noopener">
+              {renderInline(node.children, key, opts)}
+            </a>
+          );
+        return (
+          <span key={key}>
+            {"["}
             {renderInline(node.children, key, opts)}
-          </a>
-        ) : (
-          <span key={key}>{renderInline(node.children, key, opts)}</span>
+            {`](${node.href})`}
+          </span>
         );
       }
       default:

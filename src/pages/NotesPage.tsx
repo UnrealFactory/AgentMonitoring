@@ -305,7 +305,7 @@ export function NotesPage() {
                 {t("notes.empty.hint")}
                 <code className="empty-code">
                   agentmon note add --agent &lt;name&gt; --type memory --title "&lt;fact&gt;"
-                  --description "&lt;one line&gt;" --body "…"
+                  --description "&lt;one line&gt;" --body "…" --human "…"
                 </code>
               </>
             }

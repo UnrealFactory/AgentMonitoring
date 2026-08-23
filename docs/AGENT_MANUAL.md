@@ -407,8 +407,10 @@ Three things that are refused, all with exit `2`:
   *after* your text, so an unclosed fence would swallow it and the record would save with
   no human area at all. The error names the flag and the line that opened it; close the
   fence and re-run. A record already on disk in that state (hand-edited, or written by an
-  older build) refuses the same way until the fence is closed in the file — `agentmon
-  doctor` lists those separately, because `--human` alone cannot repair them.
+  older build) refuses *every* write until the fence is closed in the file — `agentmon
+  doctor` reports those separately and as an **error** (it exits non-zero even without
+  `--strict`), naming the file line to open, because `--human` alone cannot repair them and
+  neither can any other command: a person adds the missing ``` line, and nothing else.
 
 ---
 
@@ -1148,6 +1150,7 @@ agentmon work done WORK-0004 --agent my-agent \
 ```
 agentmon work abandon <WORK-ID> --agent <name>
                       (--reason <text> | --reason-file <file|->)
+                      (--human <text> | --human-file <file|->)
                       [--at <ISO8601>] [--json]
 ```
 
@@ -1482,7 +1485,8 @@ first problem. Two levels:
 - **error** — the app will render something wrong or untrue: unparseable frontmatter, a
   `done` work log with no `## Outcome`, a resolved bug with no `## Resolution`, an id (or a
   note's name) that does not match its filename, a duplicate id, a note whose `updated`
-  predates its `created`, a broken line in `events.jsonl`.
+  predates its `created`, a broken line in `events.jsonl`, or a `work_updated` event whose
+  record holds no `### <ts>` entry at that timestamp (see below).
 - **warning** — readable, but off: an event referencing a record that no longer exists, a
   write lock left behind by a killed process, an event type this build has not heard of,
   or a record with no `## For humans` section ([The human area](#the-human-area)) — one
@@ -1496,6 +1500,27 @@ writes, and before you hand work to a human.
 agentmon doctor
 agentmon doctor --strict --json
 ```
+
+**Events are checked against their records, not just for shape.** `agentmon work update
+--message` writes the `### <ts>` entry under `## Updates` and the `work_updated` event in
+one call, so the two exist together or not at all. If you ever see the event without the
+entry, something other than agentmon wrote half a pair — and the dashboard is counting a
+progress note nobody can open. Doctor names the record, the timestamp, and the entries the
+record *does* hold.
+
+Two repairs, and only two. If the note is real and you still have its text, post it:
+`agentmon work update <id> --agent <you> --at <the event's ts> --message "…"` — plus
+`--human "<retelling>"` when that record has no `## For humans` yet, because no write may
+leave a record without one ([The human area](#the-human-area)). Doctor reads the record and
+prints the flag only where it is needed, so run the line as printed rather than as
+remembered. If it never
+existed, or only the event's 160-character `summary` survives, **do not write that fragment
+into the record** — a truncated summary is not the note, and a live record must never carry
+invented history. Account for it instead in `notes/event-reconciliation.md`, one line per
+orphan holding the exact token `WORK-NNNN@<ts>` and a sentence on what happened. Doctor
+reads that note, stops treating those as errors, and goes on printing them on every run —
+accounted for is not the same as gone. A bare record id accounts for nothing; each orphan
+costs its own token and its own sentence.
 
 ### `agentmon human-style`
 
@@ -1709,8 +1734,9 @@ record, which is how a shipped record is corrected without editing history (see
 [`agentmon work update`](#agentmon-work-update)).
 
 **A work log of mine is stuck `in_progress` and I am not working on it** — close it
-honestly: `agentmon work abandon <ID> --agent <you> --reason "..."`. Do not leave it; the
-dashboard reads `in_progress` as "an agent is on this right now".
+honestly: `agentmon work abandon <ID> --agent <you> --reason "..." --human "..."`. Stopping
+is an ending, so the retelling is required and replaces what the record said while it ran.
+Do not leave it; the dashboard reads `in_progress` as "an agent is on this right now".
 
 **`BUG-0002 is already claimed by <someone>`** — do not take it over. Add what you know with
 `agentmon bug comment`, or pick another bug from `agentmon bug list --status open`.

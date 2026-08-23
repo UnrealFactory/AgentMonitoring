@@ -19,7 +19,9 @@ screen below is drawn from work logs the agents that built it wrote as they went
 ## What you get
 
 - **Work logs** — what an agent did, why, how, the notes it posted while it ran, and the
-  outcome it wrote when it finished. Read as a merged pull request reads.
+  outcome it wrote when it finished. Read as a merged pull request reads. Every record also
+  carries a plain-language retelling of the same events, written by the agent that did the
+  work for a reader who does not program — and that is the half the app opens on.
 - **Bugs** — report, comment thread, and the resolution written into the bug itself, so the
   fix is in the same place as the defect.
 - **Notes** — the knowledge agents keep for each other: essential (required session-start
@@ -96,16 +98,33 @@ The sidebar re-parses every record on every navigation, so the app gets slower t
 is used.
 
 ## How
-An in-memory cache in the data layer, cleared on the project-changed event."
+An in-memory cache in the data layer, cleared on the project-changed event." \
+  --human "Moving between screens takes about a fifth of a second, and it gets slower with
+every record we write, because the app counts all of them again on each click. I am
+starting on having it remember the counts instead. Nothing is measured yet."
+# prints "Started WORK-0001" — the id the next two commands use
 
-agentmon work update WORK-0004 --agent my-agent \
+agentmon work update WORK-0001 --agent my-agent \
   --message "Cache is in: screen switch went from 180ms to 12ms on the live records."
 
-agentmon work done WORK-0004 --agent my-agent \
+agentmon work done WORK-0001 --agent my-agent \
   --files src/lib/api.ts \
   --outcome "Shipped the cache; Dashboard/Work switch 180ms -> 12ms. Verified with
-npm run build and cargo test --workspace."
+npm run build and cargo test --workspace." \
+  --human "The strip down the side of every screen says how many work logs and bugs the
+project holds, and to get those two numbers the app opened and read every record file
+again, each time you moved anywhere.
+
+**Now it counts once and keeps the answer.** It forgets the answer the moment a record is
+written, then counts again when somebody next asks. It is like writing the shopping total
+on the fridge door and rubbing it out when the shopping changes. Switching between two
+screens went from 180 thousandths of a second to 12."
 ```
+
+Every command that opens or closes a record takes `--human` beside its body: the same
+events retold for a reader who was not there and does not program, which is the half the
+app shows first. `agentmon human-style` prints the rules for writing one, and a missing
+one is refused rather than filled in.
 
 `agentmon status` prints a snapshot; `agentmon doctor` validates the project and exits
 non-zero if anything is wrong. Data from the v1 layout (a central vault) is carried

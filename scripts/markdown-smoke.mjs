@@ -506,7 +506,29 @@ console.log("fixtures");
   eq("a bracketed record id is a ref", parseInline("[[WORK-0004]]")[0].kind, "ref");
 }
 
-// 18. Highlighting may be wrong about a token, never about the bytes.
+// 18. A link's href is data, and flattening keeps it — like an image's src above.
+//     WORK-0061 writes `[[label](url)` in prose to document the grammar in 17; the label
+//     parses as `[label` (CommonMark), so a flatten that kept the label alone dropped
+//     `](url)` and the sweep below read it, correctly, as words gone missing.
+{
+  eq(
+    "a link flattens back to its source spelling",
+    inlineText(parseInline("see [the docs](https://x.dev/a) now")),
+    "see [the docs](https://x.dev/a) now"
+  );
+  eq(
+    "…including the one whose label opens with a bracket",
+    inlineText(parseInline("because [[label](url) is a link")),
+    "because [[label](url) is a link"
+  );
+  eq(
+    "…and markup inside the label is still flattened",
+    inlineText(parseInline("[the **fix**](notes/a.md)")),
+    "[the fix](notes/a.md)"
+  );
+}
+
+// 19. Highlighting may be wrong about a token, never about the bytes.
 {
   const samples = [
     ["js", "const n = 1; // half\nconst s = `a ${b} c`;"],

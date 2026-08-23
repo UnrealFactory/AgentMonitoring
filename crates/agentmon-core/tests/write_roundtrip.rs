@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 
 use agentmon_core::doctor::{self, Level};
 use agentmon_core::{
-    BugStatus, FinishWork, NewBug, NewProject, Severity, StartWork, Store, WorkStatus, DATA_DIR,
+    BugStatus, FinishWork, NewBug, NewNote, NewProject, Severity, StartWork, Store, UpdateNote,
+    WorkStatus, DATA_DIR,
 };
 
 // ---------------------------------------------------------------------------
@@ -399,6 +400,30 @@ fn a_bug_claimed_by_someone_else_cannot_be_stolen() {
     assert_eq!(err.kind(), "conflict");
     assert!(err.to_string().contains("already claimed by cli-builder"), "{err}");
     assert!(err.to_string().contains("agentmon bug comment"), "suggests the fix: {err}");
+
+    // Suggesting it is not enough — the line has to run, on this record, in the state this
+    // record is in. With a retelling already there it is bare, and asking for one would
+    // overwrite what somebody wrote with a placeholder.
+    let bare = backticked(&err.to_string(), "agentmon bug ");
+    assert!(!bare.contains("--human"), "this bug has its retelling already: {bare}");
+    run_bug_comment(&tp, &bare)
+        .unwrap_or_else(|e| panic!("the refusal printed a line that does not run:\n  {bare}\n{e}"));
+
+    // Now the state `agentmon migrate` hands over: a claimed record with no `## For humans`.
+    // The claim conflict is checked before the human area is, so this hint is the first
+    // thing such a reader sees — and `bug comment` refuses to leave the record without one,
+    // so a bare line would send them from a refusal straight into another.
+    strip_human(&tp.path(&format!("bugs/{id}.md")));
+    let err = tp.store.claim_bug(&id, "other-agent", None, None).unwrap_err();
+    let legacy = backticked(&err.to_string(), "agentmon bug ");
+    assert!(
+        legacy.contains("--human "),
+        "the record this line names has no human area to keep: {legacy}"
+    );
+    run_bug_comment(&tp, &legacy).unwrap_or_else(|e| {
+        panic!("the refusal printed a line that does not run:\n  {legacy}\n{e}")
+    });
+    assert_eq!(tp.store.bug(&id).unwrap().human.as_deref(), Some(COORDINATE_HUMAN));
 
     // the original claim is intact
     assert_eq!(tp.store.bug(&id).unwrap().meta.assignee.as_deref(), Some("cli-builder"));
@@ -955,4 +980,571 @@ fn a_title_with_a_line_break_is_refused_and_leaves_nothing_behind() {
         .is_err());
     assert_eq!(tp.store.worklogs().unwrap().len(), 1);
     assert!(tp.store.bugs().unwrap().is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// events must match the records they describe, not merely be well-formed
+// ---------------------------------------------------------------------------
+
+/// Append a raw line to events.jsonl — what a hand or a batch script does, and the only
+/// way to produce the shape this check exists for. `update_work` cannot: it writes the
+/// `### <ts>` entry and the event in one call, so through the CLI the pair is never split.
+fn append_raw_event(tp: &TempProject, line: &str) {
+    let path = tp.path("events.jsonl");
+    let mut raw = fs::read_to_string(&path).unwrap();
+    raw.push_str(line);
+    raw.push('\n');
+    fs::write(&path, raw).unwrap();
+}
+
+/// One `work_updated` announcement with no `### <ts>` entry behind it.
+fn orphan_event(id: &str, ts: &str) -> String {
+    format!(
+        "{{\"ts\":\"{ts}\",\"actor\":\"backfill\",\"type\":\"work_updated\",\"ref\":\"{id}\",\
+         \"summary\":\"Human area: swept this record…\"}}"
+    )
+}
+
+/// The command between a hint's backticks — the exact bytes a reader is told to run, lifted
+/// rather than reconstructed here. Reconstructing it would test this test.
+fn backticked(text: &str, prefix: &str) -> String {
+    text.split('`')
+        .find(|s| s.starts_with(prefix))
+        .unwrap_or_else(|| panic!("no `{prefix}…` command in: {text}"))
+        .to_string()
+}
+
+/// A command out of the orphan problem's fix line.
+fn fix_command(tp: &TempProject, prefix: &str) -> String {
+    let report = doctor::check(&tp.store).unwrap();
+    let problem = report
+        .problems
+        .iter()
+        .find(|p| p.fix.contains(doctor::RECONCILE_NOTE))
+        .unwrap_or_else(|| panic!("no orphan problem to read a fix off: {:#?}", report.problems));
+    backticked(&problem.fix, prefix)
+}
+
+/// The half that accounts for an orphan nobody can recover.
+fn reconcile_fix(tp: &TempProject) -> String {
+    fix_command(tp, "agentmon note ")
+}
+
+/// The half that repairs one that is recoverable — posting the note the feed announced.
+fn repair_fix(tp: &TempProject) -> String {
+    fix_command(tp, "agentmon work ")
+}
+
+/// Split a printed command the way a shell does for the shapes doctor prints: spaces
+/// separate, double quotes group. A hint needing more quoting than this is a hint nobody
+/// can copy.
+fn shell_words(command: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let (mut word, mut quoted, mut started) = (String::new(), false, false);
+    for c in command.chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                started = true;
+            }
+            c if c.is_whitespace() && !quoted => {
+                if started {
+                    out.push(std::mem::take(&mut word));
+                    started = false;
+                }
+            }
+            c => {
+                word.push(c);
+                started = true;
+            }
+        }
+    }
+    if started {
+        out.push(word);
+    }
+    out
+}
+
+/// What a reader puts where a hint left a blank. Only the blanks: anything doctor spelled
+/// out — the verb, the flags, the note's name, the record's id — is passed through
+/// untouched, because those are the parts under test.
+///
+/// Keyed by the flag as well as the blank, because the two halves of the fix line leave the
+/// same `…` and the same `<retelling>` meaning different things: a note's one-line
+/// description on one and a progress note on the other, an explanation of the corpus on one
+/// and a retelling of the work on the other. A blank this does not recognise falls through
+/// as itself and is refused as the placeholder it is, which is the failure we want.
+fn fill(kind: &str, flag: &str, value: &str) -> String {
+    match (kind, flag, value) {
+        (_, "agent", "<you>") => "cli-builder".to_string(),
+        ("note", "description", "…") => {
+            "Accounts for feed lines whose record holds no such note.".to_string()
+        }
+        ("note", "human", "<retelling>") => RECONCILE_HUMAN.to_string(),
+        ("work", "message", "…") => REPAIR_MESSAGE.to_string(),
+        ("work", "human", "<retelling>") => REPAIR_HUMAN.to_string(),
+        ("bug", "message", "...") => COORDINATE_MESSAGE.to_string(),
+        ("bug", "human", "<retelling>") => COORDINATE_HUMAN.to_string(),
+        (_, _, other) => other.to_string(),
+    }
+}
+
+const RECONCILE_HUMAN: &str = "Some lines in the activity list point at notes that were never \
+written down. This says which ones, and why nobody made up the missing text.";
+
+const REPAIR_MESSAGE: &str = "Posting the note this event announced: the watcher was restarted \
+by hand, and the reload it should have logged fired once.";
+
+const REPAIR_HUMAN: &str = "This piece of work now has its story written down, including the \
+progress note that the activity list had been pointing at with nothing behind it.";
+
+const COORDINATE_MESSAGE: &str = "I was about to take this one, but cli-builder already has it. \
+Leaving it with them, and here is what I found before I stopped.";
+
+const COORDINATE_HUMAN: &str = "Two people nearly worked on this same fault at once. The second \
+one stopped and wrote down what they had found instead.";
+
+/// Run an `agentmon note add|update` line through the calls the CLI makes for it, with the
+/// blanks filled in the way a reader fills them.
+///
+/// The core API rather than a spawned binary, because that is what this file tests — but
+/// every flag below is the one `crates/agentmon-cli/src/main.rs` reads for that verb, and
+/// nothing here supplies a value the printed line did not: a hint that drops `--human`
+/// arrives at `add_note`/`update_note` without one and is refused exactly as a terminal
+/// would refuse it (exit 2), and a hint naming a verb that cannot do the job fails on the
+/// same missing file the CLI would fail on (exit 3).
+fn run_note_command(tp: &TempProject, command: &str, body: &str) -> Result<(), String> {
+    let words = shell_words(command);
+    assert_eq!(words.first().map(String::as_str), Some("agentmon"), "{command}");
+    assert_eq!(words.get(1).map(String::as_str), Some("note"), "{command}");
+    let verb = words.get(2).cloned().unwrap_or_default();
+
+    let mut flags: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut positional: Vec<String> = Vec::new();
+    let mut i = 3;
+    while i < words.len() {
+        match words[i].strip_prefix("--") {
+            // Every flag these two verbs take carries a value, `--body-file -` included.
+            Some(flag) => {
+                let value = words
+                    .get(i + 1)
+                    .unwrap_or_else(|| panic!("--{flag} has no value in: {command}"));
+                flags.insert(flag.to_string(), fill("note", flag, value));
+                i += 2;
+            }
+            None => {
+                positional.push(words[i].clone());
+                i += 1;
+            }
+        }
+    }
+    // `-` is stdin, which for a test is the body it was handed.
+    let piped = match flags.get("body-file").map(String::as_str) {
+        Some("-") => Some(body.to_string()),
+        Some(path) => panic!("the printed line reads a body from {path}, which no reader has"),
+        None => flags.get("body").cloned(),
+    };
+    let agent = flags.get("agent").cloned().unwrap_or_default();
+
+    match verb.as_str() {
+        "add" => {
+            let note_type = agentmon_core::parse_note_type(
+                flags.get("type").map(String::as_str).unwrap_or_default(),
+            )
+            .map_err(|e| e.to_string())?;
+            tp.store
+                .add_note(&NewNote {
+                    agent,
+                    name: flags.get("name").cloned(),
+                    title: flags.get("title").cloned().unwrap_or_default(),
+                    note_type,
+                    description: flags.get("description").cloned().unwrap_or_default(),
+                    tags: vec![],
+                    refs: vec![],
+                    body: piped.unwrap_or_default(),
+                    human: flags.get("human").cloned().unwrap_or_default(),
+                    at: None,
+                })
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        }
+        "update" => {
+            let name = positional
+                .first()
+                .cloned()
+                .unwrap_or_else(|| panic!("`note update` names no note: {command}"));
+            tp.store
+                .update_note(
+                    &name,
+                    &UpdateNote {
+                        agent,
+                        body: piped,
+                        human: flags.get("human").cloned(),
+                        ..Default::default()
+                    },
+                )
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        }
+        other => Err(format!("`agentmon note {other}` is not a verb the CLI has")),
+    }
+}
+
+/// Run an `agentmon work update` line through the calls the CLI makes for it, with the
+/// blanks filled in the way a reader fills them. Same reasoning as [`run_note_command`]:
+/// every flag below is the one `crates/agentmon-cli/src/main.rs` reads for this verb and
+/// hands to `update_work`, so a printed line with no `--human` arrives with `None` and is
+/// refused exactly as a terminal refuses it (exit 2) on a record that has no human area yet.
+fn run_work_command(tp: &TempProject, command: &str) -> Result<(), String> {
+    let words = shell_words(command);
+    assert_eq!(words.first().map(String::as_str), Some("agentmon"), "{command}");
+    assert_eq!(words.get(1).map(String::as_str), Some("work"), "{command}");
+    assert_eq!(words.get(2).map(String::as_str), Some("update"), "{command}");
+    let id = words
+        .get(3)
+        .cloned()
+        .unwrap_or_else(|| panic!("`work update` names no record: {command}"));
+    assert!(!id.starts_with("--"), "the id has to come before the flags: {command}");
+
+    let mut flags: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut i = 4;
+    while i < words.len() {
+        // Every flag this verb takes carries a value.
+        let flag = words[i]
+            .strip_prefix("--")
+            .unwrap_or_else(|| panic!("`{}` is not a flag, in: {command}", words[i]));
+        let value = words
+            .get(i + 1)
+            .unwrap_or_else(|| panic!("--{flag} has no value in: {command}"));
+        flags.insert(flag.to_string(), fill("work", flag, value));
+        i += 2;
+    }
+    tp.store
+        .update_work(
+            &id,
+            flags.get("agent").map(String::as_str).unwrap_or_default(),
+            flags.get("message").map(String::as_str),
+            flags.get("human").map(String::as_str),
+            flags.get("at").map(String::as_str),
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Run an `agentmon bug comment` line the way the CLI runs it. Same reasoning as
+/// [`run_work_command`], on the other verb a refused `bug claim` sends its reader to.
+fn run_bug_comment(tp: &TempProject, command: &str) -> Result<(), String> {
+    let words = shell_words(command);
+    assert_eq!(words.first().map(String::as_str), Some("agentmon"), "{command}");
+    assert_eq!(words.get(1).map(String::as_str), Some("bug"), "{command}");
+    assert_eq!(words.get(2).map(String::as_str), Some("comment"), "{command}");
+    let id = words
+        .get(3)
+        .cloned()
+        .unwrap_or_else(|| panic!("`bug comment` names no record: {command}"));
+
+    let mut flags: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut i = 4;
+    while i < words.len() {
+        let flag = words[i]
+            .strip_prefix("--")
+            .unwrap_or_else(|| panic!("`{}` is not a flag, in: {command}", words[i]));
+        let value = words
+            .get(i + 1)
+            .unwrap_or_else(|| panic!("--{flag} has no value in: {command}"));
+        flags.insert(flag.to_string(), fill("bug", flag, value));
+        i += 2;
+    }
+    tp.store
+        .comment_bug(
+            &id,
+            flags.get("agent").map(String::as_str).unwrap_or_default(),
+            flags.get("message").map(String::as_str),
+            flags.get("human").map(String::as_str),
+            flags.get("at").map(String::as_str),
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// A work log that began before the orphan it is about to be handed, so `--at <the event's
+/// ts>` lands inside the window the write path allows (at or after `started`, at or before
+/// now). The first two attempts at this fixture failed on that bound rather than on the
+/// flag under test.
+fn start_dated(tp: &TempProject, title: &str, started_at: &str) -> String {
+    tp.store
+        .start_work(&StartWork {
+            agent: "cli-builder".into(),
+            title: title.into(),
+            tags: vec!["tauri".into(), "rust".into()],
+            refs: vec![],
+            body: BODY.into(),
+            human: "We are starting a piece of work; this line says in plain words what it is \
+                    for."
+                .into(),
+            started_at: Some(started_at.into()),
+        })
+        .expect("work start")
+        .id
+}
+
+/// Turn a record into a legacy one: everything the CLI wrote, minus the `## For humans`
+/// section. Exactly what `agentmon migrate` leaves behind (SPEC.md, "Migration"), and the
+/// state doctor's own human-area warning is about.
+fn strip_human(path: &Path) {
+    let raw = fs::read_to_string(path).unwrap();
+    let (agent_area, human) = raw
+        .split_once("\n## For humans")
+        .unwrap_or_else(|| panic!("nothing to strip — this record has no human area:\n{raw}"));
+    assert!(!human.is_empty());
+    fs::write(path, format!("{}\n", agent_area.trim_end())).unwrap();
+}
+
+/// The body the fix line asks for: one line per orphan, each holding the exact token and a
+/// sentence on what happened. `--body-file` replaces the body, so every token the note is
+/// already accounting for has to be in it — which is what the second write below proves.
+fn accounting_body(tokens: &[String]) -> String {
+    let mut body =
+        String::from("Accounted for — feed lines no record backs, and why each one stays:\n");
+    for t in tokens {
+        body.push_str(&format!(
+            "\n- `{t}` — a batch run wrote the announcement without the note it announces. \
+             The text is gone, and inventing one would put history in a live record that \
+             never happened.\n"
+        ));
+    }
+    body
+}
+
+#[test]
+fn doctor_catches_an_update_event_whose_record_holds_no_such_note() {
+    let tp = TempProject::new("doctor-pairing");
+    let id = start(&tp, "Wire the change watcher into the desktop app");
+
+    // A real note first: the event and the entry go in together, and doctor is happy.
+    tp.store
+        .update_work(&id, "cli-builder", Some("Halfway: the watcher fires."), None, None)
+        .unwrap();
+    let note_ts = tp.store.worklog(&id).unwrap().updates[0].ts.clone();
+    let report = doctor::check(&tp.store).unwrap();
+    assert_eq!(report.errors(), 0, "{:#?}", report.problems);
+    assert!(report.reconciled_events.is_empty());
+
+    // Now the shape the CLI cannot write: the announcement without the note.
+    append_raw_event(
+        &tp,
+        &format!(
+            "{{\"ts\":\"2026-08-19T09:00:00Z\",\"actor\":\"backfill\",\"type\":\"work_updated\",\
+             \"ref\":\"{id}\",\"summary\":\"Human area: swept this record…\"}}"
+        ),
+    );
+    let found = problems_matching(&tp, "has no `### 2026-08-19T09:00:00Z` under `## Updates`");
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert!(found[0].starts_with("[Error]"), "a human reads something untrue: {found:#?}");
+    // The message says which record and which real notes it does hold, so the reader can
+    // tell "never written" from "written at a different time".
+    assert!(found[0].contains(&id), "{found:#?}");
+    assert!(found[0].contains(&note_ts), "names the notes it does hold: {found:#?}");
+    // The fix names both routes and the note that accounts for the unrecoverable ones.
+    assert!(found[0].contains("--at 2026-08-19T09:00:00Z"), "{found:#?}");
+    assert!(found[0].contains(doctor::RECONCILE_NOTE), "{found:#?}");
+    assert_eq!(doctor::check(&tp.store).unwrap().errors(), 1);
+
+    // Only `work_updated` claims an entry. The other types say nothing about `## Updates`,
+    // so pairing must not touch them.
+    append_raw_event(
+        &tp,
+        &format!(
+            "{{\"ts\":\"2026-08-19T09:30:00Z\",\"actor\":\"backfill\",\"type\":\"human_updated\",\
+             \"ref\":\"{id}\",\"summary\":\"A retelling for a reader who does not program.\"}}"
+        ),
+    );
+    assert_eq!(doctor::check(&tp.store).unwrap().errors(), 1, "human_updated is not paired");
+}
+
+#[test]
+fn an_orphan_event_is_accounted_for_by_the_reconciliation_note_and_never_goes_quiet() {
+    let tp = TempProject::new("doctor-reconcile");
+    let id = start(&tp, "Wire the change watcher into the desktop app");
+    append_raw_event(
+        &tp,
+        &format!(
+            "{{\"ts\":\"2026-08-19T09:00:00Z\",\"actor\":\"backfill\",\"type\":\"work_updated\",\
+             \"ref\":\"{id}\",\"summary\":\"Human area: swept this record…\"}}"
+        ),
+    );
+    assert_eq!(doctor::check(&tp.store).unwrap().errors(), 1);
+
+    let note = tp.path(&format!("notes/{}.md", doctor::RECONCILE_NOTE));
+    let head = "---\nname: event-reconciliation\ntitle: Orphaned events\ntype: decision\n\
+                description: Accounts for events with no matching note.\nagent: tester\n\
+                created: 2026-08-19T10:00:00Z\nupdated: 2026-08-19T10:00:00Z\n---\n\n";
+    // Every record owes a human area, this one included, or doctor warns about it and the
+    // test would be measuring the wrong warning.
+    let tail = "\n## For humans\n\nSome lines in the activity list point at notes that were \
+                never written down. This note says which ones, and why nobody made up the \
+                missing text.\n";
+
+    // A near miss must not account for anything: same record, one second out.
+    fs::write(
+        &note,
+        format!("{head}Accounted for:\n\n- {id}@2026-08-19T09:00:01Z — a different second.\n{tail}"),
+    )
+    .unwrap();
+    assert_eq!(
+        doctor::check(&tp.store).unwrap().errors(),
+        1,
+        "the token has to be the event's own timestamp, not near it"
+    );
+
+    // Naming the record alone must not account for it either — that would waive every
+    // orphan on the record, present and future, which is the wildcard this refuses.
+    fs::write(&note, format!("{head}Accounted for:\n\n- {id} — all of them.\n{tail}")).unwrap();
+    assert_eq!(doctor::check(&tp.store).unwrap().errors(), 1, "no bare-ref wildcard");
+
+    // The exact `ref@ts`, in prose, where a person reading the note sees it too.
+    fs::write(
+        &note,
+        format!(
+            "{head}Accounted for:\n\n- `{id}@2026-08-19T09:00:00Z` — a batch run logged the \
+             wrong event type; the note text is gone and inventing one would be worse.\n{tail}"
+        ),
+    )
+    .unwrap();
+    let report = doctor::check(&tp.store).unwrap();
+    assert_eq!(report.errors(), 0, "{:#?}", report.problems);
+    assert_eq!(report.warnings(), 0, "accounted for is not a warning either");
+    // Accounted for, but never silent: it is still reported, just not as a problem.
+    assert_eq!(
+        report.reconciled_events,
+        vec![format!("{id}@2026-08-19T09:00:00Z")],
+        "doctor still says which events the files do not back"
+    );
+
+    // -- and the line doctor printed to get here has to be one that runs ---------------
+    //
+    // The note above was written by this test. The one below is written by **doctor's own
+    // fix line**, executed as printed — the only way to know the line works, and it
+    // shipped not working. The fix named `agentmon note update event-reconciliation` in
+    // both of the states a project can be in, and neither one ran: with no such note —
+    // every project meeting its first orphan — `update` has no file to read and exits 3,
+    // and once the note is there the same line still exits 2, because a `--body-file` that
+    // replaces what a note knows must carry the retelling of the new knowledge with it. A
+    // fix line is doctor's promise that the reader has somewhere to go, so the promise is
+    // checked here rather than read.
+    //
+    // A second project, because the state that broke is the one this test has already left.
+    let fresh = TempProject::new("doctor-reconcile-fix");
+    let fid = start(&fresh, "Wire the change watcher into the desktop app");
+    let first = format!("{fid}@2026-08-19T09:00:00Z");
+    append_raw_event(&fresh, &orphan_event(&fid, "2026-08-19T09:00:00Z"));
+
+    // State one: no reconciliation note. The overwhelmingly common one — a project meets
+    // its first orphan exactly once — and the one the old hint could not survive.
+    let fresh_note = fresh.path(&format!("notes/{}.md", doctor::RECONCILE_NOTE));
+    assert!(!fresh_note.is_file(), "the state under test is the note not existing");
+    let create = reconcile_fix(&fresh);
+    assert!(
+        create.starts_with("agentmon note add "),
+        "nothing to update yet, so the line has to create the note: {create}"
+    );
+    run_note_command(&fresh, &create, &accounting_body(&[first.clone()]))
+        .unwrap_or_else(|e| panic!("doctor printed a line that does not run:\n  {create}\n{e}"));
+
+    assert!(fresh_note.is_file(), "the printed line left no note behind: {create}");
+    let report = doctor::check(&fresh.store).unwrap();
+    assert_eq!(report.errors(), 0, "running the fix did not fix it: {:#?}", report.problems);
+    assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
+    assert_eq!(report.reconciled_events, vec![first.clone()]);
+
+    // State two: the note exists, and a second orphan turns up. Now `add` would be refused
+    // (one fact, one file), so the printed verb has to change — and the body it asks for
+    // replaces the old one, which is why the retelling has to be rewritten with it.
+    let second = format!("{fid}@2026-08-20T14:05:00Z");
+    append_raw_event(&fresh, &orphan_event(&fid, "2026-08-20T14:05:00Z"));
+    let update = reconcile_fix(&fresh);
+    assert!(
+        update.starts_with("agentmon note update "),
+        "the note is there now; adding it again is refused: {update}"
+    );
+    run_note_command(&fresh, &update, &accounting_body(&[first.clone(), second.clone()]))
+        .unwrap_or_else(|e| panic!("doctor printed a line that does not run:\n  {update}\n{e}"));
+
+    let report = doctor::check(&fresh.store).unwrap();
+    assert_eq!(report.errors(), 0, "{:#?}", report.problems);
+    assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
+    assert_eq!(report.reconciled_events, vec![first, second]);
+    // Written by the fix line, so the retelling it demanded is the one on disk — the human
+    // area is not a formality a hint can name and the write path skip.
+    let raw = fs::read_to_string(&fresh_note).unwrap();
+    assert!(raw.contains("## For humans"), "{raw}");
+    assert!(raw.contains(RECONCILE_HUMAN), "{raw}");
+
+    // -- and so does the other half of that same line: the repair ----------------------
+    //
+    // `agentmon work update` lands on the **record**, and a record with no `## For humans`
+    // refuses every write that would leave it without one. That is not a corner: `agentmon
+    // migrate` hands over a project of records in exactly that state, and doctor prints its
+    // own human-area warning naming the same id a few lines above this error — so the run
+    // that offers the repair is usually the run that says the record cannot take it. Both
+    // states below, because the repair line has to be right in both and each can only be
+    // proved by running it.
+    let started = "2026-08-19T08:00:00Z";
+    let orphan_ts = "2026-08-19T09:00:00Z";
+
+    // State one: a legacy record, no human area. The line has to ask for one.
+    let legacy = TempProject::new("doctor-repair-legacy");
+    let lid = start_dated(&legacy, "Wire the change watcher into the desktop app", started);
+    strip_human(&legacy.path(&format!("worklogs/{lid}.md")));
+    append_raw_event(&legacy, &orphan_event(&lid, orphan_ts));
+    let report = doctor::check(&legacy.store).unwrap();
+    assert_eq!(report.errors(), 1, "{:#?}", report.problems);
+    assert_eq!(report.missing_human, vec![lid.clone()], "the state under test");
+
+    let repair = repair_fix(&legacy);
+    assert!(
+        repair.contains("--human "),
+        "the record this line names cannot take a write that leaves it without a human \
+         area: {repair}"
+    );
+    run_work_command(&legacy, &repair)
+        .unwrap_or_else(|e| panic!("doctor printed a line that does not run:\n  {repair}\n{e}"));
+
+    // One line, both findings: the entry the feed announced exists now, and the record it
+    // was announced on has the human area the same run was warning about.
+    let report = doctor::check(&legacy.store).unwrap();
+    assert_eq!(report.errors(), 0, "running the fix did not fix it: {:#?}", report.problems);
+    assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
+    assert!(report.reconciled_events.is_empty(), "recovered, not accounted for");
+    assert_eq!(
+        legacy.store.worklog(&lid).unwrap().updates[0].ts,
+        orphan_ts,
+        "the note landed at the timestamp the feed had been announcing"
+    );
+
+    // State two: a record that already has a retelling. Here the flag must be *absent* —
+    // `<retelling>` is a placeholder, and pasting it over what somebody wrote would trade
+    // doctor's error for a lie in a live record.
+    let told = TempProject::new("doctor-repair-told");
+    let tid = start_dated(&told, "Wire the change watcher into the desktop app", started);
+    let kept = told.store.worklog(&tid).unwrap().human;
+    assert!(kept.is_some(), "the state under test is the record having one");
+    append_raw_event(&told, &orphan_event(&tid, orphan_ts));
+
+    let repair = repair_fix(&told);
+    assert!(
+        !repair.contains("--human"),
+        "this record has its retelling already; asking for one would overwrite it: {repair}"
+    );
+    run_work_command(&told, &repair)
+        .unwrap_or_else(|e| panic!("doctor printed a line that does not run:\n  {repair}\n{e}"));
+
+    let report = doctor::check(&told.store).unwrap();
+    assert_eq!(report.errors(), 0, "{:#?}", report.problems);
+    assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
+    assert_eq!(
+        told.store.worklog(&tid).unwrap().human,
+        kept,
+        "the retelling it had is the one it still has"
+    );
 }

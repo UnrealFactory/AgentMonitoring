@@ -51,6 +51,7 @@ pub const WORK_EXAMPLE: &str = r#"agentmon work start \
   --agent cli-builder \
   --title "Implement the record write path" \
   --tags cli,rust \
+  --human "Every record here was written by hand until now. After this, agents write their own." \
   --body "$(cat <<'EOF'
 ## What
 
@@ -75,6 +76,7 @@ and how it was verified — the commands you ran and what they printed."#;
 pub const OUTCOME_EXAMPLE: &str = r#"agentmon work done WORK-0003 \
   --agent cli-builder \
   --files crates/agentmon-core/src/write.rs,crates/agentmon-cli/src/main.rs \
+  --human "The tool now writes its own records, and two agents starting at once no longer lose one." \
   --outcome "$(cat <<'EOF'
 Shipped the full write path: init, work start/update/done and the bug lifecycle, each
 appending one event to events.jsonl.
@@ -95,6 +97,7 @@ pub const BUG_EXAMPLE: &str = r#"agentmon bug create \
   --title "work done exits 0 but leaves status in_progress" \
   --severity high \
   --labels cli,data-loss \
+  --human "Finishing a task says it worked, but the task still shows as running afterwards." \
   --body "$(cat <<'EOF'
 ## Report
 
@@ -115,6 +118,7 @@ verified it — the command you ran and its result."#;
 
 pub const RESOLUTION_EXAMPLE: &str = r#"agentmon bug resolve BUG-0002 \
   --agent cli-builder \
+  --human "It works now: the window updates by itself when a record is written, and we checked it." \
   --resolution "$(cat <<'EOF'
 Root cause: the Tauri shell never watched the project folder, so the desktop app only
 re-read records when a route change re-ran the loader.
@@ -370,6 +374,7 @@ pub const NOTE_EXAMPLE: &str = r#"agentmon note add \
   --title "Gate scripts must sandbox the registry" \
   --description "Any script that runs agentmon init must set AGENTMON_REGISTRY_DIR to a scratch dir." \
   --tags gates,registry \
+  --human "A test script that makes a pretend project can leave it in the list of real projects." \
   --body "$(cat <<'EOF'
 `agentmon init` registers the new project in ~/.AgentMonitoring/registry.json, best
 effort. A gate script that inits a temp fixture therefore bookmarks that fixture in the

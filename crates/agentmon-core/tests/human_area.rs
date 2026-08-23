@@ -1067,6 +1067,78 @@ fn a_record_whose_stored_body_leaves_a_fence_open_refuses_the_repair() {
     assert_eq!(f.raw("worklogs/WORK-0001.md").matches("## For humans").count(), 1);
 }
 
+/// …and `doctor` calls that record what it is: an **error**, so the check fails without
+/// `--strict` (SPEC: "validate project integrity, exit non-zero on problems").
+///
+/// It was filed as a warning, which made the loudest state a record can be in the quietest
+/// output agentmon has: a record that refuses `work update`, `bug comment`, `note update`
+/// and every MCP tool, reported by `agentmon doctor` at exit 0 under a line saying the
+/// project was fine. The report has to name the line a person opens the file at, and say
+/// plainly that this repair is not a command — every other doctor fix is one.
+#[test]
+fn doctor_errors_on_a_record_frozen_by_an_open_fence() {
+    let f = Fixture::new("fencelevel");
+    f.start(); // a healthy record, so the report is not empty for some other reason
+
+    // The ``` is on line 23 of the file: 11 lines of frontmatter, then the body.
+    let text = "---\nid: WORK-0900\ntitle: A record with an unclosed fence\nagent: old\n\
+                status: in_progress\nstarted: 2026-08-01T09:00:00Z\nfinished: null\ntags: []\n\
+                refs: []\nfiles: []\n---\n\n## What\n\nSomething real.\n\n## Why\n\nA reason.\n\n\
+                ## How\n\n```\nthread main panicked\n";
+    let dir = f.location.join(DATA_DIR).join("worklogs");
+    fs::write(dir.join("WORK-0900.md"), text).unwrap();
+    assert_eq!(
+        text.lines().nth(22),
+        Some("```"),
+        "the fixture's own line count, so the assertion below is about doctor and not arithmetic"
+    );
+
+    let report = agentmon_core::doctor::check(&f.store).unwrap();
+    let fence = report
+        .problems
+        .iter()
+        .find(|p| p.message.contains("code fence"))
+        .expect("doctor reports the frozen record");
+    assert_eq!(
+        fence.level,
+        agentmon_core::doctor::Level::Error,
+        "a record no write can touch is an error: {fence:#?}"
+    );
+    assert_eq!(report.errors(), 1, "{:#?}", report.problems);
+    assert!(
+        fence.message.contains("WORK-0900 (line 23)"),
+        "names the record and the line the fence opened on: {}",
+        fence.message
+    );
+    assert!(
+        fence.message.contains("refuses every write"),
+        "says why it is an error: {}",
+        fence.message
+    );
+    assert!(
+        fence.fix.contains("no agentmon command") && fence.fix.contains("a person opens"),
+        "the fix is a person's, and the report says so: {}",
+        fence.fix
+    );
+
+    // The claim the level rests on, checked and not assumed: the record is frozen.
+    let err = f
+        .store
+        .update_work("WORK-0900", "a", None, Some(HUMAN), None)
+        .unwrap_err();
+    assert_eq!(err.kind(), "invalid_argument", "{err}");
+
+    // The repair the message asks for — one line, nothing else touched — clears it.
+    fs::write(dir.join("WORK-0900.md"), format!("{text}```\n")).unwrap();
+    let report = agentmon_core::doctor::check(&f.store).unwrap();
+    assert_eq!(report.errors(), 0, "{:#?}", report.problems);
+    assert!(
+        report.missing_human.contains(&"WORK-0900".to_string()),
+        "still owed a human area — a warning now, which is the level that fits: {:#?}",
+        report.problems
+    );
+}
+
 // ---------------------------------------------------------------------------
 // one list of heading spellings, shared with the two other parsers
 // ---------------------------------------------------------------------------

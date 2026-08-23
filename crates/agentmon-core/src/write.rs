@@ -647,7 +647,9 @@ impl Store {
             "abandon reason",
             "agentmon work abandon WORK-0003 --agent cli-builder \\\n  \
              --reason \"Superseded by WORK-0007, which solves the same problem in the core \
-             crate; nothing from this branch was kept.\"",
+             crate; nothing from this branch was kept.\" \\\n  \
+             --human \"We stopped this one and did the same job in another place; nothing \
+             here was kept.\"",
         )?;
         let id = validate_id(id, "WORK")?;
         let human_text = human::require(&req.human, &id)?;
@@ -867,8 +869,8 @@ impl Store {
                     return Err(CoreError::conflict(
                         format!("{id} is already claimed by {holder}"),
                         format!(
-                            "coordinate instead of taking it over: \
-                             `agentmon bug comment {id} --agent {agent} --message \"...\"`"
+                            "coordinate instead of taking it over: `{}`",
+                            comment_hint(&id, &agent, existing_human.is_some())
                         ),
                     ));
                 }
@@ -878,9 +880,8 @@ impl Store {
                 return Err(CoreError::conflict(
                     format!("{id} is already {}", meta.status.as_str()),
                     format!(
-                        "if it is not actually fixed, say so first: \
-                         `agentmon bug comment {id} --agent {agent} --message \"...\"`, \
-                         then file a new bug"
+                        "if it is not actually fixed, say so first: `{}`, then file a new bug",
+                        comment_hint(&id, &agent, existing_human.is_some())
                     ),
                 ))
             }
@@ -1018,7 +1019,7 @@ impl Store {
                     format!(
                         "if it regressed, file a new bug and reference this one: \
                          `agentmon bug create --agent {agent} --title \"...\" \
-                         --severity high --refs {id} --body \"...\"`"
+                         --severity high --refs {id} --body \"...\" --human \"...\"`"
                     ),
                 ))
             }
@@ -1614,6 +1615,28 @@ fn write_record(
 /// record written before the human area existed reads fine forever; the moment an agent
 /// *changes* it, the change comes with a retelling, because otherwise the record would be
 /// edited by an agent that had a chance to speak to the human and declined.
+/// The `bug comment` line a refused `bug claim` sends the reader to, in the state that
+/// record is actually in.
+///
+/// Same rule as doctor's orphan-repair hint, for the same reason: a record with no `## For
+/// humans` refuses every write that would leave it without one, so a hint naming this verb
+/// with no `--human` exits 2 on the very record it names. Both branches below are reachable
+/// on exactly such a record — `agentmon migrate` hands over a project of legacy records that
+/// gain a human area on first touch (SPEC.md, "Migration"), claimed and resolved ones among
+/// them, and the claim conflict is checked before the human area is resolved.
+///
+/// Told from the record rather than always printed: pasting the placeholder over a
+/// retelling somebody wrote would trade a refusal for a lie.
+fn comment_hint(id: &str, agent: &str, has_human: bool) -> String {
+    if has_human {
+        format!("agentmon bug comment {id} --agent {agent} --message \"...\"")
+    } else {
+        format!(
+            "agentmon bug comment {id} --agent {agent} --message \"...\" --human \"<retelling>\""
+        )
+    }
+}
+
 fn resolve_human(
     supplied: Option<String>,
     existing: Option<String>,

@@ -525,7 +525,6 @@ export function BugsPage() {
         <Skeleton rows={6} />
       ) : flat.length === 0 ? (
         <BoardEmpty
-          projectId={projectId}
           total={bugs.length}
           tab={tab}
           filtersActive={filtersActive}
@@ -647,7 +646,6 @@ function RowLabels({ bug }: { bug: BugSummary }) {
  * and the good one — a board with no open bugs left.
  */
 function BoardEmpty({
-  projectId,
   total,
   tab,
   filtersActive,
@@ -656,7 +654,6 @@ function BoardEmpty({
   onClear,
   onSwitchTab,
 }: {
-  projectId: string;
   total: number;
   tab: Tab;
   filtersActive: boolean;
@@ -683,8 +680,13 @@ function BoardEmpty({
         hint={
           <>
             {t("bugs.empty.hint")}
+            {/* Two v1 leftovers were in this line: `-p <id>`, which the v2 CLI does not
+                parse (it finds the project by walking up from the working directory, like
+                git), and a command with no `--human`, which it refuses. A hint the reader
+                pastes has to be one the CLI accepts. */}
             <code className="empty-code">
-              agentmon bug create -p {projectId} --agent &lt;name&gt; --severity high --title &lt;title&gt;
+              agentmon bug create --agent &lt;name&gt; --severity high --title "&lt;title&gt;"
+              --body "…" --human "…"
             </code>
           </>
         }

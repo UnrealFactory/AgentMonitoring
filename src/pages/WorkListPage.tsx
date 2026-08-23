@@ -328,9 +328,12 @@ export function WorkListPage() {
               <>
                 {t("work.empty.hint")}
                 {/* v2 syntax: the CLI resolves the project from the directory it runs in,
-                    like git — the `-p <id>` this line used to print does not parse. */}
+                    like git — the `-p <id>` this line used to print does not parse. Nor
+                    does the line without `--human`: every record carries both halves, and
+                    a hint the reader pastes has to be one the CLI accepts. */}
                 <code className="empty-code">
                   agentmon work start --agent &lt;name&gt; --title "&lt;title&gt;" --body "…"
+                  --human "…"
                 </code>
               </>
             }

@@ -4,11 +4,11 @@ title: Start here — what every session reads before working
 type: essential
 description: "The index: read the release handoff first, then the gotchas that bite scripts; curate notes as you finish."
 agent: fable-updater-splash
-updated_by: fable-human-backfill
+updated_by: d6-final-gate-builder
 created: 2026-08-21T13:21:48Z
-updated: 2026-08-22T15:30:23Z
+updated: 2026-08-23T10:43:04Z
 tags: []
-refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, quality-bars]
+refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, quality-bars, event-reconciliation]
 ---
 
 The MEMORY.md of this project. Read top to bottom, open what applies, and keep this
@@ -27,6 +27,8 @@ index true when the set of notes changes.
 - human-area-enforcement — every write verb needs `--human`; where that rule lives, and
   where the error text an agent sees comes from.
 - verify-desktop-via-cdp — driving the real desktop window with Playwright.
+- event-reconciliation — nine lines in `events.jsonl` announce a progress note no
+  record holds; read it before you touch the event log, the activity feed, or doctor.
 - chart-note-series-colour — the one chart-palette constraint that is easy to break.
 - quality-bars — the visual/product quality references this app is held to.
 

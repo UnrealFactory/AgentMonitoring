@@ -327,6 +327,13 @@ export function inlineText(nodes: Inline[]): string {
           // The source syntax, not just the alt: a flattened record must still say which
           // file it showed (scripts/markdown-smoke.mjs sweeps on exactly this).
           return `![${n.alt}](${n.src})`;
+        case "link":
+          // An href is data, exactly like an image's src — the one field of a parsed link
+          // that the label does not repeat. Dropping it made a flattened record say the
+          // author wrote a bare phrase where they wrote a target, and the sweep read it as
+          // a renderer eating words: WORK-0061 spells `[[label](url)` in prose (it
+          // documents this grammar), the label flattened to `[label` and `](url)` vanished.
+          return `[${inlineText(n.children)}](${n.href})`;
         default:
           return inlineText(n.children);
       }

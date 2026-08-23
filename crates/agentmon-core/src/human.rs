@@ -302,11 +302,12 @@ pub fn contains_heading(text: &str) -> bool {
     find_heading(text).is_some()
 }
 
-/// Does this body end inside a code fence? — the state in which no human area can be
-/// stored, because the heading appended after it reads as code. `agentmon doctor` reports
-/// the records in it: they are the ones `--human` alone cannot repair.
-pub fn has_open_fence(text: &str) -> bool {
-    body::open_fence_line(text).is_some()
+/// Does this body end inside a code fence, and on which line did that fence open? — the
+/// state in which no human area can be stored, because the heading appended after it reads
+/// as code. `agentmon doctor` reports the records in it as errors: they are the ones
+/// `--human` alone cannot repair, and the line is what the person repairing one needs.
+pub fn open_fence_line(text: &str) -> Option<usize> {
+    body::open_fence_line(text)
 }
 
 /// Put the human area back, always as the last section.
