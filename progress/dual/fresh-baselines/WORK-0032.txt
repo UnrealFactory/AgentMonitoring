@@ -1,0 +1,55 @@
+🗑️
+The Delete Button
+One app got a real delete — and only the human can press it.
+📦🙈
+Before: the Hide-It Box
+Old projects went into an “archive” — hidden, but still there.
+Nobody wanted it, and every screen needed special rules for it.
+So the box was thrown out .
+🏠 ➜ 💨
+Now: really gone
+Done with a project? Delete it, and its folder truly
+leaves the disk . No hiding. Gone means gone.
+Who can delete?
+🧑‍💻🔑
+The human — yes
+In the app window, behind a confirmation.
+🤖⛔
+Robots — never
+AI agents can write notes into the vault, but they have no delete button at all .
+🔒
+The safety lock
+The red button stays asleep until you type the project’s exact name .
+Delete “Relay”?
+영구 삭제 — 되돌릴 수 없습니다 (permanent — no undo)
+work logs 12 · bugs 3 · events 40 — all go with it
+Cancel
+삭제 (asleep)
+⬇️ type the whole name
+Delete “Relay”?
+영구 삭제 — 되돌릴 수 없습니다 (permanent — no undo)
+work logs 12 · bugs 3 · events 40 — all go with it
+Cancel
+삭제 (awake!)
+Wrong name? Nothing happens. Press Enter too early? Nothing.
+Press Esc or click outside? The dialog just closes. Only the exact name wakes the button.
+🛡️
+The guard checks the address
+Before anything is removed, the app makes sure the folder is
+really one of its own projects — sitting right inside its own house.
+Sneaky addresses like “../..” that point somewhere else are refused.
+🪟🪟
+Every open window finds out
+Delete a project in one window, and other windows already looking at it don’t keep lying:
+📋
+Lists turn into
+“this project isn’t here anymore”
+📄🫶
+A page you were reading keeps your last copy, with a note that it’s gone
+🙅🔁
+The “try again” button that would have erased that last copy was removed
+✅✅✅
+Checked and re-checked
+Hundreds of automatic checks pressed every button — in Korean and English —
+always on throwaway copies . The real vault was never touched.
+ELI5 of WORK-0032 · “Archive out, delete in” · 2026-08-20

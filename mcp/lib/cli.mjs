@@ -155,6 +155,41 @@ function parseJson(text) {
 const HUMAN_CONTRACT = "agentmon human-style";
 const HUMAN_CAP = Number.POSITIVE_INFINITY;
 
+/**
+ * The last line of that refusal reads "The full contract: agentmon human-style" — a shell
+ * command, to a caller that has no shell. The compact rules above it arrive whole; what
+ * does not is the rest of the contract, the worked example included, so the message ends
+ * by naming the call that prints it here. Appended rather than substituted: the CLI's own
+ * wording is what a reader with a terminal open should still see, and this server's rule
+ * everywhere else is that a refusal comes back in the CLI's words.
+ */
+const HUMAN_CONTRACT_HERE = '\nNo shell here: status(mode="human_style") prints that contract.';
+
+/**
+ * Has this session already been handed the compact style rules?
+ *
+ * Three channels carry the same text and none should pay for another's turn: the session's
+ * first tool result, whatever call produced it (`handOver` in tools.mjs), which is where
+ * they normally land because it comes before any draft; this refusal, when a write is
+ * turned down; and `status(mode="human_style")`, which hands over the whole contract the
+ * block is cut from. Through MCP the refusal hardly ever fires — `required: [..., "human"]`
+ * means the caller always sends *something*, so the write succeeds and there is no
+ * rejection to teach from.
+ *
+ * The setter takes a value because `handOver` claims the session *before* it spawns the CLI
+ * — two calls in flight would otherwise both pass an "already sent?" check and both pay —
+ * and has to give the claim back if that spawn comes up empty.
+ *
+ * Process-scoped because an MCP server process **is** one client session: the client
+ * spawns it on connect and kills it on disconnect, so "once per process" and "once per
+ * session" are the same sentence here.
+ */
+let contractSent = false;
+export const contractDelivered = () => contractSent;
+export const markContractDelivered = (sent = true) => {
+  contractSent = sent;
+};
+
 /** One short line an agent can act on: what failed, which exit code, why. */
 export function cliErrorText(result) {
   if (result.spawnFailed) return trimCliMessage(result.stderr);
@@ -162,8 +197,11 @@ export function cliErrorText(result) {
   const kind = envelope?.kind ? ` (${envelope.kind})` : "";
   const meaning = EXIT_MEANING[result.exitCode] ? `, ${EXIT_MEANING[result.exitCode]}` : "";
   const body = envelope?.message ?? result.stderr ?? result.stdout ?? "agentmon failed";
-  const cap = String(body).includes(HUMAN_CONTRACT) ? HUMAN_CAP : undefined;
-  return `agentmon exit ${result.exitCode}${kind}${meaning}: ${trimCliMessage(body, cap)}`;
+  const isHumanRefusal = String(body).includes(HUMAN_CONTRACT);
+  const message = trimCliMessage(body, isHumanRefusal ? HUMAN_CAP : undefined);
+  const route = isHumanRefusal ? HUMAN_CONTRACT_HERE : "";
+  if (isHumanRefusal) markContractDelivered();
+  return `agentmon exit ${result.exitCode}${kind}${meaning}: ${message}${route}`;
 }
 
 /** Comma-joined list flag value, from either an array or an already-joined string. */

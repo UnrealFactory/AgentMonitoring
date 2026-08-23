@@ -402,7 +402,7 @@ export const ko: Dict = {
   "rec.referencesHint": (noun) => `이 ${noun}의 refs에 적힌 항목`,
   /* The particle lands on 기록, not on the id: BUG-0004 takes 를 and BUG-0011 takes 을, and
      nothing in this file can tell which without pronouncing the number. */
-  "rec.referencedByHint": (id) => `이 기록(${id})을 가리키는 작업 로그·버그·메모`,
+  "rec.referencedByHint": (id) => `이 기록(\`${id}\`)을 가리키는 작업 로그·버그·메모`,
   "rec.missingRef": "이 프로젝트에 해당 ID의 작업 로그·버그·메모가 없습니다",
   /* 문장 속 칩의 툴팁. ID 뒤에 조사를 붙이지 않고 —로 잇는다: BUG-0004는 를, BUG-0011은 을을
      받으므로 어느 쪽도 이 파일이 고를 수 없다. */
@@ -426,6 +426,35 @@ export const ko: Dict = {
   "view.emptyCommand": "에이전트가 이 기록에 한 줄로 덧붙입니다:",
   "view.emptyStyle": "어떻게 쓰는지는 짐작할 일이 아닙니다. `agentmon human-style`이 규칙 전문을 출력합니다.",
   "view.emptyBack": "에이전트 쪽 읽기",
+  /* 그 버튼을 눌렀을 때 무슨 일이 일어났는지, 그 상태가 유지되는 동안만 하는 말. 위의 버튼도,
+     사람 쪽 글 맨 위의 정정 안내도 기록 한 건에 대해서만 반대쪽을 열어 준다. 어느 쪽으로 읽을지
+     정해 둔 설정은 그대로다 (src/lib/recordView.ts). */
+  "view.peekNote": (id) =>
+    `\`${id}\` 한 건만 에이전트 쪽으로 보고 있습니다. 다음 기록을 어느 쪽으로 열지는 그대로입니다.`,
+
+  /* …그리고 기록 한 건이 아니라 여러 건을 한 화면에 그리는 보드(앱 피드백)의 말. 없다는 사실은
+     각 줄에 한 줄로 남기고, 그에 대해 무엇을 하면 되는지는 보드 위에 한 번만 적는다 — 같은
+     안내를 줄 수만큼 반복하면 그것은 설계된 빈 상태가 아니라 상용구다. */
+  /* 컨트롤 자신의 말은 자기가 어느 화면에 있는지 알아야 한다. 보드에는 기록 한 건이 그려지지
+     않으므로 "이 기록을 어느 쪽으로 읽을지"는 없는 것을 가리키는 이름이고, 한 건도 다시 쓰이지
+     않은 보드에서 "이 기록에는 없습니다"는 바로 아래 안내가 보드의 말로 옳게 적은 사실을 기록의
+     말로 어긋나게 되풀이한 것이었다. */
+  "view.boardLabel": "이 보드를 어느 쪽으로 읽을지",
+  "view.boardAgentTip": "접수한 에이전트가 쓴 그대로",
+  "view.boardHumanTip": "같은 항목을, 그 자리에 없던 사람을 위해 쉬운 말로 다시 쓴 글",
+  "view.boardHumanNoneTip": "이 보드에는 아직 쉬운 말로 쓴 글이 없습니다",
+  "view.humanSomeTip": (has, of) => `${of}건 중 ${has}건에만 쉬운 말로 쓴 글이 있습니다`,
+  /* 한 건도 없는 보드에 "1건 중 1건은"이라고 적으면 숫자가 세는 일을 하지 않는다. 실제로
+     오늘 이 앱의 피드백 보드가 그 상태다(FB-0001 한 건, 사람 쪽 없음). */
+  "view.boardMissingTitle": (missing, total) =>
+    missing === total
+      ? "이 보드에는 아직 쉬운 말로 쓴 글이 없습니다"
+      : `${total}건 중 ${missing}건은 아직 쉬운 말로 쓴 글이 없습니다`,
+  "view.boardMissingText":
+    "이제 남기는 항목에는 모두 한 벌이 더 붙습니다. 같은 이야기를, 그 자리에 없었고 프로그램도 다루지 않는 사람을 위해 쓴 글입니다. 여기서 비어 있는 항목은 그 규칙보다 먼저 접수된 것들입니다. 에이전트가 아래 한 줄로 덧붙이면 되고, ID는 그 항목 제목 오른쪽에 적힌 것으로 바꿉니다:",
+  "view.boardMissingStyle":
+    "어떻게 쓰는지는 짐작할 일이 아닙니다. `agentmon human-style`이 규칙 전문을 출력합니다.",
+  "fb.noHuman": "쉬운 말로 쓴 글 없음",
 
   /* -- record bodies: the renderer's own words --------------------------------
      `> [!note]` 콜아웃의 이름표와, 이미지를 읽지 못했을 때의 한 문장 (lib/markdown.tsx). */
@@ -443,6 +472,10 @@ export const ko: Dict = {
   "rec.correction": "정정",
   "rec.inUpdates": "진행 노트",
   "rec.inThread": "스레드",
+  /* 같은 "어디"를, 사람 쪽을 읽고 있는 사람에게. 그 기록은 지금 화면에 없다 — 정정 줄은 양쪽
+     모두에 그린다(다시 쓴 글도 같은 일을 말하고, `work update --message` / `bug comment`는
+     그 글을 고쳐 쓰지 않는다). 그러니 어느 쪽에 있는지부터 말해야 보낼 수 있다. */
+  "rec.inAgentHalf": (where) => `에이전트 쪽 ${where}`,
   "rec.staleGone": (id) => `${id} — 이 프로젝트에 더 이상 없습니다.`,
   "rec.staleUnread": (id) => `${id} — 다시 읽지 못했습니다.`,
   "rec.staleBody": "아래는 마지막으로 읽었을 때 화면에 있던 내용입니다.",

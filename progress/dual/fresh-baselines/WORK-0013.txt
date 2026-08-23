@@ -1,0 +1,100 @@
+🔔
+The App That Keeps Itself Fresh
+One work session, explained with pictures. (WORK-0013)
+1 The problem: the screen argued with itself
+The app is a window onto a folder of notes (the vault ). But each page only looked at the notes once , when you opened it.
+LIVE
+Sidebar says
+13
+✓ fresh
+Page next to it says
+9
+✗ old news
+⚡
+Same app, same moment — two different answers, under a green "LIVE" light. 😬
+2 The fix: one bell, everyone listens
+Now there is one bell for the whole app. When anything in the vault changes, the bell rings — and every page quietly redraws itself.
+🗃️
+Vault changes
+🔔
+Bell rings once
+Dashboard ↻
+Every page ↻
+Sidebar ↻
+All 8 loaders in the app listen to the same bell.
+🤫
+Quiet refresh No flash, no blank "loading…" skeleton
+📌
+You stay put Scroll position and open sections survive
+🤝
+Everyone agrees Sidebar and page can never disagree again
+3 Two ways to hear the bell
+The app runs in two homes, so it has two ears.
+🖥️ 👂
+Desktop app
+A watcher taps it on the shoulder the instant a file changes.
+🌐 👀
+Browser
+Peeks every 2 seconds: "anything new?" A super-cheap peek — just a tiny fingerprint of the files.
+😴
+Polite too
+Hidden tab? It stops peeking and naps. Come back — it checks once, right away.
+4 The one-pen rule
+You can now create and archive projects from inside the app. But no matter which button you press — or which terminal command you type — there is only one pen that ever writes into the vault.
+🖱️ App button
+⌨️ Terminal command
+🌐 Browser dev mode
+🖊️
+ONE pen
+(the core write code)
+🗃️
+Vault
+One pen = every note looks the same, no matter who wrote it. The app's reader stays a reader.
+5 Your vault is a suitcase now
+The vault is just a folder — and now you can point the app at any folder, anywhere.
+🧳
+Pick a folder "Open vault folder…" — the app moves in and re-arms its watcher
+🌱
+Empty vault? Friendly setup screen with the exact commands to run — and a copy button
+🚫
+Not a vault? The app says no politely, and tells you the one command that would fix it
+6 A magic door: Ctrl + K
+Press two keys, type a few letters, and jump anywhere — any record, any project, any screen.
+🔎 bug 14…
+🐛 BUG-0014 — two Reacts on a cold server
+📁 Project: agentmon
+Everything answers from memory — it feels instant.
+7 A robot proves it (so nobody has to trust words)
+A new automatic test, check:live , acts like a very fussy inspector:
+🗃️➡️🗃️
+copies the vault (real one is safe)
+✍️
+writes a real change
+👁️
+stares at both screens
+✅
+15 checks, all green
+1.3s
+Dashboard updated no reload, no blink, no scroll jump
+0.27s
+Record page updated same rules, even faster
+🔇
+Silence is silent nothing changed for 4.5s → zero wasted requests
+8 Two gremlins caught along the way
+👯
+BUG-0014: Twin trouble
+A cold dev server sometimes loaded two copies of React — blank screen. Now it warms up first. fixed
+📝💥
+BUG-0015: The vanishing note
+Writing a note with the wrong heading style made it land empty . The checker now refuses and explains the right way. fixed
+9 …and a dustpan of little fixes
+A sweep of small paper cuts the last review left behind:
+🟠
+Open bugs are orange they used to be green — green means good!
+⏳
+"Waiting on…" chips a row now says who it's waiting for
+🔢
+Counts say what they count "13 work logs" vs "2 open bugs"
+🤐
+Honest quiet "quiet for 12h 10m" instead of pretending
+ELI5 of work log WORK-0013 · finished 2026-08-19 · all test suites green (build · 114 smoke · 392 layout loads · 670 counts · 77 Rust tests)

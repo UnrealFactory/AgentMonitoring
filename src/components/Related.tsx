@@ -19,7 +19,7 @@ import { useAsync } from "../lib/useAsync";
 import { recordPath } from "../lib/markdown";
 import { useContextMenu } from "./ContextMenu";
 import { useRecordMenu } from "../lib/menus";
-import { BugStatusPill, NoteTypeDot, NoteTypePill, RecordStatusDot, SeverityBadge, WorkStatusPill } from "./ui";
+import { BugStatusPill, NoteTypeDot, NoteTypePill, RecordStatusDot, RichText, SeverityBadge, WorkStatusPill } from "./ui";
 import { bugNoun, noteNoun, workNoun } from "../lib/words";
 import { formatDateTimeUtc, formatRelative } from "../lib/format";
 import { t } from "../lib/i18n";
@@ -214,7 +214,9 @@ export function RelatedSection({
                 ←
               </span>
               <span className="rel-group-label">{t("rec.referencedBy")}</span>
-              <span className="rel-group-hint">{t("rec.referencedByHint", id)}</span>
+              <span className="rel-group-hint">
+                <RichText text={t("rec.referencedByHint", id)} />
+              </span>
             </div>
             <ul className="rel-rows">
               {incoming.map((item) => (

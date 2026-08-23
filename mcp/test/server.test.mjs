@@ -31,17 +31,48 @@ const cliPath =
 /* ----------------------------------------------------------------- budgets */
 
 const BUDGET = {
-  // The full tools/list frame, schemas and descriptions included. Raised from 7 KB to
-  // 7.5 KB when the human area landed (SPEC.md, "The human area"): six write tools each
-  // gained a `human` field, and the shortest honest clause for it costs ~460 bytes with
-  // the JSON around it — more than the 163 bytes of headroom that were left. The clauses
-  // are already the diet version; the contract itself is not here at all, it is in
-  // `agentmon human-style` and in the refusal an agent gets for leaving one out.
-  toolsList: 7680,
+  // The full tools/list frame, schemas and descriptions included — the number this server
+  // is built around, because it is re-sent on every turn of every conversation the server
+  // is enabled in.
+  //
+  // The human area (SPEC.md) costs 265 bytes of it, measured by ablation below rather than
+  // counted by hand: six `human` fields carrying no description at all (156), `human` in
+  // the `required` list of the three tools that always need one (23), the fourteen bytes
+  // that add `human_style` to `status`'s modes, and `id` on app_feedback (72, whose own
+  // `required` got shorter, not longer). No prose teaches the duty: the field descriptions
+  // that used to were measured against the same schema with them emptied and changed
+  // neither the attempt count nor the contract rules the retelling missed, so what an agent
+  // needs to be told now arrives in a result — once a session, on whichever call the session
+  // opens with (`handOver`, mcp/lib/tools.mjs). The one clause left in the 265 is `id`'s,
+  // and it names a route rather than a rule: the call it belongs to succeeds without it,
+  // filing a second item, so no result is ever in a position to mention it.
+  //
+  // This number is published in docs/MCP.md, so `humanArea` below holds it to the schemas.
+  // It had rotted before anything measured it: the doc and this comment both said 251 when
+  // the surface cost 265.
+  toolsList: 7250,
+  // What the human area is allowed to cost that frame, and what docs/MCP.md publishes.
+  // Exact, not a ceiling: a figure in prose is only true if something fails when it drifts.
+  humanArea: 265,
   tools: 7,
   description: 200,
   result: 600, // a default-shaped tool result
   fullResult: 8000, // what `full: true` is allowed to cost
+  // The one-time handover. The compact style rules ride the session's first result,
+  // whichever call produced it — before any draft, because `required: [..., "human"]` means
+  // the refusal that carries them through a shell almost never fires through MCP. Sized to
+  // that block with room to grow, and budgeted apart from the result it is appended to:
+  // that result must still fit `result`. It moves when the contract moves, and only then:
+  // 4400 -> 5200 when the compact block took on the note/decision variant of the five beats
+  // (docs/HUMAN_STYLE.md), so an agent drafting a note is not left holding rules written for
+  // a fixed bug. Raise this deliberately, with the doc change that earned it — nothing else
+  // caps the block, and a handover nobody reads teaches as little as none.
+  primer: 5200,
+  // The style contract, which is a document rather than a record: `status(mode=
+  // "human_style")` returns docs/HUMAN_STYLE.md whole, because it is what an agent reads
+  // *before* writing its first human area, and the worked example at the end is the part
+  // a summary cannot stand in for. Sized to that file with room to grow.
+  contract: 24000,
 };
 
 /* ------------------------------------------------------------------ runner */
@@ -311,6 +342,54 @@ function budgeted(label, res, cap = BUDGET.result) {
   return res;
 }
 
+/**
+ * The style rules a session is handed once, split off from the result they ride on.
+ *
+ * They are a document, not a record — the same block the CLI prints inside every refusal
+ * — so the two halves are measured apart: the result still has to fit `result`, and the
+ * handover has its own budget. Kept out of `budgeted()` for the same reason `human_style`
+ * is: `resultSizes` is what "largest default result" is computed from.
+ *
+ * Two heads, because any call can be the first one in a session: one for a result that
+ * arrives before a draft, and one for the single shape no result can get ahead of — a
+ * session whose first call *is* the write.
+ */
+const LIST_PRIMER_MARK = "Every record you write here has a second half";
+const PRIMER_MARK = "The retelling you just sent is held to the rules below.";
+function splitPrimer(res) {
+  const text = res.text ?? "";
+  const at = [LIST_PRIMER_MARK, PRIMER_MARK].map((m) => text.indexOf(m)).filter((i) => i >= 0).sort((a, b) => a - b)[0];
+  return at === undefined ? { body: text, primer: "" } : { body: text.slice(0, at).trim(), primer: text.slice(at) };
+}
+
+const RULES_OPEN = "<!-- compact-rules -->";
+const RULES_CLOSE = "<!-- /compact-rules -->";
+const cutRules = (doc) => doc.slice(doc.indexOf(RULES_OPEN) + RULES_OPEN.length, doc.indexOf(RULES_CLOSE)).trim();
+
+/**
+ * The compact rules as their *source* has them — read off disk, never out of the artifact.
+ *
+ * Every other assertion about the handed-over block compares it to `agentmon human-style`,
+ * which is the same binary the server spawned to build that block: the binary measured
+ * against itself, green however far it has drifted from the document it was built from.
+ * That is not a hypothetical. crates/agentmon-core/build.rs bakes this block in at compile
+ * time, so a document edited after the last `cargo build --release` leaves every channel
+ * teaching the old contract at once — the CLI's refusal, `status(mode="human_style")`, and
+ * this server's handover — while both binary-to-binary checks still pass. It happened: a
+ * binary built at 00:20 handed over 3,587 characters of a 3,902-character contract for a
+ * whole round of measurement, and the rule it was missing was the one against anonymous
+ * actors. Four graded cells drafted without it, and every one of them was then marked down
+ * for exactly that rule.
+ *
+ * So this reads the document, and the check below fails unless the bytes crossing the wire
+ * carry it whole. A stale binary is a red suite now, not a quiet grade.
+ */
+function docCompactRules() {
+  const block = cutRules(readFileSync(path.join(repoRoot, "docs", "HUMAN_STYLE.md"), "utf8"));
+  assert(block.length > 1000, `docs/HUMAN_STYLE.md has ${block.length} chars between its markers`);
+  return block;
+}
+
 let workId = "";
 {
   const res = await client.call("log_work", {
@@ -321,12 +400,46 @@ let workId = "";
     human: "The window used to show whatever it had read when you opened a screen, so a record written a second ago looked missing until you clicked something. This makes it notice on its own.",
     tags: ["tauri", "live-updates"],
   });
-  budgeted("log_work (open)", res);
+  const first = splitPrimer(res);
+  budgeted("log_work (open)", { text: first.body });
   check("log_work returns a WORK id", () => {
     const m = /WORK-\d{4}/.exec(res.text ?? "");
     assert(m, res.text);
     workId = m[0];
   });
+
+  // An MCP caller can never be refused for a missing human area (`required` guarantees
+  // one), so the channel that teaches a shell caller the contract never opens. This
+  // session writes before it lists anything, which is the case the write-time fallback
+  // exists for; the session that starts the way every session is told to is below,
+  // "the rules arrive before the first draft".
+  console.log(`  the style rules handed over: ${first.primer.length} chars (budget ${BUDGET.primer})`);
+  check(`the first successful write hands over the compact rules (${first.primer.length} chars <= ${BUDGET.primer})`, () => {
+    assert(first.primer, `no rules in the first write result:\n${res.text}`);
+    assert(first.primer.length <= BUDGET.primer, `${first.primer.length} chars`);
+  });
+  check("they are the CLI's own rules, byte for byte", () => {
+    const block = cutRules(cli(["human-style"], location).stdout);
+    assert(block.length > 1000, `the CLI's compact block is ${block.length} chars`);
+    assert(first.primer.includes(block), "the handover is not the CLI's block");
+  });
+  // …and the CLI's rules are the document's. The check above is the binary against itself
+  // and cannot see a binary older than the contract; this one can. See `docCompactRules`.
+  check("…and the rules are docs/HUMAN_STYLE.md's own, byte for byte", () => {
+    const source = docCompactRules();
+    assert(
+      first.primer.includes(source),
+      `the handover is ${cutRules(cli(["human-style"], location).stdout).length} chars of a ` +
+        `${source.length}-char contract — target/release/agentmon.exe is older than ` +
+        `docs/HUMAN_STYLE.md. Run: cargo build --release -p agentmon-cli`,
+    );
+  });
+  check("the handover names the call that rewrites this very record", () =>
+    assertIncludes(first.primer, `update_work(id="${workId}", human=…)`, "handover"));
+  check("…and the way to the rest of the contract, without a shell", () =>
+    assertIncludes(first.primer, 'status(mode="human_style")', "handover"));
+  check("the confirmation itself is still inside the result budget", () =>
+    assert(first.body.length <= BUDGET.result, `${first.body.length} chars: ${first.body}`));
   check("log_work says it is in progress", () => assertIncludes(res.text, "in_progress", "result"));
   check("log_work returns the file path", () => assertIncludes(res.text, path.join("worklogs", `${workId}.md`), "result"));
   check("the file exists in the temp project", () =>
@@ -361,6 +474,8 @@ let workId = "";
   });
   budgeted("update_work (close)", res);
   check("update_work closes the log", () => assertIncludes(res.text, "done", "result"));
+  check("the rules are not handed over a second time", () =>
+    assert(!res.text.includes(PRIMER_MARK), `the session paid for the contract twice:\n${res.text}`));
   check("the record is done with an outcome and the file", () => {
     const md = readFileSync(path.join(DATA, "worklogs", `${workId}.md`), "utf8");
     assertIncludes(md, "status: done", "frontmatter");
@@ -536,7 +651,11 @@ let noteName = "";
   });
 
   const list = await client.call("note", { action: "list" });
-  budgeted("note (list)", list);
+  // This session was handed the rules by its first write, several calls ago, so the list is
+  // just a list — the split is here so the budget below measures the index either way.
+  budgeted("note (list)", { text: splitPrimer(list).body });
+  check("a session already handed the rules is not handed them again", () =>
+    assert(!list.text.includes(LIST_PRIMER_MARK), `the session paid for the contract twice:\n${list.text}`));
   check("list shows the name, the type and the author's description", () => {
     assertIncludes(list.text, noteName, "list");
     assertIncludes(list.text, "memory", "list");
@@ -740,6 +859,17 @@ section("app feedback: about the app itself, machine-level");
     assert(bad.isError, bad.text);
     assertIncludes(bad.text, "bug, idea", "error");
   });
+
+  // `required: [...]` holds `human` alone here, because `type` and `title` mean nothing on
+  // the rewrite route. The clause that used to say so in the schema was paid on every
+  // turn; this message is paid only by the call that got it wrong, and it names both
+  // shapes rather than only the one the caller happened to miss.
+  const shapeless = await client.call("app_feedback", { human: "A wish filed with nothing but its retelling." });
+  check("a filing with no type or title names both shapes of the call", () => {
+    assert(shapeless.isError, shapeless.text);
+    assertIncludes(shapeless.text, "type and title", "error");
+    assertIncludes(shapeless.text, "id to rewrite", "error");
+  });
 }
 
 /* ------------------------------------------------------------- the human area */
@@ -760,6 +890,69 @@ section("the human area: required through MCP, refreshable, and the rules travel
     for (const name of ["log_work", "report_bug", "app_feedback"]) {
       assert((schema(name).required ?? []).includes("human"), `${name} does not require human`);
     }
+  });
+  // The round-4 rule, kept honest by a test: the duty costs `required` and a field, and no
+  // prose. A description here is re-sent on every turn of the conversation and was
+  // measured to change nothing about the retelling that came back; what an agent has to be
+  // told arrives once, in the handover above and in the refusal below.
+  check("and not one of them spends a description on it", () => {
+    for (const name of ["log_work", "update_work", "report_bug", "resolve_bug", "note", "app_feedback"]) {
+      const field = schema(name).properties?.human ?? {};
+      assert(!field.description, `${name}.human carries ${JSON.stringify(field.description)}`);
+    }
+    const status = tools.find((t) => t.name === "status");
+    assert(!/human/i.test(status.description), `status advertises the contract in prose: ${status.description}`);
+    assert(status.inputSchema.properties.mode.enum.includes("human_style"), "the mode itself must stay reachable");
+  });
+  // …and nowhere else on the surface either, because "no description on `human`" is not the
+  // rule — the rule is that no always-on byte teaches this duty, and prose about it can grow
+  // back on any of the other forty-odd fields, or in a tool's own sentence. So the sweep is
+  // over the whole tool list. Exactly one clause survives it: app_feedback's `id`, which
+  // names a route rather than a rule (filing a second item instead of rewriting the first
+  // succeeds, so no refusal and no result can ever mention it). Its owner and its length are
+  // both pinned here, so a lesson cannot move in under a route's cover.
+  check("no description anywhere on the surface teaches the human area", () => {
+    const prose = [];
+    for (const t of tools) {
+      if (/human/i.test(t.description ?? "")) prose.push([`${t.name} (tool description)`, t.description]);
+      for (const [key, field] of Object.entries(t.inputSchema?.properties ?? {})) {
+        if (/human/i.test(field.description ?? "")) prose.push([`${t.name}.${key}`, field.description]);
+      }
+    }
+    assert(prose.length === 1, `human prose in the schemas: ${JSON.stringify(prose, null, 1)}`);
+    const [where, clause] = prose[0];
+    assert(where === "app_feedback.id", `the one surviving clause moved to ${where}: ${clause}`);
+    const words = clause.trim().split(/\s+/).length;
+    assert(words <= 5, `${where} is ${words} words, which is a lesson rather than a route: ${clause}`);
+  });
+
+  // What the whole duty costs the always-on frame, by ablation: build the same tool list
+  // with the human area taken out of it and subtract. docs/MCP.md publishes this number and
+  // says the suite keeps it honest, which was not true until here — the doc and the comment
+  // at the top of this file both claimed 251 while the surface had grown to 265, and nothing
+  // in the suite was in a position to notice. An exact match, not a ceiling: the point of
+  // the number is that a description growing back is visible, and a ceiling hides growth.
+  check(`the human area costs the tools/list frame exactly ${BUDGET.humanArea} bytes`, () => {
+    const bytes = (o) => Buffer.byteLength(JSON.stringify(o));
+    const stripped = JSON.parse(JSON.stringify(tools));
+    for (const t of stripped) {
+      const s = t.inputSchema;
+      if (!s) continue;
+      delete s.properties?.human;
+      if (s.required) s.required = s.required.filter((r) => r !== "human");
+      if (t.name === "status") s.properties.mode.enum = s.properties.mode.enum.filter((m) => m !== "human_style");
+      if (t.name === "app_feedback") delete s.properties.id;
+    }
+    const cost = bytes(tools) - bytes(stripped);
+    assert(
+      cost === BUDGET.humanArea,
+      `the human area now costs ${cost} bytes, not ${BUDGET.humanArea}. ` +
+        `Update BUDGET.humanArea and the figure in docs/MCP.md together.`,
+    );
+  });
+  check("…and docs/MCP.md publishes that same figure", () => {
+    const doc = readFileSync(path.join(repoRoot, "docs", "MCP.md"), "utf8");
+    assertIncludes(doc, `is **${BUDGET.humanArea}** of those bytes`, "docs/MCP.md");
   });
 
   // The refusal an agent gets, and what it teaches.
@@ -798,6 +991,12 @@ section("the human area: required through MCP, refreshable, and the rules travel
       .pop();
     assertIncludes(noHuman.text, lastRule.trim().slice(0, 60), "error");
     assert(!noHuman.text.includes("(trimmed"), `the refusal was shortened:\n${noHuman.text}`);
+  });
+  check("…and names a way to the rest of it that this caller can actually run", () => {
+    // The CLI signs off with "The full contract: agentmon human-style" — a shell command,
+    // to a caller with no shell. The compact rules above it arrive whole; the worked
+    // example does not, so the message must end at a call, not at a terminal.
+    assertIncludes(noHuman.text, 'status(mode="human_style")', "error");
   });
   check("the rejected call wrote nothing", () => {
     const worklogs = readdirSync(path.join(DATA, "worklogs"));
@@ -963,6 +1162,27 @@ section("the human area: required through MCP, refreshable, and the rules travel
     assertIncludes(lines[lines.length - 1], "human_updated", "events");
   });
 
+  // The combination that used to be warned about in the schema, on every turn, whether or
+  // not anyone made it: a note appends, and the `human` beside it REPLACES. Said now by
+  // the result of the call that does it, so it is read at the one moment it is visible.
+  const both = await client.call("update_work", {
+    id: workId,
+    note: "Correction: the watcher re-arms after a rename, which the note above did not say.",
+    human: "Rewritten again, with the correction folded in: the window keeps noticing new records even after a file is renamed.",
+  });
+  budgeted("update_work (note + human)", both);
+  check("a note with a retelling says the retelling was replaced", () => {
+    assert(!both.isError, both.text);
+    assertIncludes(both.text, "replaced", "result");
+  });
+  check("…and the record shows the note appended and the retelling swapped", () => {
+    const md = readFileSync(path.join(DATA, "worklogs", `${workId}.md`), "utf8");
+    assertIncludes(md, "Correction: the watcher re-arms", "record");
+    assertIncludes(md, "even after a file is renamed", "record");
+    assert(!md.includes("Rewritten afterwards"), "the previous retelling should be gone");
+    assert(md.match(/## For humans/g).length === 1, "a second human area was appended");
+  });
+
   // The same shape for a note and for a bug.
   const noteRefresh = await client.call("note", {
     action: "write",
@@ -1036,6 +1256,249 @@ section("the human area: required through MCP, refreshable, and the rules travel
   });
 }
 
+/* ------------------------------------- the rules arrive before the first draft */
+
+section("a session that starts the way it is told to has the rules before it drafts");
+{
+  // The failure this closes. Through MCP `required: [..., "human"]` means the refusal that
+  // teaches never fires, so the rules used to ride the first successful write — arriving
+  // stapled to the retelling they were meant to govern, which is one draft too late. They
+  // ride the session's first *result* instead, whatever call produced it. A third server
+  // process is a third session, and this one starts the way a session is told to; the
+  // section below starts the way sessions actually do.
+  const draftLocation = path.join(tmpRoot, "third-session");
+  const init = cli(["init", "--name", "Third session project"], draftLocation);
+  check("a project for the third session exists", () => assert(init.code === 0, init.stderr));
+
+  const doc = cli(["human-style"], draftLocation).stdout;
+  const block = doc
+    .slice(doc.indexOf("<!-- compact-rules -->") + "<!-- compact-rules -->".length, doc.indexOf("<!-- /compact-rules -->"))
+    .trim();
+
+  const fresh = new McpClient(["--dir", draftLocation, "--agent", AGENT], {
+    AGENTMON_BIN: cliPath,
+    AGENTMON_REGISTRY_DIR: path.join(tmpRoot, ".registry"),
+  });
+  await fresh.initialize();
+
+  const opened = await fresh.call("note", { action: "list" });
+  const handover = splitPrimer(opened);
+  console.log(`  handed over with the notes list: ${handover.primer.length} chars (budget ${BUDGET.primer})`);
+  check(`the first notes list carries the rules themselves (${handover.primer.length} chars <= ${BUDGET.primer})`, () => {
+    assert(!opened.isError, opened.text);
+    assert(handover.primer, `no rules in the session's first notes list:\n${opened.text}`);
+    assert(block.length > 1000, `the CLI's compact block is ${block.length} chars`);
+    assert(handover.primer.includes(block), "the handover is not the CLI's own block");
+    assert(handover.primer.length <= BUDGET.primer, `${handover.primer.length} chars`);
+  });
+  // What the head adds to the block: the tie between it and the `human` field the schemas
+  // require without a word of description, and the instruction the whole move exists for.
+  // Who the retelling is for is the block's own first line and is not said twice.
+  check("…tied to the field the schema requires, and to the draft that has not happened yet", () => {
+    assertIncludes(handover.primer, "second half — the `human` field", "handover");
+    assertIncludes(handover.primer, "before you draft the first one", "handover");
+  });
+  // docs/MCP.md prices this channel ("About N characters, once") and that figure is what
+  // answers the owner's context-cost question, so it gets the same honesty the 265 has:
+  // the doc must publish the measured handover to the nearest hundred. The block this rides
+  // grows with docs/HUMAN_STYLE.md, so when the contract changes, this check names the new
+  // figure to publish instead of letting the doc drift 27% low again.
+  check("…and docs/MCP.md publishes the handover's size to the nearest hundred", () => {
+    const doc = readFileSync(path.join(repoRoot, "docs", "MCP.md"), "utf8");
+    const rounded = Math.round(handover.primer.length / 100) * 100;
+    assertIncludes(doc, `About ${rounded.toLocaleString("en-US")} characters, once`, "docs/MCP.md");
+  });
+  check("…and the way to the rest of the contract, without a shell", () =>
+    assertIncludes(handover.primer, 'status(mode="human_style")', "handover"));
+  check("the index itself still fits the result budget", () =>
+    assert(handover.body.length <= BUDGET.result, `${handover.body.length} chars: ${handover.body}`));
+
+  const again = await fresh.call("note", { action: "list" });
+  check("a second list does not hand them over again", () =>
+    assert(!again.text.includes(LIST_PRIMER_MARK), `the session paid twice:\n${again.text}`));
+
+  const write = await fresh.call("log_work", {
+    title: "Record a piece of work in a session that read the rules first",
+    what: "Write a work log through MCP after the notes list handed over the style rules.",
+    why: "The rules have to reach a caller before the retelling they govern is drafted.",
+    how: "List the notes, then log the work with a human area written knowing what it is held to.",
+    human: "The plain half of this record was written after the rules for it had already arrived, which is the whole point of handing them over at the start of the session.",
+  });
+  check("and the write that follows is charged for nothing", () => {
+    assert(!write.isError, write.text);
+    assert(!write.text.includes(PRIMER_MARK), `the session paid twice:\n${write.text}`);
+    assert(write.text.length <= BUDGET.result, `${write.text.length} chars:\n${write.text}`);
+  });
+  fresh.close();
+}
+
+/* ------------------------------------ one handover per session, either channel */
+
+section("the contract reaches a session once, by whichever channel opens first");
+{
+  // A second server process is a second session. Through a shell the contract arrives in
+  // the refusal for leaving a human area out; through MCP that refusal almost never fires,
+  // which is why the notes list above, and the first successful write behind it, carry the
+  // rules instead. Every channel prints the same block, so a session that has already met
+  // one must not be charged for another — this drives the refusal first and then a clean
+  // write.
+  const soloLocation = path.join(tmpRoot, "second-session");
+  const init = cli(["init", "--name", "Second session project"], soloLocation);
+  check("a project for the second session exists", () => assert(init.code === 0, init.stderr));
+
+  const doc = cli(["human-style"], soloLocation).stdout;
+  const firstRule = doc
+    .slice(doc.indexOf("<!-- compact-rules -->") + "<!-- compact-rules -->".length)
+    .split("\n")
+    .find((l) => l.trim())
+    .trim();
+
+  const solo = new McpClient(["--dir", soloLocation, "--agent", AGENT], {
+    AGENTMON_BIN: cliPath,
+    AGENTMON_REGISTRY_DIR: path.join(tmpRoot, ".registry"),
+  });
+  await solo.initialize();
+
+  const refused = await solo.call("log_work", {
+    title: "A record whose retelling is whitespace",
+    what: "Send a real body with a human field that is nothing but spaces, over the wire.",
+    why: "The refusal for a missing human area is the channel that teaches the rules in a shell.",
+    how: "Pass human as two spaces; the server sends no --human and the CLI refuses the write.",
+    human: "   ",
+  });
+  check("the refusal carries the rules itself", () => {
+    assert(refused.isError, refused.text);
+    assertIncludes(refused.text, "exit 2", "error");
+    assertIncludes(refused.text, firstRule.slice(0, 60), "error");
+  });
+
+  const after = await solo.call("log_work", {
+    title: "The same record, with a retelling this time",
+    what: "Write the record properly, immediately after the refusal above.",
+    why: "A session that has just been handed the rules must not be handed them again.",
+    how: "Repeat the call with a real human area and check the result for the handover.",
+    human: "The same piece of work, written again with the plain-language half filled in this time.",
+  });
+  check("the write that follows does not send them a second time", () => {
+    assert(!after.isError, after.text);
+    assert(!after.text.includes(PRIMER_MARK), `the session paid twice:\n${after.text}`);
+    assert(after.text.length <= BUDGET.result, `${after.text.length} chars`);
+  });
+  solo.close();
+}
+
+/* --------------------------------- delivery does not depend on the call order */
+
+section("whichever call a session opens with, the rules come back with it");
+{
+  // The hole this closes, and it was a real one: while the handover rode
+  // `note(action="list")`, delivery depended on the caller obeying an instruction it may
+  // never have read. A session that opened on `status` got nothing, drafted its first
+  // retelling from an undescribed schema field, and met the rules stapled to the write that
+  // ended the draft. The graded sessions that failed are precisely the ones that opened with
+  // something else. So `callTool` hands them over on the first result of any kind — list,
+  // snapshot, read, refusal — and no call order can miss it (mcp/lib/tools.mjs).
+  //
+  // Three sessions here, three server processes, one throwaway project between them: one
+  // opening on a read that is not the notes list, one opening on the whole contract, and one
+  // pipelining two calls at once.
+  const orderLocation = path.join(tmpRoot, "call-order");
+  const init = cli(["init", "--name", "Call order project"], orderLocation);
+  check("a project for the call-order sessions exists", () => assert(init.code === 0, init.stderr));
+  const spawnClient = () =>
+    new McpClient(["--dir", orderLocation, "--agent", AGENT], {
+      AGENTMON_BIN: cliPath,
+      AGENTMON_REGISTRY_DIR: path.join(tmpRoot, ".registry"),
+    });
+  const draft = (title) => ({
+    title,
+    what: "Write a work log through MCP in a session that never asked for the notes list.",
+    why: "The rules have to reach a caller before the retelling they govern is drafted.",
+    how: "Open the session on some other call, then log the work and read the result.",
+    human: "A throwaway record, written to check that the rules for this half had already arrived.",
+  });
+
+  const opener = spawnClient();
+  await opener.initialize();
+  const snapshot = await opener.call("status", {});
+  const handed = splitPrimer(snapshot);
+  check("a session that opens on status is handed the rules by that status", () => {
+    assert(!snapshot.isError, snapshot.text);
+    assert(handed.primer, `no rules in the session's first call:\n${snapshot.text}`);
+    assert(handed.primer.length <= BUDGET.primer, `${handed.primer.length} chars`);
+  });
+  check("…under the head that comes before a draft, not the one that comes after", () => {
+    assertIncludes(handed.primer, "before you draft the first one", "handover");
+    assert(!handed.primer.includes(PRIMER_MARK), handed.primer.slice(0, 200));
+  });
+  check("the snapshot itself still fits the result budget", () =>
+    assert(handed.body.length <= BUDGET.result, `${handed.body.length} chars: ${handed.body}`));
+  const afterOpen = await opener.call("log_work", draft("Record work in a session that opened on status"));
+  check("and the write that follows is charged for nothing", () => {
+    assert(!afterOpen.isError, afterOpen.text);
+    assert(!afterOpen.text.includes(PRIMER_MARK), `the session paid twice:\n${afterOpen.text}`);
+    assert(afterOpen.text.length <= BUDGET.result, `${afterOpen.text.length} chars`);
+  });
+  opener.close();
+
+  // Reading the contract on purpose *is* the handover. Appending the compact block to the
+  // document it was cut from would charge a session 3,800 characters to repeat itself.
+  const reader = spawnClient();
+  await reader.initialize();
+  const contract = await reader.call("status", { mode: "human_style" });
+  check("the whole contract comes back with no compact block stapled to it", () => {
+    assert(!contract.isError, contract.text.slice(0, 200));
+    assert(splitPrimer(contract).primer === "", "the contract was charged for its own summary");
+  });
+  const afterRead = await reader.call("log_work", draft("Record work after reading the contract whole"));
+  check("and a session that read it is not handed the summary of it later", () => {
+    assert(!afterRead.isError, afterRead.text);
+    assert(!afterRead.text.includes(PRIMER_MARK), `the session paid twice:\n${afterRead.text}`);
+  });
+  reader.close();
+
+  // A session whose first call *fails*, and fails for a reason that has nothing to do with
+  // the human area — so the CLI's teaching refusal never fires and the only thing that can
+  // deliver is the dispatcher. "The first call" must not quietly mean "the first call that
+  // worked": an agent that opens by asking for a record that is not there is still an agent
+  // about to draft its first retelling, and it is one call closer to drafting it than the
+  // agent that opened cleanly.
+  const stumbler = spawnClient();
+  await stumbler.initialize();
+  const missed = await stumbler.call("status", { mode: "view", id: "WORK-9999" });
+  const taught = splitPrimer(missed);
+  check("a session that opens on a failed call is handed the rules by that failure", () => {
+    assert(taught.primer, `no rules in the session's first call:\n${missed.text}`);
+    assertIncludes(taught.primer, "before you draft the first one", "handover");
+    assert(taught.primer.length <= BUDGET.primer, `${taught.primer.length} chars`);
+  });
+  check("…and the failure is still a failure, with the CLI's own diagnosis intact", () => {
+    assert(missed.isError, `the handover swallowed isError:\n${missed.text}`);
+    assertIncludes(taught.body, "exit 3", "error");
+    assertIncludes(taught.body, "not found", "error");
+  });
+  const afterStumble = await stumbler.call("status", {});
+  check("…and the call after it is charged for nothing", () => {
+    assert(!afterStumble.isError, afterStumble.text);
+    assert(splitPrimer(afterStumble).primer === "", `the session paid twice:\n${afterStumble.text}`);
+  });
+  stumbler.close();
+
+  // A client that pipelines has two calls in flight before either answers. The flag is
+  // claimed before the CLI is spawned, so only one of them can pay.
+  const pipelined = spawnClient();
+  await pipelined.initialize();
+  const [listed, snapped] = await Promise.all([
+    pipelined.call("note", { action: "list" }),
+    pipelined.call("status", {}),
+  ]);
+  check("two calls in flight at once pay for the rules exactly once", () => {
+    const paid = [listed, snapped].filter((r) => splitPrimer(r).primer !== "").length;
+    assert(paid === 1, `${paid} of 2 results carried the rules`);
+  });
+  pipelined.close();
+}
+
 /* ---------------------------------------------------------------- read modes */
 
 section("status: every mode inside the result budget");
@@ -1069,6 +1532,33 @@ section("status: every mode inside the result budget");
     const summary = resultSizes.find((r) => r.label === "status (work view)");
     assert(summary.chars <= BUDGET.result, "summary view exceeded the budget");
     assert(full.text.length > summary.chars, "full view returned no more than the summary");
+  });
+
+  // The fifth mode, and the only result in this server that is a document rather than a
+  // record — so it is measured against its own budget rather than the record caps, and it
+  // is deliberately kept out of `budgeted()`, whose list is what "largest default result"
+  // is computed from. An agent with no shell cannot run `agentmon human-style`; this is
+  // the same text, by the same binary, through the tool list it does have.
+  const contract = await client.call("status", { mode: "human_style" });
+  console.log(`  the style contract: ${contract.text.length} chars (budget ${BUDGET.contract})`);
+  check(`status (human_style): ${contract.text.length} chars (<= ${BUDGET.contract})`, () => {
+    assert(!contract.isError, contract.text);
+    assert(contract.text.length <= BUDGET.contract, `${contract.text.length} chars`);
+  });
+  check("human_style is the contract whole, byte for byte with the CLI's own", () => {
+    const printed = cli(["human-style"], location).stdout.trim();
+    assert(printed.length > BUDGET.fullResult, `the CLI printed ${printed.length} chars`);
+    assert(contract.text === printed, "the tool and the CLI disagree about the contract");
+    // Not the compact rules the refusal already carries: the worked example is the half
+    // an agent cannot get any other way, and a clamp here would cut it off mid-rule.
+    assertIncludes(contract.text, "One worked example", "contract");
+    assert(!contract.text.includes("(truncated"), "the contract came back clamped");
+  });
+  const listed = await client.request("tools/list", {});
+  check("the mode is advertised, so it can be found without reading the docs", () => {
+    const modes = (listed.msg.result?.tools ?? []).find((t) => t.name === "status")?.inputSchema
+      ?.properties?.mode?.enum;
+    assert(modes?.includes("human_style"), JSON.stringify(modes));
   });
 }
 

@@ -21,7 +21,24 @@ workflow** (do work, update work, file a bug, fix a bug, share a note, look arou
 tell the app's maintainer where the app itself fell short) instead of mirrored
 one-for-one; each description is one verb-first sentence and no property description
 repeats what its name already says; the whole `tools/list` response, schemas included,
-is **6,664 bytes**. Results are the other half: a write
+is **7,168 bytes**.
+
+The human area every record carries is **265** of those bytes, and not one of them teaches
+the duty: six `human` fields with no description at all (156), `human` in the `required`
+list of the three tools that always need one (23), the fourteen that add `human_style` to
+`status`'s modes, and `id` on `app_feedback` (72) — whose `required` list got *shorter*,
+not longer. The only prose
+among them is that `id`'s "Rewrites that item's human area.", and it buys a route rather
+than a lesson: a caller that files a second item instead of rewriting the old one succeeds,
+so no refusal and no result can ever say what it missed.
+
+Everything an agent has to be *told* about that half is told by a **result** instead, for
+one reason — a schema is re-sent on every turn and a result is sent once. So the style
+rules arrive with the session's first result, whatever call produced it (below), before the
+first retelling is drafted, and the fact that a retelling *replaces* rather than appends is
+said by the reply to the call that replaced one.
+
+Results are the other half: a write
 returns the id, the file path and one line of confirmation — the CLI's `--json` envelope
 boiled down, about 200 characters, rather than the record it just wrote, which the caller
 already has. Reads return compact summaries capped at 600 characters, and `full: true`
@@ -113,6 +130,130 @@ for the same reason: the startup flags are the only identity.
 override the startup defaults. Times are UTC ISO8601 (`2026-08-18T09:12:00Z`) and record
 when a thing really happened — pass them when writing up work after the fact.
 
+### `human`, on every write tool
+
+The record's [human area](AGENT_MANUAL.md#the-human-area): the same events retold for a
+reader who was not there and does not program — the owner of the project, the person who
+files the wish, whoever opens the record six months from now.
+
+**The rules arrive with your session's first tool result — whatever call it was.** They are
+long, they are write-time reading, and none of them is in the tool list. In a terminal an
+agent meets them the first time it forgets `--human`: the refusal prints the compact style
+rules whole and is the one message this server never trims. Through MCP the schema bolts
+that door shut: `human` is `required` on every tool that files a record, so one is always
+supplied, the write succeeds at exit `0`, and the refusal that teaches never fires. Prose in
+the tool list was tried and measured instead: the same task through the same schema, once
+with a clause on `human` naming who the retelling is for and once with it emptied, produced
+a retelling on the same single attempt that missed the same contract rules either way. So
+the rules are **handed over** rather than described.
+
+They are handed over **before the first draft**, which was the second lesson and cost two
+graded sessions to learn: riding the first successful write put them in the transcript one
+call *after* the retelling they were meant to govern, and both of those sessions, drafting
+from the schema alone, missed the contract's headline rules — no analogy, no beat saying how
+the agent knew, label-shaped bold lead-ins, the record's own subject never named.
+
+Riding the session's first `note(action: "list")` was the third lesson, and it cost two more:
+that is the call every session is *told* to start with, and "told to" is not "did". A session
+that opened on `status`, or on a note read, or on a call that failed, got nothing and drafted
+blind exactly as before. So the handover sits in the dispatcher instead of in one handler,
+and the **first result of any kind** carries it: list, snapshot, view, refusal. It comes back
+under the index or the confirmation — what the second half is and who it is for, the rules
+themselves, and the way to the rest of the contract. About 4,900 characters, once, and no
+call order can miss it. A client with two calls in flight still pays for it once.
+
+One shape is left that no result can get ahead of, because the result comes after the call:
+a session whose very first call *is* a write. That one is caught a draft late, and told so —
+the same block plus the exact call that rewrites the record just written,
+`update_work(id="WORK-0004", human=…)` and its equivalents on the other tools. Nothing
+always-on tries to get ahead of it, and that is a measurement rather than an oversight: a
+line about the human area was put in the project's CLAUDE.md, then measured against its own
+absence, and the repo without it saved a conforming record on the same attempt as the repo
+with it — the refusal did the teaching either way. Bytes on that surface are re-sent on
+every turn of every conversation, so a line that changes no record is not worth one. This
+last shape stays one draft late.
+
+A session refused once, or one that read the whole contract on purpose, is not charged for
+the same text again by any channel. A session that only reads pays it once, which is the
+price of arriving before a draft that may never come.
+
+`status(mode: "human_style")` is the rest: the contract whole, worked example included,
+the same document `agentmon human-style` prints, for a caller with no terminal to print it
+in. It stays write-time reading — call it when a record needs a human area and the compact
+rules are not enough. Calling it *is* the session's handover: the compact block is cut out
+of that document, and nothing appends a summary to the thing it summarises.
+
+Every channel gets that block from one place — `agentmon human-style`, spawned once a
+session and cached — so the server, the CLI's refusal and `human_style` can never teach
+three different contracts. But the CLI carries the document *baked in* at compile time
+(`crates/agentmon-core/build.rs` cuts it out of `docs/HUMAN_STYLE.md`), so **editing the
+contract only reaches agents after `cargo build --release -p agentmon-cli`**. Until that
+rebuild, all three channels hand over the old text together, and the two obvious tests see
+nothing: both compare the binary's output to the binary's own copy. That is not
+hypothetical — a binary one rule out of date taught four graded sessions a contract they
+were then marked against. So `npm test` reads `docs/HUMAN_STYLE.md` off disk and fails
+unless the block crossing the wire carries it byte for byte.
+
+Required to create or close a record: `log_work`, `report_bug`, `app_feedback`, and any
+call carrying an `outcome`, `abandon`, `resolution` or a note `body`. Required, too, on any
+call touching a record that has no human area yet — a record written before this existed
+gains one on the first touch. Optional everywhere else, and **alone** it is a refresh: it
+rewrites the retelling and moves nothing else.
+
+It always **replaces**. A record has one human area, so the string you send becomes all of
+it — alone, or in the same call as a `note`, a `comment` or an `outcome`. Two sentences of
+`human` on a progress call do not extend the retelling that is already there: they
+overwrite it, the call succeeds, and what they replaced is in no note and no event. On a
+call that is not closing the record, send the retelling as the whole record should now
+read, or send none at all. The reply says which happened — `note added, retelling
+replaced` against a bare `note added` — because the difference is only visible on the call
+that makes it, and a warning in the schema would have been paid for on every turn by every
+caller who never made it.
+
+Write it in the same call, out of the same fresh context that wrote `what`/`why`/`how`.
+Only a *missing* retelling is refused; a thin one is accepted, and then it is what the
+reader gets.
+
+### One session, end to end
+
+Open with the read every session opens with. Its result carries the notes that are this
+project's memory *and* the style rules for the half below, which is why the write comes
+second:
+
+```
+note(action: "list")
+```
+
+Then one call records the whole piece of work. `what`/`why`/`how` are the record's agent
+half — for whoever picks the work up next; `outcome` closes it; `human` is the same events
+for someone who was not there and does not program:
+
+```json
+log_work({
+  "title": "Cache project counts so the sidebar stops re-reading every record",
+  "what": "Cache the per-project work/bug counts the sidebar shows, invalidated on the project-changed event, instead of walking every record on each render.",
+  "why": "The sidebar re-parsed every worklog and bug on every navigation, so the product got slower the more it was used.",
+  "how": "A small in-memory cache in the data layer keyed by project id, cleared on project-changed. No new dependency, no on-disk change.",
+  "outcome": "Shipped in src/lib/api.ts, cleared from AppContext. Measured on the live 41 records: Dashboard→Work went from 180ms to 12ms. npm run build clean, cargo test --workspace green, and a manual pass through all six screens while another agent wrote records.",
+  "human": "Moving between two screens took about a fifth of a second, and it got slower with every record anyone wrote.\n\n**The app counted the same files again on every click.** The strip down the side of every screen shows how many work logs and bugs the project holds, and to get those two numbers it opened and read all 41 files, afresh, every time you moved anywhere.\n\n**Now it counts once and keeps the answer.** It throws the answer away the moment a record is written, and counts again the next time somebody asks — like writing the shopping total on the fridge door instead of adding the receipt up again every time you walk past, as long as you rub it out when the shopping changes.\n\n**Forgetting is the part that bites.** My first version kept the old number when the agents working on a project changed, which is the second thing that moves those counts.\n\n**Measured on this project's own 41 records.** The switch between two screens went from 180 thousandths of a second to 12. `cargo test --workspace`, the command that runs every automatic test we have, passes; I also clicked through all six screens by hand while another agent wrote records into the folder, and the counts kept up.\n\nNothing about the app looks different — it just stops making you wait. The agents-changed case is the one I have only checked by hand.",
+  "files": ["src/lib/api.ts", "src/AppContext.tsx"],
+  "tags": ["performance", "frontend"]
+})
+```
+
+That `human` is what the rules ask for, and it is worth reading before you write your own:
+the same events as the `outcome`, in the order they happened — what was wrong, what the app
+was doing, what it does now, what fooled the agent, how it knows, what is still only checked
+by hand. Each paragraph after the first opens with a short bold sentence that *states*
+something (**"Forgetting is the part that bites."**), never a label (**"Verification."**).
+One name survives, `cargo test --workspace`, and it arrives with its job in the same breath.
+It runs to about 250 words, which is an ordinary record. `status(mode: "human_style")` has
+the rest, including what a bug and a note look like.
+
+Long work opens without an `outcome` and closes later with `update_work`; work that stops
+closes with `abandon`. Before you stop, leave what the next session needs:
+`note(action: "write", type: "handoff", …)`.
+
 ### `log_work`
 
 Records a piece of work, start and finish, in one call.
@@ -126,9 +267,8 @@ and comes back `done`; without one it stays `in_progress` and the reply carries 
 `WORK-NNNN` id to close later. `files` is recorded when the log closes, which is the CLI's
 rule. Backdating a whole record is `started_at` + `finished_at` in the same call.
 
-`human` is the record's [human area](AGENT_MANUAL.md#the-human-area): the same work retold for a reader
-who does not program. One field covers both halves of the call — closing replaces the
-human area, and the same retelling is what goes back.
+One `human` covers both halves of the call: closing replaces the record's human area, and
+the same retelling is the honest thing to put back.
 
 ### `update_work`
 
@@ -138,7 +278,9 @@ Progress, close, or stop — on an existing `WORK-NNNN`.
 
 `human` is required with `outcome` or `abandon` (closing replaces the human area) and on a
 record that has none yet; **alone** it is a refresh — it rewrites the human area, appends
-nothing, and the feed logs one `human_updated` line.
+nothing, and the feed logs one `human_updated` line. Sent with a `note` it still replaces,
+which is the one combination that can quietly cost a good retelling: the note is appended,
+the human area is not.
 
 Otherwise one of the three is the point of the call: `note` appends a timestamped note,
 `outcome` closes the log, `abandon` marks it abandoned with a reason. A note on an
@@ -152,9 +294,8 @@ Files a bug.
 `title*`, `severity*` (`critical|high|medium|low`), `report*`, `human*`, `labels`, `refs`,
 `created_at`
 
-`report` is prose — repro, expected, actual. It becomes the `## Report` section. `human`
-says the same thing for a reader who does not program: what they would see, and what it
-costs them. Use `refs`
+`report` is prose — repro, expected, actual. It becomes the `## Report` section; `human`
+tells it as what a person sees, and what it costs them. Use `refs`
 rather than only prose to link the work log it came out of: the link then works in both
 directions.
 
@@ -170,7 +311,8 @@ comment-only (`claim: false`, `comment`) are both valid single calls. If another
 holds the bug the claim fails and the reply names the way past it.
 
 `human` is required with a `resolution` and on a bug that has no human area yet; alone it
-is a refresh, exactly as in `update_work`.
+is a refresh, exactly as in `update_work` — and sent with a `comment` it replaces the
+bug's retelling, exactly as in `update_work` too.
 
 ### `note`
 
@@ -183,7 +325,9 @@ in one tool. The essential notes are required session-start reading and sort fir
 
 - `list` — the index: every note's name, type, author and one-line description —
   essential notes first, then newest. `type` and `query` filter. Run it at the start of
-  a session and read the essentials before working.
+  a session and read the essentials before working. Open the session here and this is also
+  where the [`human`](#human-on-every-write-tool) style rules land — though they ride
+  whichever call comes first, so opening elsewhere costs you nothing.
 - `read` — one note by `name`; `full: true` for the whole body.
 - `write` — **upsert**: against a `name` that exists it rewrites in place (only the fields
   passed — a `type` left off is preserved; `body` replaces wholesale), which is the
@@ -200,18 +344,24 @@ in one tool. The essential notes are required session-start reading and sort fir
 
 ### `status`
 
-The one read tool for work and bugs.
+The one read tool: work, bugs, and the style contract.
 
-`mode` (`project` default, `work`, `bugs`, `view`), `id`, `state`, `severity`, `agent`,
-`limit`, `full`
+`mode` (`project` default, `work`, `bugs`, `view`, `human_style`), `id`, `state`,
+`severity`, `agent`, `limit`, `full`
 
 - `project` — counts, what is in progress, open bugs by severity, last activity.
 - `work` / `bugs` — one line per record, in the CLI's own order (work by last activity,
   bugs open-and-severe first); `state`, `severity` and `agent` filter, and `limit` sets how
   many rows (default 8, max 50).
 - `view` — one record by `id`: metadata, then its outcome or, while it is open, its what.
-  `full: true` returns the whole record instead, and is the only call that may exceed 600
-  characters.
+  `full: true` returns the whole record instead, and is the only *record* read that may
+  exceed 600 characters.
+- `human_style` — the [`human`](#human-on-every-write-tool) style contract, whole: about
+  20,000 characters, the same document `agentmon human-style` prints. It is not a record
+  and is not summarised. The compact rules inside it reach every caller free — in the
+  handover on the session's first result, and in every refusal — so what only this mode has
+  is the worked example at the end, which is why it is not clamped. The mode is in the enum
+  and in no description: the messages that name it are ones the agent has already read.
 
 ### `app_feedback`
 
@@ -225,9 +375,12 @@ The one tool with no `dir`: app feedback is machine-level, stored beside the reg
 optional — a specific title can carry a whole wish, and friction here would cost real
 feedback. `human` is not optional: this board is read by the person who maintains the app.
 
-Without `id` this files a new item and `type` and `title` are required. **With `id`
-(`FB-0009`) it is `agentmon app-feedback update`**: it rewrites that item's human area and
-nothing else, which is how an item filed before the human area existed gains one. Working
+Without `id` this files a new item and `type` and `title` are required — by the handler,
+not by the schema, whose `required` list holds `human` alone because the other two mean
+nothing on the rewrite route. Get it wrong and the refusal names both shapes of the call.
+**With `id` (`FB-0009`) it is `agentmon app-feedback update`**: it rewrites that item's
+human area and nothing else, which is how an item filed before the human area existed
+gains one. Working
 the board — `done`, `reopen`, and `delete` (done items only) — happens in the app or
 through the CLI when the human delegates the cleanup; those verbs would spend every
 conversation's tokens on what is an occasional chore, so they are not tools.
@@ -254,7 +407,10 @@ Every message names the CLI's exit code, so the meaning is recoverable:
 
 A refusal for a missing human area is the exception to the trimming above: it carries the
 compact style rules the CLI prints, because that error is how the contract reaches an
-agent at write time. `agentmon human-style` prints the whole of it.
+agent at write time. The CLI signs that message off with `agentmon human-style`, which is a
+shell command; this server adds the one line that makes it actionable here —
+`status(mode: "human_style")` prints the same contract, whole. Getting that refusal also
+counts as the session's handover: the same rules are not appended to any later result.
 
 Two failures come from the server rather than the CLI, and say so plainly: no agent
 available for the call, and `update_work` with nothing to say. A failed call writes
@@ -280,6 +436,24 @@ launches a server from the repository root with no `--dir` and asserts it refuse
 than walking up to `./AgentMonitoring`, and it fingerprints the repository's live records before and after to
 prove nothing was written there.
 
+The human area gets its own eleven. That no `human` field spends a byte of prose on it, and
+that a sweep of every tool description and every property description on the surface finds
+exactly one clause mentioning it — `app_feedback`'s `id`, five words, a route rather than a
+rule — so prose cannot grow back on some other field while `human` stays bare. That a
+session starting the way it is told to — a third server process whose first call is
+`note(action: "list")` — is handed the CLI's compact block *byte for byte* before it drafts
+anything, and pays for it on no later call; that a session which writes first is handed the
+same block by that write, naming the record's own rewrite call; that no second write in the
+session sends it again; and that a second server process — refused first, then writing
+cleanly — is not charged twice either. Then the call order the handover must not depend on:
+a session that opens on `status` instead of the notes list gets the block from that
+`status`, under the head that comes *before* a draft; a session whose first call *fails*
+gets it from that failure, which still comes back an error with the CLI's own diagnosis
+intact; a session that opens by reading the whole contract gets no summary stapled to it and
+none later; and a client with two calls in flight at once pays exactly once. The handover is
+measured against its own budget, and the result it rides on still has to fit the 600 the
+others do.
+
 ## Optional: a Stop hook that reminds you to log
 
 **Not installed by anything in this repository** — this is a snippet to paste into
@@ -299,7 +473,7 @@ through, so it can never loop:
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{if(JSON.parse(s||'{}').stop_hook_active)process.exit(0);console.error('Before stopping: if you completed a piece of work, record it with the agentmon log_work tool (title, what, why, how, and outcome to close it). If you already logged it, or there was nothing to record, stop again.');process.exit(2);});\""
+            "command": "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{if(JSON.parse(s||'{}').stop_hook_active)process.exit(0);console.error('Before stopping: if you completed a piece of work, record it with the agentmon log_work tool (title, what, why, how, human, and outcome to close it). If you already logged it, or there was nothing to record, stop again.');process.exit(2);});\""
           }
         ]
       }

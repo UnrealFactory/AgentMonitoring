@@ -702,7 +702,12 @@ try {
      Then the fourth promise, which is not about the keyboard: the choice **persists across
      records**. It is a session value, so a reader who asked for plain language once is not
      asked again on the next record — including a record that has none, where the answer is
-     the box saying so rather than a silent flip back to the agent half. */
+     the box saying so rather than a silent flip back to the agent half.
+
+     …and the fifth, which is the fourth read strictly: the **only** thing that changes that
+     choice is the toggle. Two other controls reach into the other half — the empty box's way
+     out and the correction line over a retelling — and both are about one record, so both
+     are measured here for what they leave behind, not just for what they draw. */
   log("--- the Agent / Human toggle");
   const humanWork = (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/worklogs`)).json())
     .find((w) => w.human && w.human.trim());
@@ -782,6 +787,67 @@ try {
     await page.waitForSelector(".human-sheet", { state: "visible", timeout: 5_000 });
     check("Space on the Human segment swaps it back", (await shownView(page)) === "human");
 
+    /* …and the arrows, which `role="tablist"` promises and which none of this app's six
+       segmented controls kept for six rounds (lib/tablist.ts). ← from the Human segment
+       moves *and* presses — automatic activation, so what is selected is what is focused —
+       and ← again wraps rather than dead-ending, which is what makes a two-segment control
+       usable with one key. */
+    await page.keyboard.press("ArrowLeft");
+    await page.waitForSelector(".record-section .section-title", { state: "visible", timeout: 5_000 });
+    check(
+      "← moves along the toggle and swaps the half with it",
+      (await shownView(page)) === "agent" &&
+        (await page.evaluate(() => document.activeElement?.dataset.value === "agent")),
+      `toggle says ${await shownView(page)}, focus on ${await focused(page)}`,
+    );
+    await page.keyboard.press("ArrowLeft");
+    await page.waitForSelector(".human-sheet", { state: "visible", timeout: 5_000 });
+    check(
+      "…and wraps at the end rather than stopping",
+      (await shownView(page)) === "human" &&
+        (await page.evaluate(() => document.activeElement?.dataset.value === "human")),
+      `toggle says ${await shownView(page)}, focus on ${await focused(page)}`,
+    );
+    await page.keyboard.press("Home");
+    check(
+      "Home jumps to the first segment",
+      await page.evaluate(() => document.activeElement?.dataset.value === "agent"),
+      await focused(page),
+    );
+    await page.keyboard.press("End");
+    check(
+      "End jumps to the last one",
+      await page.evaluate(() => document.activeElement?.dataset.value === "human"),
+      await focused(page),
+    );
+
+    /* The same handler is on the other five `.segmented` tablists, so one of them is read
+       here too: a rule kept by one control and not by its five siblings is the difference a
+       reader feels as "this app was built by two people". The bug board's status tabs drive
+       the URL, which is how this one says it worked. */
+    await page.goto(`${ORIGIN}/p/${slug}/bugs`, { waitUntil: "domcontentloaded" });
+    await ready(page);
+    await page.locator('.segmented [role="tab"][aria-selected="true"]').first().focus();
+    const beforeTab = await page.evaluate(
+      () => document.querySelector('.segmented [role="tab"][aria-selected="true"]')?.dataset.value,
+    );
+    await page.keyboard.press("ArrowRight");
+    await page.waitForFunction(
+      (was) =>
+        document.querySelector('.segmented [role="tab"][aria-selected="true"]')?.dataset.value !== was,
+      beforeTab,
+      { timeout: 5_000 },
+    );
+    check(
+      "→ moves the bug board's own tabs too, and the board follows",
+      (await page.evaluate(
+        () => document.querySelector('.segmented [role="tab"][aria-selected="true"]')?.dataset.value,
+      )) !== beforeTab,
+      `still ${beforeTab}`,
+    );
+    await page.goto(`${ORIGIN}/p/${slug}/work/${humanWork.id}`, { waitUntil: "domcontentloaded" });
+    await ready(page);
+
     /* The choice follows the reader. A second record, opened by navigating rather than by
        reloading, and then one that has no human area at all. */
     const otherWork = (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/worklogs`)).json())
@@ -795,10 +861,33 @@ try {
         `toggle says ${await shownView(page)}`,
       );
     }
-    const noHuman = (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/bugs`)).json())
-      .find((b) => !b.human);
+    /* A record written before human areas existed — the designed empty state.
+
+       Looked for across all three kinds, not just bugs: this used to read `bugs` alone
+       because on this machine no bug had a retelling, and the day the backfill (D4) finished
+       those four checks stopped running without a word. A gate that goes quiet when its
+       material is gone is worse than one that says so, so the miss is printed. A project
+       whose every record has been retold is the *goal*; the empty state is then measured
+       where legacy records still exist — a fixture, or a project mid-migration. */
+    const kinds = [
+      ["bugs", "bugs", (r) => r.id],
+      ["worklogs", "work", (r) => r.id],
+      ["notes", "notes", (r) => r.name],
+    ];
+    let noHuman = null;
+    for (const [endpoint, route, idOf] of kinds) {
+      const found = (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/${endpoint}`)).json())
+        .find((r) => !r.human || !r.human.trim());
+      if (found) {
+        noHuman = { id: idOf(found), path: `${route}/${idOf(found)}` };
+        break;
+      }
+    }
+    if (!noHuman) {
+      log("    (no record on this project lacks a human area — the empty state is not measured here)");
+    }
     if (noHuman) {
-      await page.goto(`${ORIGIN}/p/${slug}/bugs/${noHuman.id}`, { waitUntil: "domcontentloaded" });
+      await page.goto(`${ORIGIN}/p/${slug}/${noHuman.path}`, { waitUntil: "domcontentloaded" });
       await ready(page);
       check(
         "a record with no human area answers the same choice with the box that says so",
@@ -815,8 +904,110 @@ try {
         (await page.locator(".human-empty-action .button").count()) === 1,
       );
       await page.locator(".human-empty-action .button").click();
-      await page.waitForSelector(".record-section .section-title", { state: "visible", timeout: 5_000 });
+      /* By the toggle rather than by a section heading: a note's agent half is one untitled
+         `#body`, so waiting for `.section-title` would hang on the one kind whose empty
+         state this now also reaches. */
+      await page.waitForFunction(
+        () =>
+          document.querySelector('.view-toggle [role="tab"][aria-selected="true"]')?.dataset.value ===
+          "agent",
+        undefined,
+        { timeout: 5_000 },
+      );
       check("…which shows it", (await shownView(page)) === "agent");
+
+      /* …and the price of taking that offer, which for a round was the reader's whole
+         session. The button sits inside the box that exists to say "this record has none",
+         its label names one record, and it called the session-wide setter: a reader walking
+         a week of work in plain language lost plain language at the first legacy record and
+         never learned why (D3 round 2 critic). The three checks below are that bug, in the
+         order it happened — what the store holds, what the screen admits, and what the next
+         record opens on, which is the one the reader actually feels. */
+      check(
+        "…without rewriting the reader's choice: the button's label names one record",
+        (await page.evaluate(() => window.sessionStorage.getItem("agentmon.recordView"))) === "human",
+        `sessionStorage = ${await page.evaluate(() => window.sessionStorage.getItem("agentmon.recordView"))}`,
+      );
+      check(
+        "…and the screen says so while it lasts, naming the record it is about",
+        (await page.locator(".view-peek").count()) === 1 &&
+          (await page.locator(".view-peek").innerText()).includes(noHuman.id),
+        await page.locator(".view-peek").innerText().catch(() => "(no line)"),
+      );
+      await page.goto(`${ORIGIN}/p/${slug}/work/${humanWork.id}`, { waitUntil: "domcontentloaded" });
+      await ready(page);
+      check(
+        "…so the record after it still opens in plain language",
+        (await shownView(page)) === "human" && (await page.locator(".human-sheet").count()) === 1,
+        `toggle says ${await shownView(page)}`,
+      );
+    }
+
+    /* A corrected record, read on the half that is not where the correction was posted.
+
+       The vault is append-only, so a record that turns out to state something false keeps
+       the false sentence and gains a note; the line at the top of the record is the only
+       thing that reaches the reader before the sentence does. The retelling is the same
+       events told again and `work update --message` does not rewrite it, so a retelling of a
+       corrected record is a story the record itself says is wrong — and for one round the
+       human half drew no line at all, which is precisely the reader that line exists for
+       (D3 round 1 critic). It is on both halves now, and on the half that is not drawing the
+       trail it has to carry the reader across rather than jump to an anchor that is not on
+       the page. */
+    /* The list projection carries `updateCount`, not the notes themselves, so the flag is
+       read off the records that could possibly have one. `Correction:` is the whole rule
+       (src/lib/updates.ts) and the CLI's `_Update by X._` byline sits in front of it. */
+    const isCorrection = (body) =>
+      /^[*_\s]*correction[*_\s]*:/i.test(String(body ?? "").replace(/^_Update by ([^_\n]+)\._\s*/, ""));
+    let corrected = null;
+    for (const meta of (await (await fetch(`${ORIGIN}/project-api/projects/${slug}/worklogs`)).json())
+      .filter((w) => w.human?.trim() && w.updateCount > 0)) {
+      const full = await (
+        await fetch(`${ORIGIN}/project-api/projects/${slug}/worklogs/${meta.id}`)
+      ).json();
+      if ((full.updates ?? []).some((u) => isCorrection(u.body))) {
+        corrected = full;
+        break;
+      }
+    }
+    if (corrected) {
+      await page.goto(`${ORIGIN}/p/${slug}/work/${corrected.id}`, { waitUntil: "domcontentloaded" });
+      await ready(page);
+      await showView(page, "agent");
+      check(
+        "a corrected record says so at the top of the agent's half",
+        (await page.locator(".correction-notice").count()) === 1,
+        corrected.id,
+      );
+      await showView(page, "human");
+      check(
+        "…and at the top of the retelling too, where the trail is not on the page",
+        (await page.locator(".correction-notice").count()) === 1 &&
+          (await page.locator(".human-sheet").count()) === 1,
+        `${await page.locator(".correction-notice").count()} notices, ${await page.locator(".human-sheet").count()} sheets`,
+      );
+      /* And it is a way in, not a dead anchor: `#updates` does not exist on this half. */
+      await page.locator(".correction-notice").click();
+      await page.waitForSelector("#updates", { state: "visible", timeout: 5_000 });
+      check(
+        "…and following it swaps to the half the correction is on, at the notes",
+        (await shownView(page)) === "agent" &&
+          (await page.evaluate(() => {
+            const el = document.getElementById("updates");
+            const box = el?.getBoundingClientRect();
+            return !!box && box.top >= 0 && box.top < window.innerHeight;
+          })),
+        `toggle says ${await shownView(page)}`,
+      );
+      /* The same rule as the empty box's button: it carried the reader across for this
+         record, not for the rest of the window. `showView(page, "human")` above is what
+         chose, so that is what the store must still say. */
+      check(
+        "…for this record, leaving the reader's choice where the toggle put it",
+        (await page.evaluate(() => window.sessionStorage.getItem("agentmon.recordView"))) === "human" &&
+          (await page.locator(".view-peek").count()) === 1,
+        `sessionStorage = ${await page.evaluate(() => window.sessionStorage.getItem("agentmon.recordView"))}, ${await page.locator(".view-peek").count()} lines`,
+      );
     }
   }
 
@@ -1077,14 +1268,24 @@ try {
     }
     return null;
   });
-  await page.mouse.click(nearBottom.x, nearBottom.y, { button: "right" });
-  await page.waitForSelector(".ctx-menu", { state: "visible" });
-  const bottomBox = await page.locator(".ctx-menu").boundingBox();
-  check(
-    "…and one opened at the bottom edge grows upward instead of off the screen",
-    bottomBox.y >= 0 && bottomBox.y + bottomBox.height <= 700,
-    `y ${bottomBox.y} + h ${bottomBox.height} in 700`,
-  );
+  /* A project with fewer work logs than a 700px window holds has no row on that edge, and
+     there is nothing to measure. That is a skip with a line, the way every other check here
+     handles missing material — it used to be a `TypeError` on `null.x`, which killed the
+     run and took 120 unrelated checks with it. The D3 loop meets exactly that project: the
+     empty-state block above can only be measured on a project that still has a record
+     written before human areas existed, which the live one no longer does. */
+  if (!nearBottom) {
+    log("    (no work row on the bottom edge at 960x700 — the upward flip is not measured here)");
+  } else {
+    await page.mouse.click(nearBottom.x, nearBottom.y, { button: "right" });
+    await page.waitForSelector(".ctx-menu", { state: "visible" });
+    const bottomBox = await page.locator(".ctx-menu").boundingBox();
+    check(
+      "…and one opened at the bottom edge grows upward instead of off the screen",
+      bottomBox.y >= 0 && bottomBox.y + bottomBox.height <= 700,
+      `y ${bottomBox.y} + h ${bottomBox.height} in 700`,
+    );
+  }
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 1000 });
 

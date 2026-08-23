@@ -782,6 +782,96 @@ fn doctor_reports_levels_separately() {
     assert_eq!(report.problems[0].level, Level::Warning);
 }
 
+/// A retelling of exactly `n` words, and long enough at any `n` to pass the write path.
+fn human_of(n: usize) -> String {
+    let mut out = String::from("A retelling long enough to count");
+    for _ in 6..n {
+        out.push_str(" word");
+    }
+    assert_eq!(agentmon_core::human::words(&out), n, "harness built the wrong length");
+    out
+}
+
+/// A compound retelling: a shared opening, then `things` beat-blocks of `each` words, every
+/// one opened by a bold lead-in — the shape a record that shipped several things owes.
+fn compound_human(things: usize, each: usize) -> String {
+    let mut out = String::from("The shared opening, in words a reader could have witnessed.");
+    for n in 1..=things {
+        out.push_str(&format!("\n\n**The {n} thing shipped, stated.** {}", human_of(each)));
+    }
+    out
+}
+
+/// The style contract's word ceiling is checked — on **one telling**, which is what it
+/// bounds — and it is a warning rather than a refusal.
+///
+/// Two failures, one test. Until this check existed the 450 was a rule in
+/// docs/HUMAN_STYLE.md that no code read: a 703-word human area shipped, and the only thing
+/// that caught it was a person counting words by hand. Then the check itself became the
+/// failure: it counted whole records, so a work log that shipped five things and retold all
+/// five was reported as 374 words over, and the agent sent to fix it deleted two of the
+/// five. A ceiling bounds one telling, never a record's total — a record that covers
+/// everything it shipped is silent here however long it runs, and the fix hint never asks
+/// for a cut before a split.
+///
+/// It stays a warning because a long retelling is readable and true — the repair is a
+/// rewrite by the agent that wrote it, not a write that never happens.
+#[test]
+fn doctor_warns_on_a_telling_past_the_ceiling_and_never_on_covering_everything() {
+    let tp = TempProject::new("doctor-words");
+    let id = start(&tp, "Wire the change watcher into the desktop app");
+    let ceiling = agentmon_core::human::WORDS_MAX;
+
+    // Exactly the ceiling is silent: the contract allows 450 words "where the mechanism is
+    // genuinely hard", so the warning starts one word past it.
+    tp.store
+        .update_work(&id, "cli-builder", None, Some(&human_of(ceiling)), None)
+        .unwrap();
+    let report = doctor::check(&tp.store).unwrap();
+    assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
+
+    // Four things, four tellings, none of them near the ceiling — three times the ceiling
+    // on the page and nothing to report. This is the record the per-record count called a
+    // fault, and calling it one is what cost two deliverables.
+    let compound = compound_human(4, ceiling - 100);
+    assert!(agentmon_core::human::words(&compound) > 3 * ceiling);
+    tp.store
+        .update_work(&id, "cli-builder", None, Some(&compound), None)
+        .unwrap();
+    let report = doctor::check(&tp.store).unwrap();
+    assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
+
+    // One telling past the ceiling — a wall, or one thing told at twice its weight — is
+    // the warning, and it names that telling's own count.
+    tp.store
+        .update_work(&id, "cli-builder", None, Some(&human_of(ceiling + 53)), None)
+        .unwrap();
+    let report = doctor::check(&tp.store).unwrap();
+    assert_eq!(report.errors(), 0, "{:#?}", report.problems);
+    let msgs: Vec<String> = report
+        .problems
+        .iter()
+        .map(|p| format!("[{:?}] {}: {}", p.level, p.scope, p.message))
+        .collect();
+    assert!(
+        msgs.iter().any(|m| m.contains("Warning")
+            && m.contains(&id)
+            && m.contains(&format!("{} words in one telling", ceiling + 53))),
+        "{msgs:#?}"
+    );
+    // …and the hint hands back the contract's own order. An agent reads this line and does
+    // what it says, so it says split first, and says what may never be traded for a number.
+    let fix = report
+        .problems
+        .iter()
+        .find(|p| p.message.contains("telling"))
+        .map(|p| p.fix.clone())
+        .unwrap_or_default();
+    assert!(fix.contains("never a record's total"), "{fix}");
+    assert!(fix.contains("beat-block"), "{fix}");
+    assert!(fix.contains("Never cut a fact to reach a number"), "{fix}");
+}
+
 /// A title is one line, and a title that is not one is refused before anything is written.
 ///
 /// The title lands as a YAML scalar on one frontmatter line, so a `\n` in it opened a

@@ -14,15 +14,16 @@ Tell the chase in beats, in the order it happened, one short paragraph each. Cov
 3. What was tricky: the wrong guess you chased, what fooled you, what you tried and dropped.
 4. How you know: who or what looked, the check that would have caught this, its number, what its passing rules out.
 5. What is different now for the people who use this, and what is still broken or unchecked.
+Not a fixed bug? The five still hold and some collapse to a sentence. A decision or a note: open on what was settled and when — somebody settled this and wrote it down, so state the decision with its date; item 4 is whatever evidence exists, sometimes only "we looked"; short, few names, every one cashed out; never supply the pick or the all-clear the record does not state. The marked analogy, the stating bold lead-ins and the closing rule of thumb are not the bug shape — they hold here too.
 Read the draft back as that stranger, pointing at every noun. Each name you keep gets its kind and its job in the same sentence, in words they already own — shop words (agent, hook, state, served, fixture, renderer), commands, scripts, paths, and an id that says what it was.
 A gloss is a claim. Take a thing's kind and job from this record's words, or the plain reading of its name, or — for a tool — what that kind of tool is for, with the question it settles taken from what the record ran it against. Never its shape, its parts, or what it sits beside. A gloss that only re-spells the name it glosses is not a gloss.
-Count the names as well as the words: one per fact, about one per fifty words. A second name for a fact one name already fixes is what makes a fully glossed page feel like work. Spend a long name once — after its glossed first mention it is "that file", "the same script".
+Count the names as well as the words: one per fact, about one per fifty words — a budget the facts spend, not a target to undershoot. Every fact's actor is named; an anonymous actor ("a script", "one of the three") is a missing name, not a simpler sentence, and costs the reader more re-described at each mention than one name cashed out once. What the count forbids is a second name for a fact one name already fixes, never the first — that is what makes a fully glossed page feel like work. Spend a long name once — after its glossed first mention it is "that file", "the same script".
 Then read it back a second time and mark every phrase that stranger could repeat but not restate — your own shorthand and your squeezed noun-phrases too, not only the names on the list. Each gets plain words in the same sentence, or the fact goes.
 Claim only what this record claims, of the thing and in the place it says it. No invented example, no stand-in number, no step nobody recorded. Before writing that nothing does X, reread to its end the sentence X came from: it often names the thing that does.
 One everyday analogy, marked as one ("it is like…"), on the central mechanism, carrying no number or cause of its own.
 Short sentences, one fact each, most under 20 words. Say who did what, in plain verbs — "I watched one send", not "what was watched was one send". Five sentences end a paragraph; a hard mechanism is two short paragraphs, never one wall.
 Open each beat after the first with a bold lead-in that states something — "**The stored number is wrong twice a year.**" — not a label ("**The stored offset.**"), never a stage of an essay ("**How we know.**").
-Count last, and over either count cut in this order: first a name carrying no fact of its own, then a whole fact — never a gloss. 150 words thin, 300 for most, 450 where the mechanism is genuinely hard.
+Count last, and over either count cut in this order: first a name carrying no fact of its own, then a whole fact — never a gloss. 150 words thin, 300 for most, 450 where the mechanism is genuinely hard. A ceiling bounds one telling, never a record's total: a record that shipped several separate things — wherever it names them, its title, its What, or a list further down — covers every one, one short beat-block each after the shared opening. Never write to a ceiling — stop when the facts are spent.
 Close on one sentence the reader could repeat tomorrow. No selling, no fake excitement, no emoji.
 <!-- /compact-rules -->
 
@@ -76,8 +77,15 @@ Three kinds survive the first read:
   lost: give it the shortest sentences, the analogy — *like a key cut to open every door in the building, including the one you meant to lock* — and a second lead-in
   rather than one wall.
 - **Count the names as well as the words, and count the names first.** Words: 150 thin, 300 for most, 450 at the densest — a well-built 450 reads easier than a squeezed 300.
-  Names: about one per fifty words, one per fact — nine or ten in a long piece, two or three in a short one. The second number is what decides whether a page feels like
-  work, and glossing does not buy it back: the reader still holds every noun you introduced while you use them. Over either count, cut in the order under *Coverage* below.
+  Names: about one per fifty words, one per fact — nine or ten in a long piece, two or three in a short one. That second number is a budget the facts spend, not a target
+  to undershoot: every fact's actor is named, and an anonymous actor — "a script", "one of the three" — is a missing name, not a simpler sentence, because a nameless
+  thing re-described at each mention costs more to hold than one name cashed out once. What the count forbids is a second name for a fact one name already fixes, never
+  the first; that second name is what decides whether a page feels like work, and glossing does not buy it back: the reader still holds every noun you introduced while
+  you use them. Over either count, cut in the order under *Coverage* below.
+- **A ceiling bounds one telling, not one record, and is never a target.** A record that shipped several separate things — wherever it names them: the title, the *What*, or a
+  list further down, an "Alongside:" under *How* — owes each one: after the shared opening, one short beat-block per thing, bounded on its own. Three deliverables are three
+  tellings, not one 450-word squeeze that drops two of them whole and takes their facts with them. `agentmon doctor` counts it that way too — the longest run between your bold
+  lead-ins, never the record's total. And never write up to a ceiling: stop when that thing's facts are spent, and let a thin thing stay thin.
 - **Close on a rule of thumb, not a summary**: *a backup you have never restored is not a backup*.
 
 ## Stay inside the record

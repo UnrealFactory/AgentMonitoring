@@ -1,0 +1,50 @@
+BUG-0009 · ELI5
+The word that got cut in ha
+…see? Something is missing, and nothing told you. That's the whole bug.
+1 · A VERY LONG WORD
+Some "words" are giants
+A file path has no spaces . To the browser it's one single word — and words don't get split in the middle.
+A normal sentence has spaces, so it wraps easily:
+the test we added still
+passes every time ✂️ ← breaks at spaces
+A path is ONE word — nowhere to break:
+relay-api/tests/deliveries_list.rs::lists_deliveries_with_an_in_flight_attempt
+2 · THE SILENT SCISSORS
+The card chops off what sticks out
+The word is longer than the card. The card's rule is "hide anything past my edge" — so the tail vanishes. No "…", no scrollbar. You can't tell anything is gone.
+RESOLUTION
+The regression test is:
+relay-api/tests/deliveries_list.rs::lists_deliveries_with_an
+_in_flight_attempt
+✂️ card edge
+this part is just… gone
+Copy that name and run it → the test doesn't exist. 😵
+3 · THE FIX
+Give the word permission to bend
+One CSS rule — overflow-wrap: anywhere — says: "if you must, break this word and continue on the next line." Two lines, zero letters lost.
+RESOLUTION
+The regression test is:
+relay-api/tests/deliveries_list.rs::lists_deliveries
+_with_an_in_flight_attempt
+↩ it wraps — readable AND copyable ✅
+4 · THE EXCEPTION
+But never bend a code block
+In a block of code , a new line changes what the code means . So blocks keep their lines straight — and get a scrollbar instead.
+Inline code
+a/very/long/path/that/now
+/wraps/politely.rs
+bends ↩ ✅
+Code block
+fn agent_slot(agents: &mut V…
+stays straight, scrolls ↔ ✅
+5 · WHO CAUGHT IT
+A little robot that squints at every page
+A script opens every page at many window widths and yells if any text gets chopped. It found this bug — then, given more widths to check , found two more hiding in the same neighborhood.
+1152px ✅
+1104px ✅
+1024px ✅
+768px ✅
+👀
+The whole bug in one breath
+A path is one giant word. The card hid whatever stuck out — silently . Now long words are allowed to wrap, code blocks still scroll, and a robot double-checks every page so nothing gets quietly chopped again.
+BUG-0009 · fixed with two lines of CSS in src/styles/app.css · 2026-08-18

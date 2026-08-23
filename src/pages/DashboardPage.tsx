@@ -53,6 +53,7 @@ import {
   formatRelative,
 } from "../lib/format";
 import { t } from "../lib/i18n";
+import { tablistKeys } from "../lib/tablist";
 import {
   bugLower,
   inProgress,
@@ -390,7 +391,7 @@ export function DashboardPage() {
       </section>
 
       <div className="dash-toolbar">
-        <div className="segmented" role="tablist" aria-label={t("dash.timeRange")}>
+        <div className="segmented" role="tablist" aria-label={t("dash.timeRange")} onKeyDown={tablistKeys}>
           {RANGES.map((r) => (
             <button
               key={r.value}

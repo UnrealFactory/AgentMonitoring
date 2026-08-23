@@ -1,0 +1,36 @@
+🐍 Why python doesn't work here
+…and what to do instead. In three pictures.
+Problem 1
+"python" is a fake door
+It looks like Python. It's actually an empty Microsoft Store sign that does nothing .
+you
+python …?
+python
+MS Store
+ad
+runs nothing
+python and python3 both open this fake door. It quietly exits. No Python happens.
+Problem 2
+The shell tube eats backslashes
+Pasting a multi-line script into the shell (a "heredoc")? Windows paths come out chewed.
+C:\Users\me
+😬
+multi-line shell paste
+\
+\
+C:Usersme
+slashes gone 💥
+The fix
+Write a note. Give it to Node.
+Save your script as a real file ( .cjs / .mjs ), then run node on it. Node 24 here is real and it works.
+helper.cjs
+node helper.cjs
+it runs!
+Bonus: Node here even strips TypeScript types on import. 🎁
+One address tip
+Imports need the full address
+Importing a repo file from a temp script? Use a file:/// URL — the short form fails.
+import("C:/repo/x.mjs")
+import("file:///C:/repo/x.mjs")
+On this machine: never call python , never paste big scripts into the shell .
+Save the script to a file → run it with node . Done. ✅

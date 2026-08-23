@@ -1,0 +1,133 @@
+Explain it to me simply · WORK-0007
+The Bug Pages Got a Makeover 🛠️
+An app keeps notes about bugs (things that are broken).
+The two pages that show those notes were old and clumsy. They were rebuilt — and three shared problems got fixed too.
+1
+A tidy wall for bug notes
+Before: a messy pile — you couldn't sort or search.
+Now: a neat board with tabs , filters , and colors that say how bad each bug is.
+BEFORE 😕
+just dots and lines…
+AFTER 🎉
+Open · 2
+Resolved · 6
+All · 8
+severity ▾
+label ▾
+who? ▾
+HIGH
+Login button broken
+💬 4
+MED
+Page loads slowly
+💬 2
+LOW
+Typo on the front page
+💬 1
+worst bugs float to the top ⬆️
+Tabs count what you'd see. Chips filter. Red = urgent, yellow = can wait.
+2
+Each bug now tells its story
+Before: three flat boring boxes. Now: a storybook —
+someone finds it, someone says “I'll fix it!” , people talk, and a big banner celebrates the fix.
+📝
+🙋
+✅
+Filed
+"it's broken!"
+Claimed
+"I'll fix it!"
+Fixed
+"all done!"
+⏱ 35 minutes later
+⏱ 2 hours later
+💬 “I can see the problem, it's here…”
+💬 “Try this. Does it help?”
+🎉 Fixed by nova
+it was open for 2h 35m
+One timeline, one conversation, one purple “we did it!” banner at the end.
+3
+The machine that ate numbers — fixed
+The app has a machine that turns plain text into pretty pages.
+It had a bad habit: if a sentence wrapped onto a new line starting with “200.” ,
+it thought that was a numbered list — and printed “1.” instead. It changed the facts .
+…returned errors for
+three hours, then
+200. Without jitter…
+what was written
+the page machine ⚙️
+BEFORE ❌
+1. Without jitter…
+the 200 is GONE!
+AFTER ✅
+200. Without jitter…
+every word kept, exactly
+🤖🔍
+A robot now reads every single page (58 checks)
+and shouts if even one word goes missing.
+They even broke the fix on purpose to make sure the robot really shouts. It does.
+4
+When the window shrinks, keep the words
+Before: make the window smaller and the title got squished first —
+down to a single letter! Now the decorations hide first and the title stays readable.
+WIDE WINDOW — room for everything
+HIGH
+The login button does nothing when clicked
+worker
+login
+n
+nova
+💬 4
+2d
+squeeze the window ⬇️
+BEFORE ❌ title squished first
+HIGH
+T…
+worker
+login
+n
+nova
+💬 4
+the words vanished, the chips stayed 🤦
+AFTER ✅ decorations hide first
+HIGH
+The login button does nothing…
+n
+chips gone, name gone — title readable 👍
+Order of sacrifice: tag chips → helper's name → small badges. The title goes last.
+5
+Links now point both ways
+Notes can point at other notes. Before, you could only follow the arrow forward .
+Now every page also shows who points at it .
+WORK-0005
+“I did a big task,
+found some problems…”
+BUG-0008
+problem #1, written up
+BUG-0006
+problem #2, written up
+BUG-0003
+problem #3, written up
+“referenced by” ↔ “references”
+now you can walk the arrows in both directions 🚶↔️
+WORK-0005's page now shows its three follow-up bugs — and each bug points back.
+6
+How do we know it works?
+Nobody just hoped . Everything was checked .
+✓
+The app builds with no errors
+✓
+Robot reader: 58 out of 58 checks pass
+✓
+A robot browser clicked every tab, filter and key
+✓
+Screenshots were taken and actually looked at 👀
+still on the to-do list 📝
+• lists inside lists (nobody
+uses them yet)
+• one counter on another page
+(filed as BUG-0005)
+• a sort button (not needed yet)
+Green means tested for real — they even broke things on purpose to prove the tests notice.
+That's WORK-0007: two rebuilt bug pages, a truth-telling text machine,
+rows that keep their words, and links that point both ways. done ✅

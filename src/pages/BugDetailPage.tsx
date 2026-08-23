@@ -28,7 +28,7 @@ import {
   type TocEntry,
 } from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
-import { HumanArea, RecordViewToggle } from "../components/HumanView";
+import { AgentHereNote, HumanArea, RecordViewToggle } from "../components/HumanView";
 import { useContextMenu } from "../components/ContextMenu";
 import { hasHumanArea } from "../lib/human";
 import { useRecordView } from "../lib/recordView";
@@ -86,7 +86,10 @@ export function BugDetailPage() {
   const projectMenu = useProjectMenu();
   const related = useRelated(projectId, id, bug?.refs ?? EMPTY);
   /* The reader's half of the record, for the session — the twin of the work log's. */
-  const { view, choose } = useRecordView(bug ? hasHumanArea(bug.human) : null, id);
+  const { view, choose, peekAgent, peeking } = useRecordView(
+    bug ? hasHumanArea(bug.human) : null,
+    id
+  );
   const human = view === "human";
 
   /**
@@ -212,16 +215,17 @@ export function BugDetailPage() {
             <RecordViewToggle view={view} onChange={choose} hasHuman={hasHumanArea(bug.human)} />
           </div>
 
-          {/* Same rule as a work log: a reader meets the correction before the report it
-              corrects, not thousands of pixels below it — and it points into the thread, so
-              it is drawn where the thread is. */}
-          {!human && (
-            <CorrectionNotice
-              count={countCorrections(bug.comments)}
-              href="#thread"
-              where={t("rec.inThread")}
-            />
-          )}
+          {/* Same rule as a work log, both halves of it: a reader meets the correction before
+              the report it corrects, not thousands of pixels below it — and a reader on the
+              human half meets it too, because `bug comment` posts a correction without
+              touching the retelling above it. There the line says which half the thread is on
+              and switches to it (WorkDetailPage has the long version of this). */}
+          <CorrectionNotice
+            count={countCorrections(bug.comments)}
+            href="#thread"
+            where={human ? t("rec.inAgentHalf", t("rec.inThread")) : t("rec.inThread")}
+            onFollow={human ? peekAgent : undefined}
+          />
 
           <div className="rec-byline">
             <BugStatusPill status={bug.status} />
@@ -269,9 +273,13 @@ export function BugDetailPage() {
                 /* The retelling of a bug is written by whoever last touched it: the agent who
                    resolved it if it is resolved, otherwise the one who filed it. */
                 agent={bug.resolvedBy ?? bug.assignee ?? bug.reporter}
-                onShowAgent={() => choose("agent")}
+                onShowAgent={peekAgent}
               />
             )}
+
+            {/* …and the line that says the swap it offered was this record's alone
+                (lib/recordView.ts). Only while that is what is on screen. */}
+            {peeking && <AgentHereNote id={bug.id} />}
 
             {!human && (
               <section className="record-section" id="report">

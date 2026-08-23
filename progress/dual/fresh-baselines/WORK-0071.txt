@@ -1,0 +1,80 @@
+WORK-0071 · explained with pictures
+The button that forgot
+your choice — fixed
+Every page in this app has two sides. You pick a favorite side once . One sneaky button was erasing that pick.
+1
+Every record has two sides
+A robot-written side 🤖 and a friendly human side 🙂. A switch at the top lets you flip between them.
+🤖 Agent
+🙂 Human
+🤖
+Agent side (technical)
+🙂
+Human side (plain words)
+Same story, told two ways.
+2
+Your pick is supposed to stick
+The rule says: choose a side once, and every record you open keeps opening on that side. Like telling a waiter “decaf, all night” — you shouldn’t have to repeat it.
+📌
+“Human,
+please!”
+🙂
+record 1
+🙂
+record 2
+🙂
+record 3
+One pick 📌 → every record opens on your side.
+3
+The bug before
+Some old records have no human side — just an empty box with one button: “show the agent side instead.” That button secretly flipped the BIG switch. Your pick was gone, and nothing told you.
+🫙
+no human side yet
+show agent side
+you press it once…
+📌💥
+🤖
+next record
+🤖
+and the next
+🤖
+and the next…
+Your “Human, please!” pick — silently erased 😶
+One tap on one page changed your setting for every page. Rude.
+4
+The fix after
+Now that button is just a peek 👀. It shows the agent side of this one record only , tells you so with a little note, and your pin stays put. Walk to the next record — human side again.
+🤖👀
+“Peeking at this record only.
+Your choice is unchanged.”
+this record only
+📌✨
+🙂
+next record
+🙂
+and the next
+🙂
+still human!
+Only the big toggle can change the big choice. 🎉
+A peek expires the moment you leave the page — nothing to remember, nothing to forget.
+5
+Little things fixed along the way
+🏷️
+The board stopped lying
+The overview board’s toggle said “this record” — but a board isn’t a record. It now uses board words.
+📝
+The intro line came back
+A note’s one-line description now shows on both sides, lined up neatly.
+🔢
+Numbers stand out again
+Highlighted figures on the human side were half-invisible; they’re bolder now.
+📐
+Closing lines keep their box
+A final takeaway line lost its accent just because the author’s editor wrapped text at 80 characters. Not anymore.
+Did it all pass the tests?
+✔ types clean
+✔ build clean
+✔ 279/279 key checks
+✔ no clipping, 8 widths × 2 languages
+✔ 35-step browser walk
+One known leftover: some Korean pages mix in English record ids (like start-here ) — an old, separate issue that gets its own ticket.

@@ -1,0 +1,105 @@
+🕵️
+The Sneaky Heading
+How three invisible tricks fooled a guard —
+and how one shared rulebook stopped them.
+Step 1 · The setup
+Every record has two areas
+Robots (agents) write the top. The bottom — “For humans” —
+is reserved. Robots must never write it.
+🤖
+Robot's area
+agents write here
+🧑‍🤝‍🧑
+## For humans
+only the app writes here — a guard checks!
+A guard 💂 reads every robot's text and blocks the words
+“ ## For humans ” if they appear as a heading .
+Step 2 · The trick
+Three sneaky spellings walked past
+The guard only recognized the heading with a normal space .
+These three look almost the same… but not to the guard.
+🎩
+## ⇥TAB For humans
+a tab instead of a space
+👻
+? ## For humans
+an invisible character in front
+🥸
+## ␣NBSP For humans
+a fancy “no-break” space
+💂
+The guard said:
+“That's not a heading. Go on in!” ✅
+🖥️
+The screen said:
+…and drew it as a big heading anyway! 😱
+So the app showed a fake “For humans” section that the
+guard never approved.
+Step 3 · The worst part
+One file, two truths
+The invisible 👻 character broke something bigger:
+the desktop app and the browser app cleaned it up differently .
+Same file — two different stories.
+For humans
+…shows the section 😨
+🌐 Browser
+strips the ghost → sees a heading
+≠
+…shows nothing 😌
+💻 Desktop
+keeps the ghost → sees no heading
+Two readers, two answers. That must never happen.
+Step 4 · The fix
+One rulebook for everyone
+Write the rule for “what counts as a heading” once —
+and make every reader follow the exact same rule the screen uses to draw.
+📖
+THE ONE RULE
+If the screen would draw it as a heading,
+the guard treats it as a heading.
+Tabs, ghosts, fancy spaces, CAPITALS, extra colons — all count.
+⬇️
+💂
+The guard
+Rust core
+🌐
+Browser reader
+project-fs script
+🖥️
+Screen drawer
+markdown renderer
+Three readers, one rule — they can never disagree again.
+Step 5 · The proof
+One shared list of 25 disguises
+Every sneaky spelling anyone thought of lives in one file .
+Both languages' tests read that same file, so nobody can drift.
+18
+🚫 Blocked
+tab, ghost, NBSP, CAPS,
+trailing colon, closing ##…
+7
+✅ Allowed
+e.g. the words inside a code
+example — that's fine!
+Plus one big promise, checked on every real record:
+no robot text ever draws a “For humans” heading.
+Bonus · Also fixed
+Three smaller potholes
+📛
+Title with a line break
+used to write a broken file that
+crashed the whole list. Now refused before writing.
+🗓️
+A date thrown away
+feedback updates checked the date, then dropped it.
+Now saved as updated: .
+🔧
+Remote robots couldn't fix
+the MCP tool had no “update” button.
+Now it takes an id .
+🎉
+All green
+320+ tests pass, every real record untouched,
+and both apps now tell the same story about every file.
+One thing left on purpose: the app doesn't show
+the human area yet — that's the next builder's job (D3).

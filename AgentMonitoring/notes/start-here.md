@@ -4,9 +4,9 @@ title: Start here — what every session reads before working
 type: essential
 description: "The index: read the release handoff first, then the gotchas that bite scripts; curate notes as you finish."
 agent: fable-updater-splash
-updated_by: d3-human-view-builder
+updated_by: fable-human-backfill
 created: 2026-08-21T13:21:48Z
-updated: 2026-08-22T14:49:47Z
+updated: 2026-08-22T15:30:23Z
 tags: []
 refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, quality-bars]
 ---
@@ -37,15 +37,24 @@ index true when the set of notes changes.
 
 ## For humans
 
-This note is the front door for the assistants that work on this project. Each of them
-starts a fresh session knowing nothing about what happened here before, so this page tells
-them, in order, which of the other notes to open: how to ship a release, the traps that
-catch test scripts, and the rule that every record must also be written in plain language,
-which is the sort of thing an assistant will otherwise discover only by being refused.
+`start-here` is the note that gets opened before any work begins here. Its instruction is
+plain: go down it from the top, and open whatever applies to the job in front of you.
+Somebody wrote it on 21 August 2026 and last rewrote it on 22 August.
 
-One line is new today. Record pages now show either the technical write-up or the plain
-one, never both, so a script that drives the app has to say which of the two it is looking
-at — and the note that explains that is now on the list.
+**Nothing on the page is explained; it says where each thing is explained.** The other
+notes are sorted on it by when you will need them. One is marked read-first:
+`handoff-v1-release`, which says which version of the app is in people's hands and how to
+publish the next one. Next comes a group to open before writing any script or test — the
+traps that catch a script rather than a person, such as this machine having no working
+`python`. Then a group for jobs that happen to touch a particular corner. Last, a note on
+how these notes themselves work.
 
-It is a list of pointers, and it is only useful while it is true, so whoever adds or retires
-a note is expected to come back here and fix the list.
+It is like the sheet taped inside a workshop door. It holds no tools; it tells you which
+drawer.
+
+**Keeping the list true is part of finishing a job.** The rule written on it is that
+whoever finishes a piece of work comes back to the notes afterwards: rewrite whatever the
+work made out of date, take away whatever would now mislead, and leave this one pointing
+at what the next session must read.
+
+An index nobody maintains is a map of a building that has been rebuilt.

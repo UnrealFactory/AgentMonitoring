@@ -130,6 +130,13 @@ mod tests {
         assert_ne!(ClaudeMdLang::Ko.heading(), ClaudeMdLang::En.heading());
     }
 
+    // Neither template says anything about the human area, and a test used to insist both
+    // did. The line was written, then measured against its own absence: the repo without it
+    // saved a conforming record on the same attempt as the repo with it, because the CLI's
+    // refusal teaches the contract either way. Every byte here is re-sent on every turn of
+    // every conversation in the seeded project, so a line that changes no record does not
+    // earn one. Do not add it back without a measurement that says it works.
+
     #[test]
     fn creates_then_holds_then_appends_to_a_foreign_file() {
         let dir = tmp("lifecycle");

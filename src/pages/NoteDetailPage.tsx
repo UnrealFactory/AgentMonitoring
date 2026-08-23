@@ -15,7 +15,7 @@ import { api, failureTitle, nothingToRetry } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { Markdown, RecordTitles } from "../lib/markdown";
 import { RelatedSection, useRelated } from "../components/Related";
-import { HumanArea, RecordViewToggle } from "../components/HumanView";
+import { AgentHereNote, HumanArea, RecordViewToggle } from "../components/HumanView";
 import { useContextMenu } from "../components/ContextMenu";
 import { hasHumanArea } from "../lib/human";
 import { useRecordView } from "../lib/recordView";
@@ -64,7 +64,10 @@ export function NoteDetailPage() {
   const projectMenu = useProjectMenu();
   const related = useRelated(projectId, id, note?.refs ?? EMPTY);
   /* Which half of the note is on screen — the reader's choice for the session. */
-  const { view, choose } = useRecordView(note ? hasHumanArea(note.human) : null, note?.name ?? id);
+  const { view, choose, peekAgent, peeking } = useRecordView(
+    note ? hasHumanArea(note.human) : null,
+    note?.name ?? id
+  );
   const human = view === "human";
   /* No memoized words on this page, but the sentences below are built at render and the
      subscription keeps a language change from leaving the last one behind. */
@@ -181,9 +184,27 @@ export function NoteDetailPage() {
 
         <div className="detail-layout">
           <article className="detail-main">
-            {/* The retelling stands alone: the description is the hook the *note* was
-                written with, for the agents who read this list, and the human area opens on
-                its own words (SPEC, "The human area"). */}
+            {/* The author's own hook, at the altitude it was written for: the line every
+                list shows, ahead of the body it summarises.
+
+                In **both** halves. It reads like the body's first sentence and it is not
+                one: `description` is the note's own frontmatter field, the line the notes
+                list prints under every title and the one SPEC calls this screen's lead
+                (screen 8) — which puts it with the title, the type and the dates on the side
+                of the page that does not swap. Dropping it on the human half took the note's
+                one-line claim away from exactly the reader who most needs a claim before
+                eight paragraphs, and did it in the name of a rule about *areas* that this
+                line was never part of (D3 rounds 1 and 2 critic).
+
+                Over there it spans the record column, which is what the sheet under it spans:
+                the two *cards* share both edges at every width. Their **text** does not, and
+                this comment said it did — the sheet centres one measure inside itself, so its
+                first line starts 96px in at 1600 and 138px at 1900 while this one starts at
+                its own 16px of padding. That is the page composition working (a lead is a
+                pull quote across the column; the retelling is a column of text on a sheet),
+                not an alignment, and the reason it reads is the shared card edge. */}
+            <p className={`note-lead${human ? " is-human" : ""}`}>{note.description}</p>
+
             {human && (
               <HumanArea
                 human={note.human}
@@ -191,13 +212,13 @@ export function NoteDetailPage() {
                 id={note.name}
                 /* Whoever's words the note currently is — the same rule the byline uses. */
                 agent={note.updatedBy ?? note.agent}
-                onShowAgent={() => choose("agent")}
+                onShowAgent={peekAgent}
               />
             )}
 
-            {/* The author's own hook, at the altitude it was written for: the line every
-                list shows, ahead of the body it summarises. */}
-            {!human && <p className="note-lead">{note.description}</p>}
+            {/* …and, when that offer was taken, what it cost: this record only
+                (lib/recordView.ts). */}
+            {peeking && <AgentHereNote id={note.name} />}
 
             {!human && (
               <section className="record-section" id="body">

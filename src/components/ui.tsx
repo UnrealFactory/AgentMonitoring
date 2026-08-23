@@ -3,6 +3,7 @@
  * a small coloured dot plus a label, never a shouting block of colour.
  */
 import { useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { nothingToRetry, projectErrorMessage } from "../lib/api";
 import { t } from "../lib/i18n";
 import type { BugStatus, NoteType, Severity, WorkStatus } from "../lib/types";
@@ -155,11 +156,48 @@ export function CorrectionMark() {
  *
  * Counted, never inferred: a note is a correction because its author opened it with
  * `Correction:` (src/lib/updates.ts).
+ *
+ * The record's *other* half needs this line just as much — a retelling is the same events,
+ * and a correction is posted with `work update --message` / `bug comment`, neither of which
+ * rewrites the retelling. So the human view draws it too, and passes `onFollow`: over there
+ * the trail this points at is not on screen, so following the link has to change the view
+ * before it can jump. See {@link CorrectionNotice}'s callers.
  */
-export function CorrectionNotice({ count, href, where }: { count: number; href: string; where: string }) {
+export function CorrectionNotice({
+  count,
+  href,
+  where,
+  onFollow,
+}: {
+  count: number;
+  href: string;
+  where: string;
+  /**
+   * Called instead of the browser's own jump, when the anchor is in a part of the page
+   * this view is not drawing. The handler makes it exist; the jump happens on the next
+   * frame, once it does.
+   */
+  onFollow?: () => void;
+}) {
   if (count < 1) return null;
   return (
-    <a className="correction-notice" href={href}>
+    <a
+      className="correction-notice"
+      href={href}
+      onClick={
+        onFollow
+          ? (event) => {
+              event.preventDefault();
+              /* The anchor lives in the half this view is not drawing, so at this instant
+                 there is nothing on the page to jump to — which is why the browser's own
+                 jump is cancelled. `flushSync` draws the other half inside this click,
+                 rather than after it, so the line below finds the element it needs. */
+              flushSync(onFollow);
+              document.getElementById(href.replace(/^#/, ""))?.scrollIntoView({ block: "start" });
+            }
+          : undefined
+      }
+    >
       <span className="correction-notice-mark" aria-hidden="true">
         <CorrectionMark />
       </span>

@@ -31,6 +31,7 @@ import { formatDateTimeUtc, formatRelative } from "../lib/format";
 import { t } from "../lib/i18n";
 import { noteCount, noteTypeLabel } from "../lib/words";
 import type { NoteSummary, NoteType } from "../lib/types";
+import { tablistKeys } from "../lib/tablist";
 
 /** The dimensions a filter slices on — and therefore the ones a count can be exempt from. */
 type Dim = "type" | "agent" | "tag";
@@ -190,7 +191,7 @@ export function NotesPage() {
       </header>
 
       <div className="toolbar">
-        <div className="segmented" role="tablist" aria-label={t("filter.byType")}>
+        <div className="segmented" role="tablist" aria-label={t("filter.byType")} onKeyDown={tablistKeys}>
           {TYPES.map((ty) => (
             <button
               key={ty}

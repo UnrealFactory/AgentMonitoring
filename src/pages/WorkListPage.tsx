@@ -32,6 +32,7 @@ import { formatDateTimeUtc, formatRelative } from "../lib/format";
 import { t } from "../lib/i18n";
 import { inProgressCount, workLogs, workStatusLabel } from "../lib/words";
 import type { WorklogSummary, WorkStatus } from "../lib/types";
+import { tablistKeys } from "../lib/tablist";
 
 /** The dimensions a filter slices on — and therefore the ones a count can be exempt from. */
 type Dim = "status" | "agent" | "tag";
@@ -215,7 +216,7 @@ export function WorkListPage() {
       </header>
 
       <div className="toolbar">
-        <div className="segmented" role="tablist" aria-label={t("filter.byStatus")}>
+        <div className="segmented" role="tablist" aria-label={t("filter.byStatus")} onKeyDown={tablistKeys}>
           {STATUSES.map((s) => (
             <button
               key={s}

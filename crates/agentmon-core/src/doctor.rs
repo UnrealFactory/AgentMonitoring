@@ -244,6 +244,36 @@ pub fn check(store: &Store) -> Result<Report> {
              then rather than saving a record whose human area is invisible",
         ));
     }
+    // Length, for the same reason and at the same level: a long retelling is readable and
+    // true, so it is never an error, and the repair is a rewrite by the agent that wrote
+    // it. Warned about at all because the ceiling used to live only in docs/HUMAN_STYLE.md,
+    // where no code read it — a 703-word human area shipped, and the only thing that
+    // noticed was a person counting words by hand.
+    //
+    // One telling, not one record. This warning counted whole records once, and the cost of
+    // that is measured: it reported a work log that shipped five things and retold all five,
+    // its hint said to cut, and the agent that followed the hint dropped two deliverables
+    // out of the retelling whole. A gate whose false positive is "delete a fact you owed"
+    // is worse than no gate, so what is counted is the longest run of prose with no beat
+    // break in it — certainly one telling, and over the ceiling only when a telling is.
+    if !gaps.long_telling.is_empty() {
+        problems.push(Problem::warn(
+            "human area",
+            format!(
+                "{} record(s) tell one thing at more than the style contract's {}-word \
+                 ceiling: {}",
+                gaps.long_telling.len(),
+                crate::human::WORDS_MAX,
+                listing(&gaps.long_telling)
+            ),
+            "the ceiling bounds one telling, never a record's total, so split before you cut: \
+             a record that shipped several separate things owes every one of them a beat-block \
+             of its own, opened by a bold lead-in that states something. Never cut a fact to \
+             reach a number — only where one thing's own telling is still over does anything \
+             go, and then a name carrying no fact of its own first, then a fact stated twice, \
+             never a gloss. `agentmon human-style` prints the contract",
+        ));
+    }
 
     // -- events.jsonl -------------------------------------------------------
     let mut n_events = 0usize;
@@ -357,14 +387,28 @@ struct HumanGaps {
     /// a human area to these (it would be swallowed by the fence and read back as code),
     /// so the repair is a person closing the fence, not another `--human`.
     unclosed_fence: Vec<String>,
+    /// Records with a single telling past `human::WORDS_MAX`, each with that telling's own
+    /// count, so the warning says how far over it is rather than only that it is over.
+    long_telling: Vec<String>,
 }
 
-/// Note the record if its body carries no human area (SPEC.md, "The human area").
+/// Note the record if its body carries no human area (SPEC.md, "The human area"), or if
+/// one telling inside it runs past the style contract's ceiling.
 fn note_human(md: &str, id: &str, gaps: &mut HumanGaps) {
-    if crate::human::split(md).1.is_none() {
-        gaps.missing.push(id.to_string());
-        if crate::human::has_open_fence(md) {
-            gaps.unclosed_fence.push(id.to_string());
+    match crate::human::split(md).1 {
+        None => {
+            gaps.missing.push(id.to_string());
+            if crate::human::has_open_fence(md) {
+                gaps.unclosed_fence.push(id.to_string());
+            }
+        }
+        Some(human) => {
+            // `longest_telling`, not `words`: the ceiling bounds one telling, and a record
+            // that shipped several things is meant to run past it in total.
+            let words = crate::human::longest_telling(&human);
+            if words > crate::human::WORDS_MAX {
+                gaps.long_telling.push(format!("{id} ({words} words in one telling)"));
+            }
         }
     }
 }

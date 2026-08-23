@@ -1,0 +1,98 @@
+Explain it like I'm five
+The night the app got ready to ship
+One work session, three big jobs: teach every screen the same words , give the desktop app a guard dog , and box it up for the world.
+1
+Before: one thing, five names
+Two tasks were being worked on. Every screen agreed on the fact — but each screen made up its own word for it. Like a family where everyone calls the same dog a different name.
+"active"
+"still open"
+"in flight"
+"work open"
+"in progress"
+Same dog. Five names. Very confusing.
+The fix: one shared word list (a file called words.ts ) that every screen must read from . Now the dog has one name, everywhere.
+2
+Numbers now tell the whole story
+"2" alone means nothing. 2 out of what — 3? 200? Every count now brings its "out of" with it.
+BEFORE
+2
+…two of what?
+AFTER
+"2 of 12 in progress"
+Every screen — the switcher, the dashboard, the list, the charts — now says "2 of 12" , never just "2".
+3
+Twins in search get name tags
+Two projects can both have a task numbered 0002. Searching used to show two identical twins. Now each one wears a badge saying which family it's from.
+WORK-0002
+quill
+WORK-0002
+AgentMonitoring
+Same number, different badge — you can finally tell them apart at a glance.
+4
+The desktop app gets a guard dog
+The app watches a folder of data (the "vault"). Here's the sneaky part: if that folder disappears, the watcher doesn't scream — it just goes silent . The app would keep showing old numbers forever, looking perfectly fine.
+1 · NORMAL DAY
+the vault (data)
+fresh news
+🙂
+LIVE
+2 · THE FOLDER VANISHES
+💨
+folder gone!
+🐕
+watchdog checks every 5 seconds
+WOOF!
+⚠ Not reading the vault right now
+showing last good data
+3 · THE FOLDER COMES BACK
+re-connected!
+😀
+LIVE again — by itself
+🐕✅
+And it was proved for real : they ran the finished app, yanked the data file away — banner appeared in 13 seconds. Put it back — banner gone, new updates flowed in. Not a promise. A test.
+5
+Little kindnesses
+Small things that make an app feel cared for.
+🌱
+nothing to plot yet
+Empty charts look friendly,
+not broken
+Archived ·
+UNDO
+Undo waits for you —
+it doesn't fade away
+⏰
+"just now"
+Fresh events say "just now",
+never "in a moment" 🤨
+6
+Caught: a test knocking on the wrong door
+A safety test is supposed to practice on a copy of the data. But if its usual door (port 5199) was busy, it quietly walked through the next door — and once touched the real data.
+🤖
+the test
+"Are you MY copy?"
+🚪
+practice copy
+✅
+🚪
+real data
+⛔
+Now the test asks first — "is this my practice copy?" — and refuses to run if it isn't. The accidental mess was cleaned up.
+7
+Cleaned up, checked, boxed, shipped
+Threw out 206 MB of scrap paper, wrote a welcome sign (the README, with screenshots), ran every check, and built the real Windows installer.
+Every check, all green
+✅ code compiles clean
+✅ 121 smoke tests
+✅ 427 screen loads, nothing clipped
+✅ 714 numbers on screen re-counted
+✅ 80 Rust tests
+✅ links & URLs
+✅ keyboard keys
+✅ live app test
+✅ data doctor:
+no problems found
+the real app
+.exe · MSI · installer
+Shipped: one word per state everywhere, a desktop app that tells the truth when its data disappears, and a repository with a face.
+WORK-0016 · finished 2026-08-19 · one hour and forty minutes of tidying, guarding, and boxing

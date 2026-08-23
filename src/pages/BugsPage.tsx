@@ -54,6 +54,7 @@ import {
   unresolvedMeans,
 } from "../lib/words";
 import type { BugStatus, BugSummary, Severity } from "../lib/types";
+import { tablistKeys } from "../lib/tablist";
 
 type Tab = "unresolved" | "resolved" | "all";
 /**
@@ -341,7 +342,7 @@ export function BugsPage() {
       </header>
 
       <div className="toolbar">
-        <div className="segmented" role="tablist" aria-label={t("filter.byStatus")}>
+        <div className="segmented" role="tablist" aria-label={t("filter.byStatus")} onKeyDown={tablistKeys}>
           {/* Each tab says which statuses it holds, so the one word on it never has to
               stand in for two. */}
           <button

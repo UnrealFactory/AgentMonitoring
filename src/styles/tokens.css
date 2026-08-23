@@ -157,14 +157,28 @@
   --text-sm: 12px;
   --text-base: 13px;
   --text-md: 14px;
-  /* One step above the body, and the only place it is used: the human area — a record
-     retold in plain language for somebody who was not there (SPEC). Every other surface in
-     this app is *scanned*, which is what 13–14px is for; that one is **read**, start to
-     finish, by a person who did not come here for a dashboard. 15 is the smallest step that
-     changes how a paragraph reads without changing what app you are in — 16 (`--text-lg`)
-     is already the size of a card heading here, and prose set at a heading's size stops
-     looking like this window. */
+  /* --- the reading sizes ---------------------------------------------------
+     The one surface in this app that is **read** rather than scanned: the human area, a
+     record retold in plain language for somebody who was not there (SPEC). Everything else
+     here is skimmed for the one row that matters, which is what 13–14px is for.
+
+     `--text-read` is defined against the body beside it rather than as a number: **one step
+     above whatever `.prose` is at this window width**. That relative reading is the whole
+     point of the token, and stating it as a constant quietly broke it — this app's own wide
+     contract steps `.prose` to 15px at 1560 and 16px at 1840 (app.css, "wide windows"), so a
+     fixed 15 made the read half exactly the size of the scanned half at 1600 and *smaller*
+     than it at 1900. The three sizes therefore step with the same two breakpoints, in the
+     one place a token may be re-declared: `:root` inside those queries, the way
+     `--content-max` already is. Nothing else in this app uses these.
+
+     `--text-read-lead` is the beat headings and the closing line, `--text-read-lede` the
+     opening paragraph — a real ramp (body / +3 / +5), because the retelling's hierarchy is
+     the only thing carrying a reader who cannot read the other half. They were both
+     `--text-lg` for a round, which put a heading and its own body 1px apart and put both of
+     them level with the agent half's paragraphs. */
   --text-read: 15px;
+  --text-read-lead: 18px;
+  --text-read-lede: 20px;
   --text-lg: 16px;
   --text-xl: 20px;
   --text-2xl: 26px;
@@ -223,9 +237,15 @@
   --prose-max: 78ch;
   /* …and the measure of the one surface that is read rather than scanned. Narrower than
      `--prose-max` on purpose: 78ch is right for a record body that is skimmed for the one
-     paragraph that matters, and too long a line to return from eight times in a row. At
-     `--text-read` this is ~560px, which leaves the sheet sitting inside the same column the
-     agent view uses rather than opening a second layout. */
+     paragraph that matters, and too long a line to return from eight times in a row.
+
+     It is a *measure*, not a width: `ch` resolves against `--text-read`, so it already grows
+     with the type at each breakpoint and the line keeps the same number of characters on it
+     (~78 Latin, ~40 Hangul). The extra `ch` at the two wide steps is the same widening the
+     agent half takes there (78 → 82 → 92ch) at two thirds the rate — the half that is read
+     may spend a wide window on size, and only some of it on line length. The sheet itself
+     is NOT this wide: it fills the record column at every width, and this is the column of
+     text inside it (app.css, "the human area"). */
   --human-measure: 62ch;
   --header-height: 48px;
   /* The strip the desktop app draws where Windows used to draw a title bar. Only the
@@ -380,14 +400,24 @@ dt {
    scripts/check-i18n.mjs the first time that dialog was read at 1600px). */
 .modal-warn,
 .modal-note,
-/* The four lines the human view says in its own voice: the box a record with no retelling
-   shows (its headline, its paragraph, the line over the command and the line under it), and
-   the byline naming who retold the one that has it. Sentences, in a 560px column — the
-   width band this whole list exists for. */
+/* The lines the human view says in its own voice: the box a record with no retelling shows
+   (its headline, its paragraph, the line over the command and the line under it), the byline
+   naming who retold the one that has it — and the same two things said for a *board* rather
+   than a record, which is the app-feedback board's notice and the one line a row without a
+   retelling carries. Sentences, in a 560px column — the width band this whole list exists
+   for. */
 .human-empty-title,
 .human-empty-text,
 .human-empty-lead,
 .human-empty-foot,
+.human-notice-title,
+.human-notice-text,
+.human-notice-foot,
+.feedback-none,
+/* …and the line that admits the agent area is on screen instead of the half the reader
+   asked for. One sentence, in a box the width of the sentence, which is precisely the shape
+   that wraps. */
+.view-peek,
 .human-foot,
 .note-foot {
   word-break: keep-all;

@@ -249,6 +249,13 @@ const AUTHOR = [
   ".file-item",
   ".agent-name",
   ".agent-avatar",
+  /* The same initials, in the palette's own class. `agentInitials()` renders both
+     (CommandPalette.tsx), and both are `aria-hidden` decoration off a handle nobody
+     translates — but only the first was listed, so the exemption depended on the letters an
+     agent's handle happened to start with. `fable-notes-builder` gives "FN" and passed;
+     `d3-round5` gives "DR", which is an English word, and failed the Korean run on a screen
+     where nothing was wrong. */
+  ".palette-meta-avatar",
   ".tag",
   ".mono", // ids, slugs, routes, paths
   "code",
@@ -261,11 +268,20 @@ const AUTHOR = [
  * The app's own words *inside* an author container — checked despite the list above.
  *
  * The exemptions are by container, and a container can hold both: a rendered record body is
- * the author's, but an id in it that names nothing is drawn as a chip whose tooltip is the
- * app talking ("no work log or bug with this id in this project"). The live vault has one —
- * WORK-0011 cites BUG-9999 — and it sat in English through a whole round because `.prose`
- * excused it (P8 critic). A chip whose record *is* there keeps the author's title in its
- * tooltip and stays exempt.
+ * the author's, but an id in it that names nothing is drawn as a chip whose **tooltip** is
+ * the app talking ("no work log or bug with this id in this project"). The live vault has
+ * one — WORK-0011 cites BUG-9999 — and it sat in English through a whole round because
+ * `.prose` excused it (P8 critic). A chip whose record *is* there keeps the author's title
+ * in its tooltip and stays exempt.
+ *
+ * The tooltip is the whole of it, and for several rounds this list said so and did more: it
+ * un-exempted the chip's **text** as well, which is the author's id and nothing else, and it
+ * read the id back out of the tooltip that quotes it. On this repo's own records — WORK-0061
+ * and WORK-0062, whose prose is *about* wiki-links and therefore cites `[[note-name]]` and
+ * `[[unrealnetcore-queue]]` on purpose — that was 28 findings a round telling a Korean
+ * reviewer to translate an id an agent typed. So: chrome names elements whose **attributes**
+ * are checked, with the element's own text subtracted from them first (see {@link PROBE}).
+ * The sentence the app adds is still read whole, which is the defect this list exists for.
  */
 const CHROME = [".ref-inline.is-unknown"];
 
@@ -1062,8 +1078,17 @@ const PROBE = ({ exemptSelectors, chromeSelectors }) => {
   const isExempt = (node) => {
     const el = node.nodeType === 1 ? node : node.parentElement;
     if (!el) return false;
-    if (chromeSelectors.some((sel) => el.closest(sel))) return false;
     return exemptSelectors.some((sel) => el.closest(sel));
+  };
+  /** The nearest ancestor (or self) whose *attributes* are the app talking. */
+  const chromeHost = (node) => {
+    const el = node.nodeType === 1 ? node : node.parentElement;
+    if (!el) return null;
+    for (const sel of chromeSelectors) {
+      const hit = el.closest(sel);
+      if (hit) return hit;
+    }
+    return null;
   };
   const where = (node) => {
     const el = node.nodeType === 1 ? node : node.parentElement;
@@ -1087,9 +1112,15 @@ const PROBE = ({ exemptSelectors, chromeSelectors }) => {
     found.push({ kind: "text", text, at: where(node) });
   }
   for (const el of document.querySelectorAll("[title], [aria-label], [placeholder]")) {
-    if (isExempt(el)) continue;
+    const host = chromeHost(el);
+    if (!host && isExempt(el)) continue;
+    /* The app's sentence about the author's id quotes that id back into itself, and the id
+       stays the author's wherever it is printed. Subtracting the element's own text leaves
+       exactly the run the app wrote, which is the run this gate is about. */
+    const quoted = host ? (host.textContent || "").trim() : "";
     for (const attr of ["title", "aria-label", "placeholder"]) {
-      const text = (el.getAttribute(attr) || "").trim();
+      let text = (el.getAttribute(attr) || "").trim();
+      if (quoted && text.includes(quoted)) text = text.split(quoted).join(" ").trim();
       if (text) found.push({ kind: attr, text, at: where(el) });
     }
   }
@@ -1293,12 +1324,15 @@ try {
     { name: "projects", path: "/projects", wait: ".project-row" },
     { name: "app feedback", path: "/app-feedback", wait: ".empty, .feedback-list" },
     /* The fourth surface that draws a record, read the other way. One toggle for the whole
-       board, and whatever this machine's agents filed decides whether the rows show a
-       retelling or the box that says none was written. */
+       board, and whatever this machine's agents filed decides what is on that half: a row
+       that carries a retelling draws `.human-view`, and the rows that do not are answered
+       once, by the board's `.human-notice`. A machine whose items all predate the human
+       area — this one, today — has only the second, so waiting for the first alone timed
+       out on the very board this gate is here to read. */
     {
       name: "app feedback (human)",
       path: "/app-feedback",
-      wait: ".human-view, .empty",
+      wait: ".human-view, .human-notice, .empty",
       prepare: async (page) => {
         await page.waitForSelector(".feedback-list, .empty", { state: "visible", timeout: 15_000 });
         if (await page.locator(".view-toggle").count()) await pressView("human")(page);

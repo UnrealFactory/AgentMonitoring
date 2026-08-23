@@ -1,0 +1,138 @@
+WORK-0068 · explained with pictures
+The sign that lied.
+Two headings. They look exactly the same .
+One is real. One is a fake the computer couldn't catch — until now.
+For humans
+what you see
+REAL
+For humans
+also what you see
+FAKE
+Your eyes can't tell them apart. That was the whole problem.
+The setup
+One heading is special.
+Robots write work notes in this app. Each note may have one section
+meant for people. It always starts with the heading “For humans” .
+Everything else belongs to the robots.
+🤖
+🤖
+🤖
+🧑
+## For humans
+the one
+people read
+The rule only works if the computer can always recognize that heading.
+Trick #1
+Letters that draw nothing.
+Some characters are completely invisible — they take up no space
+and leave no ink. Slip one inside the heading and the computer thinks
+it's a different word. Your eyes see no difference at all.
+WHAT YOU SEE
+For humans
+WHAT THE COMPUTER SEES
+F
+o
+r
+👻
+·
+h
+u
+m
+a
+n
+s
+an invisible character hides here
+👻
+zero-width space,
+soft hyphen, and
+friends — all blank
+Seven different invisible spellings all slipped past the old check.
+Trick #2
+Twin letters from other alphabets.
+Other alphabets have letters drawn exactly like ours.
+Same shape on screen — but inside the computer, every character has an ID number,
+and the numbers don't match.
+o
+ID 006F
+our alphabet
+≠
+to the computer
+о
+ID 043E
+Cyrillic alphabet
+Cyrillic, Greek, Armenian, ｆｕｌｌｗｉｄｔｈ, math alphabets like 𝐅 —
+every letter in “For humans” has twins.
+So the app happily drew a heading that read
+“For humans” above robot text — and the guard shrugged: “different ID numbers, not my problem.”
+The fix
+The guard now checks what you see.
+Before comparing, the program rebuilds the heading
+the way a reader's eye sees it — in three steps.
+Ｆоr👻humаns
+a sneaky spelling arrives
+👻
+1 · Ghosts are thrown away
+a letter that draws nothing counts as nothing
+2 · Blank-but-wide letters become a space
+if it fills a slot but shows nothing, your eye reads a space
+о → o
+3 · Twins become the letter they imitate
+only the nine letters in “for humans” — no other word matters here
+for humans
+Result: “for humans.” Caught. Now the fake is refused
+before it's ever written down.
+And a heading that doesn't read as
+“For humans” — like “For​humans” squeezed into one word — is still allowed.
+The check matches eyes, not paranoia.
+The other bug
+Two robots, two rulebooks.
+The same check runs in two languages — Rust and JavaScript.
+Each has its own idea of which blank characters to strip off the edges of text.
+One strips a certain invisible mark; the other keeps it.
+Same file, two different answers.
+🦀 Rust strips
+JavaScript strips 🟨
+spaces, tabs,
+line breaks…
+FEFF
+an invisible mark
+Notepad leaves in files
+The fix: both now strip everything in either circle.
+Same file → same answer, every time. And “blank” now means “no visible ink at all.”
+A note made of nothing but invisible marks used to count as writing.
+Now it's refused: “no human text was supplied.”
+While we were here
+Three small fixes rode along.
+📛
+File names wrap now
+A long file name was chopped to “reserved-heading-sh…” on screen.
+Now it wraps onto the next line instead.
+↩️
+No sneaky line breaks
+A title hiding a line break could smuggle a fake heading onto its second line.
+It's now rejected before anything is saved.
+✂️
+No more cut-off message
+A help message had a size cap that trimmed off its last, most useful line.
+The cap is gone; the whole message prints.
+Proof
+Every trick is now a test.
+A shared list holds 44 spellings of the heading —
+34 sneaky ones that must be caught, 10 honest ones that must pass.
+Both languages run every single one, and every test suite is green.
+44 spellings
+✔ ghost inside → caught
+✔ Cyrillic о → caught
+✔ math-bold 𝐅 → caught
+✔ honest heading → allowed
+✔ …and 40 more
+🦀
+Rust runs it
+🟨
+JavaScript runs it
+One list, two languages, zero disagreements —
+326 tests plus 700 markdown checks, all passing.
+one thing left, on purpose
+The app's screen doesn't show the human section yet.
+That's the next chapter, not this one.
+WORK-0068 · “The reserved heading, compared the way a reader sees it” · explained like you're five

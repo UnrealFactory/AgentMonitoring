@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { highlightCode } from "../src/lib/highlight.ts";
 import { parseBlocks, parseInline, inlineText } from "../src/lib/markdown-parse.ts";
 import { splitLabelledSections } from "../src/lib/sections.ts";
+import { readHumanStory } from "../src/lib/human.ts";
 import { sections, splitHuman } from "./project-fs.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -255,6 +256,159 @@ console.log("fixtures");
   check("…and its paragraph keeps its label", kept.preamble.includes("**Fix**, which took"), kept.preamble);
 }
 
+// 10c. …and a retelling's lead-in is a whole sentence, so the same rule bites harder there.
+// `splitLabelledSections(…, { sentence: true })` is what lib/human.ts calls to find the beats
+// of a human area, and for a round it cut a heading out of the middle of the author's
+// sentence on 12 beats of this repo's own records: a 19px "The row is one line taller" over a
+// paragraph opening "below 1260 pixels", which makes the record assert flatly what its author
+// conditioned on a window width (D3 round 5 critic, BUG-0007).
+{
+  const beat = (src) => splitLabelledSections(src, { min: 1, sentence: true });
+
+  // The author carried straight on after the closing asterisks: one sentence, left whole.
+  const runOn = "**The row is one line taller** below 1260 pixels, and a name past 180 ends in a “…”.";
+  const kept = beat(runOn);
+  eq("a lead-in the author never ended is not a heading", kept.sections.length, 0);
+  eq("…and its paragraph is returned exactly as written", kept.preamble, runOn);
+
+  // Their own dash binds the halves whatever case the second one opens in.
+  const dash = beat("**The Menu key opened the menu and killed it a millisecond later** — `BUG-0020`.");
+  eq("a dash binds the rest to the lead-in too", dash.sections.length, 0);
+
+  // The author's colon *is* an ending, and it rides the heading line where they wrote it.
+  const colon = beat("**Lifting it any later would have been a race**: the browser's own box arrives at 500ms.");
+  eq("a lead-in ended on a colon is a beat", colon.sections.length, 1);
+  eq("…keeping the colon the author typed", colon.sections[0].trailer, ":");
+  eq("…and opening the body on their next word", colon.sections[0].body, "the browser's own box arrives at 500ms.");
+
+  // A stop inside the author's quotes is still the stop (WORK-0067's first beat).
+  const quoted = beat('**Three pieces of code each answered "is this line a heading?"** `body::heading` refuses.');
+  eq("a sentence that ends inside quotes is finished", quoted.sections.length, 1);
+  check("…and the beat keeps its own words", quoted.sections[0].body.startsWith("`body::heading`"), quoted.sections[0].body);
+
+  // Case is a Latin-script test and says nothing about Korean: those beats are untouched.
+  const ko = beat("**저장한 것은 자리가 아니라 숫자였다.** 시계를 한 시간 되돌리면 같은 시각이 두 번 옵니다.");
+  eq("a Korean lead-in is still a beat", ko.sections.length, 1);
+
+  // None of this reaches a resolution, where the bold run is a heading word rather than a
+  // sentence and "Fix" over prose is what the author meant (fixture 10b pins that reading).
+  const label = splitLabelledSections("**Root cause.** The loop tested the raw line.\n\n**Fix** in `app.css` two rules.");
+  eq("a resolution's label splits as it always did", label.sections.length, 2);
+  eq("…with no colon invented for it", label.sections[1].trailer, "");
+}
+
+// 10d. …and where that retelling ends (src/lib/human.ts). The closing line gets the one
+// accent-painted block on the page, and for two rounds a last beat that was a lead-in and one
+// line never got one: BUG-0020, BUG-0021 and WORK-0022 each close on a rule of thumb that is
+// the *whole* body of their final beat, and all three were drawn as one more grey paragraph
+// (D3 round 7 critic). Lifting it takes two things — the line standing alone in its own
+// paragraph, and a finished statement above it — and the two live records that fail those,
+// BUG-0019 and BUG-0024, are here to keep them failing.
+{
+  const doc = (...paragraphs) => paragraphs.join("\n\n");
+  const lastBeat = (story) => story.beats[story.beats.length - 1];
+
+  // BUG-0020's shape: the last beat is a lead-in and one line, alone in its paragraph.
+  const alone = readHumanStory(
+    doc(
+      "Somebody watching the screen would have seen the Menu key do nothing at all.",
+      "**The mouse and Shift+F10 were never affected: a dead key, not a leak.**",
+      "A key nobody presses in the check is a key nobody has tested.",
+    ),
+  );
+  eq(
+    "a last beat that is a lead-in and one line closes the retelling on that line",
+    alone.takeaway,
+    "A key nobody presses in the check is a key nobody has tested.",
+  );
+  eq("…the beat keeping its lead-in", lastBeat(alone).lead, "The mouse and Shift+F10 were never affected: a dead key, not a leak.");
+  eq("…with nothing left under it", lastBeat(alone).body, "");
+  eq("…and the opening where the author put it", alone.lede, "Somebody watching the screen would have seen the Menu key do nothing at all.");
+
+  // BUG-0021 and WORK-0022 end the heading line on the clause they bound to the lead-in, and
+  // the statement the screen draws is the two of them together.
+  const bound = readHumanStory(
+    doc(
+      "**A right-click while a menu is open still only closes it**, rather than moving to whatever is under the new cursor.",
+      "A gesture that answers on some rows and not others teaches nobody to use it.",
+    ),
+  );
+  eq(
+    "a lead-in finished by its bound clause closes the retelling too",
+    bound.takeaway,
+    "A gesture that answers on some rows and not others teaches nobody to use it.",
+  );
+  eq("…and the clause still rides the heading line", lastBeat(bound).trailer, ", rather than moving to whatever is under the new cursor.");
+
+  // BUG-0019's shape: the same two sentences, written on one line. There is no last paragraph
+  // to lift, so the beat keeps every word where its author put it.
+  const inline = readHumanStory(
+    doc(
+      "Somebody watching the screen would have seen the Menu key do nothing at all.",
+      "**Everywhere except a box you type in, the right button is now the app's.** Whatever you never answer, something else answers for you.",
+    ),
+  );
+  eq("a closing line sharing the lead-in's paragraph is not lifted", inline.takeaway, null);
+  eq("…and stays the beat's body", lastBeat(inline).body, "Whatever you never answer, something else answers for you.");
+
+  // BUG-0024's shape: the same, and its paragraph taken whole is 215 characters.
+  const long = readHumanStory(
+    "**Any two agents writing to one project at the same moment could hit this.** The test with its eight writers only rolls the dice faster. Two writers now wait for each other, which is the whole point of taking turns.",
+  );
+  eq("…however long that paragraph is", long.takeaway, null);
+  check("…which stays two sentences of body", lastBeat(long).body.startsWith("The test with its eight"), lastBeat(long).body);
+
+  // …and the ceiling is unmoved by any of this: a paragraph of its own, two sentences and
+  // past MAX_TAKEAWAY, is a paint swatch rather than a line to leave holding.
+  const over =
+    "The test with its eight writers only rolls the dice faster, which is why it failed one run in five rather than every run, and two writers now wait for each other, which is the whole point of taking turns.";
+  check("the fixture is over the ceiling", over.length > 200, `${over.length} characters`);
+  eq(
+    "a single paragraph past the ceiling is not a closing line",
+    readHumanStory(doc("**Any two agents writing to one project at once could hit this.**", over)).takeaway,
+    null,
+  );
+
+  // Nor is a paragraph that is not prose — the floor `carveTakeaway` already applies to the
+  // last of several holds for the only one just the same.
+  const list = readHumanStory(
+    doc("**The three keys were each answered somewhere else.**", "- the mouse\n- Shift+F10\n- the Menu key"),
+  );
+  eq("a list under a lead-in is not a closing line", list.takeaway, null);
+
+  // An unfinished lead-in is *completed* by the paragraph under it; lifting that would leave
+  // half a sentence as a heading with nothing beneath it.
+  const half = readHumanStory(doc("**We saved a number**", "Not a place, which is the whole bug."));
+  eq("an unfinished lead-in keeps the paragraph that finishes it", half.takeaway, null);
+  eq("…as its body", lastBeat(half).body, "Not a place, which is the whole bug.");
+
+  // The author's hard wrap is not a paragraph break here either (the reason is on
+  // `carveTakeaway`): the same beat wrapped mid-sentence closes on the same line.
+  const wrapped = readHumanStory(
+    doc(
+      "**The mouse and Shift+F10 were never affected: a dead key, not a leak.**",
+      "A key nobody presses in the check\nis a key nobody has tested.",
+    ),
+  );
+  eq("a wrapped closing line is still one line", wrapped.takeaway, "A key nobody presses in the check is a key nobody has tested.");
+
+  // A beat-less retelling — the shape the contract gives a thin record — is untouched by all
+  // of it: it still closes on its own last paragraph, and one that is a single paragraph
+  // still keeps that paragraph.
+  const thin = readHumanStory(
+    doc(
+      "The tool wrote the same file twice and the second write won.",
+      "A colour is only as legible as the colours you checked it beside.",
+    ),
+  );
+  eq("a beat-less retelling still closes on its last paragraph", thin.takeaway, "A colour is only as legible as the colours you checked it beside.");
+  eq("…with no beats invented", thin.beats.length, 0);
+  eq("…and its opening left whole", thin.lede, "The tool wrote the same file twice and the second write won.");
+  const one = readHumanStory("The tool wrote the same file twice and the second write won.");
+  eq("a one-paragraph retelling keeps its one paragraph", one.takeaway, null);
+  eq("…as the opening", one.lede, "The tool wrote the same file twice and the second write won.");
+}
+
 // 11. A resolution written as plain prose is left exactly as it is — no invented headings.
 {
   const src = "Replaced the capturing closure with a free function.\n\nVerified with `cargo build`.";
@@ -485,10 +639,24 @@ function sweep(file) {
 
   // The two areas do not bleed: whatever this record hands the Agent view never draws a
   // heading reading "For humans", whatever spelling the file uses.
+  const halves = splitHuman(body);
   check(
     `${name} keeps the reserved heading out of its agent area`,
-    !drawnAsReserved(splitHuman(body).agent),
+    !drawnAsReserved(halves.agent),
   );
+
+  // The Human view reads the retelling back as an opening, its beats and its closing line
+  // (src/lib/human.ts), and that reading is the whole text — "nothing is summarised,
+  // reordered, counted or invented" is the promise the screen is built on, so it is swept
+  // here for the same reason the resolution's split is: a re-arrangement may lose no word.
+  if (halves.human) {
+    const story = readHumanStory(halves.human);
+    const retold = bare(
+      [story.lede, ...story.beats.map((b) => `${b.lead} ${b.trailer} ${b.body}`), story.takeaway ?? ""].join("\n"),
+    );
+    const gone = lost(halves.human, retold);
+    check(`${name} retells without loss`, gone.length === 0, gone.slice(0, 6).join(" · "));
+  }
 
   // Every code block in the record, re-joined from its highlight spans: colour may be
   // wrong about a token, never about the bytes (lib/highlight.ts).

@@ -8,9 +8,17 @@
 // `note` is one tool, not four: its verbs share every field, and the upsert rule (write
 // rewrites an existing name in place) is exactly the one-fact-one-file discipline the
 // manual teaches.
+//
+// The human area every record carries (SPEC.md) is here as six `human` fields, the three
+// `required: [...]` entries for the tools that always need one, one enum value, and one
+// five-word clause on app_feedback's `id` — which names a route, not a rule, because the
+// call it belongs to succeeds without it and no result is ever in a position to mention
+// it. No rule about the human area is taught here. Anything an agent needs to be *told*
+// about it is told by a result, which is paid once, rather than by a description, which is
+// paid on every turn: see `handOver` below.
 
 import path from "node:path";
-import { runCli, cliErrorText, listArg } from "./cli.mjs";
+import { runCli, cliErrorText, listArg, contractDelivered, markContractDelivered } from "./cli.mjs";
 import {
   RESULT_CAP,
   FULL_CAP,
@@ -33,11 +41,26 @@ const dir = { type: "string", description: "Another project folder; overrides th
 const agent = { type: "string", description: "Override the server default." };
 const when = { type: "string", description: "UTC ISO8601 of when it really happened." };
 /**
- * The human area (SPEC.md). One clause per tool and nothing more: the rules live in
- * `agentmon human-style`, and the refusal for a missing one prints their short form — so
- * the schema carries the requirement and the error carries the contract.
+ * The human area (SPEC.md), on six write tools — and carrying no prose at all.
+ *
+ * The schemas are re-sent every turn; a result is sent once. So nothing about the human
+ * area that a *result* can carry is bought here. `required: [...]` says which calls demand
+ * one. Who the retelling is for is the opening line of the block `handOver` below sends —
+ * said once, on the session's first result, rather than six times in a tool list on every
+ * turn of the conversation. That a supplied retelling *replaces* the stored one is said by
+ * the result of the call that replaces it. And the rules themselves — the part that decides
+ * whether the retelling is any good — are that same block, handed over whole.
+ *
+ * The description that used to sit here read "Retold for a non-programmer." An A/B run by
+ * this initiative's critic put the same task through this schema with those bytes present
+ * and with them emptied: one attempt either way, and the same four contract rules missed.
+ * Read that for what it is — an audience clause measured against nothing, not a pointer
+ * measured against nothing: neither arm could reach the contract, because that run's
+ * schema listed `status`'s modes without `human_style`. What it settles is narrow and
+ * enough: naming the audience here changed no record, and a field description that changes
+ * nothing is one six tools pay for on every turn. So it is gone.
  */
-const human = { type: "string", description: "Retold for a non-programmer." };
+const human = { type: "string" };
 
 export const TOOLS = [
   {
@@ -52,7 +75,7 @@ export const TOOLS = [
         why: { type: "string", description: "The problem, the constraint, the option rejected." },
         how: { type: "string", description: "The approach and the tricky parts." },
         outcome: { type: "string", description: "What shipped and how it was verified; closes the log." },
-        human: { ...human, description: "Required; retold for a non-programmer." },
+        human,
         files: { ...strList, description: "Paths touched; recorded when the log closes." },
         tags: strList,
         refs: { ...strList, description: "Related WORK/BUG ids." },
@@ -75,7 +98,7 @@ export const TOOLS = [
         note: { type: "string", description: "Progress note, or a correction on a closed log." },
         outcome: { type: "string", description: "What shipped and how it was verified; closes the log." },
         abandon: { type: "string", description: "Why the work stopped for good; marks it abandoned." },
-        human: { ...human, description: "Retold for a non-programmer; alone, it rewrites that." },
+        human,
         files: { ...strList, description: "Paths touched." },
         at: when,
         dir,
@@ -93,7 +116,7 @@ export const TOOLS = [
         title: { type: "string", description: "One specific line." },
         severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
         report: { type: "string", description: "Repro steps, expected, actual." },
-        human: { ...human, description: "Required; retold for a non-programmer." },
+        human,
         labels: strList,
         refs: { ...strList, description: "Related WORK/BUG ids." },
         created_at: when,
@@ -113,7 +136,7 @@ export const TOOLS = [
         id: { type: "string", description: "BUG-NNNN." },
         comment: { type: "string", description: "Root cause or a finding, for the thread." },
         resolution: { type: "string", description: "The fix, why it works, how it was verified." },
-        human: { ...human, description: "Retold for a non-programmer; required to resolve." },
+        human,
         claim: { type: "boolean", description: "Take the bug; refuses if another agent holds it." },
         at: when,
         dir,
@@ -139,7 +162,7 @@ export const TOOLS = [
         },
         description: { type: "string", description: "One line a scanner reads instead of the body." },
         body: { type: "string", description: "Free-form markdown; write replaces it." },
-        human: { ...human, description: "Retold for a non-programmer; required with body." },
+        human,
         tags: strList,
         refs: { ...strList, description: "Related WORK/BUG ids or note names." },
         query: { type: "string", description: "list: match name, title, description, body." },
@@ -160,7 +183,14 @@ export const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        mode: { type: "string", enum: ["project", "work", "bugs", "view"], description: "Default project." },
+        // `human_style` is the fifth mode and the cheapest possible home for it: fourteen
+        // bytes of enum on a tool every caller already has, instead of an eighth tool. It
+        // buys the *whole* contract — the worked example the compact rules cannot carry —
+        // for a caller with no shell to run `agentmon human-style` in. Fourteen bytes and
+        // no sentence anywhere advertising them: what points here is the last line of the
+        // rules the session's first result hands over, and the last line of every refusal,
+        // both of which the agent has already read by the time it wants more.
+        mode: { type: "string", enum: ["project", "work", "bugs", "view", "human_style"], description: "Default project." },
         id: { type: "string", description: "Record id, for mode=view." },
         state: { type: "string", description: "in_progress|done|abandoned, or open|in_progress|resolved|closed." },
         severity: { type: "string", description: "Bugs only." },
@@ -180,14 +210,19 @@ export const TOOLS = [
       // No dir: feedback about the app is machine-level and belongs to no project.
       properties: {
         // `type` and `title` are required for a new item and meaningless for a rewrite, so
-        // the schema cannot require them and the handler asks for them instead. Without
-        // this, an agent with only MCP had no way to give a legacy item a human area at
-        // all, which SPEC.md ("the MCP tools mirror all of this") says it must.
-        id: { type: "string", description: "FB id: rewrite that item's human area instead of filing." },
+        // `required: [...]` cannot carry them and holds `human` alone. What it costs is one
+        // round trip on a filing that forgets a title, and the handler's refusal names both
+        // shapes of the call — cheaper than a clause every turn pays for.
+        //
+        // `id` keeps a description because deleting it deletes a route: without it, the
+        // only way an agent with MCP and no shell can give a legacy item its human area
+        // ("the MCP tools mirror all of this", SPEC.md) is undiscoverable from the tool
+        // list, and an `id` sent while filing goes to `app-feedback update` and fails.
+        id: { type: "string", description: "Rewrites that item's human area." },
         type: { type: "string", enum: ["bug", "idea"] },
         title: { type: "string", description: "One specific line." },
         body: { type: "string", description: "Repro for a bug; the situation behind an idea." },
-        human: { ...human, description: "Required; retold for a non-programmer." },
+        human,
         at: when,
         agent,
       },
@@ -249,6 +284,123 @@ function recordPath(at, id) {
 
 const lines = (...parts) => text(parts.filter(Boolean).join("\n"));
 
+/* ------------------------------------------------- handing over the contract */
+
+const RULES_OPEN = "<!-- compact-rules -->";
+const RULES_CLOSE = "<!-- /compact-rules -->";
+
+/**
+ * The compact style rules, cut out of the contract the binary itself carries.
+ *
+ * Not a copy kept here. `agentmon human-style` prints docs/HUMAN_STYLE.md, and the rules
+ * are the block between its two markers — the same bytes crates/agentmon-core/build.rs
+ * extracts for every CLI refusal, so this server and the CLI can never teach two different
+ * contracts. One extra spawn, once a session.
+ */
+async function compactRules(at) {
+  const r = await runCli(at, ["human-style"]);
+  if (!r.ok) return "";
+  const doc = r.stdout;
+  const from = doc.indexOf(RULES_OPEN);
+  const to = doc.indexOf(RULES_CLOSE);
+  if (from < 0 || to <= from) return "";
+  return doc.slice(from + RULES_OPEN.length, to).trim();
+}
+
+/**
+ * The rules themselves, once a session, on the first tool result of any kind.
+ *
+ * **The MCP half never receives the contract.** A shell caller reaches it two ways without
+ * being told to: `work start --help` names `agentmon human-style`, and running a command
+ * is free once you have a terminal; and forgetting `--human` on a verb that requires one
+ * prints the compact rules whole in the refusal, the one message never trimmed. Through MCP
+ * the second door is closed by construction
+ * (`required: [..., "human"]` means a retelling is always supplied, so the write succeeds
+ * at exit 0 and no refusal is ever built), and the first is a mode name in an enum rather
+ * than a command. A clause on the `human` description was measured against no clause at
+ * all — same single attempt, same four contract rules missed — and that clause named the
+ * audience rather than pointing anywhere, since the schema it ran under listed no
+ * `human_style` mode to point at. Narrow, and enough: prose here changed no record.
+ *
+ * So this hands them over instead of naming them. A tool result is paid once; the six
+ * `human` descriptions were paid on every turn of the conversation and bought less.
+ *
+ * **And it hands them over before the first draft.** Riding the first successful write was
+ * measured and failed: two graded MCP sessions wrote a human area with nothing but the
+ * schema to go on, and both missed the contract's headline rules — no analogy, no beat
+ * saying how the agent knew, label-shaped bold lead-ins where the contract asks for ones
+ * that state something, the record's own subject never named — and one invented a purpose
+ * for a number the record never explained. The block that was meant to govern that draft
+ * arrived stapled to the write that ended it.
+ *
+ * Riding the session's first `note(action="list")` instead was better and still not right:
+ * it is the call the server's `instructions` and the project's CLAUDE.md both tell a session
+ * to begin with, but "told to" is not "did". A session that opened with `status`, or with a
+ * note read, or with a failed call, drafted blind exactly as before — delivery depended on
+ * call order, and the sessions that got the order wrong are the ones that needed the rules
+ * most. So `callTool` at the bottom of this file runs this over *every* result, and the
+ * first one back — list, read, snapshot, refusal, anything — carries the block. There is no
+ * call order that misses it, and it still costs no always-on bytes: the rules travel in a
+ * result the session was going to receive anyway.
+ *
+ * One shape is left that no result can reach in time, because the result comes after the
+ * call: a session whose first call *is* a write. `written` catches it one draft late, with
+ * a head that says so and names `repair` — the call that rewrites this very record, id
+ * filled in, replacing the retelling and touching nothing else. Nothing always-on is spent
+ * trying to get ahead of it: a bullet about this in the project's CLAUDE.md was written,
+ * then measured against its own absence, and the repo without it saved a conforming record
+ * on the same attempt as the repo with it. Those bytes are re-sent on every turn of every
+ * conversation and bought nothing, so there are none — this last shape is one draft late,
+ * and that is the price.
+ *
+ * SPEC.md calls the contract write-time reading and never session-start reading, and that
+ * still holds for the *contract*: 20,000 characters, the worked example, read when a record
+ * needs one, `status(mode="human_style")`. What rides the first result is the compact block
+ * every refusal already carries.
+ *
+ * Three ways it stays cheap and quiet: whichever channel opens first claims the session and
+ * silences the others (mcp/lib/cli.mjs), so a session pays once — a refusal, or the whole
+ * contract read on purpose, pays for everything after it; the claim is staked before the
+ * spawn, so two calls in flight cannot both pay for it, and is given back if the spawn comes
+ * up empty; and a call that could not reach `human-style` at all still returns exactly what
+ * it would have, because a call that succeeded must never look like it failed.
+ */
+// Who the retelling is for is the first line of the block itself, so this does not say it
+// twice: what it adds is the tie between that block and the undescribed `human` field the
+// schemas require, and the instruction the whole move exists for — read now, draft after.
+const PRE_DRAFT_HEAD =
+  "Every record you write here has a second half — the `human` field, held to the rules " +
+  "below. They come once, this session: read them before you draft the first one, not after.";
+
+const primerHead = (repair) =>
+  `The retelling you just sent is held to the rules below. Nothing refused this call, so ` +
+  `they come here instead — once, this session. Read it back against them; whatever it ` +
+  `misses, fix with ${repair}, which replaces the retelling and changes nothing else ` +
+  `about the record.`;
+
+const PRIMER_TAIL = 'The whole contract, worked example included: status(mode="human_style").';
+
+/** The same envelope, error-ness and all, with `s` in place of its text. */
+const reworded = (res, s) => ({ ...res, content: [{ type: "text", text: s }] });
+
+async function handOver(at, res, head) {
+  if (contractDelivered()) return res;
+  markContractDelivered(); // claim the session before the spawn, not after
+  const rules = await compactRules(at);
+  if (!rules) {
+    markContractDelivered(false);
+    return res;
+  }
+  const body = (res?.content ?? []).map((c) => c.text ?? "").join("\n");
+  return reworded(res, `${body}\n\n${head}\n\n${rules}\n\n${PRIMER_TAIL}`);
+}
+
+async function written(at, human, repair, ...parts) {
+  const body = parts.filter(Boolean).join("\n");
+  if (!human) return text(body);
+  return handOver(at, text(body), primerHead(repair));
+}
+
 /* ------------------------------------------------------------------ handlers */
 
 async function logWork(args, ctx) {
@@ -275,7 +427,10 @@ async function logWork(args, ctx) {
     // `work start` has no --files: the CLI attaches files when the log closes. Say so
     // rather than dropping the caller's list without a word.
     const held = listArg(args.files) ? ", with the files" : "";
-    return lines(
+    return written(
+      at,
+      human,
+      `update_work(id="${id}", human=…)`,
       `${id} in_progress · ${who}`,
       `started ${startedAt}`,
       file,
@@ -294,7 +449,10 @@ async function logWork(args, ctx) {
     );
   }
   const rec = done.json?.record ?? {};
-  return lines(
+  return written(
+    at,
+    human,
+    `update_work(id="${id}", human=…)`,
     `${id} done · ${who}`,
     `started ${rec.started ?? startedAt} · finished ${rec.finished ?? ""}`,
     file
@@ -330,7 +488,11 @@ async function updateWork(args, ctx) {
     flag(a, "--at", args.at);
     const r = await runCli(at, a, note || undefined);
     if (!r.ok) return fail(cliErrorText(r));
-    done.push(note ? "note added" : "human area rewritten");
+    // `resolve_human` in crates/agentmon-core/src/write.rs is `(Some(new), _) => Ok(new)`:
+    // a retelling sent with a note REPLACES the stored one while the note is appended.
+    // Said here, on the call that did it, rather than in a schema clause every turn pays
+    // for — the caller reads it at the one moment the difference is visible.
+    done.push(note ? (human ? "note added, retelling replaced" : "note added") : "human area rewritten");
     file = r.json?.path ?? file;
     stamp = r.json?.event?.ts ?? stamp;
     state = r.json?.record?.status ?? state;
@@ -361,7 +523,14 @@ async function updateWork(args, ctx) {
     state = "abandoned";
   }
 
-  return lines(`${id} ${state} · ${done.join(", ")} · ${who}`, stamp ? `at ${stamp}` : null, file);
+  return written(
+    at,
+    human,
+    `update_work(id="${id}", human=…)`,
+    `${id} ${state} · ${done.join(", ")} · ${who}`,
+    stamp ? `at ${stamp}` : null,
+    file
+  );
 }
 
 async function reportBug(args, ctx) {
@@ -373,14 +542,18 @@ async function reportBug(args, ctx) {
     "--severity", String(args.severity).trim(),
     "--body-file", "-", "--json",
   ];
-  flag(a, "--human", humanText(args, "report_bug"));
+  const human = humanText(args, "report_bug");
+  flag(a, "--human", human);
   flag(a, "--labels", listArg(args.labels));
   flag(a, "--refs", listArg(args.refs));
   flag(a, "--created-at", args.created_at);
   const r = await runCli(at, a, String(args.report).trim());
   if (!r.ok) return fail(cliErrorText(r));
   const rec = r.json?.record ?? {};
-  return lines(
+  return written(
+    at,
+    human,
+    `resolve_bug(id="${r.json?.id}", human=…)`,
     `${r.json?.id} open · ${rec.severity} · reported by ${who}`,
     `created ${rec.created ?? r.json?.event?.ts ?? ""}`,
     r.json?.path ?? ""
@@ -433,7 +606,9 @@ async function resolveBug(args, ctx) {
     flag(a, "--at", args.at);
     const r = await runCli(at, a, comment || undefined);
     if (!r.ok) return fail(stepFailure(done, cliErrorText(r)));
-    done.push(comment ? "commented" : "human area rewritten");
+    // Same replace-not-append as `update_work`, said on the call that did it: the comment
+    // joins the thread, the retelling takes the old one's place.
+    done.push(comment ? (human ? "commented, retelling replaced" : "commented") : "human area rewritten");
     file = r.json?.path ?? file;
     state = r.json?.record?.status ?? state;
   }
@@ -450,7 +625,14 @@ async function resolveBug(args, ctx) {
   }
 
   const shown = resolution ? "resolved" : state || "in_progress";
-  return lines(`${id} ${shown} · ${done.join(", ")} · ${who}`, stamp ? `resolved ${stamp}` : null, file);
+  return written(
+    at,
+    human,
+    `resolve_bug(id="${id}", human=…)`,
+    `${id} ${shown} · ${done.join(", ")} · ${who}`,
+    stamp ? `resolved ${stamp}` : null,
+    file
+  );
 }
 
 async function status(args, ctx) {
@@ -481,6 +663,24 @@ async function status(args, ctx) {
     return text(mode === "work" ? renderWorkList(shown, opts) : renderBugList(shown, opts));
   }
 
+  // The whole contract, not the compact rules: those already reach every caller free, on
+  // the session's first result whatever it was (`handOver`), or in the refusal for leaving
+  // a human area out. What is only here is the worked example at the end, which a summary
+  // cannot stand in for — so this is the call an agent makes when the rules it has been
+  // handed are not enough. Uncapped for the same reason that refusal is (mcp/lib/cli.mjs)
+  // — a contract cut off mid-rule is a demand with no way to satisfy it.
+  // Printed, not read out of `--json`: the document is the whole answer here, so the
+  // plain call is the shorter path *and* the one that cannot go quietly empty if a future
+  // envelope renames its field.
+  if (mode === "human_style") {
+    const r = await runCli(at, ["human-style"]);
+    if (!r.ok) return fail(cliErrorText(r));
+    // This *is* the handover, in full: appending the compact block to the document it was
+    // cut from would charge the session 3,800 characters to repeat itself.
+    markContractDelivered();
+    return text(r.stdout);
+  }
+
   if (mode === "view") {
     need(args, ["id"], "status(mode=view)");
     const id = String(args.id).trim().toUpperCase();
@@ -496,7 +696,7 @@ async function status(args, ctx) {
     return text(kind === "work" ? renderWorkView(r.json ?? {}, file) : renderBugView(r.json ?? {}, file));
   }
 
-  throw new ToolError(`unknown mode '${mode}': use project, work, bugs or view.`);
+  throw new ToolError(`unknown mode '${mode}': use project, work, bugs, view or human_style.`);
 }
 
 async function note(args, ctx) {
@@ -543,7 +743,8 @@ async function note(args, ctx) {
       flag(a, "--type", args.type);
       flag(a, "--description", args.description ? oneLine(args.description) : null);
       // Alone, this is the refresh: it rewrites the human area and nothing else.
-      flag(a, "--human", humanText(args, "note(action=write)"));
+      const human = humanText(args, "note(action=write)");
+      flag(a, "--human", human);
       flag(a, "--tags", listArg(args.tags));
       flag(a, "--refs", listArg(args.refs));
       flag(a, "--at", args.at);
@@ -555,7 +756,10 @@ async function note(args, ctx) {
       // away unpins required reading from every list, so it never happens silently.
       const was = existing.json?.type;
       const now = r.json?.record?.type ?? was;
-      return lines(
+      return written(
+        at,
+        human,
+        `note(action="write", name="${r.json?.id}", human=…)`,
         `${r.json?.id} rewritten · ${who}`,
         r.json?.event?.summary ?? "",
         was === "essential" && now !== "essential"
@@ -582,7 +786,8 @@ async function note(args, ctx) {
       "--description", oneLine(args.description),
       "--body-file", "-", "--json",
     ];
-    flag(a, "--human", humanText(args, "note(action=write)"));
+    const human = humanText(args, "note(action=write)");
+    flag(a, "--human", human);
     flag(a, "--name", name || null);
     flag(a, "--tags", listArg(args.tags));
     flag(a, "--refs", listArg(args.refs));
@@ -590,7 +795,10 @@ async function note(args, ctx) {
     const r = await runCli(at, a, String(args.body).trim());
     if (!r.ok) return fail(cliErrorText(r));
     const rec = r.json?.record ?? {};
-    return lines(
+    return written(
+      at,
+      human,
+      `note(action="write", name="${r.json?.id}", human=…)`,
       `${r.json?.id} added · ${rec.type} · ${who}`,
       `rewrite it later with note(action="write", name="${r.json?.id}", …)`,
       r.json?.path ?? ""
@@ -618,28 +826,43 @@ async function appFeedback(args, ctx) {
   // before the human area existed a good one. The board has no other update and no event
   // feed, so nothing else about the item moves.
   const id = String(args?.id ?? "").trim();
+  const human = humanText(args, "app_feedback");
   if (id) {
     const u = ["app-feedback", "update", id, "--agent", who, "--json"];
-    flag(u, "--human", humanText(args, "app_feedback"));
+    flag(u, "--human", human);
     flag(u, "--at", args.at);
     const r = await runCli(at, u);
     if (!r.ok) return fail(cliErrorText(r));
-    return lines(`${r.json?.id} retold · ${who}`, "only the human area changed");
+    return written(
+      at,
+      human,
+      `app_feedback(id="${r.json?.id}", human=…)`,
+      `${r.json?.id} retold · ${who}`,
+      "only the human area changed"
+    );
   }
 
-  need(args, ["type", "title"], "app_feedback");
+  // `required: [...]` holds `human` alone — `type` and `title` are meaningless on the
+  // rewrite above — so this message is where a filer learns which shape it missed. Both
+  // shapes, because "needs type, title" to an agent that meant to rewrite an item is a
+  // second wrong guess.
+  if (!String(args.type ?? "").trim() || !String(args.title ?? "").trim())
+    throw new ToolError("app_feedback needs type and title to file a new item, or id to rewrite an existing one's human area.");
   const a = [
     "app-feedback", "add", "--agent", who,
     "--type", String(args.type).trim(),
     "--title", oneLine(args.title),
     "--json",
   ];
-  flag(a, "--human", humanText(args, "app_feedback"));
+  flag(a, "--human", human);
   flag(a, "--body", String(args.body ?? "").trim() || null);
   flag(a, "--at", args.at);
   const r = await runCli(at, a);
   if (!r.ok) return fail(cliErrorText(r));
-  return lines(
+  return written(
+    at,
+    human,
+    `app_feedback(id="${r.json?.id}", human=…)`,
     `${r.json?.id} filed · ${r.json?.type} · ${who}`,
     "about the app itself — the maintainer works these on the App feedback board"
   );
@@ -655,12 +878,17 @@ const HANDLERS = { log_work: logWork, update_work: updateWork, report_bug: repor
 export async function callTool(name, args, ctx) {
   const handler = HANDLERS[name];
   if (!handler) return null; // caller turns this into a protocol-level error
+  let res;
   try {
-    return await handler(args ?? {}, ctx);
+    res = await handler(args ?? {}, ctx);
   } catch (err) {
-    if (err instanceof ToolError) return fail(err.message);
-    return fail(`agentmon-mcp failed: ${err?.message ?? err}`);
+    res = fail(err instanceof ToolError ? err.message : `agentmon-mcp failed: ${err?.message ?? err}`);
   }
+  // The session's first result carries the style rules, whatever call produced it — a list,
+  // a snapshot, a read, a refusal. Here rather than in a handler because "the first call"
+  // has to mean the first call, not the first call of one favoured kind (`handOver` above).
+  // Anything the handlers already delivered leaves the flag set and this returns untouched.
+  return handOver(ctx, res, PRE_DRAFT_HEAD);
 }
 
 export { RESULT_CAP };

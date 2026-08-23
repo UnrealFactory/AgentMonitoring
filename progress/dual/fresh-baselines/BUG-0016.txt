@@ -1,0 +1,69 @@
+BUG-0016 · explained like you're five
+The test that failed
+once in 16 tries 👻
+A ghost in the test suite — and how it got caught.
+1
+Something failed… once
+just this one 😨
+The tests ran 16 times . Fifteen were fine.
+One failed. Then it never failed again.
+2
+And the note got torn ✂️
+test result: FAILED.
+20 passed; 1 failed
+which one? it said,
+right below… here ↓
+the failing test's name
+✂️
+The computer's message was cut short to save space —
+and the part naming which test failed was on the piece that got thrown away.
+(The log was piped through tail -12 , which keeps only the last 12 lines.)
+3
+The suspect: a shared key 🔑
+ONE AT
+A TIME
+🔑 .lock
+writers waiting their turn…
+Many little programs share one room (the project's files).
+A lock file is the key on the door: whoever holds it goes in, everyone else waits .
+4
+Windows says the wrong thing 😠
+USUALLY
+BUSY
+“Occupied — just wait 🙂”
+FOR A SPLIT SECOND
+NO ENTRY!!
+“ACCESS DENIED 😠” …huh?!
+While someone is halfway out the door , Windows doesn't say “busy, wait” —
+it snaps “ACCESS DENIED!” even though the room is about to be free.
+(A lock file being deleted is “delete-pending”: create_new gets PermissionDenied , not AlreadyExists .)
+5
+Our robot gave up 💥
+Robot's rulebook 📖
+“BUSY” → wait, retry ✔
+“NO ENTRY” → ???
+💥
+test fails!
+The robot knew how to handle “busy” : wait and try again.
+But “no entry” wasn't in its rulebook — so it crashed instead of waiting.
+That's why it was so rare: two robots had to swap the key at the exact same instant, which mostly happened when the disk was slow and busy.
+6
+The fix: one new rule 🩹
+Rulebook v2 📖✨
+“BUSY” → wait, retry ✔
+“NO ENTRY” → wait, retry ✔
+⏳
+✅
+waits a moment… gets in. every time.
+Teach the robot: an angry “no entry” at the door just means
+someone's still leaving — wait a moment and knock again.
+( PermissionDenied on the lock file now retries exactly like AlreadyExists , with the same time limit. Fixed in BUG-0024.)
+7
+The other lesson 📜
+FAILED: 1 test
+failures:
+concurrent_writers…
+✂️
+When something fails, keep the whole message.
+The torn-off piece is always the part you needed. 🕵️
+BUG-0016 · flaky test in write_roundtrip.rs · root-caused & fixed via BUG-0024 · one ghost, busted 👻✅

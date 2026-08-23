@@ -50,6 +50,39 @@ const VIEWPORT = { width: Number.isFinite(widthArg) && widthArg >= 320 ? widthAr
 const SCALE = 1.5;
 const VIEWPORT_TEXT = `${VIEWPORT.width}x${VIEWPORT.height}`;
 
+/**
+ * Every key this script knows, whether or not the project being shot can fill it.
+ *
+ * The one list `--help` prints and `--only` is checked against, so the two cannot drift —
+ * and, more importantly, so that "this project has no record for that screen" stays a skip
+ * instead of becoming an unknown-key error. Several keys are conditional on the data
+ * (notes, and each half of a record), and `human-empty` is conditional on a record that
+ * predates human areas — which a fully retold project, the goal, no longer has.
+ */
+const CATALOGUE = [
+  "dashboard",
+  "work-list",
+  "work-detail",
+  "bugs",
+  "bug-detail",
+  "notes-list",
+  "note-detail",
+  "work-human",
+  "work-agent",
+  "bug-human",
+  "note-human",
+  "human-empty",
+  "feedback-human",
+  "projects",
+  "palette",
+  "palette-vault",
+  "menu-project",
+  "menu-record",
+  "menu-dashboard",
+  "menu-switcher",
+  "menu-vault-feed",
+];
+
 if (flag("--help") || flag("-h")) {
   console.log(`Capture the app's screens to PNG.
 
@@ -62,11 +95,7 @@ if (flag("--help") || flag("-h")) {
 Options (flag, or environment variable):
   --port <n>       $SHOT_PORT     dev-server port to boot on / shoot against (default 5173)
   --width <n>      $SHOT_WIDTH    viewport width (default 1600; the shell is judged at 1152 too)
-  --only a,b       $SHOT_ONLY     screens: dashboard, work-list, work-detail, bugs, bug-detail,
-                                  notes-list, note-detail, work-human, work-agent, bug-human,
-                                  note-human, human-empty, feedback-human, projects, palette,
-                                  palette-vault, menu-project, menu-record, menu-dashboard,
-                                  menu-switcher, menu-vault-feed
+  --only a,b       $SHOT_ONLY     screens: ${CATALOGUE.join(", ").replace(/(.{1,58})(, |$)/g, "$1,\n                                  ").replace(/,\n\s+$/, "")}
   --out <dir>      $SHOT_OUT      output directory (default progress/shots)
   --locale <ko|en> $SHOT_LOCALE   language to photograph the app in (default ko)
   --project <name> $SHOT_PROJECT  project to shoot, by name or id (default: the one with the most records)
@@ -75,7 +104,10 @@ Options (flag, or environment variable):
   --record <ids>   $SHOT_RECORD   record ids for the detail screens, e.g. WORK-0009 or
                                   WORK-0009,BUG-0004,some-note-name (default: a finished
                                   work log, a resolved bug and the note with the most refs,
-                                  so Outcome, Resolution and Related are on screen)
+                                  so Outcome, Resolution and Related are on screen). It
+                                  steers the -human keys too, which otherwise take the
+                                  longest retelling of each kind — the one shape that
+                                  default can never reach is a short one.
   --url <origin>                  shoot an already-running server (implies --keep-server)
   --keep-server                   leave the dev server running afterwards
 
@@ -275,13 +307,18 @@ try {
 
   // Prefer records that exercise the full page: a finished work log has an Outcome,
   // a resolved bug has a Resolution, and the best note is the most wired-in one.
+  /* Held apart from the fallbacks below: "the operator named this one" and "this is what the
+     screen defaults to" are different facts, and the human keys further down need the first
+     one on its own. */
+  const namedWork = pick(WANT_RECORDS, "WORK");
+  const namedBug = pick(WANT_RECORDS, "BUG");
   const work =
-    pick(WANT_RECORDS, "WORK") ??
+    namedWork ??
     works.find((w) => w.status === "done" && w.updateCount > 0) ??
     works.find((w) => w.status === "done") ??
     works[0];
   const bug =
-    pick(WANT_RECORDS, "BUG") ??
+    namedBug ??
     bugs.find((b) => (b.status === "resolved" || b.status === "closed") && b.commentCount > 0) ??
     bugs.find((b) => b.status === "resolved" || b.status === "closed") ??
     bugs[0];
@@ -297,9 +334,8 @@ try {
         `Known names: ${notes.map((n) => n.name).join(", ") || "(none)"}`,
     );
   }
-  const note = wantNote
-    ? notes.find((n) => n.name === wantNote)
-    : [...notes].sort((a, b) => b.refs.length - a.refs.length)[0] ?? null;
+  const namedNote = wantNote ? notes.find((n) => n.name === wantNote) : null;
+  const note = namedNote ?? [...notes].sort((a, b) => b.refs.length - a.refs.length)[0] ?? null;
   log(
     `project: ${project.name} · work-detail: ${work.id} · bug-detail: ${bug.id} · ` +
       `note-detail: ${note?.name ?? "(no notes)"} · language: ${LOCALE}`,
@@ -312,12 +348,28 @@ try {
      and none of the shape — and the *same* record is shot in both halves, so the pair can
      be read against each other. A project whose records all predate the human area (or all
      carry one) skips the key it cannot fill, with a line in the log, exactly as a project
-     with no notes skips the note screens. */
+     with no notes skips the note screens.
+
+     `--record` still wins, because these are detail screens and that is what the flag is for.
+     The default has one blind spot the flag is the only cure for: "richest" means longest,
+     and the retellings that have most often been drawn *wrong* are the thin ones — a
+     beat-less retelling is by construction never the longest of its kind, so no default run
+     has ever photographed the page shape the style contract calls a thin record's. A named
+     record with no retelling cannot fill a `-human` key at all (the screen would be the empty
+     state under a key that promises a sheet), so it falls back and says so. */
   const richest = (records) =>
     records.filter((r) => r.human && r.human.trim()).sort((a, b) => b.human.length - a.human.length)[0] ?? null;
-  const humanWork = richest(works);
-  const humanBug = richest(bugs);
-  const humanNote = richest(notes);
+  const retold = (r) => (r && r.human && r.human.trim() ? r : null);
+  const asked = [];
+  const chosen = (wanted, records, label) => {
+    const named = retold(wanted);
+    if (wanted && !named) asked.push(`${wanted.id ?? wanted.name} (${label}: no retelling)`);
+    return named ?? richest(records);
+  };
+  const humanWork = chosen(namedWork, works, "work-human");
+  const humanBug = chosen(namedBug, bugs, "bug-human");
+  const humanNote = chosen(namedNote, notes, "note-human");
+  if (asked.length) log(`--record fell back to the richest retelling for ${asked.join(", ")}`);
   /* And a record with no retelling at all, for the empty state: a bug first, because a live
      bug board is where they actually are. */
   const legacy =
@@ -446,10 +498,15 @@ try {
       : []),
     {
       /* The app feedback board: the fourth surface that draws a record, and the one whose
-         records are the app's own. One toggle for the board, every row swapped. */
+         records are the app's own. One toggle for the board, every row swapped.
+         Either of two things is on that half and neither is optional: `.human-view` is a
+         row that carries a retelling, `.human-notice` is the board's one instruction for
+         the rows that do not. Waiting only for the first hung for 30s against this
+         machine's own board, whose single item (FB-0001) predates the human area — the
+         very state SPEC says every board starts in. */
       name: "feedback-human",
       path: "/app-feedback",
-      waitFor: ".human-view",
+      waitFor: ".human-view, .human-notice",
       prepare: showView("human"),
     },
 
@@ -559,11 +616,24 @@ try {
   ]) {
     if (missing) log(`no record for ${key} in this project — the key is skipped`);
   }
-  const unknown = ONLY.filter((k) => !all.some((s) => s.name === k));
+  /* A misspelled key is an error; a key this *project* cannot fill is not.
+     `all` holds only the screens this project can actually produce, so validating against it
+     turned "the key is skipped" into "unknown screen — FAILED" one line later, for the very
+     keys the log had just excused. That is the normal state of `human-empty` on a project
+     whose records have all been retold — the goal — and of the note keys on a project with
+     no notes. Both are skips, and a run asking for nothing but skips exits 0 having
+     photographed nothing, which is the honest answer. */
+  /* …which only works while the catalogue is the truth. A screen added below without a line
+     up there would be unreachable through `--only`, so it says so rather than going quiet. */
+  const uncatalogued = all.map((s) => s.name).filter((n) => !CATALOGUE.includes(n));
+  if (uncatalogued.length) {
+    throw new Error(`screen(s) missing from CATALOGUE: ${uncatalogued.join(", ")}`);
+  }
+  const unknown = ONLY.filter((k) => !CATALOGUE.includes(k));
   if (unknown.length) {
     throw new Error(
       `unknown screen ${unknown.map((u) => `"${u}"`).join(", ")} in --only/$SHOT_ONLY. ` +
-        `Valid keys: ${all.map((s) => s.name).join(", ")}`,
+        `Valid keys: ${CATALOGUE.join(", ")}`,
     );
   }
   const screens = ONLY.length ? all.filter((s) => ONLY.includes(s.name)) : all;

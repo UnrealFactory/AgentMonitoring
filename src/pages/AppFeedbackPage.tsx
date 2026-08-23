@@ -14,7 +14,7 @@ import { api, failureTitle, nothingToRetry } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { useUrlFilters } from "../lib/useUrlFilters";
 import { AgentChip, EmptyState, ErrorState, InlineCode, RichText, Skeleton } from "../components/ui";
-import { HumanArea, RecordViewToggle } from "../components/HumanView";
+import { BoardHumanNotice, HumanArea, RecordViewToggle } from "../components/HumanView";
 import { hasHumanArea } from "../lib/human";
 import { useRecordView } from "../lib/recordView";
 import { Markdown } from "../lib/markdown";
@@ -22,6 +22,7 @@ import { useNow } from "../components/charts";
 import { formatDateTimeUtc, formatRelative } from "../lib/format";
 import { t } from "../lib/i18n";
 import type { FeedbackItem, FeedbackKind } from "../lib/types";
+import { tablistKeys } from "../lib/tablist";
 
 const KINDS: (FeedbackKind | "all")[] = ["all", "bug", "idea"];
 const kindText = (k: string): string =>
@@ -57,12 +58,21 @@ export function AppFeedbackPage() {
   const open = items.filter((f) => f.status === "open").length;
   const filtered = kind === "all" ? items : items.filter((f) => f.type === kind);
   /* The board is a list of small records, so its toggle is the board's rather than each
-     row's: one control, and every row swaps to the same half. The default follows the same
-     rule a detail screen's does — the retelling if there is one to show. */
-  const { view, choose } = useRecordView(
-    data ? items.some((f) => hasHumanArea(f.human)) : null,
-    "app-feedback"
-  );
+     row's: one control, and every row swaps to the same half.
+     ------------------------------------------------------------------------------------
+     What the default reads is the whole board, not any one row of it. A detail screen's
+     rule — "the retelling, if there is one" — is a question about one record and has one
+     answer; asked of N records with `.some()` it lets a single retold row decide the
+     opening view for all the others, and SPEC guarantees that mixed board exists (an item
+     filed before this rule gains its human area through `app-feedback update`). One item
+     of five opening the board onto four absences and one story is not "the retelling if
+     there is one to show" — it is the retelling if *anyone* has one. So the board opens on
+     the half most of it is written in, and ties (2 of 4) fall to the agent half, which is
+     the half every item is guaranteed to have. */
+  const retold = filtered.filter((f) => hasHumanArea(f.human));
+  const missing = filtered.filter((f) => !hasHumanArea(f.human));
+  const mostlyRetold = filtered.length > 0 && retold.length * 2 > filtered.length;
+  const { view, choose } = useRecordView(data ? mostlyRetold : null, "app-feedback");
   const human = view === "human";
 
   const toggle = async (f: FeedbackItem) => {
@@ -124,7 +134,7 @@ export function AppFeedbackPage() {
       </header>
 
       <div className="toolbar">
-        <div className="segmented" role="tablist" aria-label={t("filter.byType")}>
+        <div className="segmented" role="tablist" aria-label={t("filter.byType")} onKeyDown={tablistKeys}>
           {KINDS.map((k) => (
             <button
               key={k}
@@ -140,10 +150,15 @@ export function AppFeedbackPage() {
           ))}
         </div>
         <div className="toolbar-right">
+          {/* `is-thin` is the "nothing under here" marker, so it reads the *none* case —
+              which is not the same question as the default's. A board where one of five
+              rows is retold has something under the segment and is not mostly it; the
+              count says which, before the press rather than after. */}
           <RecordViewToggle
             view={view}
             onChange={choose}
-            hasHuman={items.some((f) => hasHumanArea(f.human))}
+            hasHuman={retold.length > 0}
+            retold={{ has: retold.length, of: filtered.length }}
           />
         </div>
       </div>
@@ -163,78 +178,94 @@ export function AppFeedbackPage() {
           <EmptyState title={t("fb.noMatch")} />
         )
       ) : (
-        <div className="feedback-list">
-          {filtered.map((f) => (
-            <article
-              key={f.id}
-              className={`feedback-row${f.status === "done" ? " is-done" : ""}`}
-            >
-              <div className="feedback-head">
-                <span className={`fb-kind fb-kind-${f.type}`}>{kindText(f.type)}</span>
-                <h2 className="feedback-title">{f.title}</h2>
-                <span className="feedback-id tabular">{f.id}</span>
-              </div>
-              {/* The item's two halves, the same way a record's detail screen draws them:
-                  what the agent filed, or the same wish said for the person who has to
-                  decide about it. The row itself is the card, so the sheet inside it gives
-                  up its frame (.feedback-human, src/styles/app.css). */}
-              {human ? (
-                <div className="feedback-body feedback-human">
-                  <HumanArea
-                    human={f.human}
-                    kind="feedback"
-                    id={f.id}
-                    agent={f.agent}
-                    onShowAgent={() => choose("agent")}
-                  />
+        <>
+          {/* One board, one instruction (components/HumanView.tsx). Only on the half it is
+              about, and only while there is a row it is about. */}
+          {human && missing.length > 0 && (
+            <BoardHumanNotice
+              kind="feedback"
+              missing={missing.length}
+              total={filtered.length}
+              sample={{ id: missing[0].id, agent: missing[0].agent }}
+            />
+          )}
+          <div className="feedback-list">
+            {filtered.map((f) => (
+              <article
+                key={f.id}
+                className={`feedback-row${f.status === "done" ? " is-done" : ""}`}
+              >
+                <div className="feedback-head">
+                  <span className={`fb-kind fb-kind-${f.type}`}>{kindText(f.type)}</span>
+                  <h2 className="feedback-title">{f.title}</h2>
+                  <span className="feedback-id tabular">{f.id}</span>
                 </div>
-              ) : (
-                f.body && (
-                  <div className="feedback-body">
-                    <Markdown source={f.body} />
-                  </div>
-                )
-              )}
-              <div className="feedback-meta">
-                <AgentChip name={f.agent} />
-                <time
-                  className="feedback-time tabular"
-                  dateTime={f.created}
-                  title={formatDateTimeUtc(f.created)}
-                >
-                  {formatRelative(f.created, new Date(now))}
-                </time>
-                {f.status === "done" && f.done && (
-                  <span className="feedback-done-at" title={formatDateTimeUtc(f.done)}>
-                    {t("fb.doneOn", formatRelative(f.done, new Date(now)))}
-                  </span>
+                {/* The item's two halves, the same way a record's detail screen draws them:
+                    what the agent filed, or the same wish said for the person who has to
+                    decide about it. The row itself is the card, so the sheet inside it gives
+                    up its frame (.feedback-human, src/styles/app.css).
+
+                    A row with no retelling says so in one line and stops there: what to do
+                    about it is the board's notice above, not five copies of itself. */}
+                {human ? (
+                  hasHumanArea(f.human) ? (
+                    <div className="feedback-body feedback-human">
+                      {/* No way-out button on a row: the box that carries one is a *screen's*
+                          answer and is not drawn here, and the one control this board has is
+                          the toggle over all of it (components/HumanView.tsx). */}
+                      <HumanArea human={f.human} kind="feedback" id={f.id} agent={f.agent} />
+                    </div>
+                  ) : (
+                    <p className="feedback-body feedback-none">{t("fb.noHuman")}</p>
+                  )
+                ) : (
+                  f.body && (
+                    <div className="feedback-body">
+                      <Markdown source={f.body} />
+                    </div>
+                  )
                 )}
-                <span className="feedback-actions">
-                  <button
-                    className="button"
-                    onClick={() => toggle(f)}
-                    disabled={busyId === f.id}
+                <div className="feedback-meta">
+                  <AgentChip name={f.agent} />
+                  <time
+                    className="feedback-time tabular"
+                    dateTime={f.created}
+                    title={formatDateTimeUtc(f.created)}
                   >
-                    {f.status === "open" ? t("fb.markDone") : t("fb.reopen")}
-                  </button>
-                  {/* Delete exists only on a done row: the path is always read → done →
-                      delete, so an open complaint cannot vanish unread (core refuses it
-                      too). Two clicks, the second armed and red. */}
-                  {f.status === "done" && (
-                    <button
-                      className={`button${armed === f.id ? " button-danger" : ""}`}
-                      onClick={() => remove(f)}
-                      disabled={busyId === f.id}
-                      title={t("fb.deleteTip")}
-                    >
-                      {armed === f.id ? t("fb.deleteArmed") : t("fb.delete")}
-                    </button>
+                    {formatRelative(f.created, new Date(now))}
+                  </time>
+                  {f.status === "done" && f.done && (
+                    <span className="feedback-done-at" title={formatDateTimeUtc(f.done)}>
+                      {t("fb.doneOn", formatRelative(f.done, new Date(now)))}
+                    </span>
                   )}
-                </span>
-              </div>
-            </article>
-          ))}
-        </div>
+                  <span className="feedback-actions">
+                    <button
+                      className="button"
+                      onClick={() => toggle(f)}
+                      disabled={busyId === f.id}
+                    >
+                      {f.status === "open" ? t("fb.markDone") : t("fb.reopen")}
+                    </button>
+                    {/* Delete exists only on a done row: the path is always read → done →
+                        delete, so an open complaint cannot vanish unread (core refuses it
+                        too). Two clicks, the second armed and red. */}
+                    {f.status === "done" && (
+                      <button
+                        className={`button${armed === f.id ? " button-danger" : ""}`}
+                        onClick={() => remove(f)}
+                        disabled={busyId === f.id}
+                        title={t("fb.deleteTip")}
+                      >
+                        {armed === f.id ? t("fb.deleteArmed") : t("fb.delete")}
+                      </button>
+                    )}
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

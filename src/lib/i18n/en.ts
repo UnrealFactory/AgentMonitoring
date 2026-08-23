@@ -333,7 +333,11 @@ export const en = {
   "rec.references": "References",
   "rec.referencedBy": "Referenced by",
   "rec.referencesHint": (noun: string) => `written into this ${noun}’s refs`,
-  "rec.referencedByHint": (id: string) => `work logs, bugs and notes that point back at ${id}`,
+  /* The id is marked as an id (`RichText`, so it lands in the mono face like every other id
+     on these screens). It has to be: on a note the id is a kebab slug — `start-here` — and a
+     slug set in the app's own proportional face inside the app's own sentence is four English
+     words in a Korean line, which is what the reader sees and what check-i18n reads. */
+  "rec.referencedByHint": (id: string) => `work logs, bugs and notes that point back at \`${id}\``,
   "rec.missingRef": "no work log, bug or note with this id in this project",
   /* The same fact on the chip inside a sentence, where the id has to be named because the
      tooltip is all the reader can see. Assembled here, not at the call site: the id leads in
@@ -360,6 +364,44 @@ export const en = {
   "view.emptyCommand": "An agent adds it to this record with one line:",
   "view.emptyStyle": "What to write is not guesswork — `agentmon human-style` prints the whole style contract.",
   "view.emptyBack": "Read the agent’s half",
+  /* …and what taking that offer did, said while it lasts. The button above and the
+     correction line at the top of a retelling both reach into the other half for **one**
+     record; the reader's choice of half is untouched, and the sentence that matters to
+     somebody reading a week of work in plain language is the second half of this one
+     (src/lib/recordView.ts). */
+  "view.peekNote": (id: string) =>
+    `The agent’s half of \`${id}\`, for this record only — which half the next record opens on is unchanged.`,
+
+  /* …and the same words for a surface that draws many records at once (the app-feedback
+     board). The absence stays marked in the row it belongs to, in one line; what to do about
+     it is said once, over the board — the same instruction repeated per row is boilerplate,
+     not a designed empty state. */
+  /* The control's own words, which have to know which surface they are on. A board draws no
+     record, so "which half of this record to read" over one is a label about something that
+     is not there — and on a board where nothing has been retold, the record wording put "this
+     record has none" an inch above a notice saying the same fact in board words. */
+  "view.boardLabel": "Which half of this board to read",
+  "view.boardAgentTip": "Every item as the agent who filed it wrote it",
+  "view.boardHumanTip": "The same items retold in plain words, for a reader who was not there",
+  "view.boardHumanNoneTip": "Nothing on this board has been retold in plain words yet",
+  "view.humanSomeTip": (has: number, of: number) =>
+    has === 1
+      ? `1 of ${of} items on this board has been retold in plain words`
+      : `${has} of ${of} items on this board have been retold in plain words`,
+  /* A board where none of them has one must not say "1 of 1 has none": the numbers stop
+     counting anything. That is this app's own feedback board today — FB-0001, agent half
+     only — so it is the first shape a reader meets, not an edge case. */
+  "view.boardMissingTitle": (missing: number, total: number) =>
+    missing === total
+      ? "Nothing on this board has been retold in plain words yet"
+      : missing === 1
+        ? `1 of ${total} items has no plain-language retelling yet`
+        : `${missing} of ${total} items have no plain-language retelling yet`,
+  "view.boardMissingText":
+    "Every item filed from now on carries one: the same story told for somebody who was not there and does not program. What is blank here was filed before that rule. An agent adds it with the line below — carrying the id printed beside that item’s own title:",
+  "view.boardMissingStyle":
+    "What to write is not guesswork — `agentmon human-style` prints the whole style contract.",
+  "fb.noHuman": "No plain-language retelling",
 
   /* -- record bodies: the renderer's own words --------------------------------
      Callout labels for `> [!note]` etc., and the one sentence an image that will not
@@ -380,6 +422,11 @@ export const en = {
   "rec.correction": "Correction",
   "rec.inUpdates": "Updates",
   "rec.inThread": "the thread",
+  /* The same "where", said to a reader who is on the human half — where that trail is not
+     on screen. The correction line is drawn on both halves (a retelling is the same events,
+     and `work update --message` / `bug comment` do not rewrite it), so on this one it has to
+     say which half the note is on before it can send anybody there. */
+  "rec.inAgentHalf": (where: string) => `${where}, on the agent’s half`,
   "rec.staleGone": (id: string) => `${id} is no longer in this project.`,
   "rec.staleUnread": (id: string) => `${id} could not be read again.`,
   "rec.staleBody": "Everything below is the copy that was on screen when it was last read.",

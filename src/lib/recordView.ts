@@ -23,8 +23,27 @@
  * `sessionStorage`, so it survives a reload of the same window (the desktop app reloads on
  * update; the gates navigate by `goto`) and dies with the window, which is exactly the
  * scope SPEC gives it.
+ *
+ * ## The one thing that is allowed to show the other half without changing that
+ *
+ * Two places on a record offer the reader the *other* half without being the toggle: the
+ * empty box's "read the agent's half" on a record nobody retold, and the correction line on
+ * a retelling whose trail is over there. Both are about **this record** — their own words
+ * say so — and for a round both called {@link setRecordView}, which is the session-wide
+ * setter the toggle uses. So a reader who pinned the human half and walked into one legacy
+ * record lost the pin at that record, silently, for the rest of the window: the next record
+ * opened on the agent area, and the one after that, with nothing on screen admitting the
+ * pin had been thrown away. That is the exact behaviour the paragraph above swears off,
+ * undone by the button drawn inside the box that does the telling (D3 round 2 critic).
+ *
+ * {@link useRecordView} therefore hands back a second way to change what is drawn:
+ * `peekAgent()`, a component-local override keyed to the record on screen. It touches no
+ * store and notifies nobody, so the session choice is exactly what it was — the next record
+ * opens on the half the reader asked for. The screen says so in one line while it lasts
+ * (`view.peekNote`), because a control showing "Agent" while the reader's choice is Human
+ * is the kind of quiet disagreement this file exists to prevent.
  */
-import { useRef, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
 export type RecordView = "agent" | "human";
 
@@ -90,6 +109,14 @@ export function useRecordView(
   view: RecordView;
   choice: RecordViewChoice;
   choose: (next: RecordView) => void;
+  /**
+   * Draw the agent area for **this record only**, leaving the session choice alone — what
+   * the empty box's button and the correction line do. Silent no-op semantics on a record
+   * already showing the agent area: there is nothing to override.
+   */
+  peekAgent: () => void;
+  /** Whether that override is what is on screen, so the page can say so. */
+  peeking: boolean;
 } {
   const choice = useSyncExternalStore(subscribe, getRecordViewChoice, getRecordViewChoice);
   /* Derived-from-props state, written during render on purpose: the value must be right on
@@ -99,21 +126,45 @@ export function useRecordView(
     latched.current = { key, has: hasHuman };
   }
   const fallback: RecordView = latched.current?.has ? "human" : "agent";
+  const chosen: RecordView = choice ?? fallback;
+
+  /* The per-record override, held as the id it was asked for rather than as a boolean: the
+     detail screens are one mounted component that the router walks from record to record, so
+     a boolean would follow the reader onto the next one. Comparing ids means it expires by
+     arithmetic the moment the address changes — and, going back, applies again to the record
+     it was asked for, which is what the reader was looking at. */
+  const [peeked, setPeeked] = useState<string | null>(null);
+  const peeking = chosen === "human" && peeked !== null && peeked === (key ?? "");
+  const view: RecordView = peeking ? "agent" : chosen;
+
+  /* The two views are two documents, not two states of one, and the app scrolls inside
+     `#main` (lib/useScrollRestoration.ts). A reader half-way down a long agent record who
+     asks for the retelling would otherwise land past the end of a much shorter one and see
+     the foot of a page they have not read. Each view starts at its own top. */
+  const toTop = () => {
+    const main = typeof document !== "undefined" ? document.getElementById("main") : null;
+    if (main) main.scrollTop = 0;
+  };
+
   return {
-    view: choice ?? fallback,
+    view,
     choice,
+    peeking,
     choose: (next: RecordView) => {
       /* Pressing the segment the reader is already on is still a choice, and it is recorded:
-         it is how somebody pins the half they want before walking through five records. */
-      const swapped = next !== (choice ?? fallback);
+         it is how somebody pins the half they want before walking through five records.
+         Against what is *on screen*, not against the stored choice: while an override is up
+         the reader sees the agent area, and pressing Human is a swap even though the stored
+         choice already says human — that press is what takes the override back down. */
+      const swapped = next !== view;
+      if (peeked !== null) setPeeked(null);
       setRecordView(next);
-      if (!swapped) return;
-      /* The two views are two documents, not two states of one, and the app scrolls inside
-         `#main` (lib/useScrollRestoration.ts). A reader half-way down a long agent record
-         who asks for the retelling would otherwise land past the end of a much shorter one
-         and see the foot of a page they have not read. Each view starts at its own top. */
-      const main = typeof document !== "undefined" ? document.getElementById("main") : null;
-      if (main) main.scrollTop = 0;
+      if (swapped) toTop();
+    },
+    peekAgent: () => {
+      if (view === "agent") return;
+      setPeeked(key ?? "");
+      toTop();
     },
   };
 }

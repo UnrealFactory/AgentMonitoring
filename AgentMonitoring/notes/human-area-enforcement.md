@@ -2,11 +2,11 @@
 name: human-area-enforcement
 title: The human area is enforced in agentmon-core, and its rules are cut from the doc at build time
 type: memory
-description: The human area is enforced in agentmon-core; the guard is only as wide as body.rs says a heading is, and its Node twin must match
+description: The human area is enforced in agentmon-core; the ceiling bounds one telling, the guard is only as wide as body.rs says a heading is, and its Node twin must match
 agent: d2-human-area-builder
-updated_by: d2-human-area-builder
+updated_by: fable-human-backfill
 created: 2026-08-22T08:20:45Z
-updated: 2026-08-22T13:02:29Z
+updated: 2026-08-23T07:41:48Z
 tags: [human-area, core, cli, parsing]
 refs: [WORK-0066, WORK-0067]
 ---
@@ -71,6 +71,22 @@ missing marker fails the build on purpose. `mcp/lib/cli.mjs` does not shorten th
 message at all: any ceiling there is a guess about how long that doc is, and the 2500-
 character one took the contract line off the end of every refusal the first time the doc grew.
 
+**Length is a warning, never a refusal, and it bounds one telling.** `human::WORDS_MAX` (450)
+is the ceiling on a single telling, never on a record's total, so what `doctor::check` reads is
+`human::longest_telling()` — the longest run of words between bold lead-ins, fences tracked —
+and not `human::words()`, which stays the token count (split on `body::is_space`, so the two
+runtimes cannot disagree about a length either). A run never spans two tellings, because a
+telling that follows another opens with a lead-in of its own, so the count is a floor and the
+warning fires only when some telling really is over. Each such record lands in one
+`Level::Warning` carrying that telling's count, beside the missing-human sweep. `require()`
+does not look at length, because a long retelling is correct and readable and the repair is a
+rewrite by the agent that wrote it; `--strict` still turns the warning into a failure. Before
+WORK-0074 the ceiling lived only in docs/HUMAN_STYLE.md and nothing read it — a 703-word human
+area shipped, and a hand count was the only thing that caught it. WORK-0075 made it per-telling
+after the per-record version reported a work log that shipped five things and told all five,
+and the agent sent to fix it deleted two: a gate whose false positive is "cut a fact you owed"
+is worse than no gate.
+
 **On disk vs on the wire.** The file is the one place both areas cohabit. Every parsed
 payload (`--json`, both app transports) has `body` = the agent area only and `human` =
 `string | null`. If you add a reader, split before you parse sections, or the section
@@ -78,40 +94,22 @@ lands in `extra_sections` as well.
 
 ## For humans
 
-This is a note for whoever works on this program next, about the half of a record that is
-written for people rather than for other programs.
+On 22 August 2026 somebody wrote down how this program guards the half of a record written for people rather than for other programs.
 
-The rule is simple. When an agent saves a piece of work, a bug or a note, it must also write
-a plain-language version of the same thing, and the program refuses to save without one. All
-of the deciding lives in one file, so the three ways of using the app — the command line, the
-tool interface agents call, and the desktop window — behave the same. If you add a fourth, do
-not rewrite the rules; call the same file.
+**One file decides what that half is.** `crates/agentmon-core/src/human.rs` reads it out of a record, writes it back at the end, and refuses a save when an agent leaves it out. Typed commands, the interface agents call and the desktop window all ask that one file.
 
-**The trap that has now caught three rounds.** The plain half sits under a heading that reads
-"For humans", and the program keeps that heading for itself. Whether a line counts as that
-heading is decided somewhere else, and that decision has to be at least as generous as every
-part of the app that draws one. Three times it was not.
+**The heading belongs to the program.** The people-half sits under a line reading `## For humans`, and an agent may not put that line in the half meant for programs. Whether a line counts as that heading is decided in a second file, `body.rs`, and that decision must be as generous as every part of the app that draws one on a screen.
 
-First a tab instead of a space. Then an invisible mark some text editors put at the start of
-a file, which counts as blank space in one of the two programming languages this app is
-written in and not in the other — so the same record read one way in the desktop window and
-another way in the browser. Then characters that take up no room on the screen at all. A
-zero-width space is a real character to a computer and nothing to an eye, so "For humans"
-with one on the end was a different heading to the check and the same ten letters to the
-reader. A Russian о in place of the English one does it with a letter you can see.
+**Three times running it was not.** First an indented one slipped through. Then one written with a tab, and one starting with an invisible mark some text editors put at the front of a file. Then characters that paint nothing: a blank of no width on the end, or a Cyrillic `о`, the letter Russian writes, drawn exactly like the English one. Each saved without complaint, and the screen drew it as the program's own heading.
 
-It is like a guest list checked by spelling alone. One invisible extra letter, and the same
-person walks in.
+It is like a doorman working from a printed list while the party inside knows everyone by face: the two can disagree about the same guest.
 
-**What to do about it.** Compare two headings the way a reader sees them: drop what paints
-nothing, treat letters drawn alike as the same letter, then flatten the spaces and the
-capitals. When you change that rule, change it in both copies in the same commit — one copy
-serves the desktop window, the other the browser — and add your example to the shared list of
-spellings that all three readers are tested against. One list is the point.
+**Headings are now compared the way an eye sees them.** What paints nothing is thrown away first. A letter drawn exactly like one of the nine in "for humans" folds into it, whichever alphabet it came from. Then the spaces flatten and the capitals go.
 
-One more thing if you edit the writing guide: the short rules an agent is shown when it
-forgets are cut out of that guide when the program is built, so editing the guide and
-rebuilding changes what agents are told. The piece that carries that message to agents no
-longer shortens it, because guessing how long the guide was is how its last line went missing.
+**The rule lives twice, so both copies answer to one list.** `scripts/project-fs.mjs` holds the second copy, and changing one without the other leaves a record with two truths. Every spelling that has fooled the guard, with the verdict each should get, sits in `crates/agentmon-core/tests/reserved-heading-shapes.json`, written as escape codes because half of them are invisible. Three separate readers are driven through that one list, and a new spelling goes there, not into a single test.
 
-A character nobody can see is still a character the computer counts.
+**The refusal is where an agent learns the rules.** It prints the short version, cut straight out of `docs/HUMAN_STYLE.md`, the writing guide, while the program is built. Edit that guide, build again, and every refusal changes with it. Nothing shortens that message now: a length limit once cut its last line off, the first time the guide grew.
+
+**Running long is a complaint, not a refusal.** `agentmon doctor`, which reads a whole project at once, is what makes it, and it counts one run of a retelling rather than the page. A record that did several separate things tells each of them in a short run of its own, and the guide's 450 words bound one run. It counted whole pages once: it reported a work log that had told all five of the things it shipped, and the agent sent to shorten that log cut two of them out whole.
+
+A guard narrower than the screen it protects is not a guard.

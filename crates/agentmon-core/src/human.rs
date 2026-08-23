@@ -44,6 +44,88 @@ pub const COMPACT_RULES: &str = include_str!(concat!(env!("OUT_DIR"), "/human_co
 /// passes, high enough that "ok" and "fixed" do not.
 const MIN_HUMAN: usize = 12;
 
+/// The style contract's word ceiling — docs/HUMAN_STYLE.md: "150 words thin, 300 for most,
+/// 450 where the mechanism is genuinely hard", and "never fill a ceiling".
+///
+/// **A ceiling on one telling, never on a record's total.** A record that shipped several
+/// separate things owes each one its own beat-block, so its total is whatever those
+/// tellings spent — see [`longest_telling`], which is the count `agentmon doctor` reads.
+/// This number was a per-record ceiling once, and the cost is measured: told that a work
+/// log covering five deliverables was 374 words over, an agent cut two of them out whole,
+/// and the facts under them went with the names.
+///
+/// Never a refusal. A long retelling is true and readable, and the repair is a rewrite by
+/// the agent that wrote it, so this number is what `agentmon doctor` warns against rather
+/// than what [`require`] rejects. It exists at all because the ceiling was a rule in a
+/// document that no code read: a 703-word human area shipped, and the only thing that
+/// caught it was a person counting words by hand.
+pub const WORDS_MAX: usize = 450;
+
+/// Words in a retelling, counted the way the contract counts them: runs of anything that
+/// is not a space, separated by spaces.
+///
+/// [`body::is_space`] rather than `char::is_whitespace`, for the same reason [`is_blank`]
+/// uses it — so this crate and scripts/project-fs.mjs cannot return different counts for
+/// the same record.
+pub fn words(text: &str) -> usize {
+    text.split(|c: char| body::is_space(c))
+        .filter(|w| !w.is_empty())
+        .count()
+}
+
+/// The longest stretch of a human area that is certainly **one telling**, in words — the
+/// count [`WORDS_MAX`] is a ceiling on.
+///
+/// A *telling* is one shipped thing retold. Nothing in the text announces where one ends:
+/// a record that shipped three things gives each of them a beat-block opened by a bold
+/// lead-in, and a record that shipped one thing opens its beats exactly the same way. What
+/// can be read off the page is the run *between* lead-ins — and a run never spans two
+/// tellings, because a telling that follows another starts with a lead-in of its own.
+///
+/// So this is a floor on the longest telling, and a floor is the direction the one thing
+/// that reads it needs. Past it, some telling is certainly over the ceiling; under it, the
+/// record may be long only because it covered everything it shipped, which is the case the
+/// old per-record count called a fault and told agents to cut.
+///
+/// The wall it was built for is still caught whole: prose with no beats in it is one run,
+/// so the 703-word block that put a number in this file at all counts as 703.
+pub fn longest_telling(text: &str) -> usize {
+    let mut fences = body::Fences::default();
+    let mut longest = 0usize;
+    let mut run = 0usize;
+    let mut block_start = true;
+    for line in text.lines() {
+        let code = fences.feed(line);
+        if !code && is_blank(line) {
+            block_start = true;
+            continue;
+        }
+        if !code && block_start && is_lead_in(line) {
+            longest = longest.max(run);
+            run = 0;
+        }
+        block_start = false;
+        run += words(line);
+    }
+    longest.max(run)
+}
+
+/// Does this line open a beat? — the bold lead-in the contract asks every beat after the
+/// first to start with: "**The stored number is wrong twice a year.**".
+///
+/// Only at the top of a block, and only when the bold closes: a `**` opening a line in the
+/// middle of a paragraph is emphasis inside a beat, not the start of the next one. A `-`
+/// or `+` in front of it is furniture and comes off; a `*` does not, because it is the
+/// lead-in's own first character.
+fn is_lead_in(line: &str) -> bool {
+    let t = body::trim(line);
+    let t = match t.strip_prefix(['-', '+']) {
+        Some(rest) => body::trim(rest),
+        None => t,
+    };
+    t.strip_prefix("**").is_some_and(|rest| rest.contains("**"))
+}
+
 /// The two flags every verb that takes a human area offers, for error messages.
 pub const FLAGS: &str = "--human \"<text>\" or --human-file <path> (--human-file - reads stdin)";
 
@@ -533,6 +615,43 @@ mod tests {
         assert_eq!(secs.len(), 2, "the old copy was replaced, not duplicated");
         attach(&mut secs, None);
         assert_eq!(secs.len(), 1, "None removes it");
+    }
+
+    /// The ceiling bounds one telling, so the count has to be one telling's.
+    ///
+    /// Both halves are the same failure seen from either side. A record that shipped five
+    /// things and retold all five was reported as 374 words over by a check that counted
+    /// the record, and the agent sent to fix it deleted two of the five. A wall — one
+    /// undivided block, no beats — is the thing that reading is actually hard, and it is
+    /// still counted whole.
+    #[test]
+    fn a_telling_ends_at_the_next_lead_in_and_a_wall_is_one_telling() {
+        let wall = "word ".repeat(600);
+        assert_eq!(longest_telling(&wall), 600, "no beats: the whole block is one telling");
+
+        // Paragraph breaks alone do not end a telling — a hard mechanism is "two short
+        // paragraphs, never one wall", and both of them belong to the same beat.
+        assert_eq!(longest_telling("one two\n\nthree four five"), 5);
+
+        // Three things, three tellings. Four times the ceiling on the page, and nothing in
+        // it is over the ceiling.
+        let block = |lead: &str| format!("**{lead}** {}", "word ".repeat(300));
+        let compound = format!(
+            "The shared opening, three sentences of scene.\n\n{}\n\n{}\n\n{}\n\n{}",
+            block("The board is a triage screen now."),
+            block("The renderer ate a number."),
+            block("Every link was one-way."),
+            "A closing line the reader can repeat.",
+        );
+        assert!(words(&compound) > 900, "{}", words(&compound));
+        assert!(longest_telling(&compound) <= WORDS_MAX, "{}", longest_telling(&compound));
+
+        // A `**` that is not at the top of a block is emphasis inside a beat, and a bullet
+        // in front of a lead-in is furniture.
+        assert_eq!(longest_telling("one two\n**three** four"), 4);
+        assert_eq!(longest_telling("one two three four five six\n\n- **Stated.** three"), 6);
+        // …and one inside a code fence starts nothing: the fence is part of its own beat.
+        assert_eq!(longest_telling("one two\n\n```\n**not a lead-in** here\n```"), 8);
     }
 
     #[test]

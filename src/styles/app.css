@@ -2733,15 +2733,65 @@ a.button {
   scroll-margin-top: var(--space-6);
 }
 
+/* The line the agent area carries when it is being shown *instead of* the reader's choice —
+   the empty box's way out, or a correction whose trail is only on this side. It is chrome
+   about the control above it, not part of the record, so it is the quietest box this
+   stylesheet draws: the geometry of `.correction-notice` next door with none of its amber,
+   because nothing is wrong here. Bordered rather than bare so it cannot be read as the
+   record's first sentence. */
+.view-peek {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 6px var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+/* The Human segment's own glyph, in the accent: what this line is about is that the reader's
+   half is still the human one. */
+.view-peek-mark {
+  display: inline-flex;
+  flex: none;
+  color: var(--accent-text);
+}
+
+/*
+ * The sheet is a **page**, and it is the width of the column the agent half fills.
+ *
+ * It was sized to its own text for two rounds — `max-width: measure + padding` — which is
+ * the right instinct and the wrong element to put it on. A card that stops at its measure
+ * inside a column that does not leaves a strip of app floor down one side, and that strip
+ * grows with the window: 71px at 1400, 237px at 1600, 405px at 1900, on the one screen in
+ * this app whose empty space widens as the window widens. That is the defect WORK-0041 was
+ * written to remove ("a 1070px island between two ~650px voids"), reintroduced one column in.
+ *
+ * So the card fills the column — nothing beside it at any width — and the measure moves
+ * inside it, centred, where it reads as a page's margins instead of as a dead column. It is
+ * also the composition the reference has (the eli5.png baselines under progress/dual: one
+ * column of text centred in a much wider surface). `padding-inline` does the centring rather
+ * than an extra wrapper, because a percentage padding resolves against this element's own
+ * width: the content box lands exactly one measure wide, and the floor under it is
+ * `--space-8`, for the narrow window where the column is barely a measure wide.
+ */
 .human-sheet {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  /* The measure plus the sheet's own padding: the column is what is being sized, not the
-     card. `ch` resolves against this element's font size, which is why the reading size is
-     set here rather than on the paragraphs inside it. */
-  max-width: calc(var(--human-measure) + 2 * var(--space-8));
-  padding: var(--space-8);
+  /* One step more than the app's card padding, top and bottom: this is the surface the
+     stylesheet above says spends pixels on air, and the opening paragraph is the largest
+     type in it. */
+  padding-block: var(--space-10);
+  padding-inline: max(var(--space-8), calc((100% - var(--human-measure)) / 2));
+  /* `ch` resolves against this element's font size, which is why the reading size is set
+     here rather than on the paragraphs inside it: one declaration sizes both the type and
+     the measure, and they step together at the two wide breakpoints (tokens.css). */
   font-size: var(--text-read);
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -2749,20 +2799,60 @@ a.button {
 }
 
 /* Inside the sheet the renderer's own measure is off — the sheet is the measure — and the
-   type is the reading size rather than the record body's 14px. */
+   type is the reading size rather than the record body's.
+
+   This rule outranks the wide-window steps on `.prose` (0,0,2,0 against 0,0,1,0), which for a
+   round meant it silently *cancelled* them: the agent half went 14 → 15 → 16px across the two
+   breakpoints and the retelling stayed at 15 through all three, so the half that is read was
+   the same size as the half that is scanned at 1600 and a size smaller at 1900. Winning that
+   cascade is correct — the human area has its own scale — but only because the scale it wins
+   with now steps at the same two widths (tokens.css). */
 .human-view .prose {
   max-width: none;
   font-size: var(--text-read);
   line-height: var(--leading-normal);
 }
 
-/* The opening: what somebody could have witnessed, before any explanation. One size up
-   from the beats, so the eye starts here — and in the same ink as them, not a dimmed
-   standfirst: this is the paragraph that decides whether the rest gets read, and grey type
-   is the one thing that would make it look optional. */
-.human-view .prose.human-lede {
-  font-size: var(--text-lg);
-  line-height: var(--leading-normal);
+/* …and the figures inside it get a real step, because half of `.figure`'s marking is not
+   available here. That rule is weight *and* ink — 510 on `--text-primary` — and it was drawn
+   for the evidence block, where the prose around it is dimmer. The sheet's prose is already
+   at full-strength ink (this is the surface that is read, not scanned), so the colour half
+   is a no-op and the mark was carrying 110 weight units alone at the reading size: visible,
+   and thinner than a number a whole claim rests on deserves. One step further up the same
+   scale, and nothing else changes — no colour, no box, no extraction: every character stays
+   where the author typed it (src/lib/markdown.tsx). */
+.human-sheet .figure {
+  font-weight: var(--weight-semibold);
+}
+
+/* The opening: what somebody could have witnessed, before any explanation. The largest type
+   on the page, one size up from the beat headings — and in the same ink as them, not a dimmed
+   standfirst: this is the paragraph that decides whether the rest gets read, and grey type is
+   the one thing that would make it look optional.
+
+   **One paragraph of it.** `story.lede` is a run, not a sentence — 14 of this project's 107
+   retellings open on two paragraphs or more — and for a round this rule sat on the run, so
+   every paragraph in it came out at the lede size. On a retelling with no bold lead-ins at
+   all, which the style contract sanctions for a thin record ("A thin record gets no lead-ins
+   at all") and three live records are, the run is the *whole piece*: BUG-0023 is 254 words of
+   21px, six even paragraphs with no heading, no gutter number and no step anywhere in them,
+   above `--text-xl` on a page whose own title is 26px and whose agent half is 16px. That is
+   not a friendlier reading surface, it is a page with its hierarchy removed — and it breaks
+   the rule this system opens with ("13–14px type"), which the reading sizes are allowed to
+   exceed *because* they buy a ramp.
+
+   So the standfirst is the first paragraph, the way a standfirst is one paragraph everywhere
+   else, and the rest of the opening is body: `--text-read` and `--leading-normal`, inherited
+   from the rule above. `p`, not `*`, because a run that opens on a list or a quote opens on
+   something that is not a standfirst, and blowing that up to 21px would be the same mistake
+   one block further along.
+
+   "One size up from the beats" is what this comment said while both were `--text-lg`, i.e.
+   the same size; the ramp is real now (tokens.css). */
+.human-view .prose.human-lede > p:first-child {
+  font-size: var(--text-read-lede);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
 }
 
 /* One beat of the chase: the author's own bold lead-in, promoted to a heading, and the
@@ -2792,8 +2882,9 @@ a.button {
 }
 
 .human-beat-lead {
-  font-size: var(--text-lg);
+  font-size: var(--text-read-lead);
   line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
 }
 
@@ -2816,7 +2907,7 @@ a.button {
   border-left: 2px solid var(--accent);
   border-radius: 0 var(--radius) var(--radius) 0;
   background: var(--accent-soft);
-  font-size: var(--text-lg);
+  font-size: var(--text-read-lead);
   line-height: var(--leading-snug);
   font-weight: var(--weight-medium);
   color: var(--text-primary);
@@ -2831,19 +2922,21 @@ a.button {
 
 /* --- …and a record that has no human area --------------------------------- */
 
-/* Wider than the sheet beside it, and deliberately: this box is not prose to read at length
-   but an instruction with a command in it, and that command — verb, id, handle, flag — is
-   68 characters of mono. In the reading measure it wrapped, and a hyphen carries a line-break
-   opportunity of its own, so it wrapped *inside* `--human`: a flag cut in half in the one
-   place on the screen whose whole job is to be copied correctly. 720px is the measure this
-   stylesheet already uses for a heading. */
+/* The same card as the sheet — it stands in the same place, on a record whose second half
+   was never written — so it fills the column the same way and centres its own block inside
+   itself the same way. What it centres is wider than a measure and deliberately so: this box
+   is not prose to read at length but an instruction with a command in it, and that command —
+   verb, id, handle, flag — is 68 characters of mono. In the reading measure it wrapped, and a
+   hyphen carries a line-break opportunity of its own, so it wrapped *inside* `--human`: a
+   flag cut in half in the one place on the screen whose whole job is to be copied correctly.
+   720px is the measure this stylesheet already uses for a heading. */
 .human-empty {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-3);
-  max-width: 720px;
-  padding: var(--space-8);
+  padding-block: var(--space-8);
+  padding-inline: max(var(--space-8), calc((100% - 720px) / 2));
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -2890,11 +2983,16 @@ a.button {
   overflow-wrap: break-word;
 }
 
+/* No `ch` caps on these four. They were each capped at `--human-measure`, and `ch` resolves
+   against the element's *own* size — so the same token meant 666px on the paragraph at the
+   reading size and 500px on the two 12px lines under it, and the box's right edge came out
+   in three places. The box already has one measure: the 720px block the padding above
+   centres. Everything in it stops there, together. */
 .human-empty-title,
 .human-empty-text,
 .human-empty-lead,
 .human-empty-foot {
-  max-width: var(--human-measure);
+  max-width: 100%;
 }
 
 .human-empty-foot {
@@ -2908,9 +3006,12 @@ a.button {
 }
 
 /* The app-feedback board draws the same two halves inside a row, which is a card already:
-   the sheet there is the row, so it gives up its own frame and keeps the reading column. */
+   the sheet there is the row, so it gives up its own frame and keeps the reading column.
+   Not the page composition either — a row is not a page, so the measure is a cap on the
+   left rather than a column centred in a card. */
 .feedback-human .human-sheet,
 .feedback-human .human-empty {
+  max-width: var(--human-measure);
   padding: 0;
   background: none;
   border: none;
@@ -2918,6 +3019,132 @@ a.button {
 
 .feedback-human .human-empty {
   gap: var(--space-2);
+}
+
+/* …and not the page's type ramp either. A sheet opens one size above its own body and steps
+   its headings above that, because a screen given over to one retelling has room to say
+   "start here". Repeated down a board that ramp inverts the page: the 21px opening paragraph
+   of five items in a row out-shouts the 13px titles they each hang under, and the board stops
+   being scannable — which is the same failure the notice above this rule was written for, in
+   type instead of in boilerplate. On a row the retelling is set at the reading size, and the
+   author's lead-ins keep their weight to mark the beats.
+
+   What that leaves, measured on the live board at 1152/1600/1900: title 13, agent half
+   14/15/16, human half 15/16/17. The retelling is still larger than the title it hangs
+   under — and so is the agent half, by the same board's own scale, one step lower. That gap
+   is this board's, not this rule's: the two halves keep the one-step relation they keep on
+   every detail screen (tokens.css, "the reading sizes"), and closing it here would make the
+   half that is read the size of the half that is scanned, which is the defect that relation
+   exists to prevent. A board whose 13px titles want to be larger is a change to
+   `.feedback-title`, where both halves would get it.
+
+   The lede selector follows the page's one paragraph in: the rule it is undoing moved onto
+   the first paragraph of the opening run, and a container rule no longer reaches it — a
+   descendant's own `font-size` outranks anything inherited, whatever the two selectors weigh
+   against each other. */
+.feedback-human .human-view .prose.human-lede > p:first-child,
+.feedback-human .human-beat-lead,
+.feedback-human .human-takeaway {
+  font-size: var(--text-read);
+  letter-spacing: normal;
+}
+
+/* The byline is a page's answer to a question a whole screen of plain language raises — "a
+   page about a machine's work, written by whom?" — and it is answered once. A board that
+   printed it under every retold row said the same sentence N times, two lines above the row's
+   own meta line, which already names the agent and when they filed it. */
+.feedback-human .human-foot {
+  display: none;
+}
+
+/* --- …and the same absence on a board rather than a screen ----------------
+   The box above is a screen's answer: one record, one page, and it is what the reader came
+   for. A board is N records at once, and SPEC puts a mixed one in writing — an item filed
+   before this rule gains its human area through `app-feedback update` — so five rows drew
+   four copies of that box, ~1000px of one headline, one paragraph, four commands differing
+   in seven characters and four identical buttons. The board grew 640 → 1631px and the
+   instruction outweighed the titles it hung off about five to one. Repeated N times is
+   boilerplate, not a designed empty state.
+
+   So it is split by owner. The absence is the row's and stays there, one line. What to DO
+   about it is the board's, and is said once, above.
+   ------------------------------------------------------------------------- */
+
+.human-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  /* Narrower than the 860px rows on purpose, and the same 720px `.human-empty` uses: at the
+     list's own width the sentence inside it stops at its reading measure and leaves 300px of
+     nothing to its right, and the notice reads as one more row that happens to be indented.
+     Short of the column, with an accent edge no row has, it reads as what it is — the
+     board's own voice, above the board. */
+  max-width: 720px;
+  /* No margin of its own: the notice and the list are siblings inside `.page`, which is a
+     flex column with the app's own 24px rhythm between its blocks. A margin here would be
+     added to that, not instead of it. */
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  /* The same 2px accent edge the retelling's closing line carries: this is the human half
+     talking about itself, not a warning, so it is not `.notice`'s amber. */
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.human-notice-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.human-notice-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.human-notice-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+/* Chrome, not the reading surface: the notice is an instruction to act on, so it stays at
+   the app's own 13px rather than the sheet's reading size. Both lines keep the reading
+   measure, because a sentence 800px wide is not a sentence anybody finishes. */
+.human-notice-text {
+  max-width: var(--human-measure);
+  font-size: var(--text-base);
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
+}
+
+.human-notice-foot {
+  max-width: var(--human-measure);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--text-tertiary);
+}
+
+.human-notice .command-line {
+  align-self: stretch;
+}
+
+/* …and the row's own half of it: one quiet line where the retelling would have been, in the
+   ink this app marks an absence with. It carries no id of its own — the row prints one,
+   beside its title, which is the id the command above wants. */
+.feedback-none {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 /* --- bug: status history strip -------------------------------------------
@@ -3723,6 +3950,16 @@ a.rel-row:hover .rel-id {
   font-size: 15px;
   line-height: 1.55;
   color: var(--text-primary);
+}
+
+/* The same line over the retelling. The note's claim belongs to both halves — it is the
+   frontmatter field every list prints, not a sentence out of the body — so what changes is
+   only how it is set: at the retelling's own reading size, so the claim and the page under
+   it are one voice at every window width. It carried a width instead for a round, back when
+   the sheet stopped at its measure and a lead running past the sheet's right edge read as a
+   second column; the sheet fills the record column now, and so does this line. */
+.note-lead.is-human {
+  font-size: var(--text-read);
 }
 
 .note-foot {
@@ -6562,6 +6799,13 @@ a.ref-inline.is-unknown:hover {
 @media (min-width: 1560px) {
   :root {
     --content-max: none;
+    /* The read half steps with the scanned one — it is defined as one size above it
+       (tokens.css) and `.prose` grows here, so leaving these fixed made the retelling the
+       same size as the record body at this width and smaller than it at the next. */
+    --text-read: 16px;
+    --text-read-lead: 19px;
+    --text-read-lede: 21px;
+    --human-measure: 66ch;
   }
 
   .page-detail {
@@ -6580,6 +6824,13 @@ a.ref-inline.is-unknown:hover {
 }
 
 @media (min-width: 1840px) {
+  :root {
+    --text-read: 17px;
+    --text-read-lead: 20px;
+    --text-read-lede: 22px;
+    --human-measure: 70ch;
+  }
+
   /* Full-bleed content sits against the window edge; a step more gutter keeps it
      from reading as touching it. */
   .page {

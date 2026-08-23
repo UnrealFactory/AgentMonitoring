@@ -16,6 +16,11 @@ before any work ([Notes](#notes--shared-agent-knowledge)).
 **In a hurry?** Jump to [Recipes](#recipes): four copy-pasteable sequences that cover
 recording work, filing a bug, fixing someone else's bug, and leaving knowledge behind.
 
+**Writing a record?** It has two halves, and they go in the same command: the technical one,
+and `--human` — the same events retold for a reader who does not program
+([The human area](#the-human-area)). Read `agentmon human-style` before you write your first
+one.
+
 **Already finished the work and only now writing it down?** That is the normal case and it
 is fully supported — go to
 [Recording work you already finished](#recording-work-you-already-finished).
@@ -342,7 +347,27 @@ agentmon human-style        # the contract. Read it when you are about to write 
 
 That command prints the whole thing, and it is **write-time** reading, not session-start
 reading: open it when a record needs a human area, not before. Every refusal for a missing
-one prints its short form, so a rejected command teaches the rules on the spot.
+one prints its short form, so a rejected command teaches the rules on the spot. Working
+through the MCP tools instead of a shell? There the rules come to you — the session's first
+tool result, whichever call it was, returns the compact form under whatever it answered,
+because a tool call that supplies a `human` is never refused and so would otherwise never
+meet them. The whole document is `status(mode: "human_style")`
+([MCP](MCP.md#human-on-every-write-tool)).
+
+Three things that are about *when* you write rather than how, and so are not in the
+contract:
+
+- **Write it in the same command as the text it retells**, out of the same fresh context.
+  The technical half can be reconstructed from a diff next week; the plain half is the story
+  of the chase, and that is the half that goes cold.
+- **Only a missing retelling is refused.** Twelve characters of real content pass the check,
+  so the rejection is not a quality gate and will not become one. Reading the contract is
+  on you.
+- **Match the record you are writing.** A log you are opening gets what is wrong today and
+  what you are about to try, not a result you do not have; a thin record gets 150 honest
+  words rather than 300 padded ones.
+  [Recipe 1](#recipe-1--record-a-piece-of-work-start-to-finish) walks through a full-length
+  one and says why it is shaped the way it is.
 
 **Where it is required**
 
@@ -352,7 +377,7 @@ one prints its short form, so a rejected command teaches the rules on the spot.
 | `bug create`, `bug resolve` | required — `bug resolve` replaces it |
 | `note add`; `note update --body` | required |
 | `app-feedback add` | required |
-| `work update`, `bug comment`, `note update`, `app-feedback update` | optional — **alone**, it rewrites the human area and nothing else |
+| `work update`, `bug comment`, `note update`, `app-feedback update` | optional — and never additive: it **replaces** the retelling that is there |
 | `bug claim` | optional |
 | any verb above, on a record that has **no** human area yet | required (older records gain one on the first touch) |
 | `app-feedback done` / `reopen` / `delete` | takes none — they are the owner's own buttons on the board, and they neither ask for a human area nor disturb one |
@@ -361,6 +386,13 @@ A `--human` on its own is a *refresh*: nothing is appended to `## Updates` or
 `## Comments`, and the feed logs one `human_updated` line. When the human area changes as
 part of a real mutation, that mutation's own event covers it — never two lines for one
 command.
+
+**`--human` overwrites; it never appends.** A record has one human area, and the text you
+pass becomes all of it — alone, or in the same command as a `--message`. So two sentences
+of `--human` on a progress note do not join the retelling that is there: they replace it,
+at exit `0`, with no warning, and the old text survives in no note and no event. On an
+update, pass the retelling as the whole record should now read, or leave the flag off. On
+a closing verb, replacing is the point — the ending changed the story.
 
 Records written before this existed read fine and report `human: null`; `agentmon doctor`
 lists them as a warning with their ids, and `--json` carries `human` (string or null) on
@@ -453,15 +485,26 @@ recording — that is what makes the commands this short. From elsewhere, add
 Run `work start` **when you begin**, not at the end. It gives you the id, and the
 timestamps then describe reality.
 
+Every command below carries `--human` as well as its body: two audiences, one command
+([The human area](#the-human-area)). Read the rules for that half **before** you write the
+first one — it is one command, it takes a minute, and it is the difference between a
+retelling that lands and one that merely passes:
+
+```bash
+agentmon human-style
+```
+
 ```bash
 # 1. Start. Prints "Started WORK-0004" — note the id.
+#    --human on an opening log says what is wrong today and what you are about to try.
+#    Not what it will be like when you are done: that is a plan, and plans are not results.
 agentmon work start \
   --agent my-agent \
   --title "Cache project counts so the sidebar stops re-reading every record" \
   --tags performance,frontend \
-  --human "Moving between screens had got slow — about a fifth of a second — because the
-app counted every record again each time you clicked. It will now remember the counts
-until something changes them." \
+  --human "Moving between screens takes about a fifth of a second, and it gets slower with
+every record we write, because the app counts all of them again on each click. I am
+starting on having it remember the counts instead. Nothing is measured yet." \
   --body "$(cat <<'EOF'
 ## What
 
@@ -483,18 +526,46 @@ EOF
 )"
 
 # 2. Update as you go. Any number of times; each is timestamped in order.
+#    No --human here on purpose: on an update it overwrites the whole retelling instead
+#    of adding to it, and what step 1 wrote is still the true story so far.
 agentmon work update WORK-0004 \
   --agent my-agent \
   --message "Cache is in and the sidebar no longer re-parses. Measured on the live records: screen switch went from 180ms to 12ms. Invalidation on project-changed works; clearing it when the roster changes is next."
 
 # 3. Finish. The outcome is for the next agent; --human is for everyone else, and
-#    closing replaces whatever the record said while it was open.
+#    closing replaces whatever the record said while it was open — the ending changed
+#    the story. Write both now, out of the same fresh context: the plain half is much
+#    harder to reconstruct tomorrow than the technical one.
 agentmon work done WORK-0004 \
   --agent my-agent \
   --files src/lib/api.ts,src/AppContext.tsx \
-  --human "It is done: switching screens went from about a fifth of a second to almost
-nothing, measured on the 41 records this project has. We checked it by hand on every
-screen while another agent was writing records." \
+  --human "$(cat <<'EOF'
+Moving between two screens took about a fifth of a second, and it got slower with every
+record anyone wrote.
+
+**The app counted the same files again on every click.** The strip down the side of every
+screen shows how many work logs and bugs the project holds. To get those two numbers the app
+opened and read all 41 files, afresh, every time you moved anywhere.
+
+**Now it counts once and keeps the answer.** It throws the answer away the moment a record
+is written, and counts again the next time somebody asks. It is like writing the shopping
+total on the fridge door instead of adding the receipt up again every time you walk past —
+as long as you rub it out when the shopping changes.
+
+**Forgetting is the part that bites.** My first version kept the old number when the agents
+working on a project changed, which is the second thing that changes those counts.
+
+**Measured on this project's own 41 records.** The switch between two screens went from 180
+thousandths of a second to 12. `cargo test --workspace`, the command that runs every
+automatic test we have, passes; I also clicked through all six screens by hand while another
+agent wrote records into the folder, and the counts kept up.
+
+Nothing about the app looks different — it just stops making you wait. The agents-changed
+case is the one I have only checked by hand.
+
+A remembered number is only as good as the moment the program agrees to forget it.
+EOF
+)" \
   --outcome "$(cat <<'EOF'
 Shipped the project-count cache in src/lib/api.ts, cleared from AppContext on
 `project-changed` and on a roster change.
@@ -509,7 +580,21 @@ EOF
 )"
 ```
 
-Check your work the way a human will see it:
+That `--human` is what the rules ask for, and it is worth seeing why before you write your
+own: the same events as the outcome, in the order they happened — what was wrong, what the
+app was doing, what it does now, what fooled me, how I know, what is still only checked by
+hand — then one line to leave with. Each paragraph after the first opens with a short bold
+sentence that *states* something ("**Forgetting is the part that bites.**"), never a label
+("**Verification.**"). One name survives, `cargo test --workspace`, and it arrives with its
+job in the same breath; the numbers cost the reader nothing to hold, so they stay. It runs
+to 256 words, which is an ordinary record — 150 is a thin one, and 450 is the ceiling for a
+genuinely hard mechanism, never a target. That ceiling bounds one telling: a record that
+shipped several separate things retells every one of them, a beat-block each, and runs as
+long as those tellings need. `agentmon human-style` has the rest, including what a bug and
+a note look like.
+
+Check your work the way a human will see it — the record file holds both halves, and
+`work view` prints them labelled:
 
 ```bash
 agentmon work view WORK-0004
@@ -573,7 +658,9 @@ on the dashboard with your name on it:
 agentmon work abandon WORK-0004 \
   --agent my-agent \
   --reason "Superseded by WORK-0009, which caches at the API layer instead and covers the same screens; nothing from this branch was kept." \
-  --human "We stopped this one. The same job is being done in another place, and nothing written here was kept."
+  --human "We wanted the screens to stop counting every record on each click. This attempt
+kept the counts in the screen code; the same job is now being done one layer down, closer
+to where the records are read, so this one stops here. Nothing from it was kept."
 ```
 
 Status becomes `abandoned`, the reason is appended under `## Updates`, and the clock stops
@@ -656,8 +743,26 @@ agentmon bug comment BUG-0002 \
 #    what the bug said while it was open: the ending changed the story.
 agentmon bug resolve BUG-0002 \
   --agent my-agent \
-  --human "It works now: the window updates by itself when a record is written, about a
-third of a second later, and we checked that by writing one while it was open." \
+  --human "$(cat <<'EOF'
+A record another agent had just written did not appear in the desktop window. You had to
+click onto another screen and back before it showed up.
+
+**Nothing was telling the window that the folder had changed.** The desktop app read the
+records folder when you moved between screens, and at no other time.
+
+**It watches the folder now.** When a file in a project's records folder changes, the app is
+told, and it re-reads. Changes arriving within a quarter of a second are counted as one, so
+a single write makes the window refresh once.
+
+**Checked both ways.** All 94 of our automatic tests pass, including a new one that starts
+the real watcher against a scratch folder and waits to be told. I also followed the steps in
+the bug report on the built app: one write, one refresh, about a quarter of a second behind.
+
+For anyone with the app open beside their work, records now appear as they are written.
+
+A screen is only as fresh as whatever is telling it the world moved.
+EOF
+)" \
   --resolution "$(cat <<'EOF'
 Root cause: no filesystem watcher existed in the Tauri shell, so `project-changed` was
 never emitted and the desktop app only re-read records when a route change re-ran the
@@ -939,9 +1044,9 @@ is what makes "this work fixed that bug" visible in the app.
 `started` and stamps the `work_started` event ([Backdating](#backdating)). There is no
 `--finished-at` here: a work log gains its end time from `work done`.
 
-```bash
 `--human` is required: the same work retold for a reader who was not there and does not
-program ([The human area](#the-human-area)).
+program ([The human area](#the-human-area)). On a log you are opening, that is what is
+missing today and what you are about to try — not a result you do not have yet.
 
 ```bash
 agentmon work start --agent my-agent \
@@ -949,8 +1054,9 @@ agentmon work start --agent my-agent \
   --tags tauri,live-updates --refs BUG-0002 \
   --started-at 2026-08-18T09:12:00Z \
   --body-file plan.md \
-  --human "The window only noticed new records when you clicked something, so work
-another agent had just written looked missing. This makes it notice on its own."
+  --human "The window only notices new records when you click something, so work another
+agent has just written looks missing until you do. I am starting on having it notice by
+itself; nothing of that works yet."
 ```
 
 ### `agentmon work update`
@@ -996,6 +1102,11 @@ agentmon work update WORK-0004 --agent my-agent \
 
 A record written before the human area existed has none, and a mutation may not leave it
 that way: a `--message` on such a record needs `--human` with it
+([The human area](#the-human-area)).
+
+`--human` here **replaces** the record's human area rather than adding to it — the same
+overwrite whether it comes alone or beside a `--message`, and the text it replaced is kept
+nowhere. Pass the retelling as the whole record should now read, or leave the flag off
 ([The human area](#the-human-area)).
 
 ### `agentmon work done`
@@ -1052,7 +1163,9 @@ record referencing it instead), and so does abandoning it twice.
 ```bash
 agentmon work abandon WORK-0004 --agent my-agent \
   --reason "Superseded by WORK-0009, which caches at the API layer instead and covers the same screens; nothing from this branch was kept." \
-  --human "We stopped this one. The same job is being done in another place, and nothing written here was kept."
+  --human "We wanted the screens to stop counting every record on each click. This attempt
+kept the counts in the screen code; the same job is now being done one layer down, closer
+to where the records are read, so this one stops here. Nothing from it was kept."
 ```
 
 Stopping is an ending, so `--human` is required and replaces what the record said while it
@@ -1139,6 +1252,9 @@ agentmon bug comment BUG-0002 --agent my-agent \
 agentmon bug comment BUG-0002 --agent my-agent \
   --human "What this bug looks like to somebody using the app."
 ```
+
+Like `work update`, a `--human` here **replaces** the bug's human area — alone or beside a
+`--message` — instead of adding to it ([The human area](#the-human-area)).
 
 ### `agentmon bug resolve`
 
@@ -1519,8 +1635,15 @@ you did not take and the reason.
 it builds is the story of the work. Reconstructing it at the end produces a record that
 reads like a summary, because it is one.
 
+**Both halves, from the same sitting.** Everything above is the agent area. The other half
+— `--human` — retells the same chase for a reader who does not program, and for the people
+who asked for the work it is the only half they open. Write it while the work is fresh
+([The human area](#the-human-area)); the rules for it are one command away, `agentmon
+human-style`.
+
 **Do not fabricate.** Never write a verification you did not run or a number you did not
-measure. Everything here is read by humans checking whether the work happened.
+measure. Everything here is read by humans checking whether the work happened. That goes
+double for the plain half, where an invented example reads as smoothly as a true one.
 
 `agentmon work view WORK-0002` shows a record written to this bar, if you want a model to
 copy.
@@ -1564,6 +1687,20 @@ produced with `echo "$(cat <<'EOF' ... EOF )"` before blaming the CLI.
 **Everything went into `## What` and the other sections are empty** — your headings are not
 at the start of a line, or they use `#`/`###` instead of `##`. Exactly two hashes, then a
 space.
+
+**`no human area for this work log: none was supplied`** — this verb also wants the
+record's plain half ([The human area](#the-human-area)). The message prints the two flags
+under `Fix:` and the short form of the style rules under **How to write it**; nothing was
+written, so add `--human "..."` (or `--human-file plain.md`) and re-run the whole command.
+The same refusal covers a blank one, a placeholder (`todo`, `n/a`, `fixed`), and anything
+under twelve characters of real content. `agentmon human-style` prints the full contract.
+
+**`` `## For humans` is a reserved section and cannot be written through --body ``** — you
+wrote the plain half inside the body. Take that section out and pass its text as `--human`:
+agentmon appends the heading itself, always last, so a hand-written one would be a second
+one. A cousin of this is **`the human area ... cannot be read back out of the record`**,
+which means a ``` in your prose is never closed and would swallow the appended section; the
+message names the line that opened it.
 
 **`WORK-0004 is already done`** — a finished work log cannot be finished again, re-started
 or rewritten; start a new one with `agentmon work start`. The same applies to `abandoned`

@@ -23,7 +23,7 @@ import {
   type TocEntry,
 } from "../components/RecordBody";
 import { RelatedSection, useRelated } from "../components/Related";
-import { HumanArea, RecordViewToggle } from "../components/HumanView";
+import { AgentHereNote, HumanArea, RecordViewToggle } from "../components/HumanView";
 import { useContextMenu } from "../components/ContextMenu";
 import { hasHumanArea } from "../lib/human";
 import { useRecordView } from "../lib/recordView";
@@ -86,7 +86,10 @@ export function WorkDetailPage() {
   /* Which half of the record is on screen — the agent's areas or the retelling. The reader's
      choice for the session; the record's own answer until they make one. `null` while it
      loads: "not read yet" is not "has none" (lib/recordView.ts). */
-  const { view, choose } = useRecordView(work ? hasHumanArea(work.human) : null, id);
+  const { view, choose, peekAgent, peeking } = useRecordView(
+    work ? hasHumanArea(work.human) : null,
+    id
+  );
   const human = view === "human";
   /** Notes their authors opened with "Correction:" — see src/lib/updates.ts. */
   const corrections = countCorrections(work?.updates ?? []);
@@ -206,12 +209,23 @@ export function WorkDetailPage() {
           </div>
 
           {/* Above What/Why/How, because a correction the reader meets after the sentence it
-              corrects is a correction they have already believed the wrong version of. The
-              retelling is one story with no trail under it, so the notice belongs to the
-              agent view, where the notes it points at are. */}
-          {!human && (
-            <CorrectionNotice count={corrections} href="#updates" where={t("rec.inUpdates")} />
-          )}
+              corrects is a correction they have already believed the wrong version of.
+
+              On both halves, for the same reason. The retelling has no trail under it, but
+              it is the same events told again, and a correction is posted with
+              `work update --message` — which does not require rewriting the retelling and
+              usually does not. Hiding this line on the human half left the reader who cannot
+              read the agent area being shown a story the record itself says is wrong, with
+              nothing on screen admitting it: exactly what the line exists to prevent. Over
+              there it names the half the note is on and carries the reader across (ui.tsx) —
+              across for *this* record, which is what it offers: a reader who pinned plain
+              language keeps it on the next one (`peekAgent`, lib/recordView.ts). */}
+          <CorrectionNotice
+            count={corrections}
+            href="#updates"
+            where={human ? t("rec.inAgentHalf", t("rec.inUpdates")) : t("rec.inUpdates")}
+            onFollow={human ? peekAgent : undefined}
+          />
 
           <div className="rec-byline">
             <WorkStatusPill status={work.status} />
@@ -286,9 +300,13 @@ export function WorkDetailPage() {
                 kind="work"
                 id={work.id}
                 agent={work.agent}
-                onShowAgent={() => choose("agent")}
+                onShowAgent={peekAgent}
               />
             )}
+
+            {/* …and when that offer was taken, the one line saying whose decision it was and
+                how far it reaches. Only while it is up. */}
+            {peeking && <AgentHereNote id={work.id} />}
 
             {/* `section` is the literal heading in the record file (`## What`), which stays
                 English because it is what the vault holds; `title` is what this screen calls
