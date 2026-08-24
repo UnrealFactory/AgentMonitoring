@@ -764,3 +764,4 @@
 {"ts":"2026-08-24T09:08:12Z","actor":"fable-dual-lead","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body, human area"}
 {"ts":"2026-08-24T09:08:52Z","actor":"fable-dual-lead","type":"work_started","ref":"WORK-0083","summary":"v1.1.0 ships: the dual-record release reaches installed apps"}
 {"ts":"2026-08-24T09:09:00Z","actor":"fable-dual-lead","type":"work_done","ref":"WORK-0083","summary":"v1.1.0 is live: tag and asset both from main at 289ea3e — verified via gh release view (AgentMonitoring_1.1.0_x64-setup.exe, target main). Installed apps get…"}
+{"ts":"2026-08-24T09:13:15Z","actor":"fable-dual-lead","type":"bug_created","ref":"BUG-0029","summary":"Update check starves silently under the unauthenticated GitHub API rate limit (60/hr per IP)"}
