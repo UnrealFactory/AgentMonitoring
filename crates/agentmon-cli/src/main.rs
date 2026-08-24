@@ -537,28 +537,33 @@ enum WorkCmd {
     /// Append a timestamped note to a work log — a progress note, or a later correction.
     #[command(after_help = "EXAMPLE\n  agentmon work update WORK-0003 \\\n    \
         --agent cli-builder \\\n    --message \"Debounce is in: one save produced four notify \
-        events, now one reload.\"\n\n  Notes are append-only and timestamped; they are the \
-        story of the work, so write what changed and what you learned, not \"progress\".\n\n\
+        events, now one reload.\" \\\n    --human \"Saving a file used to redraw the screen \
+        four times; now it redraws once.\"\n\n  Notes are append-only and timestamped; they \
+        are the story of the work, so write what changed and what you learned, not \
+        \"progress\".\n\n\
         Writing it up afterwards? --at 2026-08-18T10:05:00Z stamps the note with the time it \
         actually happened.\n\n  A FINISHED record still takes notes. Nothing already written \
         changes — the note lands at the end of the timeline, dated at or after the close — so \
         this is how a record that turns out to state something false gets corrected inside \
         itself. Open the note with \"Correction:\" and the record page marks it and says so at \
         the top:\n\n  agentmon work update WORK-0011 --agent p6-curator \\\n    \
-        --message \"Correction: relay has four agents, not ten (BUG-0017).\"\n\n\
-        REWRITING THE HUMAN AREA\n  --human alone changes only the record's plain-language \
-        telling: nothing is added to ## Updates, and the feed logs one human_updated line.\n  \
+        --message \"Correction: relay has four agents, not ten (BUG-0017).\" \\\n    \
+        --human \"An earlier line here said ten agents; the real number is four.\"\n\n\
+        THE HUMAN AREA\n  A --message REQUIRES --human with it: the note is new events, and \
+        the plain-language\n  telling has to be brought up to date with them (it replaces the \
+        stored one — re-pass\n  the current text if nothing a reader sees changed).\n\n  \
+        --human alone is a refresh: nothing is added to ## Updates, and the feed logs one \
+        human_updated line.\n  \
         agentmon work update WORK-0011 --agent p6-curator \\\n    \
-        --human \"What this work actually did, said plainly.\"\n\n  A record written before \
-        the human area existed must gain one the first time it is touched, so a --message on \
-        such a record needs --human with it.\n\n\
+        --human \"What this work actually did, said plainly.\"\n\n\
         REPLAYING A LOST NOTE (reconstruction only)\n  A record re-created after a sync \
         collision (see `agentmon reconcile`) takes its original\n  notes back at their real \
         times with --replayed: the note may predate the close and the\n  notes around it, it \
         is inserted at its place in the timeline, and the event says\n  \"Replayed:\" so it \
-        never passes for an original. Requires --at and --message.\n\n  \
+        never passes for an original. Requires --at, --message and --human.\n\n  \
         agentmon work update WORK-0011 --agent recovery-agent --replayed \\\n    \
-        --at 2026-08-22T10:05:00Z --message \"<the lost note, verbatim>\"")]
+        --at 2026-08-22T10:05:00Z --message \"<the lost note, verbatim>\" \\\n    \
+        --human \"<the record's retelling>\"")]
     Update {
         /// WORK-NNNN.
         id: String,
@@ -757,7 +762,12 @@ enum BugCmd {
     /// Add a comment to a bug's thread.
     #[command(after_help = "EXAMPLE\n  agentmon bug comment BUG-0002 \\\n    \
         --agent cli-builder \\\n    --message \"Root cause: setup() never started a watcher, so \
-        project-changed was never emitted.\"\n\n  REWRITING THE HUMAN AREA\n  \
+        project-changed was never emitted.\" \\\n    --human \"The app never noticed saved \
+        files because the part that watches for them\n    was never switched on.\"\n\n  \
+        THE HUMAN AREA\n  A --message REQUIRES --human with it: the finding is part of the \
+        bug's story, and\n  the plain-language telling has to be brought up to date with it \
+        (it replaces the\n  stored one — re-pass the current text if nothing a reader sees \
+        changed).\n\n  \
         --human alone adds nothing to the thread; it rewrites the bug's plain-language \
         telling and logs one human_updated line:\n  \
         agentmon bug comment BUG-0002 --agent cli-builder \\\n    \
@@ -765,9 +775,10 @@ enum BugCmd {
         REPLAYING A LOST COMMENT (reconstruction only)\n  A bug re-created after a sync \
         collision (see `agentmon reconcile`) takes its original\n  comments back at their \
         real times with --replayed — inserted in timeline order, the\n  event marked \
-        \"Replayed:\". Requires --at and --message.\n\n  \
+        \"Replayed:\". Requires --at, --message and --human.\n\n  \
         agentmon bug comment BUG-0006 --agent recovery-agent --replayed \\\n    \
-        --at 2026-08-22T10:05:00Z --message \"<the lost comment, verbatim>\"")]
+        --at 2026-08-22T10:05:00Z --message \"<the lost comment, verbatim>\" \\\n    \
+        --human \"<the bug's retelling>\"")]
     Comment {
         /// BUG-NNNN.
         id: String,
@@ -1584,7 +1595,8 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             println!();
             println!("Next:");
             println!(
-                "  agentmon work update {} --agent {} --message \"<what changed>\"",
+                "  agentmon work update {} --agent {} --message \"<what changed>\" \\\n    \
+                 --human \"<the retelling, brought up to date>\"",
                 w.id, agent.agent
             );
             println!(
@@ -1623,7 +1635,9 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
                                    you learned, what you are doing next.",
                         example: "agentmon work update WORK-0003 \\\n  \
                                   --agent cli-builder \\\n  --message \"Debounce is in: one \
-                                  save produced four notify events, now one reload.\"",
+                                  save produced four notify events, now one reload.\" \\\n  \
+                                  --human \"Saving used to redraw the screen four times; now \
+                                  it redraws once.\"",
                     },
                 )?),
             };
@@ -1960,7 +1974,8 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             println!();
             println!("Next:");
             println!(
-                "  agentmon bug comment {} --agent {} --message \"<root cause>\"",
+                "  agentmon bug comment {} --agent {} --message \"<root cause>\" \\\n    \
+                 --human \"<the retelling, brought up to date>\"",
                 b.id, agent.agent
             );
             println!(
@@ -1999,7 +2014,8 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
                         example: "agentmon bug comment BUG-0002 \\\n  \
                                   --agent cli-builder \\\n  --message \"Root cause: setup() \
                                   never started a watcher, so project-changed was never \
-                                  emitted.\"",
+                                  emitted.\" \\\n  --human \"The app never heard about saved \
+                                  files because its watcher was never switched on.\"",
                     },
                 )?),
             };
@@ -2806,8 +2822,10 @@ fn replay_usage(verb: &str) -> CliError {
         message: format!(
             "--replayed is for reconstruction: it writes the lost original back at the time \
              it really happened, so it needs both --at <that time> and --message/--message-file \
-             <the original text>.\n\n  agentmon {verb} <ID> --agent <you> --replayed \\\n    \
-             --at 2026-08-22T10:05:00Z --message \"<the lost text, verbatim>\"\n\nWithout \
+             <the original text> — and, like every --message, the --human retelling with \
+             it.\n\n  agentmon {verb} <ID> --agent <you> --replayed \\\n    \
+             --at 2026-08-22T10:05:00Z --message \"<the lost text, verbatim>\" \\\n    \
+             --human \"<the record's retelling>\"\n\nWithout \
              --replayed the normal ordering guard applies, which is what you want on any \
              write that is not rebuilding a lost record (docs/AGENT_MANUAL.md, \"Two \
              machines, one repo\")."

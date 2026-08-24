@@ -362,10 +362,6 @@ pub fn check(store: &Store) -> Result<Report> {
                                     &work_notes,
                                     &accounted,
                                     reconcile_note_exists,
-                                    // The sweep above already read every record; a record
-                                    // it did not name has a human area, so the repair line
-                                    // it prints needs no `--human`.
-                                    !gaps.missing.iter().any(|m| m == r),
                                     &mut reconciled,
                                 ) {
                                     problems.push(p);
@@ -450,10 +446,10 @@ pub const RECONCILE_NOTE: &str = "event-reconciliation";
 /// doctor asks for, one exact `ref@ts` at a time. No wildcards, no "everything by this
 /// actor": accounting for an orphan costs a sentence about that orphan.
 ///
-/// Both halves of the fix line are state-aware, and both states are read off the disk rather
-/// than assumed: `note_exists` picks the verb the accounting command prints (see
-/// [`reconcile_command`]) and `record_has_human` decides whether the repair command carries
-/// `--human` (see [`repair_command`]).
+/// The accounting half of the fix line is state-aware, read off the disk rather than
+/// assumed: `note_exists` picks the verb the accounting command prints (see
+/// [`reconcile_command`]). The repair half always carries `--human` now (see
+/// [`repair_command`]).
 fn pair_work_updated(
     ev: &Event,
     r: &str,
@@ -461,7 +457,6 @@ fn pair_work_updated(
     work_notes: &HashMap<String, Vec<String>>,
     accounted: &std::collections::HashSet<String>,
     note_exists: bool,
-    record_has_human: bool,
     reconciled: &mut Vec<String>,
 ) -> Option<Problem> {
     if ev.event_type != "work_updated" {
@@ -497,7 +492,7 @@ fn pair_work_updated(
              summary survives, do not invent a body for it — account for it instead, in \
              {RECONCILE_NOTE}: `{}` with a line naming this one as {token} and a sentence on \
              what actually happened",
-            repair_command(r, &ev.ts, record_has_human),
+            repair_command(r, &ev.ts),
             reconcile_command(note_exists)
         ),
     ))
@@ -506,31 +501,21 @@ fn pair_work_updated(
 /// The command that repairs a recoverable orphan — posting the note the feed already
 /// announced, at the timestamp it announced it for.
 ///
-/// `--human` for the same reason as [`reconcile_command`] and one more: this write lands on
-/// a **record**, and a record with no `## For humans` cannot take any write that would leave
-/// it without one (SPEC.md, "The human area"). That is not a rare state on the project most
-/// likely to be reading this hint — `agentmon migrate` leaves every record it converts
-/// without a human area until something touches it, and doctor prints its own human-area
-/// warning naming that same id a few lines above this error. A fix line that exits 2 on the
-/// record it names is not a fix line.
-///
-/// State-aware rather than always printed, for the mirror-image reason: on a record that
-/// already has a human area, `--human "<retelling>"` is not needed and pasting it in would
-/// overwrite a retelling somebody wrote with a placeholder — an error traded for a lie. The
-/// state is read off the disk, from the same human-area sweep that feeds the warning above.
+/// `--human` for the same reason as [`reconcile_command`] and one more: a `--message`
+/// requires the retelling rewritten with it (SPEC.md, "The human area" — owner directive,
+/// 2026-08-24), so a fix line without `--human` exits 2 on every record it names. It used
+/// to be printed only for records that still lacked a human area; the pair is unconditional
+/// now, and on a record whose retelling the repair does not change, re-passing the current
+/// text is the honest fill for the placeholder.
 ///
 /// The one record this cannot help is the one whose agent area leaves a fence open: no write
 /// reaches it at all. That is the error just above, and its fix is the only one here that is
 /// not a command.
-fn repair_command(r: &str, ts: &str, has_human: bool) -> String {
-    if has_human {
-        format!("agentmon work update {r} --agent <you> --at {ts} --message \"…\"")
-    } else {
-        format!(
-            "agentmon work update {r} --agent <you> --at {ts} --message \"…\" \
-             --human \"<retelling>\""
-        )
-    }
+fn repair_command(r: &str, ts: &str) -> String {
+    format!(
+        "agentmon work update {r} --agent <you> --at {ts} --message \"…\" \
+         --human \"<retelling>\""
+    )
 }
 
 /// The command that accounts for an orphan — the exact line the fix prints, in whichever of

@@ -149,7 +149,7 @@ fn diverge(tc: &TwoClones) {
             &w,
             "agent-b",
             Some("Halfway: the cache holds; invalidation on WORK-0002 still missing."),
-            None,
+            Some(HUMAN),
             None,
         )
         .expect("a progress note, so the event pairing survives the re-key");
@@ -405,10 +405,10 @@ fn the_same_record_edited_on_both_sides_is_a_content_merge_not_a_re_key() {
     // Both machines annotate the SAME pre-fork record with different notes: one identity,
     // two texts. Re-keying would fork the record's history — reconcile leaves it to git.
     tc.incoming
-        .update_work("WORK-0001", "agent-a", Some("A's later annotation on the shared record."), None, None)
+        .update_work("WORK-0001", "agent-a", Some("A's later annotation on the shared record."), Some(HUMAN), None)
         .unwrap();
     tc.local
-        .update_work("WORK-0001", "agent-b", Some("B's different annotation on the same record."), None, None)
+        .update_work("WORK-0001", "agent-b", Some("B's different annotation on the same record."), Some(HUMAN), None)
         .unwrap();
 
     let plan = reconcile(

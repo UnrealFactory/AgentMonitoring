@@ -286,11 +286,12 @@ Progress, close, or stop — on an existing `WORK-NNNN`.
 
 `id*`, `note`, `outcome`, `abandon`, `human`, `files`, `at`
 
-`human` is required with `outcome` or `abandon` (closing replaces the human area) and on a
-record that has none yet; **alone** it is a refresh — it rewrites the human area, appends
-nothing, and the feed logs one `human_updated` line. Sent with a `note` it still replaces,
-which is the one combination that can quietly cost a good retelling: the note is appended,
-the human area is not.
+`human` is required with everything except a bare refresh: with `outcome` or `abandon`
+(closing replaces the human area) and with a `note` too — a progress note is new events,
+and the CLI refuses one that arrives without its retelling (owner directive, 2026-08-24).
+Sent with a `note` it **replaces** the stored retelling; when the note changes nothing a
+reader sees, re-pass the current text. **Alone** it is a refresh — it rewrites the human
+area, appends nothing, and the feed logs one `human_updated` line.
 
 Otherwise one of the three is the point of the call: `note` appends a timestamped note,
 `outcome` closes the log, `abandon` marks it abandoned with a reason. A note on an
@@ -320,9 +321,10 @@ fix is one call: root-cause `comment` plus `resolution`. Claim-only (`claim: tru
 comment-only (`claim: false`, `comment`) are both valid single calls. If another agent
 holds the bug the claim fails and the reply names the way past it.
 
-`human` is required with a `resolution` and on a bug that has no human area yet; alone it
-is a refresh, exactly as in `update_work` — and sent with a `comment` it replaces the
-bug's retelling, exactly as in `update_work` too.
+`human` is required with a `resolution` and with a `comment` — a finding is part of the
+bug's story, and the CLI refuses a comment that arrives without its retelling, exactly as
+in `update_work`. Sent with a `comment` it replaces the bug's retelling; alone it is a
+refresh, exactly as in `update_work` too.
 
 ### `note`
 

@@ -67,7 +67,7 @@ fn reconstructed_worklog(tp: &TempProject) -> String {
         .expect("work start")
         .id;
     tp.store
-        .update_work(&id, "recovery-agent", Some("The note that survived the collision."), None, Some(T1))
+        .update_work(&id, "recovery-agent", Some("The note that survived the collision."), Some(HUMAN), Some(T1))
         .expect("surviving note");
     tp.store
         .finish_work(
@@ -93,14 +93,23 @@ fn a_replayed_note_lands_at_its_real_time_inside_a_closed_record() {
     // replay path is refused, because a note before the close is normally a lie.
     let err = tp
         .store
-        .update_work(&id, "recovery-agent", Some("The lost in-progress note."), None, Some(T1_5))
+        .update_work(&id, "recovery-agent", Some("The lost in-progress note."), Some(HUMAN), Some(T1_5))
         .expect_err("normal writes keep the ordering guard");
     assert_eq!(err.kind(), "invalid_argument", "{err}");
     assert!(err.to_string().contains("closed"), "{err}");
 
-    let w = tp
+    // A replay writes agent prose like any note, so it carries the retelling like any
+    // note: without --human it is refused (owner directive, 2026-08-24).
+    let err = tp
         .store
         .replay_work_note(&id, "recovery-agent", "The lost in-progress note.", None, T1_5)
+        .expect_err("--message never travels without --human, replayed or not");
+    assert_eq!(err.kind(), "invalid_argument", "{err}");
+    assert!(err.to_string().contains("--human"), "{err}");
+
+    let w = tp
+        .store
+        .replay_work_note(&id, "recovery-agent", "The lost in-progress note.", Some(HUMAN), T1_5)
         .expect("replay");
 
     // In the timeline, not at the end: T1, then the replayed T1_5 — under a T2 close.
@@ -127,14 +136,14 @@ fn the_floor_stays_a_replay_cannot_predate_the_record() {
     let id = reconstructed_worklog(&tp);
     let err = tp
         .store
-        .replay_work_note(&id, "recovery-agent", "Before the work began.", None, "2026-08-18T08:00:00Z")
+        .replay_work_note(&id, "recovery-agent", "Before the work began.", Some(HUMAN), "2026-08-18T08:00:00Z")
         .expect_err("nothing on a record predates started");
     assert!(err.to_string().contains("started"), "{err}");
 
     // The future is still the future, replay or not.
     let err = tp
         .store
-        .replay_work_note(&id, "recovery-agent", "From tomorrow.", None, "2036-01-01T00:00:00Z")
+        .replay_work_note(&id, "recovery-agent", "From tomorrow.", Some(HUMAN), "2036-01-01T00:00:00Z")
         .expect_err("a replay documents the past");
     assert!(err.to_string().contains("at or before now"), "{err}");
 }
@@ -159,19 +168,26 @@ fn a_replayed_bug_comment_lands_in_thread_order_with_a_marked_event() {
         .expect("bug create")
         .id;
     tp.store
-        .comment_bug(&id, "recovery-agent", Some("The comment that survived."), None, Some(T2))
+        .comment_bug(&id, "recovery-agent", Some("The comment that survived."), Some(HUMAN), Some(T2))
         .expect("surviving comment");
 
     // Normal write: refused before the previous comment. Replay: inserted before it.
     let err = tp
         .store
-        .comment_bug(&id, "recovery-agent", Some("The lost comment."), None, Some(T1))
+        .comment_bug(&id, "recovery-agent", Some("The lost comment."), Some(HUMAN), Some(T1))
         .expect_err("normal writes keep the ordering guard");
     assert_eq!(err.kind(), "invalid_argument", "{err}");
 
-    let b = tp
+    // Same law as on the work side: a replayed comment carries the retelling with it.
+    let err = tp
         .store
         .replay_bug_comment(&id, "recovery-agent", "The lost comment.", None, T1)
+        .expect_err("--message never travels without --human, replayed or not");
+    assert!(err.to_string().contains("--human"), "{err}");
+
+    let b = tp
+        .store
+        .replay_bug_comment(&id, "recovery-agent", "The lost comment.", Some(HUMAN), T1)
         .expect("replay");
     let stamps: Vec<&str> = b.record.comments.iter().map(|c| c.ts.as_str()).collect();
     assert_eq!(stamps, [T1, T2], "{stamps:?}");
@@ -184,7 +200,7 @@ fn a_replayed_bug_comment_lands_in_thread_order_with_a_marked_event() {
     // The floor stays here too: nothing on a bug predates created.
     let err = tp
         .store
-        .replay_bug_comment(&id, "recovery-agent", "Before the bug existed.", None, "2026-08-18T08:00:00Z")
+        .replay_bug_comment(&id, "recovery-agent", "Before the bug existed.", Some(HUMAN), "2026-08-18T08:00:00Z")
         .expect_err("created is the floor");
     assert!(err.to_string().contains("created"), "{err}");
 
@@ -193,9 +209,9 @@ fn a_replayed_bug_comment_lands_in_thread_order_with_a_marked_event() {
     assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
 }
 
-/// The human-area law holds on the replay path exactly as on the normal one: a record
-/// with no `## For humans` refuses a replay that would leave it without one, and gains
-/// one when the replay supplies it.
+/// The human-area law holds on the replay path exactly as on the normal one: every
+/// replay carries `--human` (a replayed note is still agent prose), and a legacy record
+/// with no `## For humans` gains one from the replay that supplies it.
 #[test]
 fn a_replay_onto_a_legacy_record_still_demands_the_human_area() {
     let tp = TempProject::new("legacy");

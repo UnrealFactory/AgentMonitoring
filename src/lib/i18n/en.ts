@@ -424,8 +424,8 @@ export const en = {
   "rec.inThread": "the thread",
   /* The same "where", said to a reader who is on the human half — where that trail is not
      on screen. The correction line is drawn on both halves (a retelling is the same events,
-     and `work update --message` / `bug comment` do not rewrite it), so on this one it has to
-     say which half the note is on before it can send anybody there. */
+     and the rewrite a correction travels with leaves no trail of what changed), so on this
+     one it has to say which half the note is on before it can send anybody there. */
   "rec.inAgentHalf": (where: string) => `${where}, on the agent’s half`,
   "rec.staleGone": (id: string) => `${id} is no longer in this project.`,
   "rec.staleUnread": (id: string) => `${id} could not be read again.`,

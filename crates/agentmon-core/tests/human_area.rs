@@ -636,10 +636,28 @@ fn a_mutation_of_a_record_that_lacks_one_has_to_supply_it() {
         .expect("claiming a legacy bug may supply it");
     assert!(f.store.bug("BUG-0900").unwrap().human.is_some());
 
-    // Once a record has one, later mutations do not have to repeat it — it is kept.
-    f.store
+    // Having one does not exempt later notes: a --message always brings the retelling
+    // with it (owner directive, 2026-08-24 — the optional pair was a bypass), and the
+    // supplied text replaces the stored one.
+    let err = f
+        .store
         .update_work("WORK-0900", "a", Some("A second note, no --human."), None, None)
-        .expect("the record already has one");
+        .unwrap_err();
+    assert_eq!(err.kind(), "invalid_argument", "{err}");
+    assert!(err.to_string().contains("--human"), "{err}");
+    assert!(
+        f.store.worklog("WORK-0900").unwrap().updates.len() == 1,
+        "the refused note wrote nothing"
+    );
+    f.store
+        .update_work(
+            "WORK-0900",
+            "a",
+            Some("A second note, with the retelling re-passed."),
+            Some("This is an old piece of work, told plainly for the first time."),
+            None,
+        )
+        .expect("a note travels with its retelling");
     assert!(f
         .store
         .worklog("WORK-0900")
@@ -952,7 +970,7 @@ fn a_body_that_ends_inside_a_code_fence_is_refused_on_every_kind() {
     let id = f.start();
     refused(
         f.store
-            .update_work(&id, "a", Some("Log:\n\n```\npanicked\n"), None, None)
+            .update_work(&id, "a", Some("Log:\n\n```\npanicked\n"), Some(HUMAN), None)
             .unwrap_err(),
         "--message",
     );
@@ -987,7 +1005,7 @@ fn a_body_that_ends_inside_a_code_fence_is_refused_on_every_kind() {
     let bug = f.file_bug();
     refused(
         f.store
-            .comment_bug(&bug, "a", Some("Seen again:\n\n```\nEBUSY\n"), None, None)
+            .comment_bug(&bug, "a", Some("Seen again:\n\n```\nEBUSY\n"), Some(HUMAN), None)
             .unwrap_err(),
         "--message",
     );
@@ -1284,12 +1302,18 @@ fn a_human_area_of_invisible_characters_is_refused_and_a_bom_is_furniture() {
 fn a_rewritten_record_keeps_its_human_area_through_unrelated_mutations() {
     let f = Fixture::new("survives");
     let bug = f.file_bug();
+    // A claim writes no prose, so it is the one mutation that carries the retelling
+    // across unchanged.
     f.store.claim_bug(&bug, "cli-builder", None, None).unwrap();
-    f.store
-        .comment_bug(&bug, "cli-builder", Some("Reproduced on a fresh profile."), None, None)
-        .unwrap();
     let b = f.store.bug(&bug).unwrap();
     assert!(b.human.as_deref().unwrap().starts_with("If you filter the list"));
+    // A comment carries its own retelling, which replaces the stored one — and the
+    // section still renders last, after the thread it travelled with.
+    f.store
+        .comment_bug(&bug, "cli-builder", Some("Reproduced on a fresh profile."), Some(HUMAN), None)
+        .unwrap();
+    let b = f.store.bug(&bug).unwrap();
+    assert_eq!(b.human.as_deref(), Some(HUMAN));
     assert_eq!(b.comments.len(), 1);
     let raw = f.raw(&format!("bugs/{bug}.md"));
     assert!(raw.find("## Comments").unwrap() < raw.find("## For humans").unwrap());

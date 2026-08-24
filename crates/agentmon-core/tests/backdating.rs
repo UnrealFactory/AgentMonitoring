@@ -62,6 +62,10 @@ mutation takes an optional timestamp, validated against the state it follows.\n"
 const OUTCOME: &str = "Shipped --started-at/--finished-at/--at across the write path; \
 cargo test --workspace is green and agentmon doctor reports no problems.";
 
+/// The retelling every `--message` re-passes: a note travels with its human area now
+/// (SPEC.md, "The human area" — owner directive, 2026-08-24).
+const HUMAN: &str = "A plain-words retelling of this record, long enough to be a real one.";
+
 const REPORT: &str = "## Report\n\nRepro: run `agentmon work start` an hour after starting \
 the work.\n\nExpected: a way to say when it really began.\nActual: `started` is always now.\n";
 
@@ -123,7 +127,7 @@ fn work_finished_earlier_can_be_recorded_now() {
     let tp = TempProject::new("work");
     let id = start_at(&tp, Some(T0));
     tp.store
-        .update_work(&id, "cli-builder", Some("Halfway: the parser round-trips, the writer still drops unknown keys."), None, Some(T1))
+        .update_work(&id, "cli-builder", Some("Halfway: the parser round-trips, the writer still drops unknown keys."), Some(HUMAN), Some(T1))
         .unwrap();
     finish(&tp, &id, Some(T2), None).unwrap();
 
@@ -207,7 +211,7 @@ fn a_timestamp_in_the_future_is_refused_everywhere() {
     let id = start_at(&tp, Some(T0));
     let err = tp
         .store
-        .update_work(&id, "cli-builder", Some("From the future."), None, Some(future))
+        .update_work(&id, "cli-builder", Some("From the future."), Some(HUMAN), Some(future))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument", "{err}");
     let err = finish(&tp, &id, Some(future), None).unwrap_err();
@@ -226,7 +230,7 @@ fn a_timestamp_before_the_state_it_follows_is_refused() {
     // an update before the work started
     let err = tp
         .store
-        .update_work(&id, "cli-builder", Some("Time travel."), None, Some(T0))
+        .update_work(&id, "cli-builder", Some("Time travel."), Some(HUMAN), Some(T0))
         .unwrap_err();
     assert!(
         err.to_string().contains("at or after the work log's started time"),
@@ -236,11 +240,11 @@ fn a_timestamp_before_the_state_it_follows_is_refused() {
 
     // an update before the previous update
     tp.store
-        .update_work(&id, "cli-builder", Some("First note, in order."), None, Some(T2))
+        .update_work(&id, "cli-builder", Some("First note, in order."), Some(HUMAN), Some(T2))
         .unwrap();
     let err = tp
         .store
-        .update_work(&id, "cli-builder", Some("Second note, backwards."), None, Some(T1))
+        .update_work(&id, "cli-builder", Some("Second note, backwards."), Some(HUMAN), Some(T1))
         .unwrap_err();
     assert!(err.to_string().contains("at or after the previous note"), "{err}");
     assert_eq!(tp.store.worklog(&id).unwrap().updates.len(), 1);
@@ -272,11 +276,11 @@ fn a_subheading_in_a_note_does_not_brick_the_record() {
     let id = start_at(&tp, Some(T0));
 
     tp.store
-        .update_work(&id, "cli-builder", Some("### R7 빌더 — 삼항 어휘의 거짓 문장 3곳 정정\n\nRound detail."), None, Some(T1))
+        .update_work(&id, "cli-builder", Some("### R7 빌더 — 삼항 어휘의 거짓 문장 3곳 정정\n\nRound detail."), Some(HUMAN), Some(T1))
         .unwrap();
     // The very shape that was permanently refused: a later note, and a later close.
     tp.store
-        .update_work(&id, "cli-builder", Some("Next round, later the same day."), None, Some(T2))
+        .update_work(&id, "cli-builder", Some("Next round, later the same day."), Some(HUMAN), Some(T2))
         .unwrap();
     let d = tp.store.worklog(&id).unwrap();
     assert_eq!(d.updates.len(), 2, "{:?}", d.updates);
@@ -296,7 +300,7 @@ fn work_done_can_correct_the_start_but_not_break_the_order() {
 
     // --started-at after a note that is already on the record
     tp.store
-        .update_work(&id, "cli-builder", Some("A note at T1."), None, Some(T1))
+        .update_work(&id, "cli-builder", Some("A note at T1."), Some(HUMAN), Some(T1))
         .unwrap();
     let err = finish(&tp, &id, Some(T2), Some(T2)).unwrap_err();
     assert!(
@@ -338,7 +342,7 @@ fn a_bug_can_be_filed_claimed_and_resolved_after_the_fact() {
     let id = file_bug(&tp, Some(T0));
     tp.store.claim_bug(&id, "cli-builder", None, Some(T1)).unwrap();
     tp.store
-        .comment_bug(&id, "cli-builder", Some("Root cause: the Tauri shell never started a watcher."), None, Some(T1))
+        .comment_bug(&id, "cli-builder", Some("Root cause: the Tauri shell never started a watcher."), Some(HUMAN), Some(T1))
         .unwrap();
     tp.store
         .resolve_bug(&id, "cli-builder", "Started the watcher in setup(); verified with cargo test and a live refresh.", "A plain-words retelling for whoever reads this later.", Some(T2))
@@ -386,7 +390,7 @@ fn out_of_order_bug_mutations_are_refused() {
 
     let err = tp
         .store
-        .comment_bug(&id, "cli-builder", Some("Backwards comment."), None, Some(T0))
+        .comment_bug(&id, "cli-builder", Some("Backwards comment."), Some(HUMAN), Some(T0))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument", "{err}");
     assert!(tp.store.bug(&id).unwrap().comments.is_empty());
@@ -401,7 +405,7 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
     let tp = TempProject::new("abandon");
     let id = start_at(&tp, Some(T0));
     tp.store
-        .update_work(&id, "cli-builder", Some("Tried the naive approach first."), None, Some(T1))
+        .update_work(&id, "cli-builder", Some("Tried the naive approach first."), Some(HUMAN), Some(T1))
         .unwrap();
 
     let w = tp
@@ -442,12 +446,12 @@ fn abandoning_work_records_the_reason_and_stops_the_clock() {
     // an abandoned record is closed: no second abandon, no completion. A later note is
     // still allowed — it is how the record gets corrected — but it cannot predate the stop.
     tp.store
-        .update_work(&id, "cli-builder", Some("Correction: WORK-0009 is WORK-0010."), None, None)
+        .update_work(&id, "cli-builder", Some("Correction: WORK-0009 is WORK-0010."), Some(HUMAN), None)
         .expect("a closed record still takes a correction");
     assert_eq!(tp.store.worklog(&id).unwrap().meta.status, WorkStatus::Abandoned);
     let err = tp
         .store
-        .update_work(&id, "cli-builder", Some("Backwards in time."), None, Some(T1))
+        .update_work(&id, "cli-builder", Some("Backwards in time."), Some(HUMAN), Some(T1))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument");
     let err = tp

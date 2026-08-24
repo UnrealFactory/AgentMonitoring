@@ -644,7 +644,7 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
           <li className="trail-node trail-empty">
             <span className="trail-dot trail-dot-muted" aria-hidden="true" />
             <p className="trail-empty-text">
-              {t("bd.noAnswers")} <code>agentmon bug comment {bug.id} --message …</code>
+              {t("bd.noAnswers")} <code>agentmon bug comment {bug.id} --message … --human …</code>
             </p>
           </li>
         )}

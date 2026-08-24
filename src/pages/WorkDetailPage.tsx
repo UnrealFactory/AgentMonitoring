@@ -212,9 +212,9 @@ export function WorkDetailPage() {
               corrects is a correction they have already believed the wrong version of.
 
               On both halves, for the same reason. The retelling has no trail under it, but
-              it is the same events told again, and a correction is posted with
-              `work update --message` — which does not require rewriting the retelling and
-              usually does not. Hiding this line on the human half left the reader who cannot
+              it is the same events told again — and though the `--human` a correction now
+              travels with replaces that retelling, the new text carries no mark of what
+              changed. Hiding this line on the human half left the reader who cannot
               read the agent area being shown a story the record itself says is wrong, with
               nothing on screen admitting it: exactly what the line exists to prevent. Over
               there it names the half the note is on and carries the reader across (ui.tsx) —

@@ -158,10 +158,10 @@ export function CorrectionMark() {
  * `Correction:` (src/lib/updates.ts).
  *
  * The record's *other* half needs this line just as much — a retelling is the same events,
- * and a correction is posted with `work update --message` / `bug comment`, neither of which
- * rewrites the retelling. So the human view draws it too, and passes `onFollow`: over there
- * the trail this points at is not on screen, so following the link has to change the view
- * before it can jump. See {@link CorrectionNotice}'s callers.
+ * and though the `--human` a correction now travels with replaces it wholesale, the new
+ * text carries no trail of what changed. So the human view draws it too, and passes
+ * `onFollow`: over there the trail this points at is not on screen, so following the link
+ * has to change the view before it can jump. See {@link CorrectionNotice}'s callers.
  */
 export function CorrectionNotice({
   count,

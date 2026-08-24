@@ -270,6 +270,14 @@ migrated project arrives as legacy records and gains its human areas on first to
   (`--human s | --human-file f`): `work start`, `work done`, `work abandon`,
   `bug create`, `bug resolve`, `note add`, `note update` when `--body` is given,
   `app-feedback add`. Closing verbs **replace** it — the ending changed the story.
+- Mutations that write agent prose onto a record require it too (owner directive,
+  2026-08-24): `work update` and `bug comment` refuse a `--message` without `--human`
+  — replayed or not — because a progress note or a finding is new events, and a
+  retelling that omits them is stale by definition. The supplied text **replaces**
+  the stored one; when the note changes nothing a reader sees, re-passing the
+  current retelling is the honest fill. (Before this, `--message` alone was legal on
+  a record that already had a human area, and agents used the gap as a bypass: the
+  real content went into `## Updates`/`## Comments` and the human area froze.)
 - Any mutation touching a record that still lacks a human area must supply one
   (legacy records gain it on first touch). The exception is the three flagless
   status flips `app-feedback done` / `reopen` / `delete`: they take no `--agent`
@@ -309,14 +317,16 @@ agentmon project update [--name <n>] [--description <d>] [--tags a,b] [--at T]
 agentmon project list                     # the machine's registry (informational)
 agentmon project mcp-json [--agent h]     # write/refresh .mcp.json for an existing project
 agentmon work start   --agent <name> --title <t> (--body s | --body-file f) --human s|--human-file f [--tags] [--started-at T]
-agentmon work update  <WORK-ID> --agent <name> (--message s | --body-file|--message-file f | --human s|--human-file f) [--at T] [--replayed]
+agentmon work update  <WORK-ID> --agent <name> --human s|--human-file f [--message s | --body-file|--message-file f] [--at T] [--replayed]
+                      # --human alone is a refresh; --message never travels without --human
 agentmon work done    <WORK-ID> --agent <name> (--outcome s | --outcome-file f) --human s|--human-file f [--files a,b] [--finished-at T] [--started-at T]
 agentmon work abandon <WORK-ID> --agent <name> (--reason s | --reason-file f) --human s|--human-file f [--at T]
 agentmon work list    [--status s] [--agent a] [--json]
 agentmon work view    <WORK-ID> [--json]
 agentmon bug create   --agent <name> --title <t> --severity <s> (--body s | --body-file f) --human s|--human-file f [--labels] [--created-at T]
 agentmon bug claim    <BUG-ID> --agent <name> [--human s|--human-file f] [--at T]
-agentmon bug comment  <BUG-ID> --agent <name> (--message s | --body-file|--message-file f | --human s|--human-file f) [--at T] [--replayed]
+agentmon bug comment  <BUG-ID> --agent <name> --human s|--human-file f [--message s | --body-file|--message-file f] [--at T] [--replayed]
+                      # --human alone is a refresh; --message never travels without --human
 agentmon bug resolve  <BUG-ID> --agent <name> (--resolution s | --resolution-file f) --human s|--human-file f [--at T]
 agentmon bug list     [--status s] [--severity] [--label] [--json]
 agentmon bug view     <BUG-ID> [--json]
@@ -368,7 +378,9 @@ before the note's last `updated`).
 two verbs, no others — is the one sanctioned way past the "earlier than the state it
 follows" rule, and it exists for reconstruction alone: a record re-created after an id
 collision (see Reconcile) taking its lost notes/comments back at their real times.
-It requires an explicit `--at` and a `--message` (exit `2` without both); the floor stays
+It requires an explicit `--at`, a `--message` and a `--human` (exit `2` without them —
+a replay writes agent prose like any note, so the `--message`-requires-`--human` rule
+holds here too); the floor stays
 (nothing may predate `started`/`created`, or now); the entry is inserted at its place in
 the timeline instead of appended; and the `work_updated`/`bug_commented` event carries the
 entry's own timestamp with a summary opening `Replayed:` — a reconstructed line never

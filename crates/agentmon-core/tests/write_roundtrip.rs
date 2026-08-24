@@ -63,6 +63,10 @@ screen was opened; browser mode already reloads, which makes the product look le
 own dev harness.\n\n## How\n\nA recommended_watcher on each registered AgentMonitoring folder, \
 debounced 250ms, emitting `project-changed` with the project id.\n";
 
+/// The retelling every `--message` re-passes: a note travels with its human area now
+/// (SPEC.md, "The human area" — owner directive, 2026-08-24).
+const HUMAN: &str = "A plain-words retelling of this record, long enough to be a real one.";
+
 const OUTCOME: &str = "Shipped the watcher: src-tauri/src/lib.rs starts one per registered \
 project in setup() and re-arms them when the registry changes. Verified with cargo check -p \
 agentmonitoring and by editing a record with the app open.";
@@ -133,10 +137,10 @@ fn update_then_done_round_trips_through_the_reader() {
     let id = start(&tp, "Wire the change watcher into the desktop app");
 
     tp.store
-        .update_work(&id, "cli-builder", Some("Watcher is running; a single save produced four raw notify events, so the debounce is not optional."), None, None)
+        .update_work(&id, "cli-builder", Some("Watcher is running; a single save produced four raw notify events, so the debounce is not optional."), Some(HUMAN), None)
         .unwrap();
     tp.store
-        .update_work(&id, "cli-builder", Some("Debounce set to 250ms; one reload per save."), None, None)
+        .update_work(&id, "cli-builder", Some("Debounce set to 250ms; one reload per save."), Some(HUMAN), None)
         .unwrap();
     tp.store
         .finish_work(
@@ -214,14 +218,14 @@ fn a_finished_work_log_takes_corrections_but_never_changes_state() {
     // closed at 12:00 and a note before that would draw itself inside a finished run.
     let err = tp
         .store
-        .update_work(&id, "reviewer", Some("Backdated afterthought."), None, Some("2026-01-05T10:00:00Z"))
+        .update_work(&id, "reviewer", Some("Backdated afterthought."), Some(HUMAN), Some("2026-01-05T10:00:00Z"))
         .unwrap_err();
     assert_eq!(err.kind(), "invalid_argument");
     assert!(err.to_string().contains("closed"), "says what it is behind: {err}");
 
     let w = tp
         .store
-        .update_work(&id, "reviewer", Some("Correction: the note above says four workers; the config says two."), None, None)
+        .update_work(&id, "reviewer", Some("Correction: the note above says four workers; the config says two."), Some(HUMAN), None)
         .expect("a correction may be appended to a finished record");
     assert_eq!(w.event.event_type, "work_updated", "still a work_updated event");
     let after = tp.store.worklog(&id).unwrap();
@@ -359,7 +363,7 @@ fn bug_lifecycle_round_trips() {
     assert!(b.meta.claimed.is_some());
 
     tp.store
-        .comment_bug(&id, "cli-builder", Some("Root cause: the Tauri shell never started a watcher, so `project-changed` was never emitted."), None, None)
+        .comment_bug(&id, "cli-builder", Some("Root cause: the Tauri shell never started a watcher, so `project-changed` was never emitted."), Some(HUMAN), None)
         .unwrap();
     let b = tp.store.bug(&id).unwrap();
     assert_eq!(b.comments.len(), 1);
@@ -401,25 +405,25 @@ fn a_bug_claimed_by_someone_else_cannot_be_stolen() {
     assert!(err.to_string().contains("already claimed by cli-builder"), "{err}");
     assert!(err.to_string().contains("agentmon bug comment"), "suggests the fix: {err}");
 
-    // Suggesting it is not enough — the line has to run, on this record, in the state this
-    // record is in. With a retelling already there it is bare, and asking for one would
-    // overwrite what somebody wrote with a placeholder.
-    let bare = backticked(&err.to_string(), "agentmon bug ");
-    assert!(!bare.contains("--human"), "this bug has its retelling already: {bare}");
-    run_bug_comment(&tp, &bare)
-        .unwrap_or_else(|e| panic!("the refusal printed a line that does not run:\n  {bare}\n{e}"));
+    // Suggesting it is not enough — the line has to run, on this record. `--human` is
+    // always on it now: a `--message` never travels without the retelling (owner
+    // directive, 2026-08-24), so a bare line would send the reader from a refusal
+    // straight into another.
+    let hinted = backticked(&err.to_string(), "agentmon bug ");
+    assert!(
+        hinted.contains("--human "),
+        "a hint without --human exits 2 on the very record it names: {hinted}"
+    );
+    run_bug_comment(&tp, &hinted)
+        .unwrap_or_else(|e| panic!("the refusal printed a line that does not run:\n  {hinted}\n{e}"));
+    assert_eq!(tp.store.bug(&id).unwrap().human.as_deref(), Some(COORDINATE_HUMAN));
 
-    // Now the state `agentmon migrate` hands over: a claimed record with no `## For humans`.
-    // The claim conflict is checked before the human area is, so this hint is the first
-    // thing such a reader sees — and `bug comment` refuses to leave the record without one,
-    // so a bare line would send them from a refusal straight into another.
+    // The same line survives the state `agentmon migrate` hands over: a claimed record
+    // with no `## For humans` at all gains one from the same hint.
     strip_human(&tp.path(&format!("bugs/{id}.md")));
     let err = tp.store.claim_bug(&id, "other-agent", None, None).unwrap_err();
     let legacy = backticked(&err.to_string(), "agentmon bug ");
-    assert!(
-        legacy.contains("--human "),
-        "the record this line names has no human area to keep: {legacy}"
-    );
+    assert!(legacy.contains("--human "), "{legacy}");
     run_bug_comment(&tp, &legacy).unwrap_or_else(|e| {
         panic!("the refusal printed a line that does not run:\n  {legacy}\n{e}")
     });
@@ -448,7 +452,7 @@ fn resolving_twice_is_refused_and_resolving_unclaimed_assigns_the_fixer() {
     assert!(err.to_string().contains("already resolved by cli-builder"), "{err}");
     // a comment on a resolved bug is still allowed — threads outlive the fix
     tp.store
-        .comment_bug(&id, "reviewer", Some("Confirmed on my machine after a rebuild."), None, None)
+        .comment_bug(&id, "reviewer", Some("Confirmed on my machine after a rebuild."), Some(HUMAN), None)
         .unwrap();
     assert_eq!(tp.store.bug(&id).unwrap().comments.len(), 1);
 }
@@ -577,7 +581,7 @@ fn unknown_frontmatter_keys_survive_a_rewrite() {
     fs::write(&path, patched).unwrap();
 
     tp.store
-        .update_work(&id, "cli-builder", Some("Rewrote the record through the CLI."), None, None)
+        .update_work(&id, "cli-builder", Some("Rewrote the record through the CLI."), Some(HUMAN), None)
         .unwrap();
     let after = fs::read_to_string(&path).unwrap();
     assert!(after.contains("reviewers: [human-1]"), "unknown key kept:\n{after}");
@@ -590,7 +594,7 @@ fn an_update_from_another_agent_is_attributed_in_the_body() {
     let tp = TempProject::new("attribution");
     let id = start(&tp, "Wire the change watcher into the desktop app");
     tp.store
-        .update_work(&id, "reviewer", Some("Picked this up while the author was offline."), None, None)
+        .update_work(&id, "reviewer", Some("Picked this up while the author was offline."), Some(HUMAN), None)
         .unwrap();
     let d = tp.store.worklog(&id).unwrap();
     assert_eq!(d.updates[0].ts.len(), 20, "the heading stays a bare timestamp");
@@ -616,7 +620,7 @@ fn doctor_is_clean_on_a_project_the_cli_wrote() {
     let tp = TempProject::new("doctor-clean");
     let id = start(&tp, "Wire the change watcher into the desktop app");
     tp.store
-        .update_work(&id, "cli-builder", Some("Halfway: the watcher fires."), None, None)
+        .update_work(&id, "cli-builder", Some("Halfway: the watcher fires."), Some(HUMAN), None)
         .unwrap();
     tp.store
         .finish_work(
@@ -1323,7 +1327,7 @@ fn doctor_catches_an_update_event_whose_record_holds_no_such_note() {
 
     // A real note first: the event and the entry go in together, and doctor is happy.
     tp.store
-        .update_work(&id, "cli-builder", Some("Halfway: the watcher fires."), None, None)
+        .update_work(&id, "cli-builder", Some("Halfway: the watcher fires."), Some(HUMAN), None)
         .unwrap();
     let note_ts = tp.store.worklog(&id).unwrap().updates[0].ts.clone();
     let report = doctor::check(&tp.store).unwrap();
@@ -1522,19 +1526,22 @@ fn an_orphan_event_is_accounted_for_by_the_reconciliation_note_and_never_goes_qu
         "the note landed at the timestamp the feed had been announcing"
     );
 
-    // State two: a record that already has a retelling. Here the flag must be *absent* —
-    // `<retelling>` is a placeholder, and pasting it over what somebody wrote would trade
-    // doctor's error for a lie in a live record.
+    // State two: a record that already has a retelling. The flag stays on the line —
+    // `--message` never travels without `--human` (owner directive, 2026-08-24), so a
+    // hint without it would exit 2 on the record it names — and the text the reader
+    // fills in replaces the stored retelling, exactly as on any other note.
     let told = TempProject::new("doctor-repair-told");
     let tid = start_dated(&told, "Wire the change watcher into the desktop app", started);
-    let kept = told.store.worklog(&tid).unwrap().human;
-    assert!(kept.is_some(), "the state under test is the record having one");
+    assert!(
+        told.store.worklog(&tid).unwrap().human.is_some(),
+        "the state under test is the record having one"
+    );
     append_raw_event(&told, &orphan_event(&tid, orphan_ts));
 
     let repair = repair_fix(&told);
     assert!(
-        !repair.contains("--human"),
-        "this record has its retelling already; asking for one would overwrite it: {repair}"
+        repair.contains("--human "),
+        "a repair line without --human exits 2 on the very record it names: {repair}"
     );
     run_work_command(&told, &repair)
         .unwrap_or_else(|e| panic!("doctor printed a line that does not run:\n  {repair}\n{e}"));
@@ -1543,8 +1550,8 @@ fn an_orphan_event_is_accounted_for_by_the_reconciliation_note_and_never_goes_qu
     assert_eq!(report.errors(), 0, "{:#?}", report.problems);
     assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
     assert_eq!(
-        told.store.worklog(&tid).unwrap().human,
-        kept,
-        "the retelling it had is the one it still has"
+        told.store.worklog(&tid).unwrap().human.as_deref(),
+        Some(REPAIR_HUMAN),
+        "the retelling the reader wrote into the line is the one on the record"
     );
 }

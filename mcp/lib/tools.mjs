@@ -522,12 +522,15 @@ async function updateWork(args, ctx) {
     flag(a, "--human", human);
     flag(a, "--at", args.at);
     const r = await runCli(at, a, note || undefined);
+    // A note without a human is refused by the CLI (SPEC.md, "The human area": --message
+    // never travels without --human), and that refusal carries the style contract — the
+    // teaching this wrapper must not shorten or pre-empt.
     if (!r.ok) return fail(cliErrorText(r));
-    // `resolve_human` in crates/agentmon-core/src/write.rs is `(Some(new), _) => Ok(new)`:
-    // a retelling sent with a note REPLACES the stored one while the note is appended.
+    // The retelling sent with a note REPLACES the stored one while the note is appended
+    // (`resolve_human` in crates/agentmon-core/src/write.rs is `(Some(new), _) => Ok(new)`).
     // Said here, on the call that did it, rather than in a schema clause every turn pays
     // for — the caller reads it at the one moment the difference is visible.
-    done.push(note ? (human ? "note added, retelling replaced" : "note added") : "human area rewritten");
+    done.push(note ? "note added, retelling replaced" : "human area rewritten");
     file = r.json?.path ?? file;
     stamp = r.json?.event?.ts ?? stamp;
     state = r.json?.record?.status ?? state;
@@ -640,10 +643,11 @@ async function resolveBug(args, ctx) {
     flag(a, "--human", human);
     flag(a, "--at", args.at);
     const r = await runCli(at, a, comment || undefined);
+    // A comment without a human is refused by the CLI, exactly as in `update_work`.
     if (!r.ok) return fail(stepFailure(done, cliErrorText(r)));
     // Same replace-not-append as `update_work`, said on the call that did it: the comment
     // joins the thread, the retelling takes the old one's place.
-    done.push(comment ? (human ? "commented, retelling replaced" : "commented") : "human area rewritten");
+    done.push(comment ? "commented, retelling replaced" : "human area rewritten");
     file = r.json?.path ?? file;
     state = r.json?.record?.status ?? state;
   }

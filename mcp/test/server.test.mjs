@@ -463,6 +463,7 @@ let workId = "";
   const res = await client.call("update_work", {
     id: workId,
     note: "Debounce is in. One save produced four raw filesystem events; it is now one refresh.",
+    human: "Saving a file used to redraw the screen four times; now it redraws once.",
   });
   budgeted("update_work (note)", res);
   check("update_work confirms the note", () => assertIncludes(res.text, "note", "result"));
@@ -493,6 +494,9 @@ let workId = "";
   const res = await client.call("update_work", {
     id: workId,
     note: "Correction: the note above says the debounce window is 500ms; it is 250ms.",
+    // A note travels with the retelling now; the correction changes nothing a reader
+    // sees, so the honest fill is the close's own text, re-passed.
+    human: "It works: the window notices a new record about a quarter of a second after it is written, and it refreshes once rather than four times.",
   });
   budgeted("update_work (correction on a closed log)", res);
   check("a closed log still accepts a note", () => assert(!res.isError, res.text));
@@ -575,6 +579,7 @@ let bugId = "";
     id: bugId,
     claim: false,
     comment: "Reproduced on Windows 11 with a fresh profile, so it is not a stale bundle.",
+    human: "A second person saw the same fault on a clean machine, so it is not one computer's quirk.",
   });
   budgeted("resolve_bug (comment only)", res);
   check("comment-only leaves the bug unclaimed", () => {
@@ -1675,6 +1680,19 @@ section("errors: the CLI's own message, trimmed");
     assert(noBody.isError, noBody.text);
     assertIncludes(noBody.text, "note", "error");
     assertIncludes(noBody.text, "human", "error");
+  });
+
+  // The bypass the rule closed (owner directive, 2026-08-24): the real content went into
+  // the note and the retelling stayed frozen. The CLI refuses it, and the wrapper must
+  // pass that refusal through rather than route around it.
+  const noteOnly = await client.call("update_work", {
+    id: workId,
+    note: "A note sent without its retelling, which the CLI must refuse.",
+  });
+  check("a note without a retelling is the CLI's exit 2, not a silent append", () => {
+    assert(noteOnly.isError, noteOnly.text);
+    assertIncludes(noteOnly.text, "exit 2", "error");
+    assertIncludes(noteOnly.text, "--human", "error");
   });
 
   const badDir = await client.call("status", { dir: path.join(tmpRoot, "no-such-project") });

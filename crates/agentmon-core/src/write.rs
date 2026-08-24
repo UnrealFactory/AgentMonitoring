@@ -552,6 +552,12 @@ impl Store {
     /// area is rewritten, and the one event logged is `human_updated`. That is how a record
     /// written before the human area existed gains one without inventing a progress note
     /// that never happened.
+    ///
+    /// `--message` **requires** `--human` with it (owner directive, 2026-08-24): a progress
+    /// note is new events, and a retelling that omits them is stale by definition. The rule
+    /// used to require the pair only on a record that had no human area yet, and agents
+    /// used the gap as a bypass — the real content went into `## Updates` and the human
+    /// area froze at the day the record was started.
     pub fn update_work(
         &self,
         id: &str,
@@ -565,8 +571,8 @@ impl Store {
         if message.is_none() && human_arg.is_none() {
             return Err(CoreError::conflict(
                 "nothing to update",
-                "pass --message \"<what changed>\" for a progress note, --human \"<text>\" to \
-                 rewrite the human area, or both",
+                "pass --human \"<retelling>\" to rewrite the human area, and --message \
+                 \"<what changed>\" with it for a progress note",
             ));
         }
         let note = match message {
@@ -577,15 +583,24 @@ impl Store {
                     "work update",
                     "agentmon work update WORK-0003 --agent cli-builder \\\n  \
                      --message \"Lock + temp-file writes are in; two concurrent starts now \
-                     produce two ids.\"",
+                     produce two ids.\" \\\n  \
+                     --human \"Two agents starting at the same moment now get two different \
+                     numbers instead of overwriting each other.\"",
                 )?)
             }
             None => None,
         };
         let id = validate_id(id, "WORK")?;
-        let supplied_human = match human_arg {
-            Some(h) => Some(human::require(h, &id)?),
-            None => None,
+        let supplied_human = match (human_arg, &note) {
+            (Some(h), _) => Some(human::require(h, &id)?),
+            (None, Some(_)) => {
+                return Err(human::missing(
+                    &id,
+                    "--message adds to what this record tells, so the retelling has to be \
+                     rewritten with it",
+                ))
+            }
+            (None, None) => None,
         };
         let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
@@ -652,8 +667,11 @@ impl Store {
     ///     reconstructed line must never pass for an original.
     ///
     /// `at` is required, not optional — a replay without the real time is not a replay —
-    /// and the note text is. Everything else (the human-area rule, the lock, the event
-    /// carrying the note's own timestamp so doctor can pair them) is the normal write.
+    /// and the note text is, and so is the human area: a replay writes agent prose onto the
+    /// record like any note, and exempting it would leave `--replayed --at <now>` as the
+    /// exact bypass the `--message`-requires-`--human` rule closes. Everything else (the
+    /// lock, the event carrying the note's own timestamp so doctor can pair them) is the
+    /// normal write.
     pub fn replay_work_note(
         &self,
         id: &str,
@@ -670,12 +688,21 @@ impl Store {
             "work update",
             "agentmon work update WORK-0011 --agent recovery-agent --replayed \\\n  \
              --at 2026-08-22T10:05:00Z \\\n  \
-             --message \"Halfway: the parser round-trips; the writer still drops unknown keys.\"",
+             --message \"Halfway: the parser round-trips; the writer still drops unknown keys.\" \\\n  \
+             --human \"<the record's retelling — re-pass the current one if the replay \
+             changes nothing a reader sees>\"",
         )?;
         let id = validate_id(id, "WORK")?;
         let supplied_human = match human_arg {
             Some(h) => Some(human::require(h, &id)?),
-            None => None,
+            None => {
+                return Err(human::missing(
+                    &id,
+                    "a replayed note still adds to what this record tells, so the retelling \
+                     has to be rewritten with it (re-pass the current one if the replay \
+                     changes nothing a reader sees)",
+                ))
+            }
         };
         let ts = time::stamp(Some(at), "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
@@ -944,7 +971,7 @@ impl Store {
                         format!("{id} is already claimed by {holder}"),
                         format!(
                             "coordinate instead of taking it over: `{}`",
-                            comment_hint(&id, &agent, existing_human.is_some())
+                            comment_hint(&id, &agent)
                         ),
                     ));
                 }
@@ -955,7 +982,7 @@ impl Store {
                     format!("{id} is already {}", meta.status.as_str()),
                     format!(
                         "if it is not actually fixed, say so first: `{}`, then file a new bug",
-                        comment_hint(&id, &agent, existing_human.is_some())
+                        comment_hint(&id, &agent)
                     ),
                 ))
             }
@@ -985,6 +1012,10 @@ impl Store {
 
     /// `human` alone is a **refresh**: no comment is added to the thread, only the human
     /// area changes, and the event is `human_updated`.
+    ///
+    /// `--message` **requires** `--human` with it, same rule and same reason as
+    /// [`Store::update_work`]: a finding on the thread is part of the bug's story, and the
+    /// optional pair was being used to keep the whole story on the agent side.
     pub fn comment_bug(
         &self,
         id: &str,
@@ -998,8 +1029,8 @@ impl Store {
         if message.is_none() && human_arg.is_none() {
             return Err(CoreError::conflict(
                 "nothing to add",
-                "pass --message \"<what you found>\" for the thread, --human \"<text>\" to \
-                 rewrite the human area, or both",
+                "pass --human \"<retelling>\" to rewrite the human area, and --message \
+                 \"<what you found>\" with it for the thread",
             ));
         }
         let note = match message {
@@ -1010,15 +1041,24 @@ impl Store {
                     "bug comment",
                     "agentmon bug comment BUG-0002 --agent cli-builder \\\n  \
                      --message \"Root cause: the watcher was never started, so no change \
-                     event was ever emitted.\"",
+                     event was ever emitted.\" \\\n  \
+                     --human \"The app never heard about saved files because the part that \
+                     watches for them was never switched on.\"",
                 )?)
             }
             None => None,
         };
         let id = validate_id(id, "BUG")?;
-        let supplied_human = match human_arg {
-            Some(h) => Some(human::require(h, &id)?),
-            None => None,
+        let supplied_human = match (human_arg, &note) {
+            (Some(h), _) => Some(human::require(h, &id)?),
+            (None, Some(_)) => {
+                return Err(human::missing(
+                    &id,
+                    "--message adds to what this bug tells, so the retelling has to be \
+                     rewritten with it",
+                ))
+            }
+            (None, None) => None,
         };
         let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
@@ -1083,12 +1123,21 @@ impl Store {
             "agentmon bug comment BUG-0006 --agent recovery-agent --replayed \\\n  \
              --at 2026-08-22T10:05:00Z \\\n  \
              --message \"Root cause: the watcher was never started, so no change event was \
-             ever emitted.\"",
+             ever emitted.\" \\\n  \
+             --human \"<the bug's retelling — re-pass the current one if the replay changes \
+             nothing a reader sees>\"",
         )?;
         let id = validate_id(id, "BUG")?;
         let supplied_human = match human_arg {
             Some(h) => Some(human::require(h, &id)?),
-            None => None,
+            None => {
+                return Err(human::missing(
+                    &id,
+                    "a replayed comment still adds to what this bug tells, so the retelling \
+                     has to be rewritten with it (re-pass the current one if the replay \
+                     changes nothing a reader sees)",
+                ))
+            }
         };
         let ts = time::stamp(Some(at), "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
@@ -1747,26 +1796,15 @@ fn write_record(
 /// record written before the human area existed reads fine forever; the moment an agent
 /// *changes* it, the change comes with a retelling, because otherwise the record would be
 /// edited by an agent that had a chance to speak to the human and declined.
-/// The `bug comment` line a refused `bug claim` sends the reader to, in the state that
-/// record is actually in.
+/// The `bug comment` line a refused `bug claim` sends the reader to.
 ///
-/// Same rule as doctor's orphan-repair hint, for the same reason: a record with no `## For
-/// humans` refuses every write that would leave it without one, so a hint naming this verb
-/// with no `--human` exits 2 on the very record it names. Both branches below are reachable
-/// on exactly such a record — `agentmon migrate` hands over a project of legacy records that
-/// gain a human area on first touch (SPEC.md, "Migration"), claimed and resolved ones among
-/// them, and the claim conflict is checked before the human area is resolved.
-///
-/// Told from the record rather than always printed: pasting the placeholder over a
-/// retelling somebody wrote would trade a refusal for a lie.
-fn comment_hint(id: &str, agent: &str, has_human: bool) -> String {
-    if has_human {
-        format!("agentmon bug comment {id} --agent {agent} --message \"...\"")
-    } else {
-        format!(
-            "agentmon bug comment {id} --agent {agent} --message \"...\" --human \"<retelling>\""
-        )
-    }
+/// `--human` is always on it: a `--message` requires the retelling with it (owner
+/// directive, 2026-08-24), so a hint naming this verb without `--human` would exit 2 on
+/// every record it names, not only the legacy ones that lack a human area.
+fn comment_hint(id: &str, agent: &str) -> String {
+    format!(
+        "agentmon bug comment {id} --agent {agent} --message \"...\" --human \"<retelling>\""
+    )
 }
 
 fn resolve_human(
@@ -2021,7 +2059,7 @@ mod tests {
                 &started.id,
                 "tester",
                 Some("Halfway there and nothing is on fire."),
-                None,
+                Some("Halfway through, and the part already built keeps working."),
                 None,
             )
             .expect("work update");

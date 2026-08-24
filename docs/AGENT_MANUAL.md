@@ -195,8 +195,8 @@ Set it once per session instead of repeating it:
 export AGENTMON_AGENT=my-agent-handle
 ```
 
-With that exported, `agentmon work update WORK-0003 --message "..."` is a complete
-command. Explicit flags always win over the environment. **This manual writes the flag out
+With that exported, `agentmon work update WORK-0003 --message "..." --human "..."` is a
+complete command. Explicit flags always win over the environment. **This manual writes the flag out
 in full**, so every example works with nothing exported — which also makes every example
 safe in a harness that gives each command its own shell.
 
@@ -377,7 +377,8 @@ contract:
 | `bug create`, `bug resolve` | required — `bug resolve` replaces it |
 | `note add`; `note update --body` | required |
 | `app-feedback add` | required |
-| `work update`, `bug comment`, `note update`, `app-feedback update` | optional — and never additive: it **replaces** the retelling that is there |
+| `work update`, `bug comment` with `--message` | required — a note is new events, so the retelling travels with it and **replaces** the one that is there (owner directive, 2026-08-24) |
+| `work update`, `bug comment`, `note update`, `app-feedback update` with no other change | optional — `--human` alone is a refresh, and it **replaces** the retelling that is there |
 | `bug claim` | optional |
 | any verb above, on a record that has **no** human area yet | required (older records gain one on the first touch) |
 | `app-feedback done` / `reopen` / `delete` | takes none — they are the owner's own buttons on the board, and they neither ask for a human area nor disturb one |
@@ -391,7 +392,8 @@ command.
 pass becomes all of it — alone, or in the same command as a `--message`. So two sentences
 of `--human` on a progress note do not join the retelling that is there: they replace it,
 at exit `0`, with no warning, and the old text survives in no note and no event. On an
-update, pass the retelling as the whole record should now read, or leave the flag off. On
+update, pass the retelling as the whole record should now read — re-pass the current text
+verbatim when the note changes nothing a reader sees. On
 a closing verb, replacing is the point — the ending changed the story.
 
 Records written before this existed read fine and report `human: null`; `agentmon doctor`
@@ -528,11 +530,12 @@ EOF
 )"
 
 # 2. Update as you go. Any number of times; each is timestamped in order.
-#    No --human here on purpose: on an update it overwrites the whole retelling instead
-#    of adding to it, and what step 1 wrote is still the true story so far.
+#    --human rides along and REPLACES the whole retelling — write it as the record
+#    should now read, with the new progress folded in.
 agentmon work update WORK-0004 \
   --agent my-agent \
-  --message "Cache is in and the sidebar no longer re-parses. Measured on the live records: screen switch went from 180ms to 12ms. Invalidation on project-changed works; clearing it when the roster changes is next."
+  --message "Cache is in and the sidebar no longer re-parses. Measured on the live records: screen switch went from 180ms to 12ms. Invalidation on project-changed works; clearing it when the roster changes is next." \
+  --human "Switching screens is quick now: the app remembers its counts instead of re-reading every record. One follow-up remains, forgetting them when the list of agents changes."
 
 # 3. Finish. The outcome is for the next agent; --human is for everyone else, and
 #    closing replaces whatever the record said while it was open — the ending changed
@@ -620,9 +623,11 @@ agentmon work start \
   --human-file plain.md      # or --human "..." inline
 
 # 2. Optional: the notes you would have written along the way, each with its own time.
+#    --human still rides along; the close in step 3 replaces it anyway.
 agentmon work update WORK-0004 --agent my-agent \
   --at 2026-08-18T10:05:00Z \
-  --message "Cache is in and the sidebar no longer re-parses: screen switch went from 180ms to 12ms. Roster invalidation still missing."
+  --message "Cache is in and the sidebar no longer re-parses: screen switch went from 180ms to 12ms. Roster invalidation still missing." \
+  --human "Switching screens is quick now; one follow-up on forgetting stale counts remains."
 
 # 3. Close it with the real end time.
 agentmon work done WORK-0004 --agent my-agent \
@@ -737,9 +742,11 @@ agentmon bug view BUG-0002
 agentmon bug claim BUG-0002 --agent my-agent
 
 # 4. Comment as you learn things. Root cause first — this is what makes the record useful.
+#    --human travels with every --message and replaces the bug's retelling.
 agentmon bug comment BUG-0002 \
   --agent my-agent \
-  --message "Root cause: the Tauri shell never started a filesystem watcher, so the project-changed event the frontend listens for was never emitted. Browser mode looked live only because the dev server polls."
+  --message "Root cause: the Tauri shell never started a filesystem watcher, so the project-changed event the frontend listens for was never emitted. Browser mode looked live only because the dev server polls." \
+  --human "Found why: the app never switched on the part that watches for saved files, so it never heard about new records. The browser version only looked alive because it re-asks every few seconds."
 
 # 5. Resolve it — after the fix actually works. --human is required here and replaces
 #    what the bug said while it was open: the ending changed the story.
@@ -940,12 +947,13 @@ their real times** — the one sanctioned exception to the ordering guard:
 
 ```bash
 agentmon work update WORK-0015 --agent <you> --replayed \
-  --at 2026-08-22T10:05:00Z --message "<the lost note, verbatim>"
+  --at 2026-08-22T10:05:00Z --message "<the lost note, verbatim>" \
+  --human "<the record's retelling — re-pass the current one>"
 # inserted at its place in the timeline; the event summary opens with "Replayed:"
 ```
 
-`--replayed` exists on `work update` and `bug comment`, needs both `--at` and
-`--message`, and still refuses a time before the record began ([Backdating](#backdating)).
+`--replayed` exists on `work update` and `bug comment`, needs `--at`, `--message` and
+`--human`, and still refuses a time before the record began ([Backdating](#backdating)).
 
 ---
 
@@ -1001,7 +1009,7 @@ Two rules, both enforced with exit `2` before anything is written:
 --replayed` may write an entry *before* the record's close and before its later entries,
 because they exist for exactly one job: putting a lost note back into a record that was
 re-created after a sync collision ([Recipe 5](#recipe-5--two-machines-one-repo)). A replay
-requires an explicit `--at` and a `--message` (exit `2` without both), still refuses a
+requires an explicit `--at`, a `--message` and a `--human` (exit `2` without them), still refuses a
 time before `started`/`created`, lands at its place in the timeline instead of the end,
 and its event summary opens with `Replayed:` so it never passes for an original. Rule 1
 has no exception: the future stays refused, replay or not.
@@ -1144,8 +1152,8 @@ itself; nothing of that works yet."
 
 ```
 agentmon work update <WORK-ID> --agent <name>
-                     (--message <text> | --body-file <file|-> | --message-file <file|->
-                      | --human <text> | --human-file <file|->)
+                     (--human <text> | --human-file <file|->)
+                     [--message <text> | --body-file <file|-> | --message-file <file|->]
                      [--at <ISO8601>] [--replayed] [--json]
 ```
 
@@ -1162,21 +1170,23 @@ refused is *changing* a closed record: `work done` and `work abandon` still fail
 `--message-file` and `--body-file` are the same flag under two names. `--at` stamps the
 note with the time it describes, which must be at or after `started`, at or after the
 previous note, and — on a record that has closed — at or after `finished`
-([Backdating](#backdating)). `--replayed` (with `--at` and `--message`, both required) is
+([Backdating](#backdating)). `--replayed` (with `--at`, `--message` and `--human`, all required) is
 the one exception, for reconstruction only: the note may predate the close and the notes
 around it, it is inserted at its place in the timeline, and the event summary opens with
 `Replayed:` ([Recipe 5](#recipe-5--two-machines-one-repo)).
 
 ```bash
 agentmon work update WORK-0004 --agent my-agent \
-  --message "Debounce is in. One save produced four raw filesystem events; now it is one refresh."
+  --message "Debounce is in. One save produced four raw filesystem events; now it is one refresh." \
+  --human "Saving a file used to redraw the screen four times; now it redraws once."
 
 agentmon work update WORK-0004 --agent my-agent \
-  --at 2026-08-18T10:05:00Z --message-file note.md
+  --at 2026-08-18T10:05:00Z --message-file note.md --human-file plain.md
 
 # a correction to work that finished days ago, written by somebody else
 agentmon work update WORK-0004 --agent reviewer \
-  --message "Correction: the note above says the debounce window is 500ms; it is 250ms (src-tauri/src/lib.rs)."
+  --message "Correction: the note above says the debounce window is 500ms; it is 250ms (src-tauri/src/lib.rs)." \
+  --human "An earlier line here named the wrong number; the real waiting window is a quarter of a second."
 
 # --human alone: rewrites the human area and nothing else. No note is added to
 # ## Updates, and the feed logs one human_updated line.
@@ -1184,13 +1194,14 @@ agentmon work update WORK-0004 --agent my-agent \
   --human "What this work actually changed, said plainly."
 ```
 
-A record written before the human area existed has none, and a mutation may not leave it
-that way: a `--message` on such a record needs `--human` with it
+A `--message` always needs `--human` with it (owner directive, 2026-08-24): a note is
+new events, and the retelling has to be brought up to date with them
 ([The human area](#the-human-area)).
 
 `--human` here **replaces** the record's human area rather than adding to it — the same
 overwrite whether it comes alone or beside a `--message`, and the text it replaced is kept
-nowhere. Pass the retelling as the whole record should now read, or leave the flag off
+nowhere. Pass the retelling as the whole record should now read; when the note changes
+nothing a reader sees, re-pass the current text verbatim
 ([The human area](#the-human-area)).
 
 ### `agentmon work done`
@@ -1320,29 +1331,31 @@ agentmon bug claim BUG-0002 --agent my-agent \
 
 ```
 agentmon bug comment <BUG-ID> --agent <name>
-                     (--message <text> | --body-file <file|-> | --message-file <file|->
-                      | --human <text> | --human-file <file|->)
+                     (--human <text> | --human-file <file|->)
+                     [--message <text> | --body-file <file|-> | --message-file <file|->]
                      [--at <ISO8601>] [--replayed] [--json]
 ```
 
 Appends `### <timestamp> — <agent>` to the thread. Allowed in any state.
 `--message-file` and `--body-file` are the same flag; `--at` must be at or after the bug's
-`created` and at or after the previous comment. `--replayed` (with `--at` and `--message`,
-both required) is the reconstruction exception, exactly as on `work update`: the comment
+`created` and at or after the previous comment. `--replayed` (with `--at`, `--message` and
+`--human`, all required) is the reconstruction exception, exactly as on `work update`: the comment
 may predate later comments, lands in thread order, and its event says `Replayed:`
 ([Recipe 5](#recipe-5--two-machines-one-repo)).
 
 ```bash
 agentmon bug comment BUG-0002 --agent my-agent \
-  --message "Reproduced on Windows 11. The watcher never starts, so nothing is ever emitted."
+  --message "Reproduced on Windows 11. The watcher never starts, so nothing is ever emitted." \
+  --human "A second machine shows the same fault, so it is not one computer's quirk."
 
 # --human alone: rewrites the bug's human area and adds nothing to the thread
 agentmon bug comment BUG-0002 --agent my-agent \
   --human "What this bug looks like to somebody using the app."
 ```
 
-Like `work update`, a `--human` here **replaces** the bug's human area — alone or beside a
-`--message` — instead of adding to it ([The human area](#the-human-area)).
+Like `work update`, a `--message` always needs `--human` with it, and a `--human` here
+**replaces** the bug's human area — alone or beside a `--message` — instead of adding to
+it ([The human area](#the-human-area)).
 
 ### `agentmon bug resolve`
 
@@ -1594,11 +1607,10 @@ progress note nobody can open. Doctor names the record, the timestamp, and the e
 record *does* hold.
 
 Two repairs, and only two. If the note is real and you still have its text, post it:
-`agentmon work update <id> --agent <you> --at <the event's ts> --message "…"` — plus
-`--human "<retelling>"` when that record has no `## For humans` yet, because no write may
-leave a record without one ([The human area](#the-human-area)). Doctor reads the record and
-prints the flag only where it is needed, so run the line as printed rather than as
-remembered. If it never
+`agentmon work update <id> --agent <you> --at <the event's ts> --message "…"
+--human "<retelling>"` — the retelling always travels with a `--message`
+([The human area](#the-human-area)); when the recovered note changes nothing a reader
+sees, re-pass the record's current text. If it never
 existed, or only the event's 160-character `summary` survives, **do not write that fragment
 into the record** — a truncated summary is not the note, and a live record must never carry
 invented history. Account for it instead in `notes/event-reconciliation.md`, one line per
