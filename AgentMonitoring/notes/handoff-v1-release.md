@@ -1,38 +1,39 @@
 ---
 name: handoff-v1-release
-title: v1.1.0 is live — how to ship, and the traps around the installer
+title: v1.1.1 is live — how to ship, and the traps around the installer
 type: handoff
-description: v1.1.0 published; main holds unreleased fixes through e035df9 (de-metered update check, MCP full/clear/markup) — push when shipping; npm run release; UseBasicParsing / resource-glob / NSIS gotchas.
+description: v1.1.1 published (de-metered update check, MCP full/clear/markup fixes); main pushed through b79b7af; npm run release ships; keep the installer asset name; UseBasicParsing / NSIS gotchas.
 agent: fable-release-builder
 updated_by: fable-quota-and-caps
 created: 2026-08-21T08:29:26Z
-updated: 2026-08-24T11:05:49Z
+updated: 2026-08-24T11:14:03Z
 tags: []
 refs: []
 ---
 
-Where things stand (2026-08-24, v1.1.0 released; post-release fixes on main, unreleased):
+Where things stand (2026-08-24, v1.1.1 released):
 
-- Release v1.1.0 carries AgentMonitoring_1.1.0_x64-setup.exe (tag and asset from commit
-  289ea3e). This is the dual-record release: every record carries an agent area and a human
-  area (enforced on every write path; `## For humans` is the file's last section), the
-  record screens carry the Agent/사람 toggle with per-beat scene diagrams, `agentmon
+- Release v1.1.1 is live with AgentMonitoring_1.1.1_x64-setup.exe; main is pushed through
+  b79b7af (WORK-0084 + WORK-0085). It ships the de-metered update check (BUG-0029: tag
+  from the un-metered /releases/latest redirect, installer via un-metered HEAD, notes API
+  best-effort — a spent 60/hr quota can only blank the card's tooltip) and three MCP
+  fixes: `full: true` reads untruncated (FB-0003), `note write` clears tags/refs on an
+  explicit empty array, and calls carrying leaked tool-call markup are refused whole
+  (FB-0002; the damaged ElmwoodOnline BUG-0001 was spliced clean).
+- v1.1.0 before it was the dual-record release: every record carries an agent area and a
+  human area (enforced on every write path; `## For humans` is the file's last section),
+  the record screens carry the Agent/사람 toggle with per-beat scene diagrams, `agentmon
   reconcile` + `--replayed` repair two-machine id collisions (BUG-0027), the boot locale
   race is fixed (BUG-0026), and updates stop resurrecting a deleted desktop shortcut
   (update.rs passes '/S','/UPDATE'; src-tauri/windows/hooks.nsi guards silent installs for
-  copies still updating with /S alone — the first update INTO 1.1.0 is that transition).
-- main now carries three LOCAL commits past the release, not yet pushed (through e035df9,
-  WORK-0084): the update check is de-metered (BUG-0029 resolved — tag from the un-metered
-  /releases/latest redirect, installer via un-metered HEAD, notes API best-effort; a spent
-  60/hr quota can only blank the card's tooltip now), and three MCP fixes — `full: true`
-  reads are untruncated (FB-0003), `note write` clears tags/refs on an explicit empty
-  array, and a call carrying leaked tool-call markup is refused whole (FB-0002; the one
-  damaged record, ElmwoodOnline's BUG-0001, was spliced clean). These ship with the next
-  version; push main when you ship.
+  copies still updating with /S alone).
 - To ship a new version: bump the version in package.json + src-tauri/tauri.conf.json +
   Cargo.toml (root, workspace version — all three, release.mjs refuses if they disagree),
   then npm run release. The preflight also runs scripts/check-humanstyle-drift.mjs — if it
-  refuses, rebuild the CLI so the embedded contract matches docs/HUMAN_STYLE.md.
+  refuses, rebuild the CLI so the embedded contract matches docs/HUMAN_STYLE.md. The
+  updater's fallback constructs the installer URL from the asset name release.mjs uploads
+  (AgentMonitoring_<version>_x64-setup.exe) — renaming that asset breaks the un-metered
+  path (a unit test in update.rs pins it).
 - Writing rules are write-time only: nothing in CLAUDE.md; the CLI rejection, the MCP first
   result and `agentmon human-style` deliver the compact rules; per-piece history is
   progress/rounds.jsonl (D1-D11).
@@ -46,14 +47,12 @@ Where things stand (2026-08-24, v1.1.0 released; post-release fixes on main, unr
 
 ## For humans
 
-This note is the baton between work sessions: whoever picks the project up next reads it to learn what version is out in the world and how to ship the next one. It was last rewritten on 2026-08-24, the evening after version 1.1.0 went out.
+This note is the baton between work sessions: whoever picks the project up next reads it to learn what version is out in the world and how to ship the next one. It was last rewritten on 2026-08-24, the day version 1.1.1 went out — the second release of that day.
 
-**1.1.0 is the two-audiences release, and it is in people's hands.** Every record carries a second half in plain language, the app grew a switch between the technical and plain views, and two long-standing annoyances died: the language button ignoring an early press, and the desktop icon coming back after every update.
+**1.1.1 is in people's hands and nothing is waiting unpublished.** Its headline fix: the app's "is there a newer version?" question used to go through a channel GitHub only answers 60 times an hour per address, and on a busy day the update offer silently vanished. It now asks through a free, unmetered address. Three fixes to the record-writing tools ride along: long records come back whole instead of cut off at the tail, a note's related-records list can actually be emptied, and a call carrying machine boundary-markers in its text is refused instead of saved corrupted.
 
-**Four fixes are finished on this machine but not yet published anywhere.** The biggest: the app's "is there a newer version?" question used to go through a channel GitHub only answers 60 times an hour per address, and on release day the quota ran dry and the update offer silently vanished — it now asks through a free, unmetered address. Three complaints about the record-writing tools were also fixed: long records now come back whole instead of cut off at the tail, a note's related-records list can now actually be emptied, and a call that carries machine boundary-markers in its text is refused instead of saved corrupted. All four travel inside the next version, and the code still needs to be pushed to the shared repository when that happens.
-
-**Shipping the next version is three edits and one command.** The version number lives in three files that must agree; a script refuses to build if they differ, then builds the installer and publishes it. A guard also checks that the writing rulebook baked into the tools matches the one on disk — if it complains, rebuild the command-line tool first.
+**Shipping the next version is three edits and one command.** The version number lives in three files that must agree; a script refuses to build if they differ, then builds the installer and publishes it. A guard also checks that the writing rulebook baked into the tools matches the one on disk — if it complains, rebuild the command-line tool first. One new caution: the free update route finds the installer by its exact file name, so renaming what the release script uploads would break it — an automated test stands watch over that name.
 
 **The traps at the bottom are the scars.** Each one is a mistake that already cost an afternoon once, written down so it only ever costs a sentence to avoid.
 
-Read this note first, ship with the three-files-one-command routine, and remember four finished fixes are waiting inside the next release.
+Read this note first, ship with the three-files-one-command routine, and keep the installer's file name exactly as the release script writes it.

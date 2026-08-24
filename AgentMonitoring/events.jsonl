@@ -770,3 +770,6 @@
 {"ts":"2026-08-24T11:04:31Z","actor":"fable-quota-and-caps","type":"bug_resolved","ref":"BUG-0029","summary":"Fixed in WORK-0084 by removing the API from the check's critical path entirely (src-tauri/src/update.rs):"}
 {"ts":"2026-08-24T11:04:42Z","actor":"fable-quota-and-caps","type":"work_done","ref":"WORK-0084","summary":"Shipped on main, unreleased (rides the next version):"}
 {"ts":"2026-08-24T11:05:49Z","actor":"fable-quota-and-caps","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body, human area"}
+{"ts":"2026-08-24T11:13:35Z","actor":"fable-quota-and-caps","type":"work_started","ref":"WORK-0085","summary":"Release v1.1.1 — ship WORK-0084's four fixes"}
+{"ts":"2026-08-24T11:13:40Z","actor":"fable-quota-and-caps","type":"work_done","ref":"WORK-0085","summary":"v1.1.1 live at github.com/UnrealFactory/AgentMonitoring/releases/tag/v1.1.1 with AgentMonitoring_1.1.1_x64-setup.exe (8,089,758 bytes). main pushed through…"}
+{"ts":"2026-08-24T11:14:03Z","actor":"fable-quota-and-caps","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body, human area"}
