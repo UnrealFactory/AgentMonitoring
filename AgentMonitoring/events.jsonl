@@ -777,3 +777,4 @@
 {"ts":"2026-08-24T13:04:12Z","actor":"fable-human-gate","type":"work_done","ref":"WORK-0086","summary":"Shipped the gate and re-pointed every teaching surface at it. Verified: cargo test --workspace green (the ~40 core-test call sites now pass a retelling with…"}
 {"ts":"2026-08-24T13:04:50Z","actor":"fable-human-gate","type":"note_updated","ref":"human-area-enforcement","summary":"Updated note human-area-enforcement: refs, body, human area"}
 {"ts":"2026-08-24T13:05:12Z","actor":"fable-human-gate","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body, human area"}
+{"ts":"2026-08-24T13:09:47Z","actor":"fable-human-gate","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body, human area"}
