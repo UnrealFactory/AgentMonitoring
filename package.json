@@ -1,7 +1,7 @@
 {
   "name": "agentmonitoring",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Central record house where AI agents document their own work for humans.",
   "scripts": {
