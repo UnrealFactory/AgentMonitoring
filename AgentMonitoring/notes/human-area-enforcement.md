@@ -4,11 +4,11 @@ title: The human area is enforced in agentmon-core, and its rules are cut from t
 type: memory
 description: The human area is enforced in agentmon-core; the ceiling bounds one telling, the guard is only as wide as body.rs says a heading is, and its Node twin must match
 agent: d2-human-area-builder
-updated_by: fable-human-backfill
+updated_by: fable-human-gate
 created: 2026-08-22T08:20:45Z
-updated: 2026-08-23T07:41:48Z
+updated: 2026-08-24T13:04:50Z
 tags: [human-area, core, cli, parsing]
-refs: [WORK-0066, WORK-0067]
+refs: [WORK-0066, WORK-0067, WORK-0086]
 ---
 
 **Where the rules live.** `crates/agentmon-core/src/human.rs` is the only place that knows
@@ -54,12 +54,19 @@ the real write path; `scripts/markdown-smoke.mjs` reads the same file and holds
 ever renders a level-2 heading reading "For humans". Add a spelling there, not to one test.
 
 **The matrix, in one line each.** Required: `work start/done/abandon`, `bug create`,
-`bug resolve`, `note add`, `note update --body`, `app-feedback add`. Closing verbs
-*replace* it. Required on the first touch of a record that has none (that is why
-`bug claim` has an optional `--human` the SPEC's CLI block does not list — the alternative
-was a dead end on legacy bugs). Alone on `work update` / `bug comment` / `note update` /
-`app-feedback update` it is a refresh: nothing lands in `## Updates`/`## Comments` and one
-`human_updated` event is logged. App feedback is machine-level and has no `events.jsonl`, so
+`bug resolve`, `note add`, `note update --body`, `app-feedback add` — and, since the
+owner's 2026-08-24 directive, `work update`/`bug comment` whenever `--message` is passed,
+`--replayed` included: agents were using the optional pair as a bypass, posting the real
+content as notes while the retelling froze, so a message now travels with its retelling
+(which *replaces* the stored one — re-pass the current text when nothing a reader sees
+changed). Closing verbs *replace* it. Required on the first touch of a record that has
+none (that is why `bug claim` has an optional `--human` the SPEC's CLI block does not
+list — the alternative was a dead end on legacy bugs). Alone on `work update` /
+`bug comment` / `note update` / `app-feedback update` it is a refresh: nothing lands in
+`## Updates`/`## Comments` and one `human_updated` event is logged. Every printed hint
+that names one of these verbs (`comment_hint`, doctor's `repair_command`, the `Next:`
+lines) carries `--human` unconditionally now — a hint without it exits 2 on the record
+it names. App feedback is machine-level and has no `events.jsonl`, so
 it logs none and keeps `--at` in its own `updated:` frontmatter key instead; over MCP that
 verb is `app_feedback` with an `id`.
 
@@ -113,3 +120,5 @@ It is like a doorman working from a printed list while the party inside knows ev
 **Running long is a complaint, not a refusal.** `agentmon doctor`, which reads a whole project at once, is what makes it, and it counts one run of a retelling rather than the page. A record that did several separate things tells each of them in a short run of its own, and the guide's 450 words bound one run. It counted whole pages once: it reported a work log that had told all five of the things it shipped, and the agent sent to shorten that log cut two of them out whole.
 
 A guard narrower than the screen it protects is not a guard.
+
+**Since 24 August, adding to a record demands the plain telling too.** Adding a progress note or a bug finding used to be allowed without touching the people-half, and some agents leaned on that: the real news piled up in the technical half while the plain telling stayed frozen on day one. Now a note refuses to save unless the plain telling comes with it, brought up to date — and if the note truly changes nothing a reader would see, sending the current telling back unchanged is the honest move.

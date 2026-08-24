@@ -773,3 +773,7 @@
 {"ts":"2026-08-24T11:13:35Z","actor":"fable-quota-and-caps","type":"work_started","ref":"WORK-0085","summary":"Release v1.1.1 — ship WORK-0084's four fixes"}
 {"ts":"2026-08-24T11:13:40Z","actor":"fable-quota-and-caps","type":"work_done","ref":"WORK-0085","summary":"v1.1.1 live at github.com/UnrealFactory/AgentMonitoring/releases/tag/v1.1.1 with AgentMonitoring_1.1.1_x64-setup.exe (8,089,758 bytes). main pushed through…"}
 {"ts":"2026-08-24T11:14:03Z","actor":"fable-quota-and-caps","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body, human area"}
+{"ts":"2026-08-24T12:40:00Z","actor":"fable-human-gate","type":"work_started","ref":"WORK-0086","summary":"work update / bug comment: --message now requires --human (agent-side-only bypass closed)"}
+{"ts":"2026-08-24T13:04:12Z","actor":"fable-human-gate","type":"work_done","ref":"WORK-0086","summary":"Shipped the gate and re-pointed every teaching surface at it. Verified: cargo test --workspace green (the ~40 core-test call sites now pass a retelling with…"}
+{"ts":"2026-08-24T13:04:50Z","actor":"fable-human-gate","type":"note_updated","ref":"human-area-enforcement","summary":"Updated note human-area-enforcement: refs, body, human area"}
+{"ts":"2026-08-24T13:05:12Z","actor":"fable-human-gate","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body, human area"}

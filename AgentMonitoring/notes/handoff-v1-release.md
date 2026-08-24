@@ -2,16 +2,24 @@
 name: handoff-v1-release
 title: v1.1.1 is live — how to ship, and the traps around the installer
 type: handoff
-description: v1.1.1 published (de-metered update check, MCP full/clear/markup fixes); main pushed through b79b7af; npm run release ships; keep the installer asset name; UseBasicParsing / NSIS gotchas.
+description: "v1.1.1 published; UNRELEASED on this machine: WORK-0086 --message-requires---human gate. npm run release ships; keep the installer asset name; UseBasicParsing / NSIS gotchas."
 agent: fable-release-builder
-updated_by: fable-quota-and-caps
+updated_by: fable-human-gate
 created: 2026-08-21T08:29:26Z
-updated: 2026-08-24T11:14:03Z
+updated: 2026-08-24T13:05:12Z
 tags: []
 refs: []
 ---
 
 Where things stand (2026-08-24, v1.1.1 released):
+
+- UNRELEASED, in the working tree (not yet committed): WORK-0086 — `work update` /
+  `bug comment` (and `--replayed`) refuse a `--message` without `--human` (owner
+  directive 2026-08-24; agents were bypassing the human area by posting real content
+  as notes). Core gate in write.rs; every printed hint carries `--human` now; SPEC,
+  AGENT_MANUAL, MCP.md updated; cargo + MCP (209) + tsc + smoke green. Installed apps
+  and the bundled CLI keep the old optional pair until this is committed and shipped
+  as the next version.
 
 - Release v1.1.1 is live with AgentMonitoring_1.1.1_x64-setup.exe; main is pushed through
   b79b7af (WORK-0084 + WORK-0085). It ships the de-metered update check (BUG-0029: tag
@@ -49,7 +57,7 @@ Where things stand (2026-08-24, v1.1.1 released):
 
 This note is the baton between work sessions: whoever picks the project up next reads it to learn what version is out in the world and how to ship the next one. It was last rewritten on 2026-08-24, the day version 1.1.1 went out — the second release of that day.
 
-**1.1.1 is in people's hands and nothing is waiting unpublished.** Its headline fix: the app's "is there a newer version?" question used to go through a channel GitHub only answers 60 times an hour per address, and on a busy day the update offer silently vanished. It now asks through a free, unmetered address. Three fixes to the record-writing tools ride along: long records come back whole instead of cut off at the tail, a note's related-records list can actually be emptied, and a call carrying machine boundary-markers in its text is refused instead of saved corrupted.
+**1.1.1 is in people's hands, and one change now waits unpublished.** On the same day, a rule was tightened on this machine but not yet committed or shipped: adding a note to a record now demands the plain-language telling alongside it, because some agents had been skipping that half. Whoever ships next carries it out with the routine below. 1.1.1's headline fix: the app's "is there a newer version?" question used to go through a channel GitHub only answers 60 times an hour per address, and on a busy day the update offer silently vanished. It now asks through a free, unmetered address. Three fixes to the record-writing tools ride along: long records come back whole instead of cut off at the tail, a note's related-records list can actually be emptied, and a call carrying machine boundary-markers in its text is refused instead of saved corrupted.
 
 **Shipping the next version is three edits and one command.** The version number lives in three files that must agree; a script refuses to build if they differ, then builds the installer and publishes it. A guard also checks that the writing rulebook baked into the tools matches the one on disk — if it complains, rebuild the command-line tool first. One new caution: the free update route finds the installer by its exact file name, so renaming what the release script uploads would break it — an automated test stands watch over that name.
 
