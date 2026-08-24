@@ -69,9 +69,12 @@ const BUDGET = {
   // that result must still fit `result`. It moves when the contract moves, and only then:
   // 4400 -> 5200 when the compact block took on the note/decision variant of the five beats
   // (docs/HUMAN_STYLE.md), so an agent drafting a note is not left holding rules written for
-  // a fixed bug. Raise this deliberately, with the doc change that earned it — nothing else
+  // a fixed bug. 5200 -> 5800 when it took on the replace rule — an update's retelling covers
+  // the whole record so far, one telling per update — after agents in the field replaced a
+  // record's accumulated tellings with the newest round's and the old text survived nowhere.
+  // Raise this deliberately, with the doc change that earned it — nothing else
   // caps the block, and a handover nobody reads teaches as little as none.
-  primer: 5200,
+  primer: 5800,
   // The style contract, which is a document rather than a record: `status(mode=
   // "human_style")` returns docs/HUMAN_STYLE.md whole, because it is what an agent reads
   // *before* writing its first human area, and the worked example at the end is the part

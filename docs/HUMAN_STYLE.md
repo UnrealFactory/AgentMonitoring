@@ -24,6 +24,7 @@ One everyday analogy, marked as one ("it is like…"), on the central mechanism,
 Short sentences, one fact each, most under 20 words. Say who did what, in plain verbs — "I watched one send", not "what was watched was one send". Five sentences end a paragraph; a hard mechanism is two short paragraphs, never one wall.
 Open each beat after the first with a bold lead-in that states something — "**The stored number is wrong twice a year.**" — not a label ("**The stored offset.**"), never a stage of an essay ("**How we know.**").
 Count last, and over either count cut in this order: first a name carrying no fact of its own, then a whole fact — never a gloss. 150 words thin, 300 for most, 450 where the mechanism is genuinely hard. A ceiling bounds one telling, never a record's total: a record that shipped several separate things — wherever it names them, its title, its What, or a list further down — covers every one, one short beat-block each after the shared opening. Never write to a ceiling — stop when the facts are spent.
+Your text replaces the stored human area whole — nothing appends, and what it removes survives nowhere. A record still open retells everything it has done so far, never this update alone: one telling per update, in the order they happened, the earlier ones carried forward and rewritten only where this round changed their facts, the newest last. A text telling only the latest round deletes the rest. Closing verbs rewrite the whole on purpose — the ending changed the story.
 Close on one sentence the reader could repeat tomorrow. No selling, no fake excitement, no emoji.
 <!-- /compact-rules -->
 
@@ -122,6 +123,11 @@ Three kinds survive the first read:
   list further down, an "Alongside:" under *How* — owes each one: after the shared opening, one short beat-block per thing, bounded on its own. Three deliverables are three
   tellings, not one 450-word squeeze that drops two of them whole and takes their facts with them. `agentmon doctor` counts it that way too — the longest run between your bold
   lead-ins, never the record's total. And never write up to a ceiling: stop when that thing's facts are spent, and let a thin thing stay thin.
+- **An update replaces the whole area, so write the whole record so far.** `--human` — the `human` field, over MCP — overwrites; it never appends, and the text it removes
+  survives in no note and no event. The retelling of a record still open therefore mirrors the record's own timeline: after the shared opening, one telling per update, oldest
+  first — the same beats the agent area's `## Updates` holds, told for the reader who was not there. Carry the earlier tellings forward, rewrite one only where this round
+  changed what its reader would see, and add the new round's telling last. A `--human` that tells only the newest round is not a shorter retelling — it deletes, at exit 0,
+  every telling before it. Closing verbs replace on purpose: the ending changed the story, so the final text is written fresh, one finished piece covering the whole.
 - **Close on a rule of thumb, not a summary**: *a backup you have never restored is not a backup*.
 
 ## Stay inside the record
