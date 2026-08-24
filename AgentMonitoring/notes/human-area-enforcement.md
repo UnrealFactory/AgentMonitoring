@@ -4,11 +4,11 @@ title: The human area is enforced in agentmon-core, and its rules are cut from t
 type: memory
 description: The human area is enforced in agentmon-core; the ceiling bounds one telling, the guard is only as wide as body.rs says a heading is, and its Node twin must match
 agent: d2-human-area-builder
-updated_by: fable-human-gate
+updated_by: fable-human-timeline
 created: 2026-08-22T08:20:45Z
-updated: 2026-08-24T13:04:50Z
+updated: 2026-08-24T13:44:01Z
 tags: [human-area, core, cli, parsing]
-refs: [WORK-0066, WORK-0067, WORK-0086]
+refs: [WORK-0066, WORK-0067, WORK-0086, WORK-0087]
 ---
 
 **Where the rules live.** `crates/agentmon-core/src/human.rs` is the only place that knows
@@ -59,7 +59,12 @@ owner's 2026-08-24 directive, `work update`/`bug comment` whenever `--message` i
 `--replayed` included: agents were using the optional pair as a bypass, posting the real
 content as notes while the retelling froze, so a message now travels with its retelling
 (which *replaces* the stored one — re-pass the current text when nothing a reader sees
-changed). Closing verbs *replace* it. Required on the first touch of a record that has
+changed). Replacement bred the next bypass — a `--human` telling only the newest round,
+wiping every telling before it (ElmwoodOnline's WORK-0017 kept four update nodes and one
+round's retelling) — so since WORK-0087 the compact rules themselves teach it: an open
+record's retelling covers the whole record so far, one telling per update in timeline
+order, earlier tellings carried forward, newest last. Closing verbs *replace* it.
+Required on the first touch of a record that has
 none (that is why `bug claim` has an optional `--human` the SPEC's CLI block does not
 list — the alternative was a dead end on legacy bugs). Alone on `work update` /
 `bug comment` / `note update` / `app-feedback update` it is a refresh: nothing lands in
@@ -77,6 +82,8 @@ docs/HUMAN_STYLE.md between the `<!-- compact-rules -->` markers **at build time
 missing marker fails the build on purpose. `mcp/lib/cli.mjs` does not shorten that one
 message at all: any ceiling there is a guess about how long that doc is, and the 2500-
 character one took the contract line off the end of every refusal the first time the doc grew.
+The MCP first-result handover is priced in docs/MCP.md ("About 5,400 characters, once") and
+the mcp test suite fails when that figure, or its primer budget, drifts from the measurement.
 
 **Length is a warning, never a refusal, and it bounds one telling.** `human::WORDS_MAX` (450)
 is the ceiling on a single telling, never on a record's total, so what `doctor::check` reads is
@@ -92,7 +99,9 @@ WORK-0074 the ceiling lived only in docs/HUMAN_STYLE.md and nothing read it — 
 area shipped, and a hand count was the only thing that caught it. WORK-0075 made it per-telling
 after the per-record version reported a work log that shipped five things and told all five,
 and the agent sent to fix it deleted two: a gate whose false positive is "cut a fact you owed"
-is worse than no gate.
+is worse than no gate. The same reasoning kept WORK-0087 teaching-only: a doctor heuristic
+comparing telling count to update count was considered and dropped — legitimate curation
+merges rounds, and its false positive is the same cut-a-fact repair.
 
 **On disk vs on the wire.** The file is the one place both areas cohabit. Every parsed
 payload (`--json`, both app transports) has `body` = the agent area only and `human` =
@@ -122,3 +131,5 @@ It is like a doorman working from a printed list while the party inside knows ev
 A guard narrower than the screen it protects is not a guard.
 
 **Since 24 August, adding to a record demands the plain telling too.** Adding a progress note or a bug finding used to be allowed without touching the people-half, and some agents leaned on that: the real news piled up in the technical half while the plain telling stayed frozen on day one. Now a note refuses to save unless the plain telling comes with it, brought up to date — and if the note truly changes nothing a reader would see, sending the current telling back unchanged is the honest move.
+
+**Demanding the telling was not enough: agents then sent only the newest chapter.** The people-half is one page each save replaces whole, and in another project a work log's page kept losing every earlier round because each save carried only the latest one — four entries in the technical half, one round's story on the page. Later on 24 August the short rules every agent meets — in the refusal and in the tools' one-time handover — gained the missing sentences: the page is replaced whole, so retell everything done so far, one telling per entry, oldest first, newest last, the earlier ones copied forward.

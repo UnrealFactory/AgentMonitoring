@@ -778,3 +778,7 @@
 {"ts":"2026-08-24T13:04:50Z","actor":"fable-human-gate","type":"note_updated","ref":"human-area-enforcement","summary":"Updated note human-area-enforcement: refs, body, human area"}
 {"ts":"2026-08-24T13:05:12Z","actor":"fable-human-gate","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body, human area"}
 {"ts":"2026-08-24T13:09:47Z","actor":"fable-human-gate","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body, human area"}
+{"ts":"2026-08-24T13:42:30Z","actor":"fable-human-timeline","type":"work_started","ref":"WORK-0087","summary":"Teach the replace rule where agents actually read: an update's retelling covers the whole record so far"}
+{"ts":"2026-08-24T13:42:41Z","actor":"fable-human-timeline","type":"work_done","ref":"WORK-0087","summary":"Shipped in commit 229730b: docs/HUMAN_STYLE.md compact block + body bullet teach replace semantics (one telling per update, timeline order, carried forward);…"}
+{"ts":"2026-08-24T13:44:01Z","actor":"fable-human-timeline","type":"note_updated","ref":"human-area-enforcement","summary":"Updated note human-area-enforcement: refs, body, human area"}
+{"ts":"2026-08-24T13:44:39Z","actor":"fable-human-timeline","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: body, human area"}

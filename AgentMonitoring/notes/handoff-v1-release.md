@@ -4,14 +4,24 @@ title: v1.2.0 is live — how to ship, and the traps around the installer
 type: handoff
 description: v1.2.0 published (--message requires --human everywhere); main pushed through aa36621; npm run release ships; keep the installer asset name; UseBasicParsing / NSIS gotchas.
 agent: fable-release-builder
-updated_by: fable-human-gate
+updated_by: fable-human-timeline
 created: 2026-08-21T08:29:26Z
-updated: 2026-08-24T13:09:47Z
+updated: 2026-08-24T13:44:39Z
 tags: []
 refs: []
 ---
 
-Where things stand (2026-08-24, v1.2.0 released):
+Where things stand (2026-08-24, v1.2.0 released; one change waits unpublished):
+
+- Unshipped on local main: 229730b + WORK-0087 records — the compact rules now teach the
+  replace rule (an update's `--human` replaces the stored area whole, so an open record's
+  retelling covers the whole record so far: one telling per update, timeline order,
+  earlier tellings carried forward, newest last). It reaches agents only through a
+  rebuild/release: refusals and the MCP first result both print the block baked into the
+  installed binary, so other projects (ElmwoodOnline's WORK-0017 is the case that exposed
+  it) keep the old teaching until the next version ships and their MCP servers restart.
+  docs/MCP.md now prices the handover at "About 5,400 characters, once"; the mcp test
+  primer budget rose 5200 -> 5800 with the rationale beside it.
 
 - Release v1.2.0 is live with AgentMonitoring_1.2.0_x64-setup.exe; main is pushed
   through aa36621 (WORK-0086 + records + bump). It ships the tightened human-area rule:
@@ -56,7 +66,9 @@ Where things stand (2026-08-24, v1.2.0 released):
 
 This note is the baton between work sessions: whoever picks the project up next reads it to learn what version is out in the world and how to ship the next one. It was last rewritten on 2026-08-24, the day versions 1.1.1 and then 1.2.0 went out.
 
-**1.2.0 is in people's hands and nothing is waiting unpublished.** Its change is a tightened rule: adding a note to a record now demands the plain-language telling alongside it, because some agents had been skipping that half — the program refuses the save instead of letting the two halves drift apart. Before it, 1.1.1's headline fix: the app's "is there a newer version?" question used to go through a channel GitHub only answers 60 times an hour per address, and on a busy day the update offer silently vanished. It now asks through a free, unmetered address. Three fixes to the record-writing tools ride along: long records come back whole instead of cut off at the tail, a note's related-records list can actually be emptied, and a call carrying machine boundary-markers in its text is refused instead of saved corrupted.
+**1.2.0 is in people's hands, and one change now waits unpublished.** The waiting change closes a loophole the released rule opened: a record's plain-language half is one page that every save replaces whole, and agents had begun sending only the newest round's story with each save, wiping the rounds before it. The short writing rules every agent is shown now say to retell the whole record so far, one telling per entry, oldest first. Those rules travel inside the installed program, so other projects keep the old ones until the next version ships.
+
+**1.2.0's own change was a tightened rule:** adding a note to a record demands the plain-language telling alongside it, because some agents had been skipping that half — the program refuses the save instead of letting the two halves drift apart. Before it, 1.1.1's headline fix: the app's "is there a newer version?" question used to go through a channel GitHub only answers 60 times an hour per address, and on a busy day the update offer silently vanished. It now asks through a free, unmetered address. Three fixes to the record-writing tools ride along: long records come back whole instead of cut off at the tail, a note's related-records list can actually be emptied, and a call carrying machine boundary-markers in its text is refused instead of saved corrupted.
 
 **Shipping the next version is three edits and one command.** The version number lives in three files that must agree; a script refuses to build if they differ, then builds the installer and publishes it. A guard also checks that the writing rulebook baked into the tools matches the one on disk — if it complains, rebuild the command-line tool first. One new caution: the free update route finds the installer by its exact file name, so renaming what the release script uploads would break it — an automated test stands watch over that name.
 
