@@ -44,7 +44,8 @@
  *   * `localStorage` — the browser's answer, and the desktop webview's fast path.
  *   * `settings.json` — the desktop app's own file, next to the vault path it already
  *     remembers (src-tauri/src/lib.rs). Read once at boot and mirrored into localStorage,
- *     so the second run of the app never flashes the wrong language.
+ *     so the second run of the app never flashes the wrong language — and it loses to a
+ *     toggle press that lands while it is still being read (see {@link loadDesktopLocale}).
  *   * Default: **Korean**.
  */
 import { useSyncExternalStore } from "react";
@@ -99,6 +100,16 @@ if (typeof document !== "undefined") document.documentElement.lang = current;
 // react-router makes by dropping the query string.
 if (fromUrl()) remember(current);
 
+/**
+ * How many times the language has actually changed since this module loaded.
+ *
+ * Only {@link loadDesktopLocale} reads it, and only to stand down: a press that lands while
+ * settings.json is being read is the newer choice, because that read started before the
+ * reader could touch anything. Counted rather than compared against a captured `current` so
+ * that a reader who toggled away and back still counts as having chosen.
+ */
+let choicesSinceLoad = 0;
+
 const listeners = new Set<() => void>();
 
 export const getLocale = (): Locale => current;
@@ -109,6 +120,7 @@ export const otherLocale = (locale: Locale = current): Locale => (locale === "ko
 export function setLocale(next: Locale, { persist = true } = {}): void {
   if (!isLocale(next) || next === current) return;
   current = next;
+  choicesSinceLoad += 1;
   if (typeof document !== "undefined") document.documentElement.lang = next;
   if (persist) {
     remember(next);
@@ -138,6 +150,28 @@ export function useLocale(): Locale {
  * opened with `?lang=en` is answering a question the file does not get to re-answer. The
  * value is mirrored into localStorage on the way in, so every later start of the app reads
  * it synchronously and no reader ever sees the language change under them.
+ *
+ * ## The file loses to the reader
+ *
+ * This is a long await run against a person who can already see the toggle, so what it read
+ * is applied **only while {@link choicesSinceLoad} is still 0** — while nothing has set the
+ * language since the module loaded. Overwriting a press was BUG-0026, and it did not even
+ * overwrite it cleanly: `remember(saved)` put localStorage back while `persist: false` left
+ * settings.json holding the discarded press, so the next window opened in one language and
+ * flipped to the other a moment later.
+ *
+ * That guard is also what keeps the two stores agreeing, in both directions:
+ *
+ *   * **Applied** (`choicesSinceLoad === 0`): nothing has written since the module loaded —
+ *     `setLocale` is the only writer of either store, and it bumps the count whenever it
+ *     writes — so settings.json still holds `saved`, and mirroring it into localStorage is
+ *     exactly what makes the pair match. Persisting would rewrite the file with its own
+ *     value.
+ *   * **Stood down**: the press that bumped the count went through `setLocale` with the
+ *     default `persist: true`, which wrote *both* stores on its way past.
+ *
+ * The count is read and the value applied in one synchronous step, with no await between
+ * them, or the press moves back into the gap.
  */
 export async function loadDesktopLocale(): Promise<void> {
   if (typeof window === "undefined" || fromUrl()) return;
@@ -145,7 +179,7 @@ export async function loadDesktopLocale(): Promise<void> {
   if (!isTauri()) return;
   try {
     const saved = await api.getLocale();
-    if (isLocale(saved)) {
+    if (isLocale(saved) && choicesSinceLoad === 0) {
       remember(saved);
       setLocale(saved, { persist: false });
     }

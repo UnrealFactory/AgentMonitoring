@@ -219,6 +219,8 @@ npm run check:i18n       # every screen in Korean: no English left in the app's 
                          # no Korean word broken across a line — on this repo's records and on
                          # Korean-content fixtures built for the run with the release CLI
 npm run check:errors     # every backend failure, read through the app's words, on both transports
+npm run check:locale     # the language a window opens in: a toggle press inside the boot read of
+                         # settings.json wins it, and the two stores never split
 npm run check:scenes     # the pictures inside records: every label measured in two faces — no
                          # overlap, nothing past an edge, nothing under the type floor at the
                          # narrowest column a record page gives a picture
@@ -228,12 +230,20 @@ Every gate that reads words off the screen takes `--locale ko|en` and reads its
 expectations from the same dictionaries the window does (`src/lib/i18n/`), so both
 languages are walked rather than one being tested and the other assumed.
 
-`check:errors` is the one that does not drive a browser, on purpose. Every other gate here
-talks to the Vite dev server, and the dev server is not the product: the desktop app calls
-`agentmon-core` in process, so it meets sentences (and a missing HTTP status) that no
-Playwright run can reach. That gate provokes each failure twice — once from the real
-`agentmon` binary, once from the dev server — and requires the two to arrive at the same
-headline in the reader's language.
+`check:errors` and `check:locale` are the two that do not drive a browser, on purpose.
+Every other gate here talks to the Vite dev server, and the dev server is not the product:
+the desktop app calls `agentmon-core` in process, so it meets sentences (and a missing HTTP
+status) that no Playwright run can reach. `check:errors` provokes each failure twice — once
+from the real `agentmon` binary, once from the dev server — and requires the two to arrive
+at the same headline in the reader's language.
+
+`check:locale` skips the browser for the opposite reason. What it holds still is a race
+between the boot read of `settings.json` and a reader's hand, and a gate that drives screens
+presses the toggle long after boot — the one moment the defect cannot happen in. So it
+imports the real `src/lib/i18n/index.ts` (through `scripts/ts-hooks.mjs`, not a copy) with a
+stubbed `window` whose `get_locale` reads the file when the command runs and answers
+milliseconds later, which is the shape of the bug: the value in flight predates the press it
+used to overwrite.
 
 Tests that write records only ever write to copies in the temp directory; the
 `AgentMonitoring/` folder in this repository is real history and is never written to by a
