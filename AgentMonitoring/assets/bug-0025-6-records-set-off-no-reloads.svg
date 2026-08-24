@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 540" width="700" height="540" role="img" aria-label="Records written into the records folder still set off no reload; the app finds them by asking its own server for anything new.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that. The narrowest column a record page gives a picture is
+       395, so this arrives a shade over half size and 22 comes back as 12 — over the 11 at
+       the bottom of this app's type scale. Type is asked for by role, never by name: an
+       <img> is a document of its own and cannot reach the Inter this app bundles, so the
+       reader's own interface face sets these labels and every one keeps a fifth of its box
+       empty. Icons in one band, their labels in the next, the closing line in its own band
+       at the foot — nothing overlaps at any width the page draws this at.
+       The dashed pair is the asking the beat describes, and it carries the beat's own words.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the page, the arrow "saved" and the records folder — "The records this project keeps about itself"
+         · the "no reload" pill — "still set off no reloads"
+         · the window, the dashed pair and the server — "the app learns about those by asking its own server"
+         · the arrow word "anything new?" and the closing lines — "over and over, for anything new" -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="540" rx="8" fill="#121317"/>
+
+  <path d="M50,56 h40 l20,20 v58 h-60 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M90,56 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="62" y1="92" x2="98" y2="92" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="62" y1="108" x2="98" y2="108" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="62" y1="124" x2="86" y2="124" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="s" x="210" y="80" font-size="22" fill="#8a8f98" text-anchor="middle">saved</text>
+  <line x1="140" y1="96" x2="280" y2="96" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M263.56439907437846,103.33968815507227 L280,96 L263.56439907437846,88.66031184492773" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M310,72 q0,-10 10,-10 h38.4 l12,14 h59.60000000000001 q10,0 10,10 v58 q0,10 -10,10 h-100 q-10,0 -10,-10 z"
+      fill="#5e6ad2" fill-opacity="0.14" stroke="#5e6ad2" stroke-width="2.6" stroke-linejoin="round"/>
+  <text class="s" x="36" y="196" font-size="22" fill="#8a8f98">a record</text>
+  <text class="s" x="370" y="196" font-size="22" fill="#8a8f98" text-anchor="middle">the records folder</text>
+  <rect x="520.5" y="170.5" width="159" height="37" rx="18.5" fill="#4cb782" fill-opacity="0.14" stroke="#4cb782" stroke-opacity="0.45"/><text class="s" x="600" y="196" font-size="22" fill="#4cb782" text-anchor="middle">no reload</text>
+  <rect x="60" y="280" width="120" height="90" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="60" y1="308" x2="180" y2="308" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="78" cy="294" r="4" fill="#8a8f98"/>
+     <circle cx="94" cy="294" r="4" fill="#8a8f98"/>
+     <circle cx="110" cy="294" r="4" fill="#8a8f98"/>
+  <text class="s" x="320" y="290" font-size="22" fill="#8a8f98" text-anchor="middle">anything new?</text>
+  <line x1="210" y1="306" x2="430" y2="306" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="8 8"/>
+    <path d="M413.56439907437846,313.3396881550723 L430,306 L413.56439907437846,298.6603118449277" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="430" y1="350" x2="210" y2="350" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="8 8"/>
+    <path d="M226.43560092562154,342.6603118449277 L210,350 L226.43560092562154,357.3396881550723" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="460" y="282" width="120" height="84" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="478" y1="310" x2="534" y2="310" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="478" y1="334" x2="534" y2="334" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="554" cy="310" r="6" fill="#4cb782"/>
+  <text class="s" x="36" y="414" font-size="22" fill="#8a8f98">the app</text>
+  <text class="s" x="664" y="414" font-size="22" fill="#8a8f98" text-anchor="end">its own server</text>
+  <text class="s" x="350" y="470" font-size="22" fill="#8a8f98" text-anchor="middle">The app learns about those by asking its own</text>
+  <text class="s" x="350" y="502" font-size="22" fill="#8a8f98" text-anchor="middle">server, over and over, for anything new.</text>
+</svg>

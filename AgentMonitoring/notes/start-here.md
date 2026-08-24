@@ -4,11 +4,11 @@ title: Start here — what every session reads before working
 type: essential
 description: "The index: read the release handoff first, then the gotchas that bite scripts; curate notes as you finish."
 agent: fable-updater-splash
-updated_by: d6-final-gate-builder
+updated_by: d9-scene-builder
 created: 2026-08-21T13:21:48Z
-updated: 2026-08-23T10:43:04Z
+updated: 2026-08-24T03:15:29Z
 tags: []
-refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, quality-bars, event-reconciliation]
+refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, scene-geometry-is-measured, quality-bars, event-reconciliation]
 ---
 
 The MEMORY.md of this project. Read top to bottom, open what applies, and keep this
@@ -30,6 +30,8 @@ index true when the set of notes changes.
 - event-reconciliation — nine lines in `events.jsonl` announce a progress note no
   record holds; read it before you touch the event log, the activity feed, or doctor.
 - chart-note-series-colour — the one chart-palette constraint that is easy to break.
+- scene-geometry-is-measured — writing or moving a record's pictures: where the per-beat
+  scenes are drawn, and the scripts that prove no label overlaps at any width.
 - quality-bars — the visual/product quality references this app is held to.
 
 **How notes work here**
@@ -41,7 +43,8 @@ index true when the set of notes changes.
 
 `start-here` is the note that gets opened before any work begins here. Its instruction is
 plain: go down it from the top, and open whatever applies to the job in front of you.
-Somebody wrote it on 21 August 2026 and last rewrote it on 22 August.
+Somebody wrote it on 21 August 2026 and it has been rewritten since by whoever finished a
+job, most recently on 24 August.
 
 **Nothing on the page is explained; it says where each thing is explained.** The other
 notes are sorted on it by when you will need them. One is marked read-first:

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 480" width="700" height="480" role="img" aria-label="What we blamed twice — an old copy of the server — against what actually happened: the app's main file came back missing that day's edits.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that. The narrowest column a record page gives a picture is
+       395, so this arrives a shade over half size and 22 comes back as 12 — over the 11 at
+       the bottom of this app's type scale. Type is asked for by role, never by name: an
+       <img> is a document of its own and cannot reach the Inter this app bundles, so the
+       reader's own interface face sets these labels and every one keeps a fifth of its box
+       empty. Icons in one band, their labels in the next, the closing line in its own band
+       at the foot — nothing overlaps at any width the page draws this at.
+       Every actor here is one this beat names: the guess, the server, the file I asked for.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the speech bubble — "Both times we decided an old copy of that program was still sitting on port 5173."
+         · the "twice" pill — "Twice we blamed the wrong thing."
+         · "what we blamed — and it was not that" — "It was not that"
+         · the server, "a copy seconds old", "just as stale" — "a copy seconds old was just as stale"
+         · the arrow "asked for" and the page — "I asked the server for the app’s main file"
+         · the closing line — "it handed back a version missing that day’s edits"
+         · nothing here restarts anything: the record says we blamed an old copy, never that anybody restarted one. -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="480" rx="8" fill="#121317"/>
+
+  <path d="M80,136 l0,26 l34,-26" fill="#0e0f11" stroke="none"/>
+     <rect x="36.5" y="40.5" width="399" height="95" rx="14" fill="#0e0f11" stroke="#fff" stroke-opacity="0.09"/>
+     <path d="M80,135 l0,27 l34,-27" fill="none" stroke="#fff" stroke-opacity="0.09" stroke-linejoin="round"/>
+  <text class="s" x="60" y="84" font-size="22" fill="#e8e9eb">“an old copy of that program,</text>
+  <text class="s" x="60" y="116" font-size="22" fill="#e8e9eb">still sitting on port 5173”</text>
+  <rect x="460.5" y="62.5" width="119" height="37" rx="18.5" fill="#f2994a" fill-opacity="0.14" stroke="#f2994a" stroke-opacity="0.45"/><text class="s" x="520" y="88" font-size="22" fill="#f2994a" text-anchor="middle">twice</text>
+  <text class="s" x="36" y="190" font-size="22" fill="#8a8f98">what we blamed — and it was not that</text>
+  <rect x="36" y="232" width="120" height="84" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="54" y1="260" x2="110" y2="260" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="54" y1="284" x2="110" y2="284" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="130" cy="260" r="6" fill="#4cb782"/>
+  <text class="s" x="335" y="258" font-size="22" fill="#8a8f98" text-anchor="middle">asked for</text>
+  <line x1="200" y1="274" x2="470" y2="274" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M453.56439907437846,281.3396881550723 L470,274 L453.56439907437846,266.6603118449277" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M500,236 h40 l20,20 v58 h-60 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M540,236 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="512" y1="272" x2="548" y2="272" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="512" y1="288" x2="548" y2="288" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="512" y1="304" x2="536" y2="304" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="s" x="36" y="360" font-size="22" fill="#8a8f98">the server — a copy seconds old</text>
+  <text class="s" x="36" y="392" font-size="22" fill="#f2994a">just as stale</text>
+  <text class="s" x="664" y="360" font-size="22" fill="#8a8f98" text-anchor="end">the app's main file</text>
+  <text class="s" x="350" y="448" font-size="22" fill="#8a8f98" text-anchor="middle">it came back <tspan fill="#f2994a">missing that day's edits</tspan></text>
+</svg>

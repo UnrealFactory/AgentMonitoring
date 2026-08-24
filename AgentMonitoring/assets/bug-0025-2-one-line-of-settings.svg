@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 340" width="700" height="340" role="img" aria-label="The settings file tells the watcher to skip any path with a folder called AgentMonitoring in it.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that. The narrowest column a record page gives a picture is
+       395, so this arrives a shade over half size and 22 comes back as 12 — over the 11 at
+       the bottom of this app's type scale. Type is asked for by role, never by name: an
+       <img> is a document of its own and cannot reach the Inter this app bundles, so the
+       reader's own interface face sets these labels and every one keeps a fifth of its box
+       empty. Icons in one band, their labels in the next, the closing line in its own band
+       at the foot — nothing overlaps at any width the page draws this at.
+       The pattern is quoted once, in the beat's own words, and the eye is the watcher the beat glosses.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the page, "vite.config.ts", "the settings file" — "The server reads its settings from vite.config.ts."
+         · the bubble and the pattern inside it — "to skip **/AgentMonitoring/**"
+         · the arrow "told" — "That file told the watcher"
+         · the eye and its two labels — "the watcher — the part that notices when you save a file"
+         · the closing line — "meaning any path with a folder called AgentMonitoring in it" -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="340" rx="8" fill="#121317"/>
+
+  <path d="M36,46 h40 l20,20 v58 h-60 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M76,46 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="48" y1="82" x2="84" y2="82" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="48" y1="98" x2="84" y2="98" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="48" y1="114" x2="72" y2="114" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M174,126 l0,26 l34,-26" fill="#0e0f11" stroke="none"/>
+     <rect x="130.5" y="44.5" width="339" height="81" rx="14" fill="#0e0f11" stroke="#fff" stroke-opacity="0.09"/>
+     <path d="M174,125 l0,27 l34,-27" fill="none" stroke="#fff" stroke-opacity="0.09" stroke-linejoin="round"/>
+  <text class="m" x="300" y="96" font-size="24" fill="#e8e9eb" text-anchor="middle"><tspan class="m">**/AgentMonitoring/**</tspan></text>
+  <text class="s" x="528" y="69" font-size="22" fill="#8a8f98" text-anchor="middle">told</text>
+  <line x1="490" y1="85" x2="566" y2="85" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M549.5643990743785,92.33968815507227 L566,85 L549.5643990743785,77.66031184492773" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M576,85 q44,-34 88,0 q-44,34 -88,0 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="620" cy="85" r="11" fill="#a5adf0"/>
+  <text class="m" x="36" y="176" font-size="22" fill="#a5adf0"><tspan class="m">vite.config.ts</tspan></text>
+  <text class="s" x="36" y="208" font-size="22" fill="#8a8f98">the settings file</text>
+  <text class="s" x="664" y="176" font-size="22" fill="#e8e9eb" text-anchor="end">the watcher</text>
+  <text class="s" x="664" y="208" font-size="22" fill="#8a8f98" text-anchor="end">notices when you save a file</text>
+  <text class="s" x="350" y="268" font-size="22" fill="#8a8f98" text-anchor="middle">“skip any path with a folder called</text>
+  <text class="s" x="350" y="300" font-size="22" fill="#8a8f98" text-anchor="middle"><tspan class="m" fill="#a5adf0">AgentMonitoring</tspan> in it”</text>
+</svg>

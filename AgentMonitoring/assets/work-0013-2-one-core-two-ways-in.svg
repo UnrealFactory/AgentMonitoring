@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 520" width="700" height="520" role="img" aria-label="Both ways into the app write through the same core: the desktop window calls it directly, and in the browser a small server runs the agentmon command.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that. The narrowest column a record page gives a picture is
+       395, so this arrives a shade over half size and 22 comes back as 12 — over the 11 at
+       the bottom of this app's type scale. Type is asked for by role, never by name: an
+       <img> is a document of its own and cannot reach the Inter this app bundles, so the
+       reader's own interface face sets these labels and every one keeps a fifth of its box
+       empty. Icons in one band, their labels in the next, the closing line in its own band
+       at the foot — nothing overlaps at any width the page draws this at.
+       Two windows, drawn apart: the one with the dots is the browser the record names, the plain one is the desktop window.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the plain window and the arrow "calls it directly" — "in the desktop window the app calls it directly"
+         · the dotted window and "a small server runs agentmon" — "in the browser version a small server runs the agentmon command"
+         · the box both arrows land in — "the same core the whole app writes with"
+         · the closing lines — "You can now make a project, archive one, and point the app at a folder elsewhere on the disk." -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="520" rx="8" fill="#121317"/>
+
+  <rect x="470.5" y="56.5" width="197" height="303" rx="10" fill="#5e6ad2" fill-opacity="0.10" stroke="#5e6ad2" stroke-opacity="0.45"/>
+  <text class="s" x="569" y="174" font-size="22" fill="#e8e9eb" text-anchor="middle">the same core</text>
+  <text class="s" x="569" y="206" font-size="22" fill="#e8e9eb" text-anchor="middle">the whole app</text>
+  <text class="s" x="569" y="238" font-size="22" fill="#e8e9eb" text-anchor="middle">writes with</text>
+  <rect x="40" y="56" width="130" height="92" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="40" y1="84" x2="170" y2="84" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <rect x="136" y="65" width="16" height="12" rx="2" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="s" x="325" y="86" font-size="22" fill="#8a8f98" text-anchor="middle">calls it directly</text>
+  <line x1="195" y1="102" x2="455" y2="102" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M438.56439907437846,109.33968815507227 L455,102 L438.56439907437846,94.66031184492773" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="s" x="36" y="180" font-size="22" fill="#8a8f98">the desktop window</text>
+  <rect x="40" y="264" width="130" height="92" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="40" y1="292" x2="170" y2="292" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="58" cy="278" r="4" fill="#8a8f98"/>
+     <circle cx="74" cy="278" r="4" fill="#8a8f98"/>
+     <circle cx="90" cy="278" r="4" fill="#8a8f98"/>
+  <text class="s" x="325" y="270" font-size="22" fill="#8a8f98" text-anchor="middle">a small server runs</text>
+  <text class="m" x="325" y="300" font-size="22" fill="#a5adf0" text-anchor="middle"><tspan class="m">agentmon</tspan></text>
+  <line x1="195" y1="316" x2="455" y2="316" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M438.56439907437846,323.3396881550723 L455,316 L438.56439907437846,308.6603118449277" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="s" x="36" y="388" font-size="22" fill="#8a8f98">the browser version</text>
+  <text class="s" x="350" y="444" font-size="22" fill="#8a8f98" text-anchor="middle">make a project, archive one, point the app</text>
+  <text class="s" x="350" y="476" font-size="22" fill="#8a8f98" text-anchor="middle">at a folder elsewhere on the disk</text>
+</svg>

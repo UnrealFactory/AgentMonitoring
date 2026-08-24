@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 500" width="700" height="500" role="img" aria-label="One line added showed up in what the server sent within two seconds, and deleting it stopped the server sending it.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that. The narrowest column a record page gives a picture is
+       395, so this arrives a shade over half size and 22 comes back as 12 — over the 11 at
+       the bottom of this app's type scale. Type is asked for by role, never by name: an
+       <img> is a document of its own and cannot reach the Inter this app bundles, so the
+       reader's own interface face sets these labels and every one keeps a fifth of its box
+       empty. Icons in one band, their labels in the next, the closing line in its own band
+       at the foot — nothing overlaps at any width the page draws this at.
+       Two rows, one per direction — the beat watched it both ways.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the page with a green plus and "one line, added" — "I added one harmless line to that new piece of code"
+         · the arrow "within two seconds" and "the server was serving it" — "Within two seconds the server was serving it."
+         · the page with an orange minus and "the server stopped serving it" — "I deleted the line, and the server stopped serving it."
+         · the closing lines — "A sleeping watcher would have shown me the old file both times; nothing restarted." -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="500" rx="8" fill="#121317"/>
+
+  <path d="M60,60 h40 l20,20 v58 h-60 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M100,60 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="72" y1="96" x2="108" y2="96" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="72" y1="112" x2="108" y2="112" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="72" y1="128" x2="96" y2="128" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="146" cy="76" r="16" fill="#4cb782" fill-opacity="0.18" stroke="#4cb782" stroke-opacity="0.6" stroke-width="2"/><text class="s" x="146" y="85" font-size="26" fill="#4cb782" text-anchor="middle">+</text>
+  <text class="s" x="315" y="84" font-size="22" fill="#8a8f98" text-anchor="middle">within two seconds</text>
+  <line x1="170" y1="100" x2="460" y2="100" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M443.56439907437846,107.33968815507227 L460,100 L443.56439907437846,92.66031184492773" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="500" y="58" width="120" height="84" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="518" y1="86" x2="574" y2="86" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="518" y1="110" x2="574" y2="110" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="594" cy="86" r="6" fill="#4cb782"/>
+  <text class="s" x="36" y="186" font-size="22" fill="#8a8f98">one line, added</text>
+  <text class="s" x="664" y="186" font-size="22" fill="#4cb782" text-anchor="end">the server was serving it</text>
+  <path d="M60,250 h40 l20,20 v58 h-60 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M100,250 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="72" y1="286" x2="108" y2="286" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="72" y1="302" x2="108" y2="302" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="72" y1="318" x2="96" y2="318" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="146" cy="266" r="16" fill="#f2994a" fill-opacity="0.18" stroke="#f2994a" stroke-opacity="0.6" stroke-width="2"/><text class="s" x="146" y="275" font-size="26" fill="#f2994a" text-anchor="middle">–</text>
+  <text class="s" x="315" y="274" font-size="22" fill="#8a8f98" text-anchor="middle">then deleted</text>
+  <line x1="170" y1="290" x2="460" y2="290" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M443.56439907437846,297.3396881550723 L460,290 L443.56439907437846,282.6603118449277" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="500" y="248" width="120" height="84" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="518" y1="276" x2="574" y2="276" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="518" y1="300" x2="574" y2="300" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="594" cy="276" r="6" fill="#4cb782"/>
+  <text class="s" x="36" y="376" font-size="22" fill="#8a8f98">the same line, deleted</text>
+  <text class="s" x="664" y="376" font-size="22" fill="#4cb782" text-anchor="end">the server stopped serving it</text>
+  <text class="s" x="350" y="434" font-size="22" fill="#8a8f98" text-anchor="middle">A sleeping watcher would have shown me the old file</text>
+  <text class="s" x="350" y="466" font-size="22" fill="#8a8f98" text-anchor="middle">both times. Nothing restarted.</text>
+</svg>

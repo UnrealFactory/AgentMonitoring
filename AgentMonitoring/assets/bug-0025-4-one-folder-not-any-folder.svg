@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400" role="img" aria-label="The rule used to match any folder with that name; it now names one folder, the data folder at the top of this repository.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that. The narrowest column a record page gives a picture is
+       395, so this arrives a shade over half size and 22 comes back as 12 — over the 11 at
+       the bottom of this app's type scale. Type is asked for by role, never by name: an
+       <img> is a document of its own and cannot reach the Inter this app bundles, so the
+       reader's own interface face sets these labels and every one keeps a fifth of its box
+       empty. Icons in one band, their labels in the next, the closing line in its own band
+       at the foot — nothing overlaps at any width the page draws this at.
+       No new pattern is drawn: the record says the rule is written out in full, and never spells it.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the three orange folders and "any folder with that name" — "not any folder", and beat 2’s "any path with a folder called AgentMonitoring in it"
+         · the arrow "now" — "The rule now names one folder"
+         · the green folder, its tick and its two labels — "It points at the data folder at the top of this repository, written out in full."
+         · the closing line — "Writes into it still cause no reload"
+         · no new pattern is drawn: the record says the rule is written out in full and never spells it. -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="400" rx="8" fill="#121317"/>
+
+  <path d="M56,72 q0,-10 10,-10 h30.72 l12,14 h43.28 q10,0 10,10 v42 q0,10 -10,10 h-76 q-10,0 -10,-10 z"
+      fill="#f2994a" fill-opacity="0.1" stroke="#f2994a" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M140,124 q0,-10 10,-10 h30.72 l12,14 h43.28 q10,0 10,10 v42 q0,10 -10,10 h-76 q-10,0 -10,-10 z"
+      fill="#f2994a" fill-opacity="0.1" stroke="#f2994a" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M62,176 q0,-10 10,-10 h30.72 l12,14 h43.28 q10,0 10,10 v42 q0,10 -10,10 h-76 q-10,0 -10,-10 z"
+      fill="#f2994a" fill-opacity="0.1" stroke="#f2994a" stroke-width="2.6" stroke-linejoin="round"/>
+  <text class="s" x="340" y="130" font-size="22" fill="#e8e9eb" text-anchor="middle">now</text>
+  <line x1="280" y1="146" x2="400" y2="146" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M383.56439907437846,153.33968815507225 L400,146 L383.56439907437846,138.66031184492775" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M440,122 q0,-10 10,-10 h38.4 l12,14 h59.60000000000001 q10,0 10,10 v58 q0,10 -10,10 h-100 q-10,0 -10,-10 z"
+      fill="#4cb782" fill-opacity="0.12" stroke="#4cb782" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M484,158 l11,12 l21,-26" fill="none" stroke="#4cb782" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="s" x="36" y="274" font-size="22" fill="#f2994a">any folder with that name</text>
+  <text class="s" x="664" y="274" font-size="22" fill="#4cb782" text-anchor="end">the data folder at the top</text>
+  <text class="s" x="664" y="306" font-size="22" fill="#8a8f98" text-anchor="end">of this repository, written out in full</text>
+  <text class="s" x="350" y="360" font-size="22" fill="#8a8f98" text-anchor="middle">Writes into it still cause no reload.</text>
+</svg>

@@ -409,6 +409,67 @@ console.log("fixtures");
   eq("…as the opening", one.lede, "The tool wrote the same file twice and the second write won.");
 }
 
+// 10e. …and the picture a beat opens on (src/lib/human.ts). The style contract asks for one
+// scene per beat that earns it, drawn between the lead-in and the paragraph — "the reader
+// takes the beat once as a picture and once in words" (docs/HUMAN_STYLE.md) — so the image
+// that stands FIRST in a beat's body is handed to the screen as that beat's scene. Every
+// other image in a retelling is left exactly where its author typed it, which is what the
+// rest of these fixtures pin: this module survived six critic rounds on 110 live records,
+// and a picture is not a licence to move one byte of them.
+{
+  const doc = (...paragraphs) => paragraphs.join("\n\n");
+  const img = "![The rule skipped every file in the repository.](assets/bug-0025-3-the-repo.svg)";
+  const opening = "Change a file while the app is running and nothing changes on screen.";
+
+  // First in the beat's body: the scene, and the paragraph under it keeps its words. (Every
+  // retelling here closes on a rule of thumb, because the last short paragraph of one is
+  // lifted into the accent block whatever beat it sits in — fixture 10d — and a fixture that
+  // forgot to write one would be measuring that rule instead of this one.)
+  const close = "Check what you are standing in.";
+  const scene = readHumanStory(doc(opening, "**But the repository is itself named AgentMonitoring.**", img, "So the watcher skipped all of them.", close));
+  eq("a beat that opens on an image hands that image over as its scene", scene.beats[0].figure, img);
+  eq("…and the paragraph under it is the beat's body", scene.beats[0].body, "So the watcher skipped all of them.");
+  eq("…with the lead-in untouched", scene.beats[0].lead, "But the repository is itself named AgentMonitoring.");
+  eq("…and the opening where the author put it", scene.lede, opening);
+  eq("…and the closing line still lifted off the end", scene.takeaway, close);
+
+  // Second in the beat's body: today's behaviour, which is the figure the renderer draws
+  // under the paragraph it follows. Nothing is lifted and nothing is reordered.
+  const mid = readHumanStory(doc(opening, "**But the repository is itself named AgentMonitoring.**", "So the watcher skipped all of them.", img));
+  eq("an image further down a beat is not lifted", mid.beats[0].figure, null);
+  eq("…and stays in the body, after the words it follows", mid.beats[0].body, doc("So the watcher skipped all of them.", img));
+
+  // Between two beats: the same thing said another way — an image is "between" beats only
+  // in the reading; in the source it is the last block of the beat above it.
+  const between = readHumanStory(
+    doc(opening, "**One line of settings hid the whole project.**", "The server reads its settings from that file.", img, "**The rule now names one folder.**", "It points at the data folder.", close),
+  );
+  eq("an image between two beats belongs to the beat above it", between.beats[0].figure, null);
+  eq("…where it stays", between.beats[0].body, doc("The server reads its settings from that file.", img));
+  eq("…and the beat below it opens on its own words", between.beats[1].figure, null);
+  eq("…with two beats, not three", between.beats.length, 2);
+
+  // A beat-less retelling — the shape a thin record gets — has no beat to put a scene in,
+  // so its image stays in the opening run and is drawn where it was written.
+  const beatless = readHumanStory(doc(opening, img, "A rule that skips everything skips you too."));
+  eq("a beat-less retelling keeps its image in the opening", beatless.beats.length, 0);
+  check("…where the author put it", beatless.lede.includes(img), beatless.lede);
+  eq("…and still closes on its last line", beatless.takeaway, "A rule that skips everything skips you too.");
+
+  // An image with a sentence beside it is one paragraph, not a figure — the same reading
+  // lib/markdown-parse.ts takes of the same bytes, one step later.
+  const inline = readHumanStory(doc(opening, "**One line of settings hid the whole project.**", `${img} The server reads its settings from that file.`));
+  eq("an image sharing a paragraph is not a scene", inline.beats[0].figure, null);
+  check("…and the paragraph is left whole", inline.beats[0].body.startsWith(img), inline.beats[0].body);
+
+  // A beat that is a lead-in and a picture: the scene is lifted, and nothing is left to draw
+  // under it. The closing-line floor holds on the way past — an image is not a rule of thumb.
+  const only = readHumanStory(doc(opening, "**But the repository is itself named AgentMonitoring.**", img));
+  eq("a beat that is a lead-in and a picture keeps the picture", only.beats[0].figure, img);
+  eq("…with an empty body", only.beats[0].body, "");
+  eq("…and no closing line invented out of it", only.takeaway, null);
+}
+
 // 11. A resolution written as plain prose is left exactly as it is — no invented headings.
 {
   const src = "Replaced the capturing closure with a free function.\n\nVerified with `cargo build`.";
@@ -674,7 +735,15 @@ function sweep(file) {
   if (halves.human) {
     const story = readHumanStory(halves.human);
     const retold = bare(
-      [story.lede, ...story.beats.map((b) => `${b.lead} ${b.trailer} ${b.body}`), story.takeaway ?? ""].join("\n"),
+      [
+        story.lede,
+        // `figure` too: a beat's scene is carved off its body and drawn above the words
+        // (src/lib/human.ts), and the alt text inside that line is a sentence of the record
+        // — the caption the reader is left holding. Carving it out of one field and into
+        // another may lose no more of it than promoting a lead-in loses.
+        ...story.beats.map((b) => `${b.lead} ${b.trailer} ${b.figure ?? ""} ${b.body}`),
+        story.takeaway ?? "",
+      ].join("\n"),
     );
     const gone = lost(halves.human, retold);
     check(`${name} retells without loss`, gone.length === 0, gone.slice(0, 6).join(" · "));

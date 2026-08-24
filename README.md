@@ -219,6 +219,9 @@ npm run check:i18n       # every screen in Korean: no English left in the app's 
                          # no Korean word broken across a line — on this repo's records and on
                          # Korean-content fixtures built for the run with the release CLI
 npm run check:errors     # every backend failure, read through the app's words, on both transports
+npm run check:scenes     # the pictures inside records: every label measured in two faces — no
+                         # overlap, nothing past an edge, nothing under the type floor at the
+                         # narrowest column a record page gives a picture
 ```
 
 Every gate that reads words off the screen takes `--locale ko|en` and reads its

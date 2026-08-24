@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 750" width="700" height="750" role="img" aria-label="One stored sentence whose second line begins 200. is drawn as three blocks, with a 1. where the 200 was.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that. The narrowest column a record page gives a picture is
+       395, so this arrives a shade over half size and 22 comes back as 12 — over the 11 at
+       the bottom of this app's type scale. Type is asked for by role, never by name: an
+       <img> is a document of its own and cannot reach the Inter this app bundles, so the
+       reader's own interface face sets these labels and every one keeps a fifth of its box
+       empty. Icons in one band, their labels in the next, the closing line in its own band
+       at the foot — nothing overlaps at any width the page draws this at.
+       The sentence is set in the reading face: it is this record's retelling, not a quotation of the stored bytes. Monospace is kept for the two literals the record names.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the page and the card holding two lines — "A sentence too long for one line had wrapped, and the next line began “200.”."
+         · the 200 inside the card — "It answered 503 for three hours, then 200"
+         · the arrow and the file it names — "src/lib/markdown.tsx, the file that turns a stored record into a page"
+         · the window and its three blocks, the middle one a list item — "one sentence had been broken into three"
+         · the orange 1. and the closing lines — "the 200 was gone, a “1.” stood in its place" -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="750" rx="8" fill="#121317"/>
+
+  <path d="M36,60 h40 l20,20 v58 h-60 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M76,60 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="48" y1="96" x2="84" y2="96" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="48" y1="112" x2="84" y2="112" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="48" y1="128" x2="72" y2="128" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="130.5" y="48.5" width="537" height="143" rx="10" fill="#16171a" stroke="#fff" stroke-opacity="0.09"/>
+  <text class="s" x="156" y="104" font-size="22" fill="#e8e9eb">…answered 503 for three hours, then</text>
+  <text class="s" x="156" y="152" font-size="22" fill="#e8e9eb"><tspan class="m" fill="#4cb782">200.</tspan> …</text>
+  <text class="s" x="36" y="236" font-size="22" fill="#8a8f98">one sentence, too long for one line, so it wrapped</text>
+  <text class="s" x="350" y="288" font-size="22" fill="#8a8f98" text-anchor="middle">drawn as a page by</text>
+  <text class="m" x="350" y="320" font-size="22" fill="#a5adf0" text-anchor="middle"><tspan class="m">src/lib/markdown.tsx</tspan></text>
+  <line x1="350" y1="336" x2="350" y2="382" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M342.6603118449277,365.56439907437846 L350,382 L357.3396881550723,365.56439907437846" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="36" y="396" width="632" height="244" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="36" y1="424" x2="668" y2="424" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="54" cy="410" r="4" fill="#8a8f98"/>
+     <circle cx="70" cy="410" r="4" fill="#8a8f98"/>
+     <circle cx="86" cy="410" r="4" fill="#8a8f98"/>
+  <rect x="60.5" y="440.5" width="583" height="53" rx="8" fill="#16171a" stroke="#fff" stroke-opacity="0.09"/>
+  <text class="s" x="84" y="476" font-size="22" fill="#e8e9eb">…answered 503 for three hours, then</text>
+  <text class="s" x="620" y="476" font-size="22" fill="#8a8f98" text-anchor="end">paragraph</text>
+  <rect x="60.5" y="506.5" width="583" height="53" rx="8" fill="#f2994a" fill-opacity="0.10" stroke="#f2994a" stroke-opacity="0.45"/>
+  <text class="s" x="84" y="542" font-size="22" fill="#e8e9eb"><tspan class="m" fill="#f2994a">1.</tspan> …</text>
+  <text class="s" x="620" y="542" font-size="22" fill="#f2994a" text-anchor="end">list item</text>
+  <rect x="60.5" y="572.5" width="583" height="53" rx="8" fill="#16171a" stroke="#fff" stroke-opacity="0.09"/>
+  <text class="s" x="84" y="608" font-size="22" fill="#e8e9eb">…</text>
+  <text class="s" x="620" y="608" font-size="22" fill="#8a8f98" text-anchor="end">paragraph</text>
+  <text class="s" x="350" y="690" font-size="22" fill="#8a8f98" text-anchor="middle">one sentence, broken into three —</text>
+  <text class="s" x="350" y="722" font-size="22" fill="#8a8f98" text-anchor="middle">the <tspan class="m" fill="#4cb782">200</tspan> gone, a <tspan class="m" fill="#f2994a">1.</tspan> in its place</text>
+</svg>

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 410" width="700" height="410" role="img" aria-label="A cold server left the page running on two copies of React, the toolkit that draws every screen.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that. The narrowest column a record page gives a picture is
+       395, so this arrives a shade over half size and 22 comes back as 12 — over the 11 at
+       the bottom of this app's type scale. Type is asked for by role, never by name: an
+       <img> is a document of its own and cannot reach the Inter this app bundles, so the
+       reader's own interface face sets these labels and every one keeps a fifth of its box
+       empty. Icons in one band, their labels in the next, the closing line in its own band
+       at the foot — nothing overlaps at any width the page draws this at.
+       The two boxes inside the window are the record's own count: two copies, of the one toolkit it names.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the server with an amber light — "A cold server", "The server I run the app from while working"
+         · the arrow "handed over" — "handed the page two copies of the same toolkit"
+         · the window holding two boxes — "For a moment the screen was running on two copies of React"
+         · the second label — "React, the toolkit that draws every screen here"
+         · the closing lines — "discovers some of the app’s parts only when the first page asks for them, then reloads in the middle of that page" -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="410" rx="8" fill="#121317"/>
+
+  <rect x="36" y="60" width="120" height="84" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="54" y1="88" x2="110" y2="88" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="54" y1="112" x2="110" y2="112" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="130" cy="88" r="6" fill="#f2994a"/>
+  <text class="s" x="300" y="86" font-size="22" fill="#8a8f98" text-anchor="middle">handed over</text>
+  <line x1="180" y1="102" x2="420" y2="102" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M403.56439907437846,109.33968815507227 L420,102 L403.56439907437846,94.66031184492773" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="440" y="46" width="224" height="130" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="440" y1="74" x2="664" y2="74" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <circle cx="458" cy="60" r="4" fill="#8a8f98"/>
+     <circle cx="474" cy="60" r="4" fill="#8a8f98"/>
+     <circle cx="490" cy="60" r="4" fill="#8a8f98"/>
+  <rect x="458.5" y="100.5" width="91" height="43" rx="6" fill="#0e0f11" stroke="#fff" stroke-opacity="0.09"/>
+  <text class="m" x="504" y="130" font-size="22" fill="#f2994a" text-anchor="middle"><tspan class="m">React</tspan></text>
+  <rect x="558.5" y="100.5" width="91" height="43" rx="6" fill="#0e0f11" stroke="#fff" stroke-opacity="0.09"/>
+  <text class="m" x="604" y="130" font-size="22" fill="#f2994a" text-anchor="middle"><tspan class="m">React</tspan></text>
+  <text class="s" x="36" y="222" font-size="22" fill="#8a8f98">the server I work from, still cold</text>
+  <text class="s" x="664" y="254" font-size="22" fill="#f2994a" text-anchor="end">two copies of React,</text>
+  <text class="s" x="664" y="286" font-size="22" fill="#8a8f98" text-anchor="end">the toolkit that draws every screen</text>
+  <text class="s" x="350" y="340" font-size="22" fill="#8a8f98" text-anchor="middle">It finds some of the app's parts only when the first</text>
+  <text class="s" x="350" y="372" font-size="22" fill="#8a8f98" text-anchor="middle">page asks, then reloads in the middle of that page.</text>
+</svg>

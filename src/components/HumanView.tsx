@@ -399,6 +399,13 @@ export function HumanStoryView({ human, agent }: { human: string; agent: string 
               </span>
             )}
           </h2>
+          {/* The beat's scene, where the style contract puts it: above the words, under the
+              lead-in it belongs to (docs/HUMAN_STYLE.md, "The scene goes inside the beat").
+              It is the author's own `![…](assets/…)` line, drawn by the app's one renderer
+              — same path lock, same blob URL, same visible refusal when the file cannot be
+              read (lib/markdown.tsx) — so a picture here and a picture anywhere else in the
+              retelling are the same picture, differing only in where they sit. */}
+          {beat.figure && <Markdown className="human-beat-figure" source={beat.figure} />}
           {beat.body.trim() && <Markdown className="human-beat-body" source={beat.body} figures />}
         </section>
       ))}

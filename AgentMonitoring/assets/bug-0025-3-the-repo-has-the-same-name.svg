@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 620" width="700" height="620" role="img" aria-label="Every file in the repository — the app's code, the scripts, the settings file — skipped, with the watcher shut and never restarting.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that. The narrowest column a record page gives a picture is
+       395, so this arrives a shade over half size and 22 comes back as 12 — over the 11 at
+       the bottom of this app's type scale. Type is asked for by role, never by name: an
+       <img> is a document of its own and cannot reach the Inter this app bundles, so the
+       reader's own interface face sets these labels and every one keeps a fifth of its box
+       empty. Icons in one band, their labels in the next, the closing line in its own band
+       at the foot — nothing overlaps at any width the page draws this at.
+       Three files, because the beat names three. The shut eye is the watcher of scene 2, seeing nothing.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the folder and its label — "But the repository is itself named AgentMonitoring." / "That is the project’s own folder on disk"
+         · the three pages and their labels — "the app’s code, the scripts, and the settings file carrying the rule"
+         · the "skipped — all of them" pill — "So the watcher skipped all of them"
+         · the shut eye and "the watcher saw none of it" — "It could not see its own settings change either"
+         · the closing lines — "It could not see its own settings change either, so it never restarted itself." -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="620" rx="8" fill="#121317"/>
+
+  <path d="M32,68 q0,-10 10,-10 h202.24 l12,14 h407.76000000000005 q10,0 10,10 v242 q0,10 -10,10 h-612 q-10,0 -10,-10 z"
+      fill="#8a8f98" fill-opacity="0" stroke="#8a8f98" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M90,116 h40 l20,20 v58 h-60 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M130,116 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="102" y1="152" x2="138" y2="152" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="102" y1="168" x2="138" y2="168" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="102" y1="184" x2="126" y2="184" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M300,116 h40 l20,20 v58 h-60 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M340,116 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="312" y1="152" x2="348" y2="152" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="312" y1="168" x2="348" y2="168" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="312" y1="184" x2="336" y2="184" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M510,116 h40 l20,20 v58 h-60 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M550,116 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="522" y1="152" x2="558" y2="152" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="522" y1="168" x2="558" y2="168" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="522" y1="184" x2="546" y2="184" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="s" x="120" y="236" font-size="22" fill="#e8e9eb" text-anchor="middle">the app's code</text>
+  <text class="s" x="330" y="236" font-size="22" fill="#e8e9eb" text-anchor="middle">the scripts</text>
+  <text class="s" x="540" y="236" font-size="22" fill="#e8e9eb" text-anchor="middle">the settings file</text>
+  <rect x="200.5" y="268.5" width="299" height="37" rx="18.5" fill="#f2994a" fill-opacity="0.14" stroke="#f2994a" stroke-opacity="0.45"/><text class="s" x="350" y="294" font-size="22" fill="#f2994a" text-anchor="middle">skipped — all of them</text>
+  <text class="s" x="32" y="366" font-size="22" fill="#8a8f98">the repository, itself named <tspan class="m" fill="#a5adf0">AgentMonitoring</tspan></text>
+  <path d="M306,424 q44,24 88,0" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="322" y1="434" x2="316" y2="448" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="350" y1="438" x2="350" y2="452" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+     <line x1="378" y1="434" x2="384" y2="448" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="s" x="350" y="490" font-size="22" fill="#8a8f98" text-anchor="middle">the watcher saw none of it</text>
+  <text class="s" x="350" y="542" font-size="22" fill="#8a8f98" text-anchor="middle">It could not see its own settings change either,</text>
+  <text class="s" x="350" y="574" font-size="22" fill="#8a8f98" text-anchor="middle">so it never restarted itself.</text>
+</svg>

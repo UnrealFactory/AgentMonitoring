@@ -15,7 +15,10 @@
  * as a beat.
  *
  * **Nothing is summarised, reordered, counted or invented.** The lead-in is promoted from
- * bold to a heading, the rest is rendered where the author put it, and a retelling that
+ * bold to a heading, a picture the author opened a beat with is handed over as that beat's
+ * scene — named, never moved: it is drawn in the place it already occupies, between the
+ * lead-in above it and the paragraph below ({@link HumanBeat.figure}) — the rest is
+ * rendered where the author put it, and a retelling that
  * carries no lead-ins at all (a thin record's, which the contract says gets none) comes back
  * as an opening run and the line it closed on — the two things every retelling has, beats or
  * no beats. The splitting itself is lib/sections.ts's, called with `min: 1` — the reasoning
@@ -30,6 +33,25 @@ export interface HumanBeat {
   lead: string;
   /** The clause the author bound to that sentence, when there is one. */
   trailer: string;
+  /**
+   * The scene this beat opens on, exactly as the author wrote the line —
+   * `![what it shows](assets/bug-0025-2-one-line-of-settings.svg)` — or `null`, which is
+   * most beats.
+   *
+   * The style contract asks for the picture *inside* the beat, above its words: "after the
+   * bold lead-in, before the paragraph — so the reader takes the beat once as a picture and
+   * once in words" (docs/HUMAN_STYLE.md). The screen can only draw it there if it knows
+   * which image that is, so the one that stands **first** in the body is handed over
+   * separately and the rest of the body follows it.
+   *
+   * First, and nothing weaker: the line has to be the beat's own opening block, alone in its
+   * paragraph — the same shape lib/markdown-parse.ts already draws as a figure. An image
+   * further down a beat, one between two beats, one in the opening run, one sharing a
+   * paragraph with a sentence: every one of those is left exactly where it was and rendered
+   * by the same renderer as before. Nothing is moved, and no beat gains a picture it did not
+   * have.
+   */
+  figure: string | null;
   /** Markdown source of the rest of the beat. */
   body: string;
 }
@@ -82,6 +104,37 @@ const MAX_TAKEAWAY = 200;
 
 /** A line that starts a block which is not a plain paragraph. */
 const NOT_PROSE = /^\s*(?:[-*+]|\d{1,9}[.)]|>|#{1,6}\s|```|~~~|\||!\[)/;
+
+/**
+ * A block that is nothing but `![alt](src)`.
+ *
+ * The same test lib/markdown-parse.ts applies to decide that a paragraph is a *figure*
+ * rather than a sentence with a picture in it, so the two cannot disagree about what one
+ * line is: an image with a word beside it stays inline prose there and stays in the body
+ * here.
+ */
+const FIGURE_BLOCK = /^!\[[^\]]*\]\([^)\s]+\)$/;
+
+/**
+ * Lift the scene off the front of a beat, when the author opened the beat with one.
+ *
+ * The block has to be the *first* one in the body and has to be the whole of it — the
+ * author's own paragraph break is what says "this line is a picture, not a sentence", and
+ * without one the line is part of the paragraph it was typed into. Everything else about
+ * the beat is untouched, including a body that is nothing but the picture.
+ *
+ * Called after the closing line has been lifted, deliberately: that reading is of the bytes
+ * as the author left them ({@link readHumanStory}), and a beat carved here first would hand
+ * it a different last paragraph than the retelling actually ends on.
+ */
+function liftFigure(beat: HumanBeat): HumanBeat {
+  const lines = beat.body.split("\n");
+  let end = 0;
+  while (end < lines.length && lines[end].trim()) end += 1;
+  const first = lines.slice(0, end).join("\n").trim();
+  if (!FIGURE_BLOCK.test(first)) return beat;
+  return { ...beat, figure: first, body: lines.slice(end).join("\n").replace(/^\s+/, "") };
+}
 
 /**
  * Lift the closing line off the end of a run of markdown.
@@ -148,6 +201,7 @@ export function readHumanStory(source: string): HumanStory {
        in a contents rail and wrong here (lib/sections.ts). */
     lead: part.raw,
     trailer: part.trailer,
+    figure: null,
     body: part.body,
   }));
 
@@ -172,6 +226,9 @@ export function readHumanStory(source: string): HumanStory {
      *beat* is a different question, and it is answered below. */
   const last = beats[beats.length - 1];
   if (!last) {
+    /* A retelling with no beats has nowhere to put a scene — a picture belongs *inside* a
+       beat, above its words, and there is no beat here. Whatever images it holds stay in
+       the opening run and are drawn where the author put them. */
     const { body, takeaway } = carveTakeaway(split.preamble);
     return { lede: body.trim(), beats, takeaway };
   }
@@ -208,7 +265,7 @@ export function readHumanStory(source: string): HumanStory {
 
   const { body, takeaway } = carveTakeaway(last.body, closes);
   if (takeaway) beats[beats.length - 1] = { ...last, body };
-  return { lede: split.preamble.trim(), beats, takeaway };
+  return { lede: split.preamble.trim(), beats: beats.map(liftFigure), takeaway };
 }
 
 /** Whether a record carries a human area at all — blank is the same as absent. */

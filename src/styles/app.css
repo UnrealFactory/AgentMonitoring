@@ -2899,6 +2899,20 @@ a.button {
   margin-top: var(--space-3);
 }
 
+/* The beat's scene: the picture its author put first in the beat, drawn between the lead-in
+   and the words (src/lib/human.ts, docs/HUMAN_STYLE.md). Nothing here restyles the picture
+   — `.prose-figure` already gives it the dark well, the hairline and the alt text as a
+   caption in tertiary ink, which is what the approved mock draws. What this rule owns is
+   where the picture sits in the beat: a little closer to the lead-in it illustrates than to
+   the paragraph under it, so the eye reads them as one unit and the text starts clean. */
+.human-view .prose.human-beat-figure {
+  margin-top: var(--space-3);
+}
+
+.human-view .prose.human-beat-figure + .prose.human-beat-body {
+  margin-top: var(--space-4);
+}
+
 /* The line the reader is meant to leave holding. The one accent-painted block on this page,
    and it is two lines long: the system's "colour is carried by dots and pills" rule is about
    painting *large* areas, and this is the smallest area on the page that could carry it. */
