@@ -130,6 +130,14 @@ for the same reason: the startup flags are the only identity.
 override the startup defaults. Times are UTC ISO8601 (`2026-08-18T09:12:00Z`) and record
 when a thing really happened — pass them when writing up work after the fact.
 
+Two CLI verbs have **no MCP counterpart on purpose**: `agentmon reconcile` (the
+two-machine id-collision repair) and the `--replayed` flag on `work update` / `bug
+comment`. Both are git-time recovery operations — they run once, next to a failed pull,
+rewriting or reconstructing history rather than recording new work — and a tool that
+rewrites history does not belong in the set an agent reaches for on every task. When a
+pull collides on `worklogs/WORK-NNNN.md`, use the terminal:
+[AGENT_MANUAL.md, "Two machines, one repo"](AGENT_MANUAL.md#recipe-5--two-machines-one-repo).
+
 ### `human`, on every write tool
 
 The record's [human area](AGENT_MANUAL.md#the-human-area): the same events retold for a

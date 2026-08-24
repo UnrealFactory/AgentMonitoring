@@ -633,6 +633,80 @@ impl Store {
         Ok(Written::new(id, &path, event, record))
     }
 
+    /// Replay a progress note onto a work log at the time it **originally** happened —
+    /// the sanctioned exception to the ordering guard, for reconstruction only (SPEC.md,
+    /// "Backdating": the replay exception).
+    ///
+    /// The case it exists for is BUG-0027's recovery: a record lost to a two-machine id
+    /// collision is re-created with its real `--started-at`/`--finished-at`, and then its
+    /// in-progress notes have to go back in *at their real times* — which the normal guard
+    /// rightly refuses, because on a normal write a note dated before the close is a lie
+    /// about when. Here the honesty runs the other way, so three things change and only
+    /// three:
+    ///
+    ///   * the ceilings are waived — the note may predate `finished` and earlier notes;
+    ///     the floor stays: nothing on a record may predate `started`;
+    ///   * the entry is **inserted at its place in the timeline**, not appended, so the
+    ///     rendered record reads exactly as it would have if the note were never lost;
+    ///   * the event says so: the `work_updated` summary opens with `Replayed:`, because a
+    ///     reconstructed line must never pass for an original.
+    ///
+    /// `at` is required, not optional — a replay without the real time is not a replay —
+    /// and the note text is. Everything else (the human-area rule, the lock, the event
+    /// carrying the note's own timestamp so doctor can pair them) is the normal write.
+    pub fn replay_work_note(
+        &self,
+        id: &str,
+        agent: &str,
+        message: &str,
+        human_arg: Option<&str>,
+        at: &str,
+    ) -> Result<Written<WorklogDetail>> {
+        let dir = self.root().to_path_buf();
+        let agent = require_agent(agent)?;
+        human::check_agent_text(message, "--message/--message-file")?;
+        let note = validate::note(
+            message,
+            "work update",
+            "agentmon work update WORK-0011 --agent recovery-agent --replayed \\\n  \
+             --at 2026-08-22T10:05:00Z \\\n  \
+             --message \"Halfway: the parser round-trips; the writer still drops unknown keys.\"",
+        )?;
+        let id = validate_id(id, "WORK")?;
+        let supplied_human = match human_arg {
+            Some(h) => Some(human::require(h, &id)?),
+            None => None,
+        };
+        let ts = time::stamp(Some(at), "--at")?;
+        let _lock = ProjectLock::acquire(&dir)?;
+        let path = dir.join("worklogs").join(format!("{id}.md"));
+        let (fm, meta, md) = read_work(&path, &id)?;
+        let (agent_md, existing_human) = human::split(&md);
+
+        // The floor is not waived: a record has no history before it began.
+        time::require_at_or_after(&ts, "--at", &meta.started, "the work log's started time")?;
+        let human_text = resolve_human(supplied_human, existing_human, &id)?;
+
+        let entry = if agent == meta.agent {
+            note.clone()
+        } else {
+            format!("_Update by {agent}._\n\n{note}")
+        };
+        let mut sections = body::sections(&agent_md);
+        body::insert_entry_by_time(&mut sections, "Updates", &ts, &entry, WORK_SECTIONS);
+        write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &mut sections, &human_text)?;
+
+        let event = self.append_event_at(
+            &agent,
+            EV_WORK_UPDATED,
+            Some(&id),
+            &format!("Replayed: {}", body::excerpt(&note, 150)),
+            &ts,
+        )?;
+        let record = self.worklog(&id)?;
+        Ok(Written::new(id, &path, event, record))
+    }
+
     /// Stop a work log without finishing it: status `abandoned`, `finished` stamped with
     /// the moment it stopped, and the reason appended under `## Updates`.
     ///
@@ -983,6 +1057,64 @@ impl Store {
                 &ts,
             )?,
         };
+        let record = self.bug(&id)?;
+        Ok(Written::new(id, &path, event, record))
+    }
+
+    /// Replay a comment onto a bug's thread at the time it originally happened — the
+    /// bug-side twin of [`Store::replay_work_note`], and the same contract: reconstruction
+    /// only, the floor (`created`) stays, the ceilings (the previous comment) are waived,
+    /// the entry lands in timeline order, and the `bug_commented` event opens with
+    /// `Replayed:` so it never passes for an original.
+    pub fn replay_bug_comment(
+        &self,
+        id: &str,
+        agent: &str,
+        message: &str,
+        human_arg: Option<&str>,
+        at: &str,
+    ) -> Result<Written<BugDetail>> {
+        let dir = self.root().to_path_buf();
+        let agent = require_agent(agent)?;
+        human::check_agent_text(message, "--message/--message-file")?;
+        let note = validate::note(
+            message,
+            "bug comment",
+            "agentmon bug comment BUG-0006 --agent recovery-agent --replayed \\\n  \
+             --at 2026-08-22T10:05:00Z \\\n  \
+             --message \"Root cause: the watcher was never started, so no change event was \
+             ever emitted.\"",
+        )?;
+        let id = validate_id(id, "BUG")?;
+        let supplied_human = match human_arg {
+            Some(h) => Some(human::require(h, &id)?),
+            None => None,
+        };
+        let ts = time::stamp(Some(at), "--at")?;
+        let _lock = ProjectLock::acquire(&dir)?;
+        let path = dir.join("bugs").join(format!("{id}.md"));
+        let (fm, meta, md) = read_bug(&path, &id)?;
+        let (md, existing_human) = human::split(&md);
+        time::require_at_or_after(&ts, "--at", &meta.created, "the bug's created time")?;
+        let human_text = resolve_human(supplied_human, existing_human, &id)?;
+
+        let mut sections = body::sections(&md);
+        body::insert_entry_by_time(
+            &mut sections,
+            "Comments",
+            &format!("{ts} — {agent}"),
+            &note,
+            BUG_SECTIONS,
+        );
+        write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &mut sections, &human_text)?;
+
+        let event = self.append_event_at(
+            &agent,
+            EV_BUG_COMMENTED,
+            Some(&id),
+            &format!("Replayed: {}", body::excerpt(&note, 150)),
+            &ts,
+        )?;
         let record = self.bug(&id)?;
         Ok(Written::new(id, &path, event, record))
     }

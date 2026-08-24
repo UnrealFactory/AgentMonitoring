@@ -878,6 +878,75 @@ never lifts a number out of your prose to summarise it — figures are set in fu
 numerals inside the evidence panel, in the sentence you put them in. Write the before and
 the after in that sentence ("peaked at 3, against 94 before") and the reader gets both.
 
+### Recipe 5 — two machines, one repo
+
+One project, worked on from two computers, records synced through git. Ids are counted
+from local files (`WORK-0010` on disk → the next log is `WORK-0011`, on every machine),
+so this **will** happen the first time both machines write while out of sync:
+
+```bash
+# machine A (offline):  agentmon work start ...   → WORK-0011
+# machine B (offline):  agentmon work start ...   → also WORK-0011, for different work
+# machine A pushes. Then, on machine B:
+git pull
+# error: The following untracked working tree files would be overwritten by merge:
+#   AgentMonitoring/worklogs/WORK-0011.md
+# ...and events.jsonl now points one id at two different pieces of work.
+```
+
+Do **not** delete either record, and do not re-create anything by hand. The repair is one
+command, run from the repo root on the machine that has *not* pushed yet (its records are
+the ones nobody else has seen, so they are the ones that move):
+
+```bash
+# 1. Get the incoming copy somewhere readable without merging it: a worktree of the
+#    fetched branch. (If a pull already half-ran: `git merge --abort` first.)
+git fetch origin
+git worktree add ../incoming origin/main
+
+# 2. Dry run — prints exactly what would move where, and touches nothing.
+agentmon reconcile --theirs ../incoming/AgentMonitoring
+#   WORK-0011 → WORK-0015    local (moves):    "B's work..."  (agent-b, ...)
+#                            incoming (stays): "A's work..."  (agent-a, ...)
+#   ...every local refs: entry, prose mention and events.jsonl line listed...
+
+# 3. Apply. Local records are re-keyed to ids free on BOTH machines; every local file and
+#    event that pointed at them is rewritten in the same move; a mapping is printed; and
+#    `events.jsonl merge=union` is installed in AgentMonitoring/.gitattributes so the two
+#    event logs merge by keeping both sides' lines — which, for an append-only log whose
+#    readers sort by timestamp, is the correct merge, on this pull and every future one.
+agentmon reconcile --theirs ../incoming/AgentMonitoring --apply
+git worktree remove ../incoming
+
+# 4. Commit the re-key, then pull: no path collides any more.
+git add AgentMonitoring
+git commit -m "reconcile: re-key record ids that collided with origin"
+git pull
+
+# 5. Prove the merged project is whole.
+agentmon doctor --strict
+```
+
+What reconcile will *not* move, on purpose: an id whose file is byte-identical on both
+sides (already synced — nothing to do), and one record *edited* on both sides (same
+title/agent/start on both: that is one record with two texts, an ordinary git content
+merge, and re-keying it would fork its history). It prints both kinds with the reason.
+`--only WORK-0011,BUG-0006` re-keys exactly those ids if the automatic classification
+ever gets one wrong.
+
+If a record was lost before this tool existed and you rebuilt it by hand (`work start
+--started-at` + `work done --finished-at`), its in-progress notes can go back in **at
+their real times** — the one sanctioned exception to the ordering guard:
+
+```bash
+agentmon work update WORK-0015 --agent <you> --replayed \
+  --at 2026-08-22T10:05:00Z --message "<the lost note, verbatim>"
+# inserted at its place in the timeline; the event summary opens with "Replayed:"
+```
+
+`--replayed` exists on `work update` and `bug comment`, needs both `--at` and
+`--message`, and still refuses a time before the record began ([Backdating](#backdating)).
+
 ---
 
 ## Backdating
@@ -901,6 +970,7 @@ takes the time it really happened; nothing is inferred from when you typed it.
 | `note add` | `--at` | `created`, `updated` and the `note_created` event |
 | `note update` | `--at` | `updated` and the `note_updated` event |
 | `note remove` | `--at` | the `note_removed` event |
+| `reconcile --apply` | `--at` | the `project_updated` event an applied re-key logs |
 
 **Accepted spellings.** UTC ISO8601 is the canonical one; the rest are conveniences and
 are stored normalized to it:
@@ -926,6 +996,15 @@ Two rules, both enforced with exit `2` before anything is written:
    log's started time (2026-08-18T11:00:00Z) — timelines are rendered in order, so an
    out-of-order timestamp would show the work happening backwards
    ```
+
+**The one exception to rule 2 — replays.** `work update --replayed` and `bug comment
+--replayed` may write an entry *before* the record's close and before its later entries,
+because they exist for exactly one job: putting a lost note back into a record that was
+re-created after a sync collision ([Recipe 5](#recipe-5--two-machines-one-repo)). A replay
+requires an explicit `--at` and a `--message` (exit `2` without both), still refuses a
+time before `started`/`created`, lands at its place in the timeline instead of the end,
+and its event summary opens with `Replayed:` so it never passes for an original. Rule 1
+has no exception: the future stays refused, replay or not.
 
 If you genuinely do not know when something happened, leave the flag off: `now` is honest,
 and a wrong timestamp is worse than an imprecise one.
@@ -1067,7 +1146,7 @@ itself; nothing of that works yet."
 agentmon work update <WORK-ID> --agent <name>
                      (--message <text> | --body-file <file|-> | --message-file <file|->
                       | --human <text> | --human-file <file|->)
-                     [--at <ISO8601>] [--json]
+                     [--at <ISO8601>] [--replayed] [--json]
 ```
 
 Appends a timestamped note under `## Updates`. Append-only: notes are never edited or
@@ -1083,7 +1162,10 @@ refused is *changing* a closed record: `work done` and `work abandon` still fail
 `--message-file` and `--body-file` are the same flag under two names. `--at` stamps the
 note with the time it describes, which must be at or after `started`, at or after the
 previous note, and — on a record that has closed — at or after `finished`
-([Backdating](#backdating)).
+([Backdating](#backdating)). `--replayed` (with `--at` and `--message`, both required) is
+the one exception, for reconstruction only: the note may predate the close and the notes
+around it, it is inserted at its place in the timeline, and the event summary opens with
+`Replayed:` ([Recipe 5](#recipe-5--two-machines-one-repo)).
 
 ```bash
 agentmon work update WORK-0004 --agent my-agent \
@@ -1240,12 +1322,15 @@ agentmon bug claim BUG-0002 --agent my-agent \
 agentmon bug comment <BUG-ID> --agent <name>
                      (--message <text> | --body-file <file|-> | --message-file <file|->
                       | --human <text> | --human-file <file|->)
-                     [--at <ISO8601>] [--json]
+                     [--at <ISO8601>] [--replayed] [--json]
 ```
 
 Appends `### <timestamp> — <agent>` to the thread. Allowed in any state.
 `--message-file` and `--body-file` are the same flag; `--at` must be at or after the bug's
-`created` and at or after the previous comment.
+`created` and at or after the previous comment. `--replayed` (with `--at` and `--message`,
+both required) is the reconstruction exception, exactly as on `work update`: the comment
+may predate later comments, lands in thread order, and its event says `Replayed:`
+([Recipe 5](#recipe-5--two-machines-one-repo)).
 
 ```bash
 agentmon bug comment BUG-0002 --agent my-agent \
@@ -1537,6 +1622,50 @@ second is the short form every refusal already prints.
 agentmon human-style
 ```
 
+### `agentmon reconcile`
+
+```
+agentmon reconcile --theirs <folder> [--apply] [--only WORK-NNNN,BUG-NNNN]
+                   [--agent <name>] [--at <ISO8601>] [--no-gitattributes] [--json]
+```
+
+Repairs a two-machine id collision: two clones of one repo, both writing offline, both
+allocating the same WORK-/BUG- numbers for different work, and the first `git pull`
+refusing on `worklogs/WORK-NNNN.md`. `--theirs` points at the incoming copy — a git
+worktree of the fetched branch, or the other machine's clone; it is read and never
+written. Where the same id holds different content on the two sides, the **local**
+(unpushed) record is re-keyed to the next id free on *both* sides, and everything
+pointing at it moves in the same operation: the file is renamed, its frontmatter `id`
+rewritten, every `refs:` entry and bare prose mention across local work logs, bugs and
+notes rewritten (the exact grammar the app links — `[[note-names]]` are never touched),
+and `events.jsonl` `ref` fields and summary mentions rewritten. A from→to mapping is
+printed either way.
+
+**Dry run by default.** Without `--apply` it prints the entire plan — every mapping, every
+file, the event-line counts — and writes nothing; `--apply` executes exactly that plan and
+logs one `project_updated` event carrying the mapping. Left alone, with the reason
+printed: ids byte-identical on both sides (already synced; naming one in `--only` is
+refused with exit `5`), and one record edited on both sides (a content merge — git's job,
+not a re-key). `--only` re-keys exactly the named ids when the automatic classification
+gets one wrong. Re-keying changes no prose in any record, so there is no `--human` here.
+
+`--apply` also installs `events.jsonl merge=union` in `AgentMonitoring/.gitattributes`
+(skip with `--no-gitattributes`): the event log is append-only and every reader sorts by
+timestamp, so a merge that keeps both sides' lines is the correct one — on this pull and
+every future one. The full recovery, start to finish, is
+[Recipe 5 — two machines, one repo](#recipe-5--two-machines-one-repo); a note the
+collision cost you goes back in with [`--replayed`](#agentmon-work-update).
+
+```bash
+git fetch origin && git worktree add ../incoming origin/main
+agentmon reconcile --theirs ../incoming/AgentMonitoring          # the plan
+agentmon reconcile --theirs ../incoming/AgentMonitoring --apply  # the repair
+git worktree remove ../incoming
+```
+
+CLI-only on purpose: this is a git-time operation for the moment a pull collides, not a
+record-writing tool, so it has no MCP counterpart.
+
 ### `agentmon migrate`
 
 ```
@@ -1775,6 +1904,12 @@ from another machine), use **Open project…** in the app once.
 terminal, not in the file. Check the record with `agentmon work view <ID> --json` or open
 the `.md` file directly.
 
+**`git pull` refuses: `worklogs/WORK-NNNN.md would be overwritten by merge`** — two
+machines allocated the same record ids while out of sync. Do not delete either record or
+rebuild anything by hand: `agentmon reconcile --theirs <the fetched copy>` re-keys the
+local side and rewrites every reference in one move
+([Recipe 5 — two machines, one repo](#recipe-5--two-machines-one-repo)).
+
 ---
 
 ## Multiple agents at once
@@ -1782,7 +1917,10 @@ the `.md` file directly.
 Several agents writing to one project is expected, and the CLI is built for it:
 
 - Id allocation happens under a per-project lock file, so two simultaneous `work start`
-  calls get two different ids — never the same one.
+  calls get two different ids — never the same one. (The lock is per *folder*: two
+  **machines** sharing a project through git can still allocate the same id while out of
+  sync, and `agentmon reconcile` is the repair —
+  [Recipe 5](#recipe-5--two-machines-one-repo).)
 - Record files are written to a temp file and renamed into place, so a reader (including
   the desktop app) sees either the old record or the new one, never half of one.
 - `events.jsonl` lines are appended in a single write each, so the log is never interleaved

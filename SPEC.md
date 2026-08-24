@@ -309,14 +309,14 @@ agentmon project update [--name <n>] [--description <d>] [--tags a,b] [--at T]
 agentmon project list                     # the machine's registry (informational)
 agentmon project mcp-json [--agent h]     # write/refresh .mcp.json for an existing project
 agentmon work start   --agent <name> --title <t> (--body s | --body-file f) --human s|--human-file f [--tags] [--started-at T]
-agentmon work update  <WORK-ID> --agent <name> (--message s | --body-file|--message-file f | --human s|--human-file f) [--at T]
+agentmon work update  <WORK-ID> --agent <name> (--message s | --body-file|--message-file f | --human s|--human-file f) [--at T] [--replayed]
 agentmon work done    <WORK-ID> --agent <name> (--outcome s | --outcome-file f) --human s|--human-file f [--files a,b] [--finished-at T] [--started-at T]
 agentmon work abandon <WORK-ID> --agent <name> (--reason s | --reason-file f) --human s|--human-file f [--at T]
 agentmon work list    [--status s] [--agent a] [--json]
 agentmon work view    <WORK-ID> [--json]
 agentmon bug create   --agent <name> --title <t> --severity <s> (--body s | --body-file f) --human s|--human-file f [--labels] [--created-at T]
 agentmon bug claim    <BUG-ID> --agent <name> [--human s|--human-file f] [--at T]
-agentmon bug comment  <BUG-ID> --agent <name> (--message s | --body-file|--message-file f | --human s|--human-file f) [--at T]
+agentmon bug comment  <BUG-ID> --agent <name> (--message s | --body-file|--message-file f | --human s|--human-file f) [--at T] [--replayed]
 agentmon bug resolve  <BUG-ID> --agent <name> (--resolution s | --resolution-file f) --human s|--human-file f [--at T]
 agentmon bug list     [--status s] [--severity] [--label] [--json]
 agentmon bug view     <BUG-ID> [--json]
@@ -331,6 +331,11 @@ agentmon note view    <name> [--json]
 agentmon status                           # snapshot: active work, open bugs, latest notes, recent events
 agentmon doctor       [--strict] [--json]  # validate project integrity, exit non-zero on problems
                       # errors always fail; --strict fails on warnings too
+agentmon reconcile    --theirs <folder> [--apply] [--only WORK-NNNN,BUG-NNNN] [--agent <name>] [--at T]
+                      [--no-gitattributes]
+                                          # two-machine id collision repair: re-key the LOCAL
+                                          # side, rewrite every pointer — dry run by default
+                                          # (see "Reconcile" below)
 agentmon migrate --from <vault> --project <slug> --to <folder>   # v1 → v2 bridge
 agentmon human-style                      # print docs/HUMAN_STYLE.md (embedded) — the write-time style contract
 agentmon app-feedback add     --agent <name> --type bug|idea --title <t> --human s|--human-file f [--body s] [--at T]
@@ -358,6 +363,37 @@ frontmatter *and* into the `events.jsonl` line, so the app's timeline is the rea
 Rejected with exit `2`: a time in the future, or one earlier than the state it follows
 (an update before `started`, a resolution before `claimed`, a note edit or removal
 before the note's last `updated`).
+
+**The replay exception, exactly.** `--replayed` on `work update` and `bug comment` — those
+two verbs, no others — is the one sanctioned way past the "earlier than the state it
+follows" rule, and it exists for reconstruction alone: a record re-created after an id
+collision (see Reconcile) taking its lost notes/comments back at their real times.
+It requires an explicit `--at` and a `--message` (exit `2` without both); the floor stays
+(nothing may predate `started`/`created`, or now); the entry is inserted at its place in
+the timeline instead of appended; and the `work_updated`/`bug_commented` event carries the
+entry's own timestamp with a summary opening `Replayed:` — a reconstructed line never
+passes for an original. The human-area rules apply unchanged. The future rule has no
+exception anywhere.
+
+**Reconcile (two-machine id collisions).** Ids are immutable and allocated from local
+state, so two clones of one repo working offline allocate the same numbers for different
+records and the first `git pull` collides. `agentmon reconcile --theirs <incoming copy>`
+repairs that without changing the id scheme: where one id holds different content on the
+two sides, the **local** (unpushed) record is re-keyed to the next id free on *both*
+sides, and everything pointing at it is rewritten in the same operation — the file rename,
+its frontmatter `id`, every `refs:` entry and bare prose mention across local records (the
+exact `WORK-`/`BUG-` grammar the app linkifies; `[[note-names]]` never), and
+`events.jsonl` `ref` fields plus id mentions in summaries. Dry run by default, printing
+the full plan and a from→to mapping; `--apply` executes exactly it. Left alone with the
+reason stated: an id byte-identical on both sides (already synced — and `--only` naming
+one is refused outright), and one record edited on both sides (a content merge; git's
+job). The incoming copy is read, never written. Re-keying moves records without changing
+a word of either area, so it takes no `--human`; an applied run logs one `project_updated`
+event carrying the mapping. `--apply` also installs `events.jsonl merge=union` in the
+project folder's `.gitattributes` (`--no-gitattributes` opts out): the event log is
+append-only and every reader sorts by `ts`, so keeping both sides' lines *is* the correct
+merge. Reconcile is CLI-only — it is a git-time operation, not an MCP tool. The recovery
+recipe lives in docs/AGENT_MANUAL.md, "Two machines, one repo".
 
 ## Desktop app screens
 

@@ -28,6 +28,7 @@ pub mod fsx;
 pub mod human;
 pub mod mcp_json;
 pub mod model;
+pub mod reconcile;
 pub mod registry;
 pub mod store;
 pub mod time;
@@ -48,6 +49,7 @@ pub use model::{
     ProjectStatusSnapshot, Section, Severity, WorkStatus, WorkUpdate, Worklog, WorklogDetail,
     WorklogSummary,
 };
+pub use reconcile::{reconcile, GitAttributes, Mapping, ReconcilePlan, ReconcileRequest};
 pub use registry::{Registry, RegistryEntry};
 pub use store::{next_id, slugify_note_name, validate_id, validate_note_name, Store, DATA_DIR};
 pub use write::{

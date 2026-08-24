@@ -210,6 +210,33 @@ enum Command {
         #[arg(long)]
         strict: bool,
     },
+    /// Repair a two-machine id collision: re-key this clone's unpushed records against
+    /// an incoming copy and rewrite everything that points at them. Dry run by default.
+    #[command(after_help = RECONCILE_HELP)]
+    Reconcile {
+        /// The incoming AgentMonitoring folder (or the directory holding one): a git
+        /// worktree of the branch you are about to merge, or the other machine's clone.
+        #[arg(long, value_name = "FOLDER")]
+        theirs: PathBuf,
+        /// Execute the plan. Without it the command prints exactly what would change
+        /// and touches nothing.
+        #[arg(long)]
+        apply: bool,
+        /// Re-key exactly these local ids (comma-separated WORK-/BUG- ids) instead of
+        /// the detected set — the override for a record classified wrong.
+        #[arg(long, value_delimiter = ',', value_name = "IDS")]
+        only: Vec<String>,
+        /// Agent recorded as the actor of the project_updated event an applied re-key logs.
+        #[arg(long, env = "AGENTMON_AGENT", default_value = "agentmon")]
+        agent: String,
+        /// When the reconcile happened (UTC ISO8601). Defaults to now.
+        #[arg(long, value_name = "ISO8601")]
+        at: Option<String>,
+        /// Do not install the `events.jsonl merge=union` rule in
+        /// AgentMonitoring/.gitattributes — for a repo that manages its own attributes.
+        #[arg(long)]
+        no_gitattributes: bool,
+    },
     /// Copy one project out of a v1 vault into <folder>/AgentMonitoring (schema v2).
     #[command(after_help = "EXAMPLE\n  agentmon migrate --from /c/old/vault \\\n    \
         --project agent-monitoring --to /c/Code/AgentMonitoring\n\n  Records, events and \
@@ -387,6 +414,45 @@ struct HumanArg {
     human_file: Option<PathBuf>,
 }
 
+const RECONCILE_HELP: &str = "\
+THE PROBLEM THIS REPAIRS
+  Record ids are a per-project sequence counted from local files, so two machines working
+  one repo offline both allocate WORK-0011 for different work, and the first git pull
+  collides on worklogs/WORK-0011.md while events.jsonl points one id at two meanings.
+
+WHAT IT DOES
+  Compares this project against the incoming copy. Where the same id holds different
+  content on the two sides, the LOCAL record — the one the rest of the world has not
+  seen — moves to the next id free on BOTH sides, and everything pointing at it moves in
+  the same breath: the file is renamed, its frontmatter id rewritten, every refs: entry
+  and bare prose mention across local records rewritten (the exact WORK-/BUG- grammar the
+  app links; [[note-names]] are untouched), and events.jsonl's ref fields and summary
+  mentions rewritten. A mapping table says what moved where.
+
+  Left alone, with the reason printed: an id whose bytes match on both sides (already
+  synced — nothing to do), and one record edited on both sides (that is a content merge;
+  git is the tool for it, re-keying would fork the record).
+
+  --apply also installs `events.jsonl merge=union` in AgentMonitoring/.gitattributes:
+  the event log is append-only and its readers sort by timestamp, so keeping both sides'
+  lines IS the correct merge, on this pull and every future one.
+
+  Re-keying moves records without changing a word in them, so no --human is asked for;
+  the one event an applied run logs is project_updated, carrying the mapping.
+
+EXAMPLE (the two-machine recovery, start to finish)
+  git fetch origin
+  git worktree add ../incoming origin/main
+  agentmon reconcile --theirs ../incoming/AgentMonitoring            # dry run: the plan
+  agentmon reconcile --theirs ../incoming/AgentMonitoring --apply
+  git worktree remove ../incoming
+  git add AgentMonitoring && git commit -m \"reconcile: re-key colliding record ids\"
+  git pull   # paths no longer collide; events.jsonl merges by union
+  agentmon doctor --strict
+
+  Full recipe (including replaying a note the collision cost you):
+  docs/AGENT_MANUAL.md, \"Two machines, one repo\".";
+
 const WORK_START_HELP: &str = "\
 BODY CONTRACT
   The body must contain all three sections. Anything else you add is kept.
@@ -485,7 +551,14 @@ enum WorkCmd {
         agentmon work update WORK-0011 --agent p6-curator \\\n    \
         --human \"What this work actually did, said plainly.\"\n\n  A record written before \
         the human area existed must gain one the first time it is touched, so a --message on \
-        such a record needs --human with it.")]
+        such a record needs --human with it.\n\n\
+        REPLAYING A LOST NOTE (reconstruction only)\n  A record re-created after a sync \
+        collision (see `agentmon reconcile`) takes its original\n  notes back at their real \
+        times with --replayed: the note may predate the close and the\n  notes around it, it \
+        is inserted at its place in the timeline, and the event says\n  \"Replayed:\" so it \
+        never passes for an original. Requires --at and --message.\n\n  \
+        agentmon work update WORK-0011 --agent recovery-agent --replayed \\\n    \
+        --at 2026-08-22T10:05:00Z --message \"<the lost note, verbatim>\"")]
     Update {
         /// WORK-NNNN.
         id: String,
@@ -502,6 +575,12 @@ enum WorkCmd {
         /// When the note was written (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
+        /// Reconstruction only: write the note at the time the lost original happened,
+        /// even where that predates the record's close or its other notes. Requires
+        /// --at and --message; the note is inserted in timeline order and the event
+        /// summary opens with "Replayed:".
+        #[arg(long)]
+        replayed: bool,
     },
     /// Stop a work log that will not be finished (status abandoned, with the reason).
     #[command(after_help = "EXAMPLE\n  agentmon work abandon WORK-0003 \\\n    \
@@ -682,7 +761,13 @@ enum BugCmd {
         --human alone adds nothing to the thread; it rewrites the bug's plain-language \
         telling and logs one human_updated line:\n  \
         agentmon bug comment BUG-0002 --agent cli-builder \\\n    \
-        --human \"What this bug looks like to somebody using the app.\"")]
+        --human \"What this bug looks like to somebody using the app.\"\n\n\
+        REPLAYING A LOST COMMENT (reconstruction only)\n  A bug re-created after a sync \
+        collision (see `agentmon reconcile`) takes its original\n  comments back at their \
+        real times with --replayed — inserted in timeline order, the\n  event marked \
+        \"Replayed:\". Requires --at and --message.\n\n  \
+        agentmon bug comment BUG-0006 --agent recovery-agent --replayed \\\n    \
+        --at 2026-08-22T10:05:00Z --message \"<the lost comment, verbatim>\"")]
     Comment {
         /// BUG-NNNN.
         id: String,
@@ -696,6 +781,12 @@ enum BugCmd {
         body_file: Option<PathBuf>,
         #[command(flatten)]
         human: HumanArg,
+        /// Reconstruction only: write the comment at the time the lost original
+        /// happened, even where that predates later comments. Requires --at and
+        /// --message; the comment is inserted in timeline order and the event summary
+        /// opens with "Replayed:".
+        #[arg(long)]
+        replayed: bool,
         /// When the comment was written (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
@@ -1003,6 +1094,14 @@ fn run(cli: &Cli) -> CliResult {
         Command::HumanStyle => cmd_human_style(cli),
         Command::Status => cmd_status(cli, cli.json),
         Command::Doctor { strict } => cmd_doctor(cli, *strict, cli.json),
+        Command::Reconcile {
+            theirs,
+            apply,
+            only,
+            agent,
+            at,
+            no_gitattributes,
+        } => cmd_reconcile(cli, theirs, *apply, only, agent, at.as_deref(), *no_gitattributes),
         Command::Migrate { from, project, to } => cmd_migrate(cli, from, project, to),
     }
 }
@@ -1116,6 +1215,110 @@ fn cmd_init(
         "Commands run from inside {} find this project automatically (like git).",
         store.location().display()
     );
+    Ok(())
+}
+
+fn cmd_reconcile(
+    cli: &Cli,
+    theirs: &Path,
+    apply: bool,
+    only: &[String],
+    agent: &str,
+    at: Option<&str>,
+    no_gitattributes: bool,
+) -> CliResult {
+    let store = open(cli)?;
+    let plan = agentmon_core::reconcile(
+        &store,
+        &agentmon_core::ReconcileRequest {
+            theirs: theirs.to_path_buf(),
+            apply,
+            only: only.to_vec(),
+            actor: agent.to_string(),
+            at: at.map(str::to_string),
+            gitattributes: !no_gitattributes,
+        },
+    )?;
+    if cli.json {
+        return print_json(&plan);
+    }
+
+    println!("local:    {}", plan.local);
+    println!("incoming: {}", plan.incoming);
+
+    if plan.mappings.is_empty() {
+        println!("\nNothing to re-key: no id here holds different content on the two sides.");
+    } else {
+        println!(
+            "\n{} — {} record id(s) move:",
+            if plan.applied {
+                "RE-KEYED"
+            } else {
+                "RE-KEY PLAN (dry run — nothing was written)"
+            },
+            plan.mappings.len()
+        );
+        for m in &plan.mappings {
+            println!("\n  {} → {}", m.from, m.to);
+            println!(
+                "    local (moves):     \"{}\"  ({}, {})",
+                clip(&m.local_title, 60),
+                m.local_agent,
+                m.local_at
+            );
+            println!(
+                "    incoming (stays):  \"{}\"  ({}, {})",
+                clip(&m.incoming_title, 60),
+                m.incoming_agent,
+                m.incoming_at
+            );
+        }
+        println!("\nFILES {}", if plan.applied { "REWRITTEN" } else { "TO REWRITE" });
+        for f in &plan.files {
+            match &f.renamed_to {
+                Some(to) => println!("  {} → {}  ({} id mention(s))", f.path, to, f.mentions),
+                None => println!("  {}  ({} id mention(s))", f.path, f.mentions),
+            }
+        }
+        if plan.events.refs + plan.events.summaries > 0 {
+            println!(
+                "  events.jsonl  ({} ref field(s), {} summary mention(s), {} line(s) total)",
+                plan.events.refs, plan.events.summaries, plan.events.total_lines
+            );
+        }
+    }
+
+    if !plan.skipped.is_empty() {
+        println!("\nLEFT ALONE");
+        for s in &plan.skipped {
+            println!("  {}  [{}]  {}", s.id, s.reason, s.detail);
+        }
+    }
+
+    use agentmon_core::GitAttributes as G;
+    match plan.gitattributes {
+        G::Created => println!("\nWrote AgentMonitoring/.gitattributes: events.jsonl merge=union"),
+        G::Appended => {
+            println!("\nAppended to AgentMonitoring/.gitattributes: events.jsonl merge=union")
+        }
+        G::AlreadyPresent => {
+            println!("\nAgentMonitoring/.gitattributes already carries the events.jsonl merge rule")
+        }
+        G::Skipped => {}
+    }
+
+    if plan.applied {
+        if let Some(ev) = &plan.event {
+            println!("\nLogged project_updated: {}", ev.summary);
+        }
+        println!("\nNext:");
+        println!("  git add AgentMonitoring && git commit -m \"reconcile: re-key colliding record ids\"");
+        println!("  git pull        # paths no longer collide; events.jsonl merges by union");
+        println!("  agentmon doctor --strict");
+    } else if !plan.mappings.is_empty() {
+        println!("\nThis was a dry run. Execute exactly this plan:");
+        println!("  agentmon reconcile --theirs {} --apply", theirs.display());
+    }
     Ok(())
 }
 
@@ -1398,6 +1601,7 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             body_file,
             human,
             at,
+            replayed,
         } => {
             one_stdin(&[
                 ("--body-file", body_file.as_deref().map(is_stdin).unwrap_or(false)),
@@ -1425,18 +1629,28 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             };
             let human = human.read()?;
             let store = open(cli)?;
-            let w = store.update_work(
-                id,
-                &agent.agent,
-                message.as_deref(),
-                human.as_deref(),
-                at.as_deref(),
-            )?;
+            let w = if *replayed {
+                let (Some(message), Some(at)) = (message.as_deref(), at.as_deref()) else {
+                    return Err(replay_usage("work update"));
+                };
+                store.replay_work_note(id, &agent.agent, message, human.as_deref(), at)?
+            } else {
+                store.update_work(
+                    id,
+                    &agent.agent,
+                    message.as_deref(),
+                    human.as_deref(),
+                    at.as_deref(),
+                )?
+            };
             if cli.json {
                 return print_json(&w);
             }
             let n = w.record.updates.len();
-            if message.is_none() {
+            if *replayed {
+                println!("Replayed a note onto {} at {}", w.id, w.event.ts);
+                println!("  inserted in timeline order; the event summary says \"Replayed:\"");
+            } else if message.is_none() {
                 println!("Rewrote the human area of {}", w.id);
                 println!("  ## Updates is untouched; the feed logs human_updated");
             } else {
@@ -1450,8 +1664,9 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             }
             println!("  {}", w.path);
             // Say plainly what was and was not touched, because appending to a closed
-            // record looks like editing history and is not.
-            if w.record.meta.status != WorkStatus::InProgress {
+            // record looks like editing history and is not. (A replay already said what
+            // it did in its own two lines — inserted, marked — so it skips this one.)
+            if !*replayed && w.record.meta.status != WorkStatus::InProgress {
                 println!(
                     "  Appended to a {} record: status, timestamps and everything above ## Updates are unchanged.",
                     w.record.meta.status.as_str()
@@ -1761,6 +1976,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             message,
             body_file,
             human,
+            replayed,
             at,
         } => {
             one_stdin(&[
@@ -1789,17 +2005,27 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             };
             let human = human.read()?;
             let store = open(cli)?;
-            let b = store.comment_bug(
-                id,
-                &agent.agent,
-                message.as_deref(),
-                human.as_deref(),
-                at.as_deref(),
-            )?;
+            let b = if *replayed {
+                let (Some(message), Some(at)) = (message.as_deref(), at.as_deref()) else {
+                    return Err(replay_usage("bug comment"));
+                };
+                store.replay_bug_comment(id, &agent.agent, message, human.as_deref(), at)?
+            } else {
+                store.comment_bug(
+                    id,
+                    &agent.agent,
+                    message.as_deref(),
+                    human.as_deref(),
+                    at.as_deref(),
+                )?
+            };
             if cli.json {
                 return print_json(&b);
             }
-            if message.is_none() {
+            if *replayed {
+                println!("Replayed a comment onto {} at {}", b.id, b.event.ts);
+                println!("  inserted in timeline order; the event summary says \"Replayed:\"");
+            } else if message.is_none() {
                 println!("Rewrote the human area of {}", b.id);
                 println!("  ## Comments is untouched; the feed logs human_updated");
             } else {
@@ -2570,6 +2796,25 @@ fn finished_at_on_start(finished: &str) -> CliError {
     }
 }
 
+/// `--replayed` without the two flags that make a replay a replay. Reconstruction writes
+/// history back at its real time, so a replay with no time — or with nothing to say — is a
+/// call written wrong, refused before anything opens the project.
+fn replay_usage(verb: &str) -> CliError {
+    CliError {
+        code: exit::USAGE,
+        kind: "invalid_argument",
+        message: format!(
+            "--replayed is for reconstruction: it writes the lost original back at the time \
+             it really happened, so it needs both --at <that time> and --message/--message-file \
+             <the original text>.\n\n  agentmon {verb} <ID> --agent <you> --replayed \\\n    \
+             --at 2026-08-22T10:05:00Z --message \"<the lost text, verbatim>\"\n\nWithout \
+             --replayed the normal ordering guard applies, which is what you want on any \
+             write that is not rebuilding a lost record (docs/AGENT_MANUAL.md, \"Two \
+             machines, one repo\")."
+        ),
+    }
+}
+
 impl HumanArg {
     /// The human area as text, or `None` when neither flag was passed.
     ///
@@ -2911,6 +3156,7 @@ mod tests {
             (&["note", "add"], "at"),
             (&["note", "update"], "at"),
             (&["note", "remove"], "at"),
+            (&["reconcile"], "at"),
         ];
         for (path, flag) in cases {
             assert!(
@@ -2989,6 +3235,65 @@ mod tests {
         assert!(agentmon_core::HUMAN_STYLE.contains("<!-- compact-rules -->"));
         assert!(!agentmon_core::HUMAN_COMPACT_RULES.trim().is_empty());
         assert!(agentmon_core::HUMAN_STYLE.contains(agentmon_core::HUMAN_COMPACT_RULES.trim()));
+    }
+
+    /// `--replayed` lives on exactly the two verbs whose entries have a timeline to replay
+    /// into — and a replay without its time or its text is refused as usage, before any
+    /// project is opened, with the recipe in the message.
+    #[test]
+    fn replayed_is_reconstruction_only_and_demands_at_and_message() {
+        assert!(has_flag(&["work", "update"], "replayed"));
+        assert!(has_flag(&["bug", "comment"], "replayed"));
+        for path in [
+            vec!["work", "start"],
+            vec!["work", "done"],
+            vec!["bug", "create"],
+            vec!["bug", "resolve"],
+            vec!["note", "update"],
+        ] {
+            assert!(
+                !has_flag(&path, "replayed"),
+                "`agentmon {}` has no --replayed",
+                path.join(" ")
+            );
+        }
+        for args in [
+            // no --at: a replay without the real time is not a replay
+            vec!["agentmon", "work", "update", "WORK-0001", "--agent", "a", "--replayed",
+                 "--message", "The lost note."],
+            // no --message: nothing to replay
+            vec!["agentmon", "bug", "comment", "BUG-0001", "--agent", "a", "--replayed",
+                 "--at", "2026-08-22T10:05:00Z"],
+        ] {
+            let cli = Cli::try_parse_from(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+            let err = run(&cli).unwrap_err();
+            assert_eq!(err.code, exit::USAGE, "{args:?}");
+            assert!(err.message.contains("--at"), "{}", err.message);
+            assert!(err.message.contains("--message"), "{}", err.message);
+        }
+    }
+
+    /// `reconcile` moves records without changing a word in them, so it takes no --human —
+    /// and it never runs without being told where the incoming copy is.
+    #[test]
+    fn reconcile_needs_theirs_and_takes_no_human() {
+        assert!(
+            Cli::try_parse_from(["agentmon", "reconcile"]).is_err(),
+            "--theirs is required"
+        );
+        assert!(!has_flag(&["reconcile"], "human"), "re-keying rewrites no prose");
+        let cli = Cli::try_parse_from([
+            "agentmon", "reconcile", "--theirs", "../incoming/AgentMonitoring",
+            "--only", "WORK-0011,BUG-0006", "--apply",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Reconcile { only, apply, .. } => {
+                assert_eq!(only, ["WORK-0011", "BUG-0006"]);
+                assert!(apply);
+            }
+            other => panic!("unexpected parse: {other:?}"),
+        }
     }
 
     #[test]

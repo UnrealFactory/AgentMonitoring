@@ -460,6 +460,75 @@ pub fn append_entry(
     }
 }
 
+/// The timestamp part of a `### <ts>` / `### <ts> — <agent>` entry heading — what the
+/// entries of `## Updates` and `## Comments` sort by.
+fn entry_stamp(heading: &str) -> String {
+    split_comment_heading(heading).0
+}
+
+/// Insert a `### <heading>` entry into a section **at its place in the timeline** rather
+/// than at the end — before the first existing entry whose timestamp is later, after
+/// everything at the same second or earlier.
+///
+/// [`append_entry`] is the normal write: a new note is the newest thing on the record, so
+/// the end *is* its place, and the ordering guards keep that true. This exists for the one
+/// sanctioned exception — a **replay** (SPEC.md, "Backdating"), reconstructing a record
+/// whose original was lost to a sync collision — where the honest time of a note is in the
+/// middle of a timeline that already continued past it. Timestamps the CLI writes share
+/// one normalized shape, so the comparison is the same string comparison every reader
+/// sorts by. Entry headings are found by the grammar the parser splits on (a level-3
+/// heading opening with a date, outside code fences); everything else in the section stays
+/// exactly where the author put it.
+pub fn insert_entry_by_time(
+    sections: &mut Vec<Section>,
+    name: &str,
+    heading_text: &str,
+    body_text: &str,
+    order: &[&str],
+) {
+    let Some(i) = find(sections, name) else {
+        // First entry ever: creation and placement are the same act.
+        append_entry(sections, name, heading_text, body_text, order);
+        return;
+    };
+    let new_stamp = entry_stamp(heading_text);
+    let raw = sections[i].body.clone();
+    let mut fences = Fences::default();
+    let mut insert_at: Option<usize> = None;
+    let mut offset = 0usize;
+    for line in raw.split_inclusive('\n') {
+        if !fences.feed(line) {
+            if let Some((3, title)) = heading(line) {
+                if starts_with_date(title) && entry_stamp(title) > new_stamp {
+                    insert_at = Some(offset);
+                    break;
+                }
+            }
+        }
+        offset += line.len();
+    }
+    let entry = format!("### {}\n\n{}", heading_text.trim(), body_text.trim());
+    sections[i].body = match insert_at {
+        None => {
+            let existing = raw.trim();
+            if existing.is_empty() {
+                entry
+            } else {
+                format!("{existing}\n\n{entry}")
+            }
+        }
+        Some(pos) => {
+            let before = raw[..pos].trim_end();
+            let after = raw[pos..].trim_end();
+            if before.is_empty() {
+                format!("{entry}\n\n{after}")
+            } else {
+                format!("{before}\n\n{entry}\n\n{after}")
+            }
+        }
+    };
+}
+
 /// Frontmatter lines for keys this build does not know about.
 ///
 /// The CLI rewrites frontmatter from typed structs in the exact key order SPEC.md shows;
@@ -707,6 +776,76 @@ mod tests {
         assert!(starts_with_date("2026-08-18"));
         assert!(!starts_with_date("R7 빌더 — 정정"));
         assert!(!starts_with_date("2026년 8월 21일"));
+    }
+
+    /// The replay write path: an entry lands at its place in the timeline, not at the end.
+    #[test]
+    fn insert_entry_by_time_lands_between_its_neighbours() {
+        let src = "## Updates\n\n### 2026-08-18T09:00:00Z\n\nFirst.\n\n### 2026-08-18T12:00:00Z\n\nThird.\n";
+        let mut secs = sections(src);
+        insert_entry_by_time(
+            &mut secs,
+            "Updates",
+            "2026-08-18T10:30:00Z",
+            "Replayed middle.",
+            &["What", "Why", "How", "Updates", "Outcome"],
+        );
+        let updates = work_updates(&take_section(&mut secs.clone(), "Updates").unwrap());
+        let stamps: Vec<&str> = updates.iter().map(|u| u.ts.as_str()).collect();
+        assert_eq!(
+            stamps,
+            ["2026-08-18T09:00:00Z", "2026-08-18T10:30:00Z", "2026-08-18T12:00:00Z"],
+            "{updates:?}"
+        );
+        assert_eq!(updates[1].body, "Replayed middle.");
+
+        // Later than everything (or an empty/missing section) appends, same as append_entry.
+        insert_entry_by_time(
+            &mut secs,
+            "Updates",
+            "2026-08-18T13:00:00Z",
+            "Last.",
+            &["What", "Why", "How", "Updates", "Outcome"],
+        );
+        let mut fresh: Vec<Section> = Vec::new();
+        insert_entry_by_time(&mut fresh, "Updates", "2026-08-18T09:00:00Z", "Only.", &["Updates"]);
+        assert_eq!(fresh.len(), 1);
+        assert!(fresh[0].body.starts_with("### 2026-08-18T09:00:00Z"));
+        let updates = work_updates(&take_section(&mut secs, "Updates").unwrap());
+        assert_eq!(updates.last().unwrap().body, "Last.");
+
+        // Equal stamps insert *after* the existing one: stable, like the normal append.
+        let mut equal = sections("## Updates\n\n### 2026-08-18T09:00:00Z\n\nOriginal.\n");
+        insert_entry_by_time(&mut equal, "Updates", "2026-08-18T09:00:00Z", "Same second.", &["Updates"]);
+        let updates = work_updates(&take_section(&mut equal, "Updates").unwrap());
+        assert_eq!(updates[0].body, "Original.");
+        assert_eq!(updates[1].body, "Same second.");
+    }
+
+    /// A `### <date>` inside a code fence, or an agent's own dated subheading in a message,
+    /// must not become an insertion point — the same grammar `entries()` splits by.
+    #[test]
+    fn insert_entry_by_time_ignores_fenced_and_comment_headings_split_on_their_stamp() {
+        let src = "## Updates\n\n### 2026-08-18T09:00:00Z\n\nLog:\n\n```\n### 2026-08-18T09:30:00Z\n```\n\n### 2026-08-18T12:00:00Z\n\nLater.\n";
+        let mut secs = sections(src);
+        insert_entry_by_time(&mut secs, "Updates", "2026-08-18T10:00:00Z", "Middle.", &["Updates"]);
+        let body = &secs[find(&secs, "Updates").unwrap()].body;
+        let fenced = body.find("```\n### 2026-08-18T09:30:00Z").expect("fence intact");
+        let inserted = body.find("### 2026-08-18T10:00:00Z").expect("inserted");
+        assert!(inserted > fenced, "inserted after the fenced pseudo-heading: {body}");
+
+        // Comment headings compare on the timestamp before the separator, not the agent.
+        let mut comments = sections("## Comments\n\n### 2026-08-18T09:00:00Z — zed\n\nFirst.\n");
+        insert_entry_by_time(
+            &mut comments,
+            "Comments",
+            "2026-08-18T08:00:00Z — abel",
+            "Replayed earlier.",
+            &["Report", "Comments", "Resolution"],
+        );
+        let parsed = bug_comments(&take_section(&mut comments, "Comments").unwrap());
+        assert_eq!(parsed[0].agent, "abel");
+        assert_eq!(parsed[1].agent, "zed");
     }
 
     #[test]

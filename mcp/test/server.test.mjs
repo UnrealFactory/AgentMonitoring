@@ -72,7 +72,7 @@ const BUDGET = {
   // "human_style")` returns docs/HUMAN_STYLE.md whole, because it is what an agent reads
   // *before* writing its first human area, and the worked example at the end is the part
   // a summary cannot stand in for. Sized to that file with room to grow.
-  contract: 24000,
+  contract: 29000,
 };
 
 /* ------------------------------------------------------------------ runner */
