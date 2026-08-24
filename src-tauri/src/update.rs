@@ -169,7 +169,7 @@ try {{
   Wait-Process -Id {pid} -Timeout 60 -ErrorAction SilentlyContinue
   Start-Sleep -Milliseconds 500
   Step 'installing'
-  $p = Start-Process -FilePath $setup -ArgumentList '/S' -PassThru -Wait
+  $p = Start-Process -FilePath $setup -ArgumentList '/S','/UPDATE' -PassThru -Wait
   if ($p.ExitCode -ne 0) {{ throw ('installer exited with code ' + $p.ExitCode) }}
   Remove-Item $setup -ErrorAction SilentlyContinue
   Step 'done, relaunching'
@@ -392,7 +392,7 @@ mod tests {
         assert!(s.contains("It''s_x64-setup.exe"), "quotes in the URL are doubled");
         assert!(s.contains(r"C:\Apps\Agent''s\AgentMonitoring.exe"));
         assert!(s.contains("Wait-Process -Id 4242"));
-        assert!(s.contains("-ArgumentList '/S'"), "the installer runs silently");
+        assert!(s.contains("-ArgumentList '/S','/UPDATE'"), "the installer runs silently, in update mode — /UPDATE is what stops the NSIS template re-creating the desktop shortcut on every update");
         // Without this flag, Windows PowerShell 5.1 routes Invoke-WebRequest through the
         // Internet Explorer DOM — absent on current Windows — and the download dies with
         // WebCmdletIEDomNotSupportedException before a byte arrives (seen live).

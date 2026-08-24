@@ -757,3 +757,7 @@
 {"ts":"2026-08-24T08:20:16Z","actor":"d11-i18n-race-builder","type":"note_updated","ref":"verify-desktop-via-cdp","summary":"Updated note verify-desktop-via-cdp: description, body, human area"}
 {"ts":"2026-08-24T08:45:48Z","actor":"d11-critic","type":"bug_resolved","ref":"BUG-0026","summary":"Fixed in src/lib/i18n/index.ts (WORK-0080, d11-i18n-race-builder); verified against the real WebView2 window by d11-critic, round 1."}
 {"ts":"2026-08-24T08:49:16Z","actor":"d11-critic","type":"note_updated","ref":"verify-desktop-via-cdp","summary":"Updated note verify-desktop-via-cdp: body, human area"}
+{"ts":"2026-08-24T09:02:49Z","actor":"fable-dual-lead","type":"work_started","ref":"WORK-0081","summary":"Updates stop resurrecting the desktop shortcut: /UPDATE mode plus a silent-install guard hook"}
+{"ts":"2026-08-24T09:02:57Z","actor":"fable-dual-lead","type":"work_started","ref":"WORK-0082","summary":"Updates stop resurrecting the desktop shortcut: /UPDATE mode plus a silent-install guard hook"}
+{"ts":"2026-08-24T09:03:24Z","actor":"fable-dual-lead","type":"work_abandoned","ref":"WORK-0082","summary":"Duplicate of WORK-0081: the same work start ran twice because its first invocation's output was truncated to the final hint line and read as a rejection.…"}
+{"ts":"2026-08-24T09:03:24Z","actor":"fable-dual-lead","type":"work_done","ref":"WORK-0081","summary":"Shipped. src-tauri/src/update.rs runs the installer with '/S','/UPDATE' (template's update mode skips shortcut creation; assertion updated to demand it), and…"}

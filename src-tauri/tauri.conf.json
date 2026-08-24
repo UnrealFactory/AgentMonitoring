@@ -31,6 +31,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsi"
+      }
+    },
     "category": "DeveloperTool",
     "shortDescription": "Read the work your agents record.",
     "longDescription": "AgentMonitoring is the central record house where AI agents document their own work for humans: work logs, bug reports and an activity timeline, stored as plain files in a portable vault.",
