@@ -1,15 +1,15 @@
 // Rendering. Every tool result is plain text shaped to a budget, because the result of
 // a tool call is context the caller pays for on every subsequent turn.
 
-/** Hard ceiling for a default-shaped tool result. `full: true` opts out of it. */
+/** Hard ceiling for a default-shaped tool result. `full: true` opts out of it — and out
+    of ceilings entirely: the human area is a record's last section, so any cap on a full
+    read cuts exactly what the read was for (FB-0003). */
 export const RESULT_CAP = 600;
 /** Widest a list row may get, so eight of them plus a header still fit the cap. */
 export const ROW_CAP = 60;
 /** Rows a list returns when the caller does not say. */
 export const DEFAULT_LIMIT = 8;
 export const MAX_LIMIT = 50;
-/** Ceiling for `full: true`, which is deliberately generous but not unbounded. */
-export const FULL_CAP = 8000;
 /** Titles are free-form prose and a long one must not eat a whole summary. */
 export const TITLE_CAP = 90;
 /** How much of the outcome (or the report) a record summary quotes. */
@@ -24,7 +24,7 @@ export function trunc(s, n) {
   return t.length <= n ? t : t.slice(0, Math.max(1, n - 1)).trimEnd() + "…";
 }
 
-export function clamp(s, cap = FULL_CAP) {
+export function clamp(s, cap) {
   const t = String(s ?? "");
   return t.length <= cap ? t : t.slice(0, cap - 30).trimEnd() + "… (truncated, read the file)";
 }

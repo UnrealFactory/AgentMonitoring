@@ -43,8 +43,10 @@ returns the id, the file path and one line of confirmation — the CLI's `--json
 boiled down, about 200 characters, rather than the record it just wrote, which the caller
 already has. Reads return compact summaries capped at 600 characters, and `full: true`
 (on `status(mode="view")` and `note(action="read")`) is the single, explicit way to pay
-for a whole record. `npm test` measures all of it and fails if any budget is exceeded, so
-the numbers in this paragraph cannot quietly rot.
+for a whole record — whole meaning whole: a full read is never truncated, because the
+human area is a record's last section and any ceiling would cut exactly the part the
+read was spent to reach (FB-0003). `npm test` measures all of it and fails if any budget
+is exceeded, so the numbers in this paragraph cannot quietly rot.
 
 ## Install
 
@@ -338,7 +340,9 @@ in one tool. The essential notes are required session-start reading and sort fir
   whichever call comes first, so opening elsewhere costs you nothing.
 - `read` — one note by `name`; `full: true` for the whole body.
 - `write` — **upsert**: against a `name` that exists it rewrites in place (only the fields
-  passed — a `type` left off is preserved; `body` replaces wholesale), which is the
+  passed — a `type` left off is preserved; `body` replaces wholesale; `tags` and `refs`
+  replace their lists, so an explicit empty array **clears** one — pruning a ref whose
+  note is gone — while leaving the field off keeps it), which is the
   one-fact-one-file discipline; against a new name (or none — it derives one from the
   title) it creates, requiring `title`, `type`, `description`, `body` and `human`. A
   `body` on an existing note needs a `human` with it — the old retelling described
@@ -362,8 +366,9 @@ The one read tool: work, bugs, and the style contract.
   bugs open-and-severe first); `state`, `severity` and `agent` filter, and `limit` sets how
   many rows (default 8, max 50).
 - `view` — one record by `id`: metadata, then its outcome or, while it is open, its what.
-  `full: true` returns the whole record instead, and is the only *record* read that may
-  exceed 600 characters.
+  `full: true` returns the whole record instead — untruncated however long, since the
+  human area sits at the tail — and is the only *record* read that may exceed 600
+  characters.
 - `human_style` — the [`human`](#human-on-every-write-tool) style contract, whole: about
   20,000 characters, the same document `agentmon human-style` prints. It is not a record
   and is not summarised. The compact rules inside it reach every caller free — in the
@@ -420,8 +425,13 @@ shell command; this server adds the one line that makes it actionable here —
 `status(mode: "human_style")` prints the same contract, whole. Getting that refusal also
 counts as the session's handover: the same rules are not appended to any later result.
 
-Two failures come from the server rather than the CLI, and say so plainly: no agent
-available for the call, and `update_work` with nothing to say. A failed call writes
+Three failures come from the server rather than the CLI, and say so plainly: no agent
+available for the call, `update_work` with nothing to say, and a field carrying the
+call's own envelope — a literal `<parameter …>` tag, or a `comment` whose text contains
+`</comment>` — which means a client mangled the boundary between two parameters and both
+texts landed in one field (FB-0002 reached disk exactly that way once, a resolution
+duplicated into a comment). That call is refused whole before anything runs; re-send it
+with each field carrying only its own prose. A failed call writes
 nothing — no partial record, no orphan event — so retrying after a fix is always safe. If
 a multi-step call fails halfway (say, claimed and commented, then the resolve was refused),
 the message names the steps that already happened so they are not repeated.

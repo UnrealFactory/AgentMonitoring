@@ -21,10 +21,8 @@ import path from "node:path";
 import { runCli, cliErrorText, listArg, contractDelivered, markContractDelivered } from "./cli.mjs";
 import {
   RESULT_CAP,
-  FULL_CAP,
   DEFAULT_LIMIT,
   MAX_LIMIT,
-  clamp,
   oneLine,
   renderBugList,
   renderBugView,
@@ -265,6 +263,31 @@ function humanText(args, tool) {
   return value.trim();
 }
 
+/**
+ * A field carrying the call's own envelope is a client-side parse slip, not prose.
+ *
+ * Seen once on disk (FB-0002): a bug's comment ended in a literal `</comment>`, followed
+ * by `<parameter name="resolution">` and the whole resolution again — the client mangled
+ * the boundary between two parameters and the text of both landed in one, saved verbatim,
+ * duplicated in the record forever. No handler can repair that (splitting on tags it
+ * guesses at would be inventing the caller's words), so the call is refused whole and the
+ * caller re-sends with each field holding only its own text. Two signatures: a
+ * `<parameter …>` / `</parameter>` tag anywhere (namespaced or not), and a field whose
+ * value contains its own closing tag, `comment` holding `</comment>`.
+ */
+const PARAMETER_TAG = /<\/?(?:\w+:)?parameter\b/i;
+
+function leakedMarkupField(args) {
+  for (const [key, value] of Object.entries(args ?? {})) {
+    const items = Array.isArray(value) ? value : [value];
+    for (const v of items) {
+      if (typeof v !== "string") continue;
+      if (PARAMETER_TAG.test(v) || v.includes(`</${key}>`)) return key;
+    }
+  }
+  return null;
+}
+
 function ident(args, ctx, wantAgent = true) {
   const dirArg = String(args?.dir ?? "").trim();
   const at = dirArg ? { ...ctx, dir: dirArg } : ctx;
@@ -275,6 +298,18 @@ function ident(args, ctx, wantAgent = true) {
 
 function flag(args, name, value) {
   if (value != null && value !== "") args.push(name, String(value));
+}
+
+/**
+ * A replacement-list flag, for the one verb where lists replace rather than attach
+ * (`note update`). Absent leaves the stored list alone; anything sent — an explicit
+ * empty array included — replaces it, `""` being how the CLI spells "clear". Through
+ * `flag()` an empty array collapsed to no flag at all, so a caller pruning a dead ref
+ * had no way to say so short of removing and re-adding the note.
+ */
+function replaceListFlag(args, name, value) {
+  if (value == null) return;
+  args.push(name, listArg(value) ?? "");
 }
 
 function recordPath(at, id) {
@@ -688,7 +723,10 @@ async function status(args, ctx) {
     if (args.full) {
       const r = await runCli(at, [kind, "view", id]);
       if (!r.ok) return fail(cliErrorText(r));
-      return text(clamp(r.stdout, FULL_CAP));
+      // Whole, not clamped: the human area is the record's LAST section, so any cap
+      // lands on exactly the part `full: true` was spent to reach, and the caller is
+      // pushed into the file read these tools exist to replace (FB-0003).
+      return text(r.stdout);
     }
     const r = await runCli(at, [kind, "view", id, "--json"]);
     if (!r.ok) return fail(cliErrorText(r));
@@ -720,7 +758,8 @@ async function note(args, ctx) {
     if (args.full) {
       const r = await runCli(at, ["note", "view", name]);
       if (!r.ok) return fail(cliErrorText(r));
-      return text(clamp(r.stdout, FULL_CAP));
+      // Whole for the same reason as status(mode=view) — a note's tail is its human area.
+      return text(r.stdout);
     }
     const r = await runCli(at, ["note", "view", name, "--json"]);
     if (!r.ok) return fail(cliErrorText(r));
@@ -745,8 +784,8 @@ async function note(args, ctx) {
       // Alone, this is the refresh: it rewrites the human area and nothing else.
       const human = humanText(args, "note(action=write)");
       flag(a, "--human", human);
-      flag(a, "--tags", listArg(args.tags));
-      flag(a, "--refs", listArg(args.refs));
+      replaceListFlag(a, "--tags", args.tags);
+      replaceListFlag(a, "--refs", args.refs);
       flag(a, "--at", args.at);
       const body = String(args.body ?? "").trim();
       if (body) a.push("--body-file", "-");
@@ -879,6 +918,17 @@ export async function callTool(name, args, ctx) {
   const handler = HANDLERS[name];
   if (!handler) return null; // caller turns this into a protocol-level error
   let res;
+  const leaked = leakedMarkupField(args);
+  if (leaked) {
+    res = fail(
+      `${name}: the '${leaked}' field contains raw tool-call markup (a literal parameter ` +
+        `tag) — the call's own envelope leaked into its text, which usually means the ` +
+        `boundary between two fields was parsed wrong, and saved as-is it corrupts the ` +
+        `record. Nothing was written. Re-send the call with each field carrying only its ` +
+        `own prose.`
+    );
+    return handOver(ctx, res, PRE_DRAFT_HEAD);
+  }
   try {
     res = await handler(args ?? {}, ctx);
   } catch (err) {

@@ -57,7 +57,11 @@ const BUDGET = {
   tools: 7,
   description: 200,
   result: 600, // a default-shaped tool result
-  fullResult: 8000, // what `full: true` is allowed to cost
+  // What `full: true` costs on this file's small fixtures — a sanity figure, not a cap:
+  // full reads are uncapped since FB-0003 (the human area is the record's last section,
+  // so any ceiling cut exactly what the read was for), and a long-record check below
+  // proves the tail arrives.
+  fullResult: 8000,
   // The one-time handover. The compact style rules ride the session's first result,
   // whichever call produced it — before any draft, because `required: [..., "human"]` means
   // the refusal that carries them through a shell almost never fires through MCP. Sized to
@@ -759,6 +763,23 @@ let noteName = "";
   check("the trail is on the feed", () => {
     const events = readFileSync(path.join(DATA, "events.jsonl"), "utf8");
     for (const type of ["note_created", "note_updated"]) assertIncludes(events, type, "events");
+  });
+
+  // An explicit empty list clears; a list left off stays. These used to be the same
+  // call — `[]` collapsed to no flag at all — so a note whose ref pointed at a removed
+  // note could not be pruned short of removing and re-adding the note (owner-relayed).
+  const pruned = await client.call("note", { action: "write", name: noteName, refs: [] });
+  budgeted("note (write, refs cleared)", pruned);
+  check("an explicit empty refs list clears it, and the untouched tags survive", () => {
+    assert(!pruned.isError, pruned.text);
+    const md = readFileSync(path.join(DATA, "notes", `${noteName}.md`), "utf8");
+    assertIncludes(md, "refs: []", "refs cleared");
+    assertIncludes(md, "tags: [gates]", "tags untouched");
+  });
+  const prunedTags = await client.call("note", { action: "write", name: noteName, tags: [] });
+  check("the same clearing works for tags", () => {
+    assert(!prunedTags.isError, prunedTags.text);
+    assertIncludes(readFileSync(path.join(DATA, "notes", `${noteName}.md`), "utf8"), "tags: []", "tags cleared");
   });
 
   // A named write that misses is a first write and says so — not a bare demand for
@@ -1534,6 +1555,31 @@ section("status: every mode inside the result budget");
     assert(full.text.length > summary.chars, "full view returned no more than the summary");
   });
 
+  // FB-0003: full is *full*. The human area is a record's last section, so the old
+  // 8000-character clamp on a long record cut exactly the part the read was spent to
+  // reach, and the caller was pushed into the file read these tools exist to replace.
+  {
+    const beat =
+      "The fixture was rebuilt, the check ran against it, and the numbers were compared line by line before anything was written down. ";
+    const long = await client.call("log_work", {
+      title: "A record longer than any cap the tools ever had",
+      what: beat.repeat(40),
+      why: beat.repeat(20),
+      how: beat.repeat(20),
+      outcome: "The record closed with every section present, at a length no summary could carry.",
+      human:
+        "This is a deliberately long test record: the point of it is that a reader asking for the whole thing gets the whole thing, and the whole record must reach the reader in one piece.",
+    });
+    const longId = /WORK-\d{4}/.exec(long.text)[0];
+    const whole = await client.call("status", { mode: "view", id: longId, full: true });
+    check("a record longer than the old cap comes back whole, human tail included", () => {
+      assert(!whole.isError, whole.text.slice(0, 200));
+      assert(whole.text.length > 8000, `${whole.text.length} chars — the fixture did not outgrow the old cap`);
+      assert(!whole.text.includes("(truncated"), "full view still truncates");
+      assertIncludes(whole.text, "reach the reader in one piece", "the tail survived");
+    });
+  }
+
   // The fifth mode, and the only result in this server that is a document rather than a
   // record — so it is measured against its own budget rather than the record caps, and it
   // is deliberately kept out of `budgeted()`, whose list is what "largest default result"
@@ -1577,6 +1623,26 @@ section("errors: the CLI's own message, trimmed");
     assertIncludes(res.text, "conflict", "error");
   });
   check("the error keeps the CLI's own wording", () => assertIncludes(res.text, "already done", "error"));
+
+  // FB-0002: a client that mangles the boundary between two parameters sends one field
+  // carrying the other's tag and text — seen on disk once, a comment ending in a literal
+  // </comment> with the whole resolution repeated behind a <parameter> tag. Refused
+  // whole, before any step of the call runs.
+  const leaked = await client.call("resolve_bug", {
+    id: bugId,
+    comment:
+      'The root cause was traced to the parser.</comment>\n<parameter name="resolution">The parser now honors the boundary.',
+  });
+  check("a field carrying leaked tool-call markup is refused and names the field", () => {
+    assert(leaked.isError, leaked.text);
+    assertIncludes(leaked.text, "markup", "error");
+    assertIncludes(leaked.text, "'comment'", "error");
+  });
+  check("…and none of it reached the record", () => {
+    const md = readFileSync(path.join(DATA, "bugs", `${bugId}.md`), "utf8");
+    assert(!md.includes("<parameter"), "the leak reached disk");
+    assert(!md.includes("</comment>"), "the leak reached disk");
+  });
   check(`the error is trimmed (${res.text.length} chars)`, () => assert(res.text.length <= BUDGET.result, res.text));
 
   const missing = await client.call("status", { mode: "view", id: "WORK-9999" });
@@ -1599,8 +1665,9 @@ section("errors: the CLI's own message, trimmed");
     assertIncludes(badTime.text, "exit 2", "error");
   });
   check("the rejected call wrote nothing", () => {
+    // Three by now: the lifecycle pair plus the deliberately long FB-0003 record.
     const worklogs = readdirSync(path.join(DATA, "worklogs"));
-    assert(worklogs.length === 2, `expected 2 worklogs, found ${worklogs.join(",")}`);
+    assert(worklogs.length === 3, `expected 3 worklogs, found ${worklogs.join(",")}`);
   });
 
   const noBody = await client.call("update_work", { id: workId });
