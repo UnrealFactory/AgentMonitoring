@@ -761,3 +761,4 @@
 {"ts":"2026-08-24T09:02:57Z","actor":"fable-dual-lead","type":"work_started","ref":"WORK-0082","summary":"Updates stop resurrecting the desktop shortcut: /UPDATE mode plus a silent-install guard hook"}
 {"ts":"2026-08-24T09:03:24Z","actor":"fable-dual-lead","type":"work_abandoned","ref":"WORK-0082","summary":"Duplicate of WORK-0081: the same work start ran twice because its first invocation's output was truncated to the final hint line and read as a rejection.…"}
 {"ts":"2026-08-24T09:03:24Z","actor":"fable-dual-lead","type":"work_done","ref":"WORK-0081","summary":"Shipped. src-tauri/src/update.rs runs the installer with '/S','/UPDATE' (template's update mode skips shortcut creation; assertion updated to demand it), and…"}
+{"ts":"2026-08-24T09:08:12Z","actor":"fable-dual-lead","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body, human area"}
