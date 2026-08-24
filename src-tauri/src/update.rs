@@ -1,6 +1,6 @@
 //! In-app updates, the plain way.
 //!
-//! The app asks GitHub Releases for the newest published version; when there is one, the
+//! The app asks GitHub for the newest published version; when there is one, the
 //! sidebar shows a card, and the button hands the rest to two **hidden** PowerShell
 //! processes: a worker that downloads the installer, waits for this process to exit, runs
 //! the installer silently (`/S` — the NSIS bundle installs per-user, so no UAC) and
@@ -9,17 +9,27 @@
 //! itself when it sees the freshly installed app start; if the worker fails, it kills the
 //! splash and puts the error in a message box instead. No raw console is ever shown.
 //!
+//! The check itself never touches the Releases **API** (BUG-0029): the unauthenticated
+//! API shares 60 requests an hour across a whole address, a busy network spends them,
+//! and a starved check used to hide the card with no hint. The newest tag comes from the
+//! un-metered `/releases/latest` redirect instead, and the installer from an equally
+//! un-metered HEAD; only the release notes still ride the API, best-effort — a spent
+//! quota now costs a blank tooltip, never the card.
+//!
 //! Why not tauri-plugin-updater: it wants a signing keypair and a hosted manifest, and
-//! everything this app needs — one exe, one repo, one OS — is a GET to the Releases API
+//! everything this app needs — one exe, one repo, one OS — is two cheap requests
 //! and one script. The check runs from Rust, not the WebView, so the CSP keeps its
 //! "no network from the window" shape.
 
 use serde::Deserialize;
 use tauri::AppHandle;
 
-/// Where releases live. The repo is public; the unauthenticated API allows 60 requests an
-/// hour per address, and this app makes two an hour (launch + the half-hour recheck).
+/// Where releases live. The repo is public.
 const REPO: &str = "UnrealFactory/AgentMonitoring";
+
+/// One identity and one patience for every request this module makes.
+const USER_AGENT: &str = "AgentMonitoring-updater";
+const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// What the frontend needs to draw the card and press the button.
 #[derive(Clone, serde::Serialize)]
@@ -31,29 +41,18 @@ pub struct UpdateInfo {
     /// Release notes (the release body), for the card's tooltip.
     pub notes: String,
     /// The `*-setup.exe` asset. `None` when a release has no Windows installer — the
-    /// card then opens `page_url` instead of scripting anything.
+    /// card then stays folded (components/AppUpdate.tsx has nothing it can run).
     pub installer_url: Option<String>,
     pub installer_size: Option<u64>,
     pub page_url: String,
 }
 
-// The three fields of the Releases API answer this module reads. Everything else in that
-// payload is somebody else's contract.
+// The one field of the Releases API answer this module still reads — the notes for the
+// card's tooltip. Everything else in that payload is somebody else's contract.
 #[derive(Deserialize)]
 struct ReleaseJson {
-    tag_name: String,
     #[serde(default)]
     body: Option<String>,
-    html_url: String,
-    #[serde(default)]
-    assets: Vec<AssetJson>,
-}
-
-#[derive(Deserialize)]
-struct AssetJson {
-    name: String,
-    size: u64,
-    browser_download_url: String,
 }
 
 /// `"v1.2.10"` → `[1, 2, 10]`, so versions compare as numbers, not words — `"1.10"` is
@@ -74,40 +73,94 @@ fn is_newer(latest: &str, current: &str) -> bool {
     version_key(latest) > version_key(current)
 }
 
-/// The one asset the updater knows how to run: the NSIS installer the release script
-/// uploads (`AgentMonitoring_<version>_x64-setup.exe`).
-fn pick_installer(assets: &[AssetJson]) -> Option<&AssetJson> {
-    assets
-        .iter()
-        .find(|a| a.name.to_ascii_lowercase().ends_with("-setup.exe"))
+/// The tag a `/releases/latest` redirect points at: `…/releases/tag/v1.2.0` → `v1.2.0`.
+/// A repo with no releases redirects to the `/releases` list instead — that is `None`.
+fn tag_from_location(location: &str) -> Option<String> {
+    let (_, tail) = location.split_once("/releases/tag/")?;
+    let tag = tail.split(['?', '#']).next().unwrap_or(tail).trim_end_matches('/');
+    (!tag.is_empty()).then(|| tag.to_string())
 }
 
-fn fetch_latest(current: &str) -> Result<UpdateInfo, String> {
-    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
-    let release: ReleaseJson = ureq::get(&url)
-        .set("User-Agent", "AgentMonitoring-updater")
-        .set("Accept", "application/vnd.github+json")
-        .timeout(std::time::Duration::from_secs(15))
+/// The newest published tag, through the door GitHub does not meter: for any caller,
+/// `github.com/<repo>/releases/latest` answers 302 with the tag page in `Location`.
+/// The API's shared 60-an-hour quota never touches this, so the card cannot be starved
+/// by a busy network's other checks (BUG-0029).
+fn latest_tag() -> Result<String, String> {
+    let url = format!("https://github.com/{REPO}/releases/latest");
+    let agent = ureq::AgentBuilder::new().redirects(0).build();
+    let resp = agent
+        .head(&url)
+        .set("User-Agent", USER_AGENT)
+        .timeout(TIMEOUT)
         .call()
         .map_err(|e| match e {
             ureq::Error::Status(404, _) => {
-                format!("no release has been published at github.com/{REPO} yet")
+                format!("github.com/{REPO} has no releases page")
             }
             other => format!("could not reach github.com to check for updates: {other}"),
-        })?
-        .into_json()
-        .map_err(|e| format!("the releases answer from github.com could not be read: {e}"))?;
+        })?;
+    tag_from_location(resp.header("location").unwrap_or_default())
+        .ok_or_else(|| format!("no release has been published at github.com/{REPO} yet"))
+}
 
-    let latest = release.tag_name.trim_start_matches(['v', 'V']).to_string();
-    let installer = pick_installer(&release.assets);
+/// The installer at the name the release script always gives it
+/// (`AgentMonitoring_<version>_x64-setup.exe`, scripts/release.mjs — a test below pins
+/// the two to each other). One un-metered HEAD proves it exists and carries its size;
+/// a release published without it yields `None`, same as before.
+fn find_installer(tag: &str, version: &str) -> Option<(String, Option<u64>)> {
+    let url = format!(
+        "https://github.com/{REPO}/releases/download/{tag}/AgentMonitoring_{version}_x64-setup.exe"
+    );
+    let resp = ureq::head(&url)
+        .set("User-Agent", USER_AGENT)
+        .timeout(TIMEOUT)
+        .call()
+        .ok()?;
+    let size = resp.header("content-length").and_then(|v| v.parse().ok());
+    Some((url, size))
+}
+
+/// The release notes, for the card's tooltip — the one thing still read from the
+/// rate-limited API, and so the one thing allowed to go missing: a spent quota costs
+/// an empty tooltip, never the card.
+fn release_notes(tag: &str) -> String {
+    let url = format!("https://api.github.com/repos/{REPO}/releases/tags/{tag}");
+    ureq::get(&url)
+        .set("User-Agent", USER_AGENT)
+        .set("Accept", "application/vnd.github+json")
+        .timeout(TIMEOUT)
+        .call()
+        .ok()
+        .and_then(|r| r.into_json::<ReleaseJson>().ok())
+        .and_then(|r| r.body)
+        .unwrap_or_default()
+}
+
+fn fetch_latest(current: &str) -> Result<UpdateInfo, String> {
+    let tag = latest_tag()?;
+    let latest = tag.trim_start_matches(['v', 'V']).to_string();
+    let page_url = format!("https://github.com/{REPO}/releases/tag/{tag}");
+    if !is_newer(&tag, current) {
+        // The everyday answer, reached without spending anything metered.
+        return Ok(UpdateInfo {
+            has_update: false,
+            current: current.to_string(),
+            latest,
+            notes: String::new(),
+            installer_url: None,
+            installer_size: None,
+            page_url,
+        });
+    }
+    let installer = find_installer(&tag, &latest);
     Ok(UpdateInfo {
-        has_update: is_newer(&release.tag_name, current),
+        has_update: true,
         current: current.to_string(),
         latest,
-        notes: release.body.unwrap_or_default(),
-        installer_url: installer.map(|a| a.browser_download_url.clone()),
-        installer_size: installer.map(|a| a.size),
-        page_url: release.html_url,
+        notes: release_notes(&tag),
+        installer_url: installer.as_ref().map(|(url, _)| url.clone()),
+        installer_size: installer.and_then(|(_, size)| size),
+        page_url,
     })
 }
 
@@ -359,23 +412,31 @@ mod tests {
     }
 
     #[test]
-    fn the_installer_is_the_setup_exe_asset() {
-        let release: ReleaseJson = serde_json::from_str(
-            r#"{
-                "tag_name": "v1.0.1",
-                "html_url": "https://github.com/UnrealFactory/AgentMonitoring/releases/tag/v1.0.1",
-                "body": "notes",
-                "assets": [
-                    {"name": "agentmon.exe", "size": 1, "browser_download_url": "https://x/cli"},
-                    {"name": "AgentMonitoring_1.0.1_x64-setup.exe", "size": 2, "browser_download_url": "https://x/setup"}
-                ]
-            }"#,
-        )
-        .unwrap();
-        let asset = pick_installer(&release.assets).expect("the setup asset is found");
-        assert_eq!(asset.browser_download_url, "https://x/setup");
-        // A release without a Windows installer yields None — the card then links the page.
-        assert!(pick_installer(&release.assets[..1]).is_none());
+    fn the_latest_tag_is_read_out_of_the_redirect() {
+        assert_eq!(
+            tag_from_location("https://github.com/UnrealFactory/AgentMonitoring/releases/tag/v1.1.0"),
+            Some("v1.1.0".to_string())
+        );
+        assert_eq!(
+            tag_from_location("https://github.com/x/y/releases/tag/v2.0/?something#frag"),
+            Some("v2.0".to_string()),
+            "a query or fragment on the location changes nothing"
+        );
+        // A repo with no releases redirects to the list page, which names no tag.
+        assert_eq!(tag_from_location("https://github.com/x/y/releases"), None);
+        assert_eq!(tag_from_location("https://github.com/x/y/releases/tag/"), None);
+    }
+
+    #[test]
+    fn the_conventional_installer_url_passes_the_install_guard() {
+        // find_installer builds the URL from the name scripts/release.mjs uploads; the
+        // guard in install_app_update only runs files under this repo's releases. The
+        // two must agree or the button downloads a name that is not there.
+        let url = format!(
+            "https://github.com/{REPO}/releases/download/v1.1.0/AgentMonitoring_1.1.0_x64-setup.exe"
+        );
+        assert!(url.starts_with(&format!("https://github.com/{REPO}/releases/download/")));
+        assert!(url.ends_with("-setup.exe"));
     }
 
     #[test]
