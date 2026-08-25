@@ -1,49 +1,37 @@
 ---
 name: handoff-v1-release
-title: v1.2.0 is live — how to ship, and the traps around the installer
+title: v1.4.0 is live — how to ship, and the traps around the installer
 type: handoff
-description: v1.2.0 published (--message requires --human everywhere); main pushed through aa36621; npm run release ships; keep the installer asset name; UseBasicParsing / NSIS gotchas.
+description: v1.4.0 published (scene citations render full size); main pushed through 4360ea3; npm run release ships; keep the installer asset name; UseBasicParsing / NSIS gotchas.
 agent: fable-release-builder
-updated_by: fable-human-timeline
+updated_by: fable-scene-size
 created: 2026-08-21T08:29:26Z
-updated: 2026-08-24T13:44:39Z
+updated: 2026-08-25T06:27:31Z
 tags: []
 refs: []
 ---
 
-Where things stand (2026-08-24, v1.2.0 released; one change waits unpublished):
+Where things stand (2026-08-25, v1.4.0 released):
 
-- Unshipped on local main: 229730b + WORK-0087 records — the compact rules now teach the
-  replace rule (an update's `--human` replaces the stored area whole, so an open record's
-  retelling covers the whole record so far: one telling per update, timeline order,
-  earlier tellings carried forward, newest last). It reaches agents only through a
-  rebuild/release: refusals and the MCP first result both print the block baked into the
-  installed binary, so other projects (ElmwoodOnline's WORK-0017 is the case that exposed
-  it) keep the old teaching until the next version ships and their MCP servers restart.
-  docs/MCP.md now prices the handover at "About 5,400 characters, once"; the mcp test
-  primer budget rose 5200 -> 5800 with the rationale beside it.
+- Release v1.4.0 is live with AgentMonitoring_1.4.0_x64-setup.exe; main is pushed through
+  4360ea3 (WORK-0093 + records + bump). It ships the scene-citation fix (owner feedback,
+  2026-08-25): the style contract now spells the citation as a blank-lined paragraph of
+  its own and requires `width`/`height` on a scene's SVG root; the renderer promotes a
+  whole-line image to a figure wherever it stands and SVG figures fill their column;
+  `agentmon doctor` warns on a welded citation and on a cited SVG with a sizeless root;
+  check:scenes measures every cited SVG (its widened net caught and forced the redraw of
+  WORK-0040's pre-scene-era diagram). The compact rules grew with this, so other projects
+  teach the new spelling only once they update to this version and their MCP servers
+  restart; docs/MCP.md republishes the measured hand-over (about 6,200 chars).
 
-- Release v1.2.0 is live with AgentMonitoring_1.2.0_x64-setup.exe; main is pushed
-  through aa36621 (WORK-0086 + records + bump). It ships the tightened human-area rule:
-  `work update` / `bug comment` (and `--replayed`) refuse a `--message` without
-  `--human` (owner directive 2026-08-24 — agents were bypassing the human area by
-  posting real content as notes). The supplied retelling replaces the stored one;
-  `--human` alone is still a refresh; every printed hint carries `--human` now.
+- The line before it: v1.3.0 was human area v2 (WORK-0088..0092 — tellings append as
+  dated nodes, a scene on every beat by default, the Human view sharing the agent page's
+  skeleton). v1.2.1 shipped the compact rules teaching the replace rule (WORK-0087).
+  v1.2.0 made `--message` require `--human` everywhere. v1.1.1 de-metered the update
+  check (BUG-0029) and carried three MCP fixes. v1.1.0 was the dual-record release
+  (agent + human areas on every record, the Agent/사람 toggle, `agentmon reconcile`,
+  the boot locale fix, silent updates that leave the desktop icon alone).
 
-- v1.1.1 before it shipped with AgentMonitoring_1.1.1_x64-setup.exe; main is pushed through
-  b79b7af (WORK-0084 + WORK-0085). It ships the de-metered update check (BUG-0029: tag
-  from the un-metered /releases/latest redirect, installer via un-metered HEAD, notes API
-  best-effort — a spent 60/hr quota can only blank the card's tooltip) and three MCP
-  fixes: `full: true` reads untruncated (FB-0003), `note write` clears tags/refs on an
-  explicit empty array, and calls carrying leaked tool-call markup are refused whole
-  (FB-0002; the damaged ElmwoodOnline BUG-0001 was spliced clean).
-- v1.1.0 before it was the dual-record release: every record carries an agent area and a
-  human area (enforced on every write path; `## For humans` is the file's last section),
-  the record screens carry the Agent/사람 toggle with per-beat scene diagrams, `agentmon
-  reconcile` + `--replayed` repair two-machine id collisions (BUG-0027), the boot locale
-  race is fixed (BUG-0026), and updates stop resurrecting a deleted desktop shortcut
-  (update.rs passes '/S','/UPDATE'; src-tauri/windows/hooks.nsi guards silent installs for
-  copies still updating with /S alone).
 - To ship a new version: bump the version in package.json + src-tauri/tauri.conf.json +
   Cargo.toml (root, workspace version — all three, release.mjs refuses if they disagree),
   then npm run release. The preflight also runs scripts/check-humanstyle-drift.mjs — if it
@@ -51,27 +39,30 @@ Where things stand (2026-08-24, v1.2.0 released; one change waits unpublished):
   updater's fallback constructs the installer URL from the asset name release.mjs uploads
   (AgentMonitoring_<version>_x64-setup.exe) — renaming that asset breaks the un-metered
   path (a unit test in update.rs pins it).
+
 - Writing rules are write-time only: nothing in CLAUDE.md; the CLI rejection, the MCP first
   result and `agentmon human-style` deliver the compact rules; per-piece history is
   progress/rounds.jsonl (D1-D11).
+
 - Gotchas that already bit once, still true: Invoke-WebRequest needs -UseBasicParsing on
   PowerShell 5.1; Tauri resources maps flatten glob sources; NSIS remembers the last
   install dir in HKCU/Software/agentmonitoring/AgentMonitoring, so a scratch install
   redirects the next "default" one until that key is deleted.
+
 - .mcp.json is the registration path (init --mcp-json / project mcp-json); updating FROM
   ≤1.0.1 still shows the old visible-console updater, from 1.0.2 the WPF splash, and from
   1.1.0 onward silent updates leave the desktop icon state alone.
 
 ## For humans
 
-This note is the baton between work sessions: whoever picks the project up next reads it to learn what version is out in the world and how to ship the next one. It was last rewritten on 2026-08-24, the day versions 1.1.1 and then 1.2.0 went out.
+이 노트는 작업 세션 사이의 바통입니다. 다음 사람이 지금 세상에 나가 있는 버전과 다음 버전을 내보내는 방법을 여기서 읽습니다. 마지막으로 다시 쓴 날은 2026년 8월 25일, 1.4.0이 나간 날입니다.
 
-**1.2.0 is in people's hands, and one change now waits unpublished.** The waiting change closes a loophole the released rule opened: a record's plain-language half is one page that every save replaces whole, and agents had begun sending only the newest round's story with each save, wiping the rounds before it. The short writing rules every agent is shown now say to retell the whole record so far, one telling per entry, oldest first. Those rules travel inside the installed program, so other projects keep the old ones until the next version ships.
+**1.4.0이 사람들 손에 있습니다.** 이번 버전은 그림 인용 문제를 고친 판입니다. 기록의 쉬운 말 페이지에 넣는 장면 그림이, 빈 줄 없이 붙여 쓰거나 그림 파일 첫 줄에 크기가 안 적혀 있으면 글자 한 줄 높이로 쪼그라든 채 실려 나갔습니다. 규칙서에 올바른 철자를 적고, 앱이 잘못된 철자도 그림으로 그려 주고, 점검 명령 `agentmon doctor`가 두 모양을 경고하게 해서 세 겹으로 막았습니다. 글쓰기 규칙은 설치된 프로그램 안에 실려 다니므로, 다른 프로젝트들은 이 버전으로 올려야 새 규칙을 받습니다.
 
-**1.2.0's own change was a tightened rule:** adding a note to a record demands the plain-language telling alongside it, because some agents had been skipping that half — the program refuses the save instead of letting the two halves drift apart. Before it, 1.1.1's headline fix: the app's "is there a newer version?" question used to go through a channel GitHub only answers 60 times an hour per address, and on a busy day the update offer silently vanished. It now asks through a free, unmetered address. Three fixes to the record-writing tools ride along: long records come back whole instead of cut off at the tail, a note's related-records list can actually be emptied, and a call carrying machine boundary-markers in its text is refused instead of saved corrupted.
+**그 앞은 이렇게 흘러왔습니다.** 1.3.0은 쉬운 말 페이지의 두 번째 판 — 저장마다 날짜 달린 항목으로 쌓이고, 이야기의 걸음마다 그림이 기본이 된 판입니다. 1.2.1은 짧은 규칙이 "전체를 다시 말하라"를 가르치게 된 판, 1.2.0은 기록에 노트를 달 때 쉬운 말 절반을 함께 내라고 강제한 판입니다.
 
-**Shipping the next version is three edits and one command.** The version number lives in three files that must agree; a script refuses to build if they differ, then builds the installer and publishes it. A guard also checks that the writing rulebook baked into the tools matches the one on disk — if it complains, rebuild the command-line tool first. One new caution: the free update route finds the installer by its exact file name, so renaming what the release script uploads would break it — an automated test stands watch over that name.
+**다음 버전을 내보내는 일은 세 군데 수정과 명령 하나입니다.** 버전 숫자가 사는 세 파일이 같아야 하고, 다르면 릴리스 스크립트가 거절합니다. 빌드 전에 규칙서와 도구 속 사본이 같은지도 검사합니다 — 거절당하면 명령줄 도구를 먼저 다시 빌드하십시오. 무료 업데이트 경로는 스크립트가 올리는 설치 파일의 정확한 이름으로 설치본을 찾으므로, 그 이름을 바꾸면 안 됩니다.
 
-**The traps at the bottom are the scars.** Each one is a mistake that already cost an afternoon once, written down so it only ever costs a sentence to avoid.
+**바닥의 함정 목록은 흉터입니다.** 하나하나가 이미 한나절을 잡아먹은 실수라서, 문장 하나로 피할 수 있게 적어 두었습니다.
 
-Read this note first, ship with the three-files-one-command routine, and keep the installer's file name exactly as the release script writes it.
+이 노트를 먼저 읽고, 세-파일-한-명령 순서로 내보내고, 설치 파일 이름은 스크립트가 쓰는 그대로 두십시오.
