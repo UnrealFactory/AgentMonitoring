@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 540" width="700" height="540" role="img" aria-label="점검 명령 doctor는 붙은 인용과 크기 없는 뿌리를 경고하게 되었고, 장면 측정 게이트는 인용된 SVG를 전부 재게 되어 그 첫날 규칙 이전의 옛 그림 한 장을 걸어냈다.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no taller
+       than half again that; at the 395 column every 22 lands at 12.4, over the 11 floor.
+       Type by role, never by name — `doctor` is the record's own command name, set mono;
+       every label keeps a fifth of its box empty.
+
+       Every actor, arrow, label and number below is a sentence of this record (WORK-0093):
+         · the left checker box, an eye — "doctor에 경고 둘을 새로 넣었습니다: 문단에 붙은
+           장면 인용, 크기 없는 뿌리"
+         · the right checker box, a ruler — "게이트는 이제 기록이 인용한 모든 SVG를 재고"
+         · the flagged page under it — "넓힌 그물에 옛 그림 하나가 바로 걸렸습니다 —
+           WORK-0040이 인용하는 파이프라인 그림" · "현 규격으로 다시 그렸습니다"
+         · the closing line — 같은 사건을 한 문장으로 -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="540" rx="8" fill="#121317"/>
+
+  <!-- the checker that reads records: two new warnings -->
+  <rect x="115.5" y="44.5" width="170" height="84" rx="10" fill="#5e6ad2" fill-opacity="0.10" stroke="#5e6ad2" stroke-opacity="0.45"/>
+  <path d="M168,86 q32,-22 64,0 q-32,22 -64,0 z" fill="none" stroke="#e8e9eb" stroke-width="2.2" stroke-linejoin="round"/>
+  <circle cx="200" cy="86" r="6" fill="#e8e9eb"/>
+
+  <!-- the gate that measures drawings: its net widened -->
+  <rect x="415.5" y="44.5" width="170" height="84" rx="10" fill="#5e6ad2" fill-opacity="0.10" stroke="#5e6ad2" stroke-opacity="0.45"/>
+  <rect x="455" y="74" width="90" height="24" rx="3" fill="none" stroke="#e8e9eb" stroke-width="2.2"/>
+  <line x1="470" y1="74" x2="470" y2="84" stroke="#8a8f98" stroke-width="2"/>
+  <line x1="485" y1="74" x2="485" y2="84" stroke="#8a8f98" stroke-width="2"/>
+  <line x1="500" y1="74" x2="500" y2="84" stroke="#8a8f98" stroke-width="2"/>
+  <line x1="515" y1="74" x2="515" y2="84" stroke="#8a8f98" stroke-width="2"/>
+  <line x1="530" y1="74" x2="530" y2="84" stroke="#8a8f98" stroke-width="2"/>
+
+  <!-- the words band for the two checkers -->
+  <text class="s" x="200" y="176" font-size="22" fill="#e8e9eb" text-anchor="middle"><tspan class="m" fill="#a5adf0">doctor</tspan> — 경고 둘</text>
+  <text class="s" x="200" y="208" font-size="22" fill="#8a8f98" text-anchor="middle">붙은 인용 · 크기 없는 뿌리</text>
+  <text class="s" x="500" y="176" font-size="22" fill="#e8e9eb" text-anchor="middle">장면 측정 게이트</text>
+  <text class="s" x="500" y="208" font-size="22" fill="#8a8f98" text-anchor="middle">인용된 SVG 전부 잰다</text>
+
+  <!-- what the widened net caught on its first day -->
+  <line x1="500" y1="226" x2="500" y2="262" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M492.7,245.6 L500,262 L507.3,245.6" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M465,274 h50 l20,20 v60 h-70 z" fill="none" stroke="#f2994a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M515,274 v20 h20" fill="none" stroke="#f2994a" stroke-width="2.2" stroke-linejoin="round"/>
+  <line x1="479" y1="310" x2="521" y2="310" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="479" y1="328" x2="511" y2="328" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+
+  <text class="s" x="500" y="396" font-size="22" fill="#e8e9eb" text-anchor="middle">규칙 이전의 옛 그림</text>
+  <text class="s" x="500" y="428" font-size="22" fill="#8a8f98" text-anchor="middle">현 규격으로 다시 그렸다</text>
+
+  <!-- the closing line -->
+  <text class="s" x="350" y="490" font-size="22" fill="#8a8f98" text-anchor="middle">그물을 넓힌 첫날 옛 그림 한 장이 걸렸습니다</text>
+</svg>

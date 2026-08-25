@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 370" width="700" height="370" role="img" aria-label="뿌리에 viewBox만 적힌 그림은 액자가 크기를 몰라 작게 걸리고, width와 height를 적은 그림은 적힌 크기 그대로 걸린다.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no taller
+       than half again that; at the 395 column every 22 lands at 12.4, over the 11 floor.
+       Type by role, never by name — the two attribute names are the record's own and are
+       set in the mono face; every label keeps a fifth of its box empty.
+
+       Every actor, arrow, label and number below is a sentence of this record (WORK-0093):
+         · the small frame lost in the dashed area — "뿌리에 가로·세로 크기가 안 적혀
+           있으면 액자가 그림의 원래 크기를 알 길이 없습니다"
+         · the full frame — "격자 숫자를 뿌리에 width·height로 적어라"
+         · the closing line — 같은 문장의 되풀이: 액자는 뿌리에 적힌 크기만 압니다 -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="370" rx="8" fill="#121317"/>
+
+  <!-- the room the page offers, and how little of it a sizeless drawing takes -->
+  <rect x="115.5" y="44.5" width="170" height="110" rx="8" fill="none" stroke="#fff" stroke-opacity="0.09" stroke-dasharray="6 5"/>
+  <rect x="175" y="79" width="50" height="40" rx="4" fill="none" stroke="#f2994a" stroke-width="2.2"/>
+
+  <!-- the same room, filled by a drawing whose root says its size -->
+  <rect x="415.5" y="44.5" width="170" height="110" rx="8" fill="none" stroke="#fff" stroke-opacity="0.09"/>
+  <rect x="429" y="58" width="142" height="82" rx="4" fill="none" stroke="#4cb782" stroke-opacity="0.85" stroke-width="2.2"/>
+  <circle cx="453" cy="80" r="6" fill="none" stroke="#8a8f98" stroke-width="2.2"/>
+  <path d="M437,132 l26,-28 l18,20 l13,-14 l27,22" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- the words band -->
+  <text class="s" x="200" y="210" font-size="22" fill="#e8e9eb" text-anchor="middle"><tspan class="m" fill="#a5adf0">viewBox</tspan>만 적힌 뿌리</text>
+  <text class="s" x="200" y="242" font-size="22" fill="#8a8f98" text-anchor="middle">액자가 크기를 모릅니다</text>
+  <text class="s" x="500" y="210" font-size="22" fill="#e8e9eb" text-anchor="middle"><tspan class="m" fill="#a5adf0">width·height</tspan> 적은 뿌리</text>
+  <text class="s" x="500" y="242" font-size="22" fill="#8a8f98" text-anchor="middle">적힌 크기로 걸립니다</text>
+
+  <!-- the closing line -->
+  <text class="s" x="350" y="314" font-size="22" fill="#8a8f98" text-anchor="middle">그림을 거는 액자는 뿌리에 적힌 크기만 압니다</text>
+</svg>

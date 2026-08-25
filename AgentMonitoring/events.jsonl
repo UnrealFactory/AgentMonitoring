@@ -805,3 +805,6 @@
 {"ts":"2026-08-25T04:48:52Z","actor":"fable-doc-sync","type":"note_updated","ref":"scene-geometry-is-measured","summary":"Updated note scene-geometry-is-measured: body, human area"}
 {"ts":"2026-08-25T04:49:38Z","actor":"fable-doc-sync","type":"work_started","ref":"WORK-0092","summary":"Teaching surfaces synced to the settled Human-view design; picture column re-measured at 464px"}
 {"ts":"2026-08-25T05:00:16Z","actor":"fable-doc-sync","type":"work_done","ref":"WORK-0092","summary":"Shipped. SPEC screens contract now states chronological timelines and the settled Human-view shape; HUMAN_STYLE's append bullet teaches the telling shape and…"}
+{"ts":"2026-08-25T06:15:03Z","actor":"fable-scene-size","type":"work_started","ref":"WORK-0093","summary":"Scene citations render full size: blank-line and root-size rules in the contract, renderer promotion, doctor warnings"}
+{"ts":"2026-08-25T06:15:30Z","actor":"fable-scene-size","type":"work_done","ref":"WORK-0093","summary":"Shipped: the contract names the citation's spelling (blank lines, sized root), the renderer forgives the welded shape (figure-line promotion, line-based lift,…"}
+{"ts":"2026-08-25T06:16:48Z","actor":"fable-scene-size","type":"note_updated","ref":"scene-geometry-is-measured","summary":"Updated note scene-geometry-is-measured: description, refs, body, human area"}

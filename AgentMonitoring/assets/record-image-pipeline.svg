@@ -1,22 +1,87 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 300" width="660" height="300" font-family="Segoe UI, sans-serif" font-size="13">
-  <rect x="0" y="0" width="660" height="300" rx="10" fill="#16171a" stroke="#2f3035"/>
-  <rect x="30" y="30" width="240" height="64" rx="8" fill="none" stroke="#a5adf0" stroke-width="2"/>
-  <text x="150" y="56" fill="#e8e9eb" text-anchor="middle">record body</text>
-  <text x="150" y="78" fill="#a5adf0" text-anchor="middle" font-family="Consolas, monospace" font-size="12">![alt](assets/diagram.svg)</text>
-  <path d="M150 94 v36" stroke="#8a8f98" stroke-width="2" fill="none"/>
-  <path d="M144 122 l6 10 l6 -10" fill="none" stroke="#8a8f98" stroke-width="2"/>
-  <rect x="30" y="134" width="240" height="52" rx="8" fill="none" stroke="#8a8f98" stroke-width="2"/>
-  <text x="150" y="156" fill="#e8e9eb" text-anchor="middle">Store::asset — path lock</text>
-  <text x="150" y="175" fill="#8a8f98" text-anchor="middle" font-size="11">relative · inside the folder · svg png jpg … · ≤10MB</text>
-  <path d="M270 160 h60 v-52 h28" stroke="#8a8f98" stroke-width="2" fill="none"/>
-  <path d="M350 102 l10 6 l-10 6" fill="none" stroke="#8a8f98" stroke-width="2"/>
-  <path d="M270 160 h60 v58 h28" stroke="#8a8f98" stroke-width="2" fill="none"/>
-  <path d="M350 212 l10 6 l-10 6" fill="none" stroke="#8a8f98" stroke-width="2"/>
-  <rect x="364" y="76" width="266" height="60" rx="8" fill="none" stroke="#4cb782" stroke-width="2"/>
-  <text x="497" y="100" fill="#e8e9eb" text-anchor="middle">desktop · get_record_asset</text>
-  <text x="497" y="120" fill="#4cb782" text-anchor="middle" font-family="Consolas, monospace" font-size="12">ipc::Response → blob: URL</text>
-  <rect x="364" y="188" width="266" height="60" rx="8" fill="none" stroke="#4cb782" stroke-width="2"/>
-  <text x="497" y="212" fill="#e8e9eb" text-anchor="middle">browser · dev middleware</text>
-  <text x="497" y="232" fill="#4cb782" text-anchor="middle" font-family="Consolas, monospace" font-size="12">GET …/files/assets/diagram.svg</text>
-  <text x="497" y="272" fill="#8a8f98" text-anchor="middle" font-size="12">both end in &lt;img&gt; — where even an SVG runs no script</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 900" width="700" height="900" role="img" aria-label="How a referenced image reaches the reader: the record's one citation line goes through the Store::asset path lock, then over either transport — desktop blob URL or browser GET — and both end in an img element, where even an SVG runs no script.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no taller
+       than half again that; at the 395 column every 22 lands at 12.4, over the 11 floor.
+       Redrawn 2026-08-25: the first drawing of this pipeline predated the scene grid
+       (660 wide, type at 11–13) and failed the geometry gate the day the gate learned to
+       measure every cited SVG, not only the scene-named ones. Type by role, never by
+       name; every label keeps a fifth of its box empty.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the page icon and the mono line — "The agent writes one short line,
+           `![alt](assets/diagram.svg)`"
+         · the gate box "Store::asset — the path lock" — "`Store::asset` is the gate
+           every picture goes through"
+         · "relative · canonicalized inside the folder" — "The path must be relative …
+           must land inside the project's own records folder once every shortcut is
+           resolved"
+         · "six picture kinds · under 10MB" — "must end in one of six picture
+           extensions, and it must be under ten megabytes"
+         · the plain window and "blob: URL" — "desktop serves raw bytes over
+           `ipc::Response` into a blob URL"
+         · the dotted window and "GET …/files/…" — "browser mode serves
+           `GET .../files/<path>` from the mirrored rules"
+         · the framed picture and its line — "SVG loaded through <img> is script-inert"
+         · the closing line — the record's own: "Let a page carry a picture, never an
+           instruction." -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="900" rx="8" fill="#121317"/>
+
+  <!-- the record: a page holding one citation line -->
+  <path d="M315,40 h50 l20,20 v70 h-70 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M365,40 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linejoin="round"/>
+  <line x1="327" y1="78" x2="373" y2="78" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="327" y1="94" x2="373" y2="94" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="327" y1="110" x2="358" y2="110" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <text class="m" x="350" y="168" font-size="22" fill="#a5adf0" text-anchor="middle">![alt](assets/diagram.svg)</text>
+
+  <line x1="350" y1="192" x2="350" y2="226" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M342.7,209.6 L350,226 L357.3,209.6" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- the gate every picture goes through -->
+  <rect x="130.5" y="240.5" width="439" height="89" rx="10" fill="#5e6ad2" fill-opacity="0.10" stroke="#5e6ad2" stroke-opacity="0.45"/>
+  <rect x="338" y="258" width="24" height="18" rx="3" fill="none" stroke="#e8e9eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M342,258 v-6 a8,8 0 0 1 16,0 v6" fill="none" stroke="#e8e9eb" stroke-width="2.2" stroke-linecap="round"/>
+  <text class="s" x="350" y="312" font-size="22" fill="#e8e9eb" text-anchor="middle"><tspan class="m" fill="#a5adf0">Store::asset</tspan> — the path lock</text>
+  <text class="s" x="350" y="368" font-size="22" fill="#8a8f98" text-anchor="middle">relative · canonicalized inside the folder</text>
+  <text class="s" x="350" y="400" font-size="22" fill="#8a8f98" text-anchor="middle">six picture kinds · under 10MB</text>
+
+  <!-- one gate, two transports -->
+  <path d="M350,420 L350,436 L180,436 L180,470" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M172.7,453.6 L180,470 L187.3,453.6" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M350,420 L350,436 L520,436 L520,470" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M512.7,453.6 L520,470 L527.3,453.6" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- the plain window is the desktop app; the one with the dots is the browser -->
+  <rect x="115" y="478" width="130" height="92" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="115" y1="506" x2="245" y2="506" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <rect x="211" y="487" width="16" height="12" rx="2" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="455" y="478" width="130" height="92" rx="12" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="455" y1="506" x2="585" y2="506" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="473" cy="492" r="4" fill="#8a8f98"/>
+  <circle cx="489" cy="492" r="4" fill="#8a8f98"/>
+  <circle cx="505" cy="492" r="4" fill="#8a8f98"/>
+
+  <text class="s" x="180" y="606" font-size="22" fill="#8a8f98" text-anchor="middle">the desktop app</text>
+  <text class="m" x="180" y="638" font-size="22" fill="#a5adf0" text-anchor="middle">blob: URL</text>
+  <text class="s" x="520" y="606" font-size="22" fill="#8a8f98" text-anchor="middle">the browser</text>
+  <text class="m" x="520" y="638" font-size="22" fill="#a5adf0" text-anchor="middle">GET …/files/…</text>
+
+  <!-- both transports end in the same place -->
+  <path d="M180,656 L180,725 L283,725" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M266.6,732.3 L283,725 L266.6,717.7" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M520,656 L520,725 L417,725" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M433.4,732.3 L417,725 L433.4,717.7" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- a picture in a frame: drawn, never run -->
+  <rect x="290.5" y="680.5" width="119" height="89" rx="8" fill="none" stroke="#4cb782" stroke-opacity="0.85" stroke-width="2.2"/>
+  <circle cx="322" cy="708" r="9" fill="none" stroke="#8a8f98" stroke-width="2.2"/>
+  <path d="M300,758 L332,720 L352,742 L366,726 L400,758" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="s" x="350" y="806" font-size="22" fill="#e8e9eb" text-anchor="middle">both end in &lt;img&gt; — even an SVG runs no script</text>
+
+  <!-- the closing line -->
+  <text class="s" x="350" y="858" font-size="22" fill="#8a8f98" text-anchor="middle">Let a page carry a picture, never an instruction.</text>
 </svg>
