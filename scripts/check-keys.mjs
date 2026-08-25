@@ -724,7 +724,7 @@ try {
     await ready(page);
     check(
       "a record with a human area opens on it",
-      (await shownView(page)) === "human" && (await page.locator(".human-sheet").count()) === 1,
+      (await shownView(page)) === "human" && (await page.locator(".human-view").count()) === 1,
       `toggle says ${await shownView(page)}`,
     );
     /* The two areas never share a page (SPEC): the agent's sections are not drawn under the
@@ -761,7 +761,7 @@ try {
     await page.waitForSelector(".record-section .section-title", { state: "visible", timeout: 5_000 });
     check(
       "↵ on the Agent segment swaps the record to the agent's half",
-      (await shownView(page)) === "agent" && (await page.locator(".human-sheet").count()) === 0,
+      (await shownView(page)) === "agent" && (await page.locator(".human-view").count()) === 0,
       `toggle says ${await shownView(page)}`,
     );
     check(
@@ -784,7 +784,7 @@ try {
       await focused(page),
     );
     await page.keyboard.press(" ");
-    await page.waitForSelector(".human-sheet", { state: "visible", timeout: 5_000 });
+    await page.waitForSelector(".human-view", { state: "visible", timeout: 5_000 });
     check("Space on the Human segment swaps it back", (await shownView(page)) === "human");
 
     /* …and the arrows, which `role="tablist"` promises and which none of this app's six
@@ -801,7 +801,7 @@ try {
       `toggle says ${await shownView(page)}, focus on ${await focused(page)}`,
     );
     await page.keyboard.press("ArrowLeft");
-    await page.waitForSelector(".human-sheet", { state: "visible", timeout: 5_000 });
+    await page.waitForSelector(".human-view", { state: "visible", timeout: 5_000 });
     check(
       "…and wraps at the end rather than stopping",
       (await shownView(page)) === "human" &&
@@ -857,7 +857,7 @@ try {
       await ready(page);
       check(
         "the choice carries onto the next record",
-        (await shownView(page)) === "human" && (await page.locator(".human-sheet").count()) === 1,
+        (await shownView(page)) === "human" && (await page.locator(".human-view").count()) === 1,
         `toggle says ${await shownView(page)}`,
       );
     }
@@ -938,7 +938,7 @@ try {
       await ready(page);
       check(
         "…so the record after it still opens in plain language",
-        (await shownView(page)) === "human" && (await page.locator(".human-sheet").count()) === 1,
+        (await shownView(page)) === "human" && (await page.locator(".human-view").count()) === 1,
         `toggle says ${await shownView(page)}`,
       );
     }
@@ -983,8 +983,8 @@ try {
       check(
         "…and at the top of the retelling too, where the trail is not on the page",
         (await page.locator(".correction-notice").count()) === 1 &&
-          (await page.locator(".human-sheet").count()) === 1,
-        `${await page.locator(".correction-notice").count()} notices, ${await page.locator(".human-sheet").count()} sheets`,
+          (await page.locator(".human-view").count()) === 1,
+        `${await page.locator(".correction-notice").count()} notices, ${await page.locator(".human-view").count()} sheets`,
       );
       /* And it is a way in, not a dead anchor: `#updates` does not exist on this half. */
       await page.locator(".correction-notice").click();

@@ -100,6 +100,14 @@ pub fn longest_telling(text: &str) -> usize {
             block_start = true;
             continue;
         }
+        // A `### <timestamp>` node is the hard edge between tellings — the shape
+        // [`append_telling`] writes — and the stamp itself is furniture, not words.
+        if !code && telling_heading(line).is_some() {
+            longest = longest.max(run);
+            run = 0;
+            block_start = true;
+            continue;
+        }
         if !code && block_start && is_lead_in(line) {
             longest = longest.max(run);
             run = 0;
@@ -108,6 +116,102 @@ pub fn longest_telling(text: &str) -> usize {
         run += words(line);
     }
     longest.max(run)
+}
+
+/// The timestamp of a `### <ts>` telling node, when this line is one.
+///
+/// The same grammar `## Updates` entries are read by ([`body::heading`] at level 3,
+/// opening on a date) so an author's own `### A subheading` inside a telling stays inside
+/// it — only the dated nodes agentmon writes are edges between tellings.
+fn telling_heading(line: &str) -> Option<&str> {
+    match body::heading(line) {
+        Some((3, title)) if body::starts_with_date(title) => Some(title),
+        _ => None,
+    }
+}
+
+/// One more telling on the human area's page: the existing text, then a `### <ts>` node
+/// holding the new one — the same shape the agent area's `## Updates` timeline has, with
+/// the same timestamp, so the two halves pair node for node.
+///
+/// This is what a progress note's `--human` becomes (SPEC.md, "The human area"). It used
+/// to *replace* the page, and teaching agents to carry the earlier tellings forward did
+/// not hold: ElmwoodOnline's WORK-0017 reached twenty agent nodes with one round's story
+/// on the page, every save deleting the rounds before it at exit 0. Appending makes the
+/// loss structurally impossible; merging tellings is still available, on purpose, through
+/// a refresh (`--human` alone), which replaces the page whole.
+///
+/// A record with no human area yet takes the text as the page's opening — no node, so a
+/// legacy record's first touch reads the way a `work start` page does.
+///
+/// **An unchanged telling is appended once.** One MCP call is legally two CLI steps that
+/// each require the same `human` (log_work opening and closing a record together,
+/// resolve_bug commenting and resolving) — the second step re-sends the text the first
+/// already put on the page, and a page that says the same thing twice serves nobody. So a
+/// text equal to the page's newest telling is a no-op, not a second node.
+pub fn append_telling(existing: Option<&str>, ts: &str, text: &str) -> String {
+    let text = body::trim(text);
+    match existing.and_then(visible) {
+        None => text.to_string(),
+        Some(prev) if last_telling(prev) == text => prev.to_string(),
+        Some(prev) => format!("{prev}\n\n### {ts}\n\n{text}"),
+    }
+}
+
+/// The page's newest telling: everything after the last dated node — the whole page when
+/// it has none.
+fn last_telling(page: &str) -> &str {
+    let mut fences = body::Fences::default();
+    let mut offset = 0usize;
+    let mut start = 0usize;
+    for line in page.split_inclusive('\n') {
+        let flat = line.trim_end_matches(['\r', '\n']);
+        let next = offset + line.len();
+        if !fences.feed(flat) && telling_heading(flat).is_some() {
+            start = next;
+        }
+        offset = next;
+    }
+    body::trim(&page[start..])
+}
+
+/// [`append_telling`] for a **replay** (SPEC.md, "Backdating"): the node lands at its
+/// place in the timeline — before the first node stamped later — rather than at the end,
+/// mirroring [`body::insert_entry_by_time`] on the agent side. The opening (everything
+/// before the first dated node) always stays first: it has no stamp, and it is the page's
+/// opening the way `## What` precedes `## Updates`.
+pub fn insert_telling_by_time(existing: Option<&str>, ts: &str, text: &str) -> String {
+    let Some(prev) = existing.and_then(visible) else {
+        return body::trim(text).to_string();
+    };
+    let mut fences = body::Fences::default();
+    let mut offset = 0usize;
+    let mut insert_at: Option<usize> = None;
+    for line in prev.split_inclusive('\n') {
+        let flat = line.trim_end_matches(['\r', '\n']);
+        if !fences.feed(flat) {
+            if let Some(stamp) = telling_heading(flat) {
+                if stamp.trim() > ts {
+                    insert_at = Some(offset);
+                    break;
+                }
+            }
+        }
+        offset += line.len();
+    }
+    let node = format!("### {ts}\n\n{}", body::trim(text));
+    match insert_at {
+        None => format!("{prev}\n\n{node}"),
+        Some(pos) => {
+            let before = body::trim_end(&prev[..pos]);
+            let after = body::trim_end(&prev[pos..]);
+            if before.is_empty() {
+                format!("{node}\n\n{after}")
+            } else {
+                format!("{before}\n\n{node}\n\n{after}")
+            }
+        }
+    }
 }
 
 /// Does this line open a beat? — the bold lead-in the contract asks every beat after the
@@ -124,6 +228,52 @@ fn is_lead_in(line: &str) -> bool {
         None => t,
     };
     t.strip_prefix("**").is_some_and(|rest| rest.contains("**"))
+}
+
+/// Beats in a retelling: blocks opened by a bold lead-in — the unit the picture rule
+/// counts, since the contract's default became a scene per beat (owner decision,
+/// 2026-08-25: "every beat opens on its scene"). A thin, lead-in-less retelling has no
+/// beats and owes no picture; `## Updates`-style dated nodes do not open beats either,
+/// only the lead-ins inside them do.
+pub fn beat_count(text: &str) -> usize {
+    let mut fences = body::Fences::default();
+    let mut count = 0usize;
+    let mut block_start = true;
+    for line in text.lines() {
+        let code = fences.feed(line);
+        if !code && is_blank(line) {
+            block_start = true;
+            continue;
+        }
+        if !code && block_start && is_lead_in(line) {
+            count += 1;
+        }
+        block_start = false;
+    }
+    count
+}
+
+/// Figure blocks in a retelling: lines that are one `![alt](src)` image and nothing else
+/// — the shape the app draws as a beat's scene. The test mirrors `FIGURE_BLOCK` in
+/// src/lib/human.ts (whole line, no whitespace in the target), so this count and the
+/// screen cannot disagree about whether a page has pictures.
+pub fn figure_count(text: &str) -> usize {
+    let mut fences = body::Fences::default();
+    let mut count = 0usize;
+    for line in text.lines() {
+        if fences.feed(line) {
+            continue;
+        }
+        let t = body::trim(line);
+        let Some(rest) = t.strip_prefix("![") else { continue };
+        let Some(mid) = rest.find("](") else { continue };
+        let target = &rest[mid + 2..];
+        let Some(url) = target.strip_suffix(')') else { continue };
+        if !url.is_empty() && !url.contains(char::is_whitespace) {
+            count += 1;
+        }
+    }
+    count
 }
 
 /// The two flags every verb that takes a human area offers, for error messages.
@@ -653,6 +803,100 @@ mod tests {
         assert_eq!(longest_telling("one two three four five six\n\n- **Stated.** three"), 6);
         // …and one inside a code fence starts nothing: the fence is part of its own beat.
         assert_eq!(longest_telling("one two\n\n```\n**not a lead-in** here\n```"), 8);
+    }
+
+    /// The page grows the way `## Updates` grows: one dated node per telling, the
+    /// opening first, and a replayed telling lands at its time rather than at the end.
+    #[test]
+    fn tellings_append_as_dated_nodes_and_replays_land_in_order() {
+        let opening = "We started building the saving part.";
+        assert_eq!(append_telling(None, "2026-08-25T01:00:00Z", opening), opening);
+        let two = append_telling(Some(opening), "2026-08-25T02:00:00Z", "The saving part works now.");
+        assert_eq!(
+            two,
+            "We started building the saving part.\n\n### 2026-08-25T02:00:00Z\n\n\
+             The saving part works now.",
+        );
+        let three = append_telling(Some(&two), "2026-08-25T04:00:00Z", "And it survived a restart.");
+        assert!(three.ends_with("### 2026-08-25T04:00:00Z\n\nAnd it survived a restart."));
+
+        // Re-sending the newest telling is a no-op, not a second node — the shape one MCP
+        // call takes when it opens and closes a record with a single `human`.
+        assert_eq!(
+            append_telling(Some(&three), "2026-08-25T05:00:00Z", "And it survived a restart."),
+            three,
+        );
+        assert_eq!(append_telling(Some(opening), "2026-08-25T05:00:00Z", opening), opening);
+
+        // A replayed telling goes between its neighbours, never after the newest.
+        let replayed = insert_telling_by_time(
+            Some(&three),
+            "2026-08-25T03:00:00Z",
+            "Halfway checks passed.",
+        );
+        let a = replayed.find("02:00:00Z").unwrap();
+        let b = replayed.find("03:00:00Z").unwrap();
+        let c = replayed.find("04:00:00Z").unwrap();
+        assert!(a < b && b < c, "{replayed}");
+        // …and one later than everything appends, blank existing behaves like none.
+        assert!(insert_telling_by_time(Some(&three), "2026-08-25T05:00:00Z", "Last.")
+            .ends_with("### 2026-08-25T05:00:00Z\n\nLast."));
+        assert_eq!(insert_telling_by_time(Some("  \n"), "2026-08-25T05:00:00Z", "Only."), "Only.");
+
+        // An author's own undated `###` subheading is not a node edge, and a dated
+        // heading inside a code fence is code.
+        let tricky = "Opening.\n\n### Not a node\n\nStill the opening telling.\n\n\
+                      ```\n### 2026-08-25T00:30:00Z\n```\n\n### 2026-08-25T02:00:00Z\n\nSecond.";
+        let inserted = insert_telling_by_time(Some(tricky), "2026-08-25T01:00:00Z", "Between.");
+        assert!(
+            inserted.find("Between.").unwrap() < inserted.find("Second.").unwrap(),
+            "{inserted}"
+        );
+        assert!(
+            inserted.find("Still the opening").unwrap() < inserted.find("Between.").unwrap(),
+            "the opening stays first: {inserted}"
+        );
+
+        // The whole page still reads back as one human area.
+        let mut sections = body::sections("## What\n\nx\n");
+        let rendered = render_body(&mut sections, &replayed, "WORK-0001").unwrap();
+        assert_eq!(split(&rendered).1.as_deref(), Some(replayed.as_str()));
+    }
+
+    /// The picture sweep's two counters: beats by lead-in, scenes by whole-line figure.
+    #[test]
+    fn beats_and_figures_are_counted_the_way_the_screen_reads_them() {
+        let page = "The opening run, no lead-in.\n\n\
+                    **First beat.**\n\n![the cast](assets/work-0001-1-cast.svg)\n\nWords.\n\n\
+                    **Second beat.** With a clause.\n\nNo scene here.\n\n\
+                    ```\n**not a beat** and ![not](a-figure.svg)\n```\n";
+        assert_eq!(beat_count(page), 2);
+        assert_eq!(figure_count(page), 1);
+        // A thin retelling has no beats; an image inside a sentence is not a figure block,
+        // and neither is one whose target holds a space (mirrors FIGURE_BLOCK in
+        // src/lib/human.ts).
+        assert_eq!(beat_count("One honest paragraph, no bold."), 0);
+        assert_eq!(figure_count("A line with ![img](x.svg) inside it."), 0);
+        assert_eq!(figure_count("![alt](two words.svg)"), 0);
+        assert_eq!(figure_count("![](assets/a.svg)"), 1);
+        // A dated node's heading is not a beat; a lead-in under it is.
+        assert_eq!(beat_count("Opening.\n\n### 2026-08-25T01:00:00Z\n\n**A beat.** x"), 1);
+    }
+
+    /// A dated node bounds a telling the way a lead-in bounds a beat — and its stamp is
+    /// not part of any telling's word count.
+    #[test]
+    fn a_dated_node_ends_a_telling_for_the_ceiling() {
+        let page = format!(
+            "{}\n\n### 2026-08-25T02:00:00Z\n\n{}\n\n### 2026-08-25T03:00:00Z\n\n{}",
+            "word ".repeat(300).trim(),
+            "word ".repeat(320).trim(),
+            "word ".repeat(310).trim(),
+        );
+        assert!(words(&page) > 900);
+        assert_eq!(longest_telling(&page), 320, "each node is its own telling");
+        // An undated subheading does not end one (its own words stay in the run).
+        assert_eq!(longest_telling("one two\n\n### Heading words\n\nthree four"), 7);
     }
 
     #[test]

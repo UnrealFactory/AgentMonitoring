@@ -416,7 +416,9 @@ fn a_bug_claimed_by_someone_else_cannot_be_stolen() {
     );
     run_bug_comment(&tp, &hinted)
         .unwrap_or_else(|e| panic!("the refusal printed a line that does not run:\n  {hinted}\n{e}"));
-    assert_eq!(tp.store.bug(&id).unwrap().human.as_deref(), Some(COORDINATE_HUMAN));
+    // The comment's telling is appended after the stored page (owner decision, 2026-08-25).
+    let human = tp.store.bug(&id).unwrap().human.unwrap();
+    assert!(human.ends_with(COORDINATE_HUMAN), "{human}");
 
     // The same line survives the state `agentmon migrate` hands over: a claimed record
     // with no `## For humans` at all gains one from the same hint.
@@ -826,9 +828,55 @@ fn human_of(n: usize) -> String {
 fn compound_human(things: usize, each: usize) -> String {
     let mut out = String::from("The shared opening, in words a reader could have witnessed.");
     for n in 1..=things {
-        out.push_str(&format!("\n\n**The {n} thing shipped, stated.** {}", human_of(each)));
+        // The first beat carries its scene, the way the contract's default asks — so this
+        // fixture is a conforming page and the word-ceiling test below measures only the
+        // thing it is about.
+        let scene = if n == 1 { "![the cast](assets/work-0000-1-cast.svg)\n\n" } else { "" };
+        out.push_str(&format!("\n\n**The {n} thing shipped, stated.**\n\n{scene}{}", human_of(each)));
     }
     out
+}
+
+/// The picture default (a scene per beat, owner decision 2026-08-25) is swept the same
+/// way the word ceiling is: a warning, never a refusal, and only on the shape that cannot
+/// be the contract's own valve — a page of beats with not one scene. One figure anywhere
+/// silences it (the valve is per beat, and doctor cannot judge which beat's facts draw
+/// nothing), a beat-less thin retelling owes none, and a note never warns.
+#[test]
+fn doctor_warns_on_a_page_of_beats_with_no_scene_and_only_on_records() {
+    let tp = TempProject::new("doctor-scenes");
+    let id = start(&tp, "Wire the change watcher into the desktop app");
+
+    // Beats, no picture anywhere: the warning, naming the record and the beat count.
+    let bare = "The opening.\n\n**One thing shipped.** Its words.\n\n**Another thing.** More words.";
+    tp.store.update_work(&id, "cli-builder", None, Some(bare), None).unwrap();
+    let report = doctor::check(&tp.store).unwrap();
+    let scene_warns: Vec<String> = report
+        .problems
+        .iter()
+        .filter(|p| p.message.contains("no scene"))
+        .map(|p| format!("{}: {}", p.message, p.fix))
+        .collect();
+    assert_eq!(scene_warns.len(), 1, "{:#?}", report.problems);
+    assert!(scene_warns[0].contains(&format!("{id} (2 beat(s)")), "{}", scene_warns[0]);
+    assert!(scene_warns[0].contains("check:scenes"), "{}", scene_warns[0]);
+    assert_eq!(report.errors(), 0, "a missing picture is untidy, not broken");
+
+    // One scene on the page and the sweep is silent — the per-beat valve is the
+    // contract's to judge, not doctor's.
+    let pictured = "The opening.\n\n**One thing shipped.**\n\n\
+                    ![the cast](assets/work-0000-1-cast.svg)\n\nIts words.\n\n\
+                    **Another thing.** More words.";
+    tp.store.update_work(&id, "cli-builder", None, Some(pictured), None).unwrap();
+    let report = doctor::check(&tp.store).unwrap();
+    assert!(!report.problems.iter().any(|p| p.message.contains("no scene")), "{:#?}", report.problems);
+
+    // A thin, beat-less retelling owes no picture.
+    tp.store
+        .update_work(&id, "cli-builder", None, Some("One honest paragraph, no beats at all."), None)
+        .unwrap();
+    let report = doctor::check(&tp.store).unwrap();
+    assert!(!report.problems.iter().any(|p| p.message.contains("no scene")), "{:#?}", report.problems);
 }
 
 /// The style contract's word ceiling is checked — on **one telling**, which is what it
@@ -1529,7 +1577,7 @@ fn an_orphan_event_is_accounted_for_by_the_reconciliation_note_and_never_goes_qu
     // State two: a record that already has a retelling. The flag stays on the line —
     // `--message` never travels without `--human` (owner directive, 2026-08-24), so a
     // hint without it would exit 2 on the record it names — and the text the reader
-    // fills in replaces the stored retelling, exactly as on any other note.
+    // fills in is appended to the stored page, exactly as on any other note.
     let told = TempProject::new("doctor-repair-told");
     let tid = start_dated(&told, "Wire the change watcher into the desktop app", started);
     assert!(
@@ -1549,9 +1597,8 @@ fn an_orphan_event_is_accounted_for_by_the_reconciliation_note_and_never_goes_qu
     let report = doctor::check(&told.store).unwrap();
     assert_eq!(report.errors(), 0, "{:#?}", report.problems);
     assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
-    assert_eq!(
-        told.store.worklog(&tid).unwrap().human.as_deref(),
-        Some(REPAIR_HUMAN),
-        "the retelling the reader wrote into the line is the one on the record"
-    );
+    // The telling the reader wrote into the line lands on the record — appended after
+    // the page it already had (owner decision, 2026-08-25).
+    let human = told.store.worklog(&tid).unwrap().human.unwrap();
+    assert!(human.ends_with(REPAIR_HUMAN), "{human}");
 }

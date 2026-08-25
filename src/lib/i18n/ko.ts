@@ -444,6 +444,8 @@ export const ko: Dict = {
   "view.boardHumanTip": "같은 항목을, 그 자리에 없던 사람을 위해 쉬운 말로 다시 쓴 글",
   "view.boardHumanNoneTip": "이 보드에는 아직 쉬운 말로 쓴 글이 없습니다",
   "view.humanSomeTip": (has, of) => `${of}건 중 ${has}건에만 쉬운 말로 쓴 글이 있습니다`,
+  "view.tellingN": (n) => `${n}번째 노드`,
+  "view.overview": "개요",
   /* 한 건도 없는 보드에 "1건 중 1건은"이라고 적으면 숫자가 세는 일을 하지 않는다. 실제로
      오늘 이 앱의 피드백 보드가 그 상태다(FB-0001 한 건, 사람 쪽 없음). */
   "view.boardMissingTitle": (missing, total) =>
@@ -561,7 +563,7 @@ export const ko: Dict = {
   "bd.endClosed": "닫힘",
   "bd.endWorking": (agent) => `${agent} — 작업 중입니다`,
   "bd.endWaiting": "담당자를 기다리는 중",
-  "bd.fixAbove": "해결 내용은 위에 있습니다",
+  "bd.fixBelow": "해결 내용은 아래에 있습니다",
   "bd.openFor": (duration) => `열린 지 ${duration}`,
   "bd.addedToReport": "등록 내용 보강",
   "bd.repliedAsAssignee": "담당자 답변",

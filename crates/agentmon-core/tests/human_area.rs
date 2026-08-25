@@ -719,21 +719,34 @@ fn a_refresh_writes_only_the_human_area_and_logs_one_human_updated() {
     assert_eq!(f.events("human_updated"), 3);
     assert_eq!(f.store.events(None).unwrap().len(), before + 3);
 
-    // A mutation that changes the human area *and* something else logs its own event only.
+    // A mutation that changes the human area *and* something else logs its own event only
+    // — and its telling is APPENDED as a node stamped like the note, never a replacement.
     let both = f
         .store
         .update_work(
             &id,
             "second-agent",
             Some("A real progress note."),
-            Some("And a fresh retelling with it."),
+            Some("And this note's own telling with it."),
             None,
         )
         .unwrap();
     assert_eq!(both.event.event_type, "work_updated");
     assert_eq!(f.events("human_updated"), 3, "no double line");
     assert_eq!(both.record.updates.len(), 1);
-    assert_eq!(both.record.human.as_deref(), Some("And a fresh retelling with it."));
+    let human = both.record.human.as_deref().unwrap();
+    assert!(
+        human.starts_with("A clearer retelling of the same work."),
+        "the refreshed page stays: {human}"
+    );
+    assert!(
+        human.ends_with("And this note's own telling with it."),
+        "the new telling lands last: {human}"
+    );
+    assert!(
+        human.contains(&format!("### {}", both.record.updates[0].ts)),
+        "the node carries the note's own stamp: {human}"
+    );
 }
 
 #[test]
@@ -812,12 +825,15 @@ fn nothing_at_all_is_refused_by_name() {
 }
 
 // ---------------------------------------------------------------------------
-// closing verbs replace it
+// closing verbs append the ending
 // ---------------------------------------------------------------------------
 
+/// Closing used to replace the page whole. That rule bred the loss the append model
+/// exists to close (owner decision, 2026-08-25): the page is a timeline now, so an ending
+/// is one more dated node after the tellings the record gathered while it was open.
 #[test]
-fn closing_a_record_replaces_the_human_area_rather_than_appending() {
-    let f = Fixture::new("replace");
+fn closing_a_record_appends_the_ending_after_the_earlier_tellings() {
+    let f = Fixture::new("close-append");
     let id = f.start();
     let done = f
         .store
@@ -833,11 +849,17 @@ fn closing_a_record_replaces_the_human_area_rather_than_appending() {
             },
         )
         .unwrap();
-    assert!(done.record.human.as_deref().unwrap().starts_with("It is finished"));
+    let human = done.record.human.as_deref().unwrap();
+    assert!(
+        human.starts_with("Two agents kept overwriting"),
+        "the opening telling stays: {human}"
+    );
+    assert!(human.ends_with("app refuses to save one without."), "the ending lands last");
+    let finished = done.record.meta.finished.clone().unwrap();
+    assert!(human.contains(&format!("### {finished}")), "stamped with the close: {human}");
 
     let raw = f.raw(&format!("worklogs/{id}.md"));
     assert_eq!(raw.matches("## For humans").count(), 1, "one section, not two:\n{raw}");
-    assert!(!raw.contains("Two agents kept overwriting"), "the old telling is gone:\n{raw}");
     // still last, after the outcome the close just wrote
     assert!(raw.find("## Outcome").unwrap() < raw.find("## For humans").unwrap());
 
@@ -856,14 +878,9 @@ fn closing_a_record_replaces_the_human_area_rather_than_appending() {
     let raw = f.raw(&format!("bugs/{bug}.md"));
     assert_eq!(raw.matches("## For humans").count(), 1, "{raw}");
     assert!(raw.find("## Resolution").unwrap() < raw.find("## For humans").unwrap());
-    assert!(f
-        .store
-        .bug(&bug)
-        .unwrap()
-        .human
-        .as_deref()
-        .unwrap()
-        .starts_with("The filter now survives"));
+    let human = f.store.bug(&bug).unwrap().human.unwrap();
+    assert!(human.ends_with("remembers it in the address."), "{human}");
+    assert!(human.contains("### 2026-08-"), "the ending is a dated node: {human}");
 
     let other = f.start();
     f.store
@@ -877,14 +894,9 @@ fn closing_a_record_replaces_the_human_area_rather_than_appending() {
             },
         )
         .unwrap();
-    assert!(f
-        .store
-        .worklog(&other)
-        .unwrap()
-        .human
-        .as_deref()
-        .unwrap()
-        .starts_with("We stopped this one"));
+    let human = f.store.worklog(&other).unwrap().human.unwrap();
+    assert!(human.ends_with("another record covers the same work."), "{human}");
+    assert!(human.starts_with("Two agents kept overwriting"), "{human}");
 }
 
 // ---------------------------------------------------------------------------
@@ -1307,14 +1319,17 @@ fn a_rewritten_record_keeps_its_human_area_through_unrelated_mutations() {
     f.store.claim_bug(&bug, "cli-builder", None, None).unwrap();
     let b = f.store.bug(&bug).unwrap();
     assert!(b.human.as_deref().unwrap().starts_with("If you filter the list"));
-    // A comment carries its own retelling, which replaces the stored one — and the
+    // A comment carries its own telling, appended after the stored page — and the
     // section still renders last, after the thread it travelled with.
     f.store
         .comment_bug(&bug, "cli-builder", Some("Reproduced on a fresh profile."), Some(HUMAN), None)
         .unwrap();
     let b = f.store.bug(&bug).unwrap();
-    assert_eq!(b.human.as_deref(), Some(HUMAN));
+    let human = b.human.as_deref().unwrap();
+    assert!(human.starts_with("If you filter the list"), "the page stays: {human}");
+    assert!(human.ends_with(HUMAN), "the comment's telling lands last: {human}");
     assert_eq!(b.comments.len(), 1);
+    assert!(human.contains(&format!("### {}", b.comments[0].ts)), "{human}");
     let raw = f.raw(&format!("bugs/{bug}.md"));
     assert!(raw.find("## Comments").unwrap() < raw.find("## For humans").unwrap());
 }

@@ -105,10 +105,10 @@ export function BugDetailPage() {
   const sections = useMemo(() => {
     if (!bug) return [] as TocEntry[];
     const out: TocEntry[] = [{ id: "report", label: t("bd.report"), count: 0 }];
+    out.push({ id: "thread", label: t("bd.thread"), count: bug.comments.length });
     if (bug.resolution) {
       out.push({ id: "resolution", label: t("bd.resolution"), count: 0 }, ...partsToc(resolution));
     }
-    out.push({ id: "thread", label: t("bd.thread"), count: bug.comments.length });
     if (related.count) out.push({ id: "related", label: t("rec.related"), count: related.count });
     return out;
   }, [bug, related.count, resolution, locale]);
@@ -273,6 +273,8 @@ export function BugDetailPage() {
                 /* The retelling of a bug is written by whoever last touched it: the agent who
                    resolved it if it is resolved, otherwise the one who filed it. */
                 agent={bug.resolvedBy ?? bug.assignee ?? bug.reporter}
+                started={bug.created}
+                finished={bug.resolved}
                 onShowAgent={peekAgent}
               />
             )}
@@ -299,14 +301,13 @@ export function BugDetailPage() {
               </section>
             )}
 
-            {/* The fix before the thread: it is the newest thing on the record and the
-                thing a reader came for, and the thread below it runs newest-first for
-                the same reason. */}
+            {/* The thread first, the fix after it: the page reads the way the bug ran
+                (owner, 2026-08-25) — filed, the findings in order, the fix last. */}
+            {!human && <ThreadSection bug={bug} claimDelay={claimDelay} />}
+
             {!human && bug.resolution && (
               <ResolutionCard bug={bug} openFor={openFor} resolution={resolution} />
             )}
-
-            {!human && <ThreadSection bug={bug} claimDelay={claimDelay} />}
 
             {!human && bug.status === "closed" && !bug.resolution && (
               <section className="record-section">
@@ -522,12 +523,11 @@ type ThreadEntry =
   | { kind: "end"; ts: string };
 
 /**
- * The conversation, newest at the top: someone came back with numbers, someone picked it
- * up, someone answered — down to the filing at the bottom, the same one rule as the work
- * trail (further down is further back). The order *within* the events is still how it
- * happened: a comment written after the fix — a correction, a follow-up — appears above
- * the end marker, where its recency puts it, rather than being shuffled behind it by a
- * rail that always starts on the same node.
+ * The conversation the way it ran (owner, 2026-08-25 — it read newest-first before):
+ * the claim, the findings in order, down to the end marker — the same one rule as the
+ * work trail now (further down is further on). The order *within* the events is still
+ * how it happened: a comment written after the fix — a correction, a follow-up —
+ * appears below the end marker, where its time puts it.
  */
 function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string | null }) {
   // An unfinished bug has no closing timestamp, so its end marker sorts newest.
@@ -544,8 +544,8 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
     { kind: "end" as const, ts: endTs },
     // On a tie the end marker wins: a comment stamped at the same minute as the fix was
     // written before it, or we cannot tell, and "before" is the safer claim — so in a
-    // newest-first rail it draws *below* the marker.
-  ].sort((a, b) => b.ts.localeCompare(a.ts) || rank(b) - rank(a));
+    // chronological rail it draws *above* the marker.
+  ].sort((a, b) => a.ts.localeCompare(b.ts) || rank(a) - rank(b));
 
   const endLabel = bug.resolved
     ? t("bd.endResolved", bug.resolvedBy ?? t("bd.someAgent"))
@@ -573,13 +573,13 @@ function ThreadSection({ bug, claimDelay }: { bug: BugDetail; claimDelay: string
               <div className="trail-edge-text">
                 <span className="trail-edge-label">{endLabel}</span>
                 <span className="trail-edge-time tabular">
-                  {/* When the resolution card sits immediately above the thread, it owns
+                  {/* When the resolution card sits immediately below the thread, it owns
                       the when and the how long: the thread just hands over to it. If
-                      somebody commented *after* the fix, that comment draws above this
+                      somebody commented *after* the fix, that comment draws below this
                       node, which then has to carry its own date, or the sequence cannot
                       be read. */}
-                  {bug.resolved && bug.resolution && i === 0 ? (
-                    <span>{t("bd.fixAbove")}</span>
+                  {bug.resolved && bug.resolution && i === entries.length - 1 ? (
+                    <span>{t("bd.fixBelow")}</span>
                   ) : bug.resolved ? (
                     <span title={formatDateTimeUtc(bug.resolved)}>
                       {formatDateTime(bug.resolved)} · {formatRelative(bug.resolved)} ·{" "}

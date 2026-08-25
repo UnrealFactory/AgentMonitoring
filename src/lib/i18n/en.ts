@@ -388,6 +388,8 @@ export const en = {
     has === 1
       ? `1 of ${of} items on this board has been retold in plain words`
       : `${has} of ${of} items on this board have been retold in plain words`,
+  "view.tellingN": (n: number) => `node ${n}`,
+  "view.overview": "Overview",
   /* A board where none of them has one must not say "1 of 1 has none": the numbers stop
      counting anything. That is this app's own feedback board today — FB-0001, agent half
      only — so it is the first shape a reader meets, not an edge case. */
@@ -513,7 +515,7 @@ export const en = {
   "bd.endClosed": "Closed",
   "bd.endWorking": (agent: string) => `${agent} is working on it`,
   "bd.endWaiting": "Waiting for someone to claim it",
-  "bd.fixAbove": "the fix is recorded above",
+  "bd.fixBelow": "the fix is recorded below",
   "bd.openFor": (duration: string) => `open for ${duration}`,
   "bd.addedToReport": "added to the report",
   "bd.repliedAsAssignee": "replied as assignee",

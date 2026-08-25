@@ -550,9 +550,11 @@ enum WorkCmd {
         --message \"Correction: relay has four agents, not ten (BUG-0017).\" \\\n    \
         --human \"An earlier line here said ten agents; the real number is four.\"\n\n\
         THE HUMAN AREA\n  A --message REQUIRES --human with it: the note is new events, and \
-        the plain-language\n  telling has to be brought up to date with them (it replaces the \
-        stored one — re-pass\n  the current text if nothing a reader sees changed).\n\n  \
-        --human alone is a refresh: nothing is added to ## Updates, and the feed logs one \
+        its plain-language\n  telling travels with it. The telling is APPENDED to the page \
+        as a dated entry paired\n  with the note — tell what this note did, not the whole \
+        record again.\n\n  \
+        --human alone is a refresh: nothing is added to ## Updates, the page is replaced \
+        whole\n  (this is where tellings are merged or repaired), and the feed logs one \
         human_updated line.\n  \
         agentmon work update WORK-0011 --agent p6-curator \\\n    \
         --human \"What this work actually did, said plainly.\"\n\n\
@@ -560,10 +562,11 @@ enum WorkCmd {
         collision (see `agentmon reconcile`) takes its original\n  notes back at their real \
         times with --replayed: the note may predate the close and the\n  notes around it, it \
         is inserted at its place in the timeline, and the event says\n  \"Replayed:\" so it \
-        never passes for an original. Requires --at, --message and --human.\n\n  \
+        never passes for an original. Requires --at, --message and --human;\n  the telling \
+        is inserted into the page at the note's time too.\n\n  \
         agentmon work update WORK-0011 --agent recovery-agent --replayed \\\n    \
         --at 2026-08-22T10:05:00Z --message \"<the lost note, verbatim>\" \\\n    \
-        --human \"<the record's retelling>\"")]
+        --human \"<that note's own telling>\"")]
     Update {
         /// WORK-NNNN.
         id: String,
@@ -592,8 +595,8 @@ enum WorkCmd {
         --agent cli-builder \\\n    --reason \"Superseded by WORK-0009, which solves the same \
         problem in agentmon-core; nothing from this branch was kept.\" \\\n    \
         --human \"We stopped this one and did the same job in another place; nothing here \
-        was kept.\"\n\n  Stopping is an ending, so --human is required and replaces whatever \
-        the record said while it ran.\n\n  Use it when work \
+        was kept.\"\n\n  Stopping is an ending, so --human is required and lands as the \
+        page's last entry.\n\n  Use it when work \
         stops for good: leaving it in_progress shows an agent still working on something \
         nobody is doing. The reason is appended under ## Updates and `finished` is stamped \
         with the moment it stopped. --at backdates it.")]
@@ -621,8 +624,8 @@ enum WorkCmd {
         dashboard refreshes within ~300ms of a CLI write.\" \\\n    \
         --human \"The window now notices a new record on its own, about a third of a second \
         after it is written, instead of waiting for you to click.\"\n\n  The outcome is for \
-        the next agent; --human is for everyone else, and closing replaces whatever the \
-        record said while it was open (`agentmon human-style`).\n\n\
+        the next agent; --human is for everyone else, appended as the ending after the \
+        tellings the record gathered while it ran (`agentmon human-style`).\n\n\
         RECORDING WORK THAT IS ALREADY OVER\n  --finished-at 2026-08-18T11:30:00Z stamps the \
         real end time; add --started-at to correct a start you had to guess at. Both land in \
         the frontmatter and in events.jsonl, so the duration and the feed agree.")]
@@ -765,20 +768,21 @@ enum BugCmd {
         project-changed was never emitted.\" \\\n    --human \"The app never noticed saved \
         files because the part that watches for them\n    was never switched on.\"\n\n  \
         THE HUMAN AREA\n  A --message REQUIRES --human with it: the finding is part of the \
-        bug's story, and\n  the plain-language telling has to be brought up to date with it \
-        (it replaces the\n  stored one — re-pass the current text if nothing a reader sees \
-        changed).\n\n  \
-        --human alone adds nothing to the thread; it rewrites the bug's plain-language \
-        telling and logs one human_updated line:\n  \
+        bug's story, and\n  its plain-language telling travels with it — APPENDED to the \
+        page as a dated entry\n  paired with the comment, so tell what this finding is, not \
+        the whole bug again.\n\n  \
+        --human alone adds nothing to the thread; it replaces the bug's page whole (the \
+        place\n  to merge or repair tellings) and logs one human_updated line:\n  \
         agentmon bug comment BUG-0002 --agent cli-builder \\\n    \
         --human \"What this bug looks like to somebody using the app.\"\n\n\
         REPLAYING A LOST COMMENT (reconstruction only)\n  A bug re-created after a sync \
         collision (see `agentmon reconcile`) takes its original\n  comments back at their \
         real times with --replayed — inserted in timeline order, the\n  event marked \
-        \"Replayed:\". Requires --at, --message and --human.\n\n  \
+        \"Replayed:\". Requires --at, --message and --human; the telling is inserted\n  \
+        into the page at the comment's time too.\n\n  \
         agentmon bug comment BUG-0006 --agent recovery-agent --replayed \\\n    \
         --at 2026-08-22T10:05:00Z --message \"<the lost comment, verbatim>\" \\\n    \
-        --human \"<the bug's retelling>\"")]
+        --human \"<that comment's own telling>\"")]
     Comment {
         /// BUG-NNNN.
         id: String,
@@ -810,8 +814,8 @@ enum BugCmd {
         --human \"It works now: the window updates by itself when a record is written, and \
         we checked that by writing one while it was open.\"\n\n  Say the root \
         cause, the fix, and the verification. Resolving a bug you did not claim assigns it to \
-        you. --human is required and replaces the telling the bug had while it was open — \
-        the ending changed the story (`agentmon human-style`).")]
+        you. --human is required and lands as the page's last entry — the ending, after \
+        the chase (`agentmon human-style`).")]
     Resolve {
         /// BUG-NNNN.
         id: String,
@@ -1596,7 +1600,7 @@ fn run_work(cli: &Cli, cmd: &WorkCmd) -> CliResult {
             println!("Next:");
             println!(
                 "  agentmon work update {} --agent {} --message \"<what changed>\" \\\n    \
-                 --human \"<the retelling, brought up to date>\"",
+                 --human \"<that note's own telling — it is appended to the page>\"",
                 w.id, agent.agent
             );
             println!(
@@ -1975,7 +1979,7 @@ fn run_bug(cli: &Cli, cmd: &BugCmd) -> CliResult {
             println!("Next:");
             println!(
                 "  agentmon bug comment {} --agent {} --message \"<root cause>\" \\\n    \
-                 --human \"<the retelling, brought up to date>\"",
+                 --human \"<that finding's own telling — it is appended to the page>\"",
                 b.id, agent.agent
             );
             println!(
@@ -2822,10 +2826,10 @@ fn replay_usage(verb: &str) -> CliError {
         message: format!(
             "--replayed is for reconstruction: it writes the lost original back at the time \
              it really happened, so it needs both --at <that time> and --message/--message-file \
-             <the original text> — and, like every --message, the --human retelling with \
+             <the original text> — and, like every --message, the --human telling with \
              it.\n\n  agentmon {verb} <ID> --agent <you> --replayed \\\n    \
              --at 2026-08-22T10:05:00Z --message \"<the lost text, verbatim>\" \\\n    \
-             --human \"<the record's retelling>\"\n\nWithout \
+             --human \"<that entry's own telling>\"\n\nWithout \
              --replayed the normal ordering guard applies, which is what you want on any \
              write that is not rebuilding a lost record (docs/AGENT_MANUAL.md, \"Two \
              machines, one repo\")."

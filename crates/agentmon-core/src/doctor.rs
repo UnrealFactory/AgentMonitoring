@@ -304,6 +304,30 @@ pub fn check(store: &Store) -> Result<Report> {
              never a gloss. `agentmon human-style` prints the contract",
         ));
     }
+    // Pictures, at the same level and with the same care about false positives. The
+    // contract's default is a scene per beat (owner decision, 2026-08-25 — before it,
+    // "put one in where it earns its place" produced records with none at all), and the
+    // valve stays per beat: a beat whose facts draw nothing may stay bare, so demanding
+    // one per beat here would demand the invented panel the contract forbids. What cannot
+    // be the valve is a whole page of beats with not one picture, and that is the only
+    // shape this warns on. Work logs and bugs only — a note is knowledge and owes none.
+    if !gaps.pictureless.is_empty() {
+        problems.push(Problem::warn(
+            "human area",
+            format!(
+                "{} record(s) retell in beats with no scene anywhere on the page: {}",
+                gaps.pictureless.len(),
+                listing(&gaps.pictureless)
+            ),
+            "the style contract's default is a picture per beat (docs/HUMAN_STYLE.md — \
+             every beat opens on its scene; only a beat whose facts draw nothing stays \
+             bare). Draw each beat's own cast as an SVG under assets/, named \
+             <record>-<beat>-<what>.svg, cite it as the first line of that beat's body \
+             (`![what it shows](assets/…)`), prove the geometry with `npm run \
+             check:scenes`, then re-pass the whole page with the pictures in it as a \
+             refresh (`--human-file` alone)",
+        ));
+    }
 
     // -- events.jsonl -------------------------------------------------------
     let mut n_events = 0usize;
@@ -596,14 +620,21 @@ struct HumanGaps {
     /// Records with a single telling past `human::WORDS_MAX`, each with that telling's own
     /// count, so the warning says how far over it is rather than only that it is over.
     long_telling: Vec<String>,
+    /// Work logs and bugs whose retelling has beats but not one scene — the shape the
+    /// picture default (a scene per beat, owner decision 2026-08-25) exists to end. Notes
+    /// are never in it: a note is knowledge, short, and owes no picture.
+    pictureless: Vec<String>,
 }
 
-/// Note the record if its body carries no human area (SPEC.md, "The human area"), or if
-/// one telling inside it runs past the style contract's ceiling.
+/// Note the record if its body carries no human area (SPEC.md, "The human area"), if
+/// one telling inside it runs past the style contract's ceiling, or — on the kinds that
+/// owe scenes — if it retells in beats with no picture at all.
 ///
 /// `raw` is the whole file and `md` its body: an open fence is reported at the line a
 /// person's editor shows, which is the body's line plus the frontmatter above it.
-fn note_human(raw: &str, md: &str, id: &str, gaps: &mut HumanGaps) {
+/// `owes_scenes` is true for work logs and bugs — the chase stories the picture default
+/// was written for — and false for notes.
+fn note_human(raw: &str, md: &str, id: &str, owes_scenes: bool, gaps: &mut HumanGaps) {
     match crate::human::split(md).1 {
         None => {
             gaps.missing.push(id.to_string());
@@ -618,6 +649,17 @@ fn note_human(raw: &str, md: &str, id: &str, gaps: &mut HumanGaps) {
             let words = crate::human::longest_telling(&human);
             if words > crate::human::WORDS_MAX {
                 gaps.long_telling.push(format!("{id} ({words} words in one telling)"));
+            }
+            // Beats with no scene anywhere. Whole-page, not per-beat, on purpose: the
+            // contract's valve is per beat ("a beat whose facts draw nothing may stay
+            // bare"), and a sweep that demanded one per beat would demand the invented
+            // panel the contract forbids. A page of beats with not one picture is the
+            // shape that cannot be the valve.
+            if owes_scenes {
+                let beats = crate::human::beat_count(&human);
+                if beats > 0 && crate::human::figure_count(&human) == 0 {
+                    gaps.pictureless.push(format!("{id} ({beats} beat(s), no scene)"));
+                }
             }
         }
     }
@@ -659,7 +701,7 @@ fn check_note(path: &Path, problems: &mut Vec<Problem>, gaps: &mut HumanGaps) {
         }
     };
 
-    note_human(&raw, md, &meta.name, gaps);
+    note_human(&raw, md, &meta.name, false, gaps);
 
     let stem = file.trim_end_matches(".md");
     if meta.name != stem {
@@ -769,7 +811,7 @@ fn check_worklog(
         }
     };
 
-    note_human(&raw, md, &meta.id, gaps);
+    note_human(&raw, md, &meta.id, true, gaps);
     let (md, _) = crate::human::split(md);
 
     let stem = file.trim_end_matches(".md");
@@ -932,7 +974,7 @@ fn check_bug(
         }
     };
 
-    note_human(&raw, md, &meta.id, gaps);
+    note_human(&raw, md, &meta.id, true, gaps);
     let (md, _) = crate::human::split(md);
 
     let stem = file.trim_end_matches(".md");

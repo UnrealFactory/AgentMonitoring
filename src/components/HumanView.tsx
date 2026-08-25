@@ -10,28 +10,24 @@
  * ## What it is trying to be
  *
  * The bar is the `/eli5` explainer's *friendliness*, translated into this app's tokens (the
- * `eli5.png` baselines under progress/dual/baselines). What that page gets right is not its
- * colour — it is
- * a light poster and this is a dark tool — but its shape: a surface that announces itself as
- * something to read rather than to scan, beats you can see the edges of, the numbers a claim
- * rests on made glanceable, and a last line that lands. All four are available in the
- * vocabulary this app already has:
+ * `eli5.png` baselines under progress/dual/baselines) — and, since the owner's 2026-08-25
+ * decisions, carried on the **agent page's own skeleton** rather than a separate sheet:
+ * two designs for one record was itself the confusing thing. The page is three matching
+ * card families, in the order the work ran:
  *
- *   * the sheet is `--bg-surface` inside `--bg-app`, the app's own way of saying "a thing,
- *     on the floor" — a page laid on the desk, filling the same column the agent half fills,
- *     with one measure (`--human-measure`) of text centred in it and its own type ramp on
- *     top of `--text-read`. That ramp is defined against the record body rather than as a
- *     number, because the body is not one number: this app steps `.prose` 14 → 15 → 16px
- *     across two window widths, so "the reading size" is 15 → 16 → 17 and the beat headings
- *     are 18 → 19 → 20 (tokens.css). A round of this module claimed the agent view was read
- *     "at the dense 14px" and set one fixed 15 against it, which came out identical to the
- *     agent half at 1600 and a size smaller at 1900;
- *   * a beat is the author's own bold lead-in promoted to a heading, numbered in the gutter
- *     (lib/human.ts finds them; nothing is invented and nothing is reordered);
- *   * the figures are marked the way the resolution's verification block already marks them
- *     — `Markdown figures`, which is typography and nothing else: every character stays
- *     where the author put it, and no number is extracted, paired or recomputed;
- *   * the closing line gets the one accent-soft block on the page.
+ *   * the **Overview card** — the opening telling, "개요" and the record's start on its
+ *     header strip, a short standfirst lifted above the numbers when the first paragraph
+ *     is one (`standfirstFits`);
+ *   * the **node cards** on the timeline rail — one `.update-card` per dated telling,
+ *     chronological, its number and timestamp pairing it with the agent half's entry;
+ *   * the **outcome card** — the ending's telling inside the same green-marked card the
+ *     agent half closes on.
+ *
+ * Inside every card the reading treatment survives: `--text-read` (a step above the record
+ * body, stepping at the same widths — tokens.css), beats numbered in the gutter and
+ * restarting per telling, a telling without lead-ins promoted paragraph-by-paragraph to
+ * numbered blocks (`numberParas` — nothing invented, nothing reordered), figures marked as
+ * typography, and the accent-soft closing block only where no outcome card closes the page.
  *
  * No emoji, no confetti, no second font, no light panel: the friendliness is carried by
  * size, air and rhythm, which is all this design system will lend.
@@ -47,9 +43,10 @@
  * the absence stays marked in the row it belongs to, the instruction is said once over the
  * board. The reasoning is on that component.
  */
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { CommandLine, RichText } from "./ui";
-import { readHumanStory } from "../lib/human";
+import { readHumanTellings } from "../lib/human";
+import { formatDateTime, formatDateTimeUtc, formatRelative } from "../lib/format";
 import { InlineMarkdown, Markdown } from "../lib/markdown";
 import { tablistKeys } from "../lib/tablist";
 import { t } from "../lib/i18n";
@@ -370,57 +367,296 @@ export function BoardHumanNotice({
 }
 
 /**
- * The retelling itself.
+ * The retelling itself — on the agent page's own skeleton (owner, 2026-08-25).
  *
  * `human` is the record's own markdown, rendered through the app's one renderer — so a
  * `WORK-0061` written into a sentence is still a chip, `[[note-name]]` is still a link to
- * that note, and a code span is still code. The only thing this component adds is the shape
- * the text already has (lib/human.ts).
+ * that note, and a code span is still code. The page is built from the agent view's parts,
+ * so the two halves are one design: an "Overview" section (the opening), the timeline rail
+ * with one `.update-card` per dated node — chronological, like the agent trail is now —
+ * and the ending's telling inside the same `.outcome-card` the agent half closes on. Only
+ * the *inside* of each block keeps the reading treatment this view exists for: the
+ * standfirst, the numbered beats with their scenes, the accent-marked closing line.
+ *
+ * The ending is the dated node stamped exactly when the record closed (`finished` /
+ * `resolved`) — that is the stamp `work done` and `bug resolve` append their telling
+ * under. An open record has no such node and no outcome card, exactly like the agent half.
  */
-export function HumanStoryView({ human, agent }: { human: string; agent: string }) {
+export function HumanStoryView({
+  human,
+  agent,
+  kind,
+  started = null,
+  finished = null,
+}: {
+  human: string;
+  agent: string;
+  kind: HumanKind;
+  /** When the record began — `started` on a work log, `created` on a bug. */
+  started?: string | null;
+  /** When the record closed — `finished` on a work log, `resolved` on a bug. */
+  finished?: string | null;
+}) {
   /* Parsed once per record, like the resolution's parts next door (RecordBody.tsx): the
      whole window repaints when the language changes, and the record's own words are not
      one of the things that changed. */
-  const story = useMemo(() => readHumanStory(human), [human]);
-  return (
-    <div className="human-sheet">
-      {story.lede && <Markdown className="human-lede" source={story.lede} figures />}
+  const tellings = useMemo(() => readHumanTellings(human), [human]);
+  /* The standfirst is for a standfirst: one short scene-setting paragraph, blown up to
+     the page's largest type. An opening that arrives as one long wall — records exist
+     that open on 500 characters with no paragraph break — must not be blown up whole:
+     the owner met one and the page read as a punishment. The ceiling is the closing
+     line's (lib/human.ts, MAX_TAKEAWAY) plus room for a two-sentence opening. */
+  const standfirstFits = (lede: string): boolean => {
+    const text = lede.replace(/\s+$/, "");
+    const cut = text.indexOf("\n\n");
+    const first = (cut < 0 ? text : text.slice(0, cut))
+      .split("\n")
+      .map((line) => line.trim())
+      .join(" ");
+    return first.length <= 220;
+  };
+  const opening = tellings.filter((tell) => !tell.ts);
+  const dated = tellings.filter((tell) => tell.ts);
+  /* The ending is the node stamped exactly when the record closed — wherever it sits: a
+     correction posted after the close is a later node, and the outcome card still stands
+     last, the same way the agent half's outcome card stands below a trail that may hold
+     a correction newer than it. */
+  const ending = (finished && dated.find((tell) => tell.ts === finished)) || null;
+  const nodes = ending ? dated.filter((tell) => tell !== ending) : dated;
+  /* One distinctive closer per page, never two. On a closed record the green outcome
+     card IS the page's last word, and an accent slab inside it was two closers in two
+     colours fighting inside one box (the owner saw it and said so) — there the closing
+     line is one more numbered block. Only a page with no outcome card — a record still
+     open, or a legacy one-blob page — puts the accent block on its last telling. Every
+     earlier telling keeps its closing sentence as plain prose where its author put it. */
+  const lastTell = ending ?? nodes[nodes.length - 1] ?? opening[opening.length - 1] ?? null;
+  const accentOn = (tell: (typeof tellings)[number]) => tell === lastTell && tell !== ending;
 
-      {story.beats.map((beat, i) => (
-        <section className="human-beat" key={`${i}-${beat.lead}`}>
-          <span className="human-beat-num tabular" aria-hidden="true">
-            {i + 1}
-          </span>
-          <h2 className="human-beat-lead">
-            <InlineMarkdown source={beat.lead} />
-            {beat.trailer && (
-              <span className="human-beat-trailer">
-                <InlineMarkdown source={beat.trailer} />
+  /* A telling's paragraphs, split the way markdown splits them — on blank lines, with a
+     fence held open counting as one block, so a pasted example cannot be cut in half. */
+  const paragraphsOf = (source: string): string[] => {
+    const out: string[] = [];
+    let buf: string[] = [];
+    let fence: string | null = null;
+    for (const line of source.split("\n")) {
+      if (!fence && !line.trim() && buf.length) {
+        out.push(buf.join("\n"));
+        buf = [];
+        continue;
+      }
+      if (line.trim() || fence) buf.push(line);
+      const open = line.match(/^\s*(`{3,}|~{3,})/);
+      if (fence && open && open[1][0] === fence) fence = null;
+      else if (!fence && open) fence = open[1][0];
+    }
+    if (buf.length) out.push(buf.join("\n"));
+    return out;
+  };
+
+  /* One telling's blocks — the opening's drawn bare on the sheet, a dated node's inside
+     its card. Shared so the two cannot drift. `first` marks the page's opening run, the
+     only paragraph that gets the standfirst size.
+
+     The beat numbers restart at 1 inside every telling (owner, 2026-08-25): each node is
+     its own little story, read on its own, and "beat 7" inside a card whose story has
+     three beats is a number the reader has to chase across the page to cash out.
+
+     `numberParas` is the card mode (owner, same day, third round of the same feedback):
+     inside a node or the outcome card, a telling that arrived without bold lead-ins is
+     not left as one dense run — each of its paragraphs is promoted to a numbered block,
+     so every card reads as 1·2·3 whatever shape its author typed. Nothing is reworded
+     and nothing is reordered; the numbers are enumeration, not headings. */
+  const storyBlocks = (tell: (typeof tellings)[number], first: boolean, numberParas = false) => {
+    if (numberParas && tell.story.beats.length === 0 && tell.story.lede) {
+      const paras = paragraphsOf(tell.story.lede);
+      // Inside the Overview card the standfirst stays a standfirst — the intro above the
+      // numbers, not item 1 — when the opening's first paragraph is short enough to be
+      // one (`standfirstFits`). Node and outcome cards have no standfirst to lift.
+      const intro = first && paras.length > 1 && standfirstFits(tell.story.lede) ? paras[0] : null;
+      const numbered = intro ? paras.slice(1) : paras;
+      // A closing line joins the numbered items unless this telling carries the page's
+      // accent block, which then stands below the numbers.
+      const items =
+        tell.story.takeaway && !accentOn(tell) ? [...numbered, tell.story.takeaway] : numbered;
+      return (
+        <>
+          {intro && <Markdown className="human-lede" source={intro} figures />}
+          {items.map((para, pi) => (
+            <section className="human-beat is-plain" key={`para-${pi}`}>
+              <span className="human-beat-num tabular" aria-hidden="true">
+                {pi + 1}
               </span>
-            )}
-          </h2>
-          {/* The beat's scene, where the style contract puts it: above the words, under the
-              lead-in it belongs to (docs/HUMAN_STYLE.md, "The scene goes inside the beat").
-              It is the author's own `![…](assets/…)` line, drawn by the app's one renderer
-              — same path lock, same blob URL, same visible refusal when the file cannot be
-              read (lib/markdown.tsx) — so a picture here and a picture anywhere else in the
-              retelling are the same picture, differing only in where they sit. */}
-          {beat.figure && <Markdown className="human-beat-figure" source={beat.figure} />}
-          {beat.body.trim() && <Markdown className="human-beat-body" source={beat.body} figures />}
-        </section>
-      ))}
+              <Markdown className="human-beat-body" source={para} figures />
+            </section>
+          ))}
+          {tell.story.takeaway && accentOn(tell) && (
+            <p className="human-takeaway">
+              <InlineMarkdown source={tell.story.takeaway} />
+            </p>
+          )}
+        </>
+      );
+    }
+    return (
+      <>
+      {tell.story.lede && (
+        <Markdown
+          className={
+            first && standfirstFits(tell.story.lede) ? "human-lede" : "human-lede is-later"
+          }
+          source={tell.story.lede}
+          figures
+        />
+      )}
 
-      {story.takeaway && (
-        <p className="human-takeaway">
-          <InlineMarkdown source={story.takeaway} />
-        </p>
+      {tell.story.beats.map((beat, bi) => {
+        const beatNo = bi + 1;
+        return (
+          <section className="human-beat" key={`${beatNo}-${beat.lead}`}>
+            <span className="human-beat-num tabular" aria-hidden="true">
+              {beatNo}
+            </span>
+            <h2 className="human-beat-lead">
+              <InlineMarkdown source={beat.lead} />
+              {beat.trailer && (
+                <span className="human-beat-trailer">
+                  <InlineMarkdown source={beat.trailer} />
+                </span>
+              )}
+            </h2>
+            {/* The beat's scene, where the style contract puts it: above the words,
+                under the lead-in it belongs to (docs/HUMAN_STYLE.md, "The scene goes
+                inside the beat"). It is the author's own `![…](assets/…)` line, drawn
+                by the app's one renderer — same path lock, same blob URL, same visible
+                refusal when the file cannot be read (lib/markdown.tsx) — so a picture
+                here and a picture anywhere else in the retelling are the same picture,
+                differing only in where they sit. */}
+            {beat.figure && <Markdown className="human-beat-figure" source={beat.figure} />}
+            {beat.body.trim() && (
+              <Markdown className="human-beat-body" source={beat.body} figures />
+            )}
+          </section>
+        );
+      })}
+
+      {/* The closing line: the accent block on the page's last telling, plain prose —
+          same words, same place — on every telling before it. */}
+      {tell.story.takeaway &&
+        (accentOn(tell) ? (
+          <p className="human-takeaway">
+            <InlineMarkdown source={tell.story.takeaway} />
+          </p>
+        ) : (
+          <Markdown source={tell.story.takeaway} />
+        ))}
+      </>
+    );
+  };
+
+  return (
+    <>
+      {/* The opening, in the same card family as everything below it (owner, 2026-08-25:
+          bare prose above a page of cards read as the unfinished part). The header carries
+          "개요" where a node card carries its number, and the record's own start on the
+          right where a node carries its stamp — so the page is three matching boxes:
+          overview card, node cards, outcome card. One title, not three: the opening is
+          What/Why/How retold as one story, and a blob cannot be split back into them. */}
+      {opening.length > 0 && (
+        <section className="record-section">
+          <div className="update-card human-overview-card">
+            <header className="update-head">
+              <span className="update-verb">{t("view.overview")}</span>
+              {started && (
+                <time
+                  className="update-ts tabular"
+                  dateTime={started}
+                  title={formatDateTimeUtc(started)}
+                >
+                  {formatDateTime(started)} · {formatRelative(started)}
+                </time>
+              )}
+            </header>
+            <div className="update-body human-telling-body">
+              {opening.map((tell, ti) => (
+                <Fragment key={`opening-${ti}`}>{storyBlocks(tell, ti === 0, true)}</Fragment>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* The dated nodes, on the agent trail's own rail: one `.update-card` per node,
+          chronological, each header pairing the node's number with its moment — the same
+          timestamp its `## Updates` twin carries on the other half. */}
+      {nodes.length > 0 && (
+        <section className="record-section">
+          <h2 className="section-title">
+            {kind === "bug" ? t("bd.thread") : t("wd.updates")}
+            <span className="section-count tabular">{nodes.length}</span>
+          </h2>
+          <ol className="timeline-rail">
+            {nodes.map((tell, ni) => (
+              <li className="trail-node" key={`${tell.ts}-${ni}`}>
+                <span className="trail-dot" aria-hidden="true" />
+                <article className="update-card">
+                  <header className="update-head">
+                    <span className="update-verb">{t("view.tellingN", ni + 1)}</span>
+                    <time
+                      className="update-ts tabular"
+                      dateTime={tell.ts ?? undefined}
+                      title={formatDateTimeUtc(tell.ts)}
+                    >
+                      {formatDateTime(tell.ts)} · {formatRelative(tell.ts)}
+                    </time>
+                  </header>
+                  <div className="update-body human-telling-body">
+                    {storyBlocks(tell, false, true)}
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {/* The ending, inside the same outcome card the agent half closes on — the check
+          mark, the title, the moment — with the telling `work done` / `bug resolve`
+          appended as its body. Last on the page, because it happened last. */}
+      {ending && (
+        <section className="record-section">
+          <div className="outcome-card">
+            <header className="outcome-head">
+              <span className="outcome-mark" aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="11" height="11">
+                  <path
+                    d="M3.5 8.5 L6.5 11.5 L12.5 4.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <h2 className="outcome-title">
+                {kind === "bug" ? t("bd.resolution") : t("wd.outcome")}
+              </h2>
+              <span className="outcome-when">
+                <time dateTime={ending.ts ?? undefined} title={formatDateTimeUtc(ending.ts)}>
+                  {formatDateTime(ending.ts)} · {formatRelative(ending.ts)}
+                </time>
+              </span>
+            </header>
+            <div className="outcome-body human-telling-body">{storyBlocks(ending, false, true)}</div>
+          </div>
+        </section>
       )}
 
       {/* Who is talking. The agent area's byline is in the record's head and stays there;
           this line answers the question the retelling itself raises — a plain-language page
           about a machine's work, written by whom? — and names the same handle. */}
       <p className="human-foot">{t("view.retoldBy", agent)}</p>
-    </div>
+    </>
   );
 }
 
@@ -433,12 +669,18 @@ export function HumanArea({
   kind,
   id,
   agent,
+  started = null,
+  finished = null,
   onShowAgent,
 }: {
   human: string | null;
   kind: HumanKind;
   id: string;
   agent: string;
+  /** When the record began — the stamp on the overview card's header. */
+  started?: string | null;
+  /** When the record closed (`finished` / `resolved`) — what marks the ending's node. */
+  finished?: string | null;
   /**
    * The empty box's way out — required wherever the box can appear, which is every detail
    * screen. The app-feedback board answers its own absences one line at a time and never
@@ -447,15 +689,22 @@ export function HumanArea({
   onShowAgent?: () => void;
 }) {
   return (
-    /* No `id` on this section: the app-feedback board draws one per row, and an anchor
-       repeated down a page is not an anchor. Nothing links here — the contents rail belongs
-       to the agent view. */
-    <section className="record-section human-view" aria-label={t("view.human")}>
+    /* A div, not a `record-section`: the story view inside draws the agent page's own
+       section blocks now, and a section holding sections is a heading level lie. No `id`
+       either: the app-feedback board draws one per row, and an anchor repeated down a
+       page is not an anchor — the contents rail belongs to the agent view. */
+    <div className="human-view" aria-label={t("view.human")} role="region">
       {human && human.trim() ? (
-        <HumanStoryView human={human} agent={agent} />
+        <HumanStoryView
+          human={human}
+          agent={agent}
+          kind={kind}
+          started={started}
+          finished={finished}
+        />
       ) : (
         <HumanEmpty kind={kind} id={id} agent={agent} onShowAgent={onShowAgent} />
       )}
-    </section>
+    </div>
   );
 }

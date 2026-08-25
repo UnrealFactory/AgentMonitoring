@@ -451,7 +451,7 @@ try {
           {
             name: "work-human",
             path: `/p/${slug}/work/${humanWork.id}`,
-            waitFor: ".human-sheet",
+            waitFor: ".human-view",
             prepare: showView("human"),
             full: true,
           },
@@ -469,7 +469,7 @@ try {
           {
             name: "bug-human",
             path: `/p/${slug}/bugs/${humanBug.id}`,
-            waitFor: ".human-sheet",
+            waitFor: ".human-view",
             prepare: showView("human"),
             full: true,
           },
@@ -480,7 +480,7 @@ try {
           {
             name: "note-human",
             path: `/p/${slug}/notes/${humanNote.name}`,
-            waitFor: ".human-sheet",
+            waitFor: ".human-view",
             prepare: showView("human"),
             full: true,
           },

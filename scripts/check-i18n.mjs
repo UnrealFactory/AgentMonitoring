@@ -624,9 +624,9 @@ const SWEEP_SCREENS = (projects) => [
       ? [{
           name: `work detail ${work} (human)`,
           path: `/p/${slug}/work/${work}`,
-          wait: ".human-sheet, .human-empty",
+          wait: ".human-view, .human-empty",
           prepare: pressView("human"),
-          filled: [".human-sheet"],
+          filled: [".human-view"],
         }]
       : []),
     /* The notes list: the third record kind's index, whose rows carry two author-written
@@ -1289,7 +1289,7 @@ try {
       screens.push({
         name: `human view ${id}`,
         path,
-        wait: ".human-sheet",
+        wait: ".human-view",
         prepare: pressView("human"),
       });
     }

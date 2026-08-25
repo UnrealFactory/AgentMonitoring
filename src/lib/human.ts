@@ -271,3 +271,68 @@ export function readHumanStory(source: string): HumanStory {
 /** Whether a record carries a human area at all — blank is the same as absent. */
 export const hasHumanArea = (human: string | null | undefined): boolean =>
   typeof human === "string" && human.trim().length > 0;
+
+/* --------------------------------------------------------------------------
+   Tellings — the dated nodes an update appends
+   ----------------------------------------------------------------------- */
+
+/**
+ * One telling on the page: the run of retelling under one `### <timestamp>` node — or the
+ * page's opening, which has no node and reports `ts: null`.
+ *
+ * On work logs and bugs the human area grows the way `## Updates` grows (SPEC.md, "The
+ * human area", owner decision 2026-08-25): `work start` / `bug create` write the opening,
+ * and every `--human` beside a `--message` is appended as a `### <ts>` node stamped like
+ * the note it retells, the ending last. Records written before that rule — and every
+ * note's human area — are one undated run, which comes back as a single telling.
+ */
+export interface HumanTelling {
+  /** ISO timestamp of the node this telling arrived under; `null` on the opening. */
+  ts: string | null;
+  story: HumanStory;
+}
+
+/**
+ * A `### <timestamp>` node line — the only `###` that separates tellings.
+ *
+ * Date-gated exactly as the agent side's entries are (`starts_with_date` in
+ * crates/agentmon-core/src/body.rs): an author's own `### Background` subheading stays
+ * inside its telling, and only the dated nodes agentmon writes are edges.
+ */
+const TELLING_NODE = /^\s*###[ \t]+(\d{4}-\d{2}-\d{2}\S*(?:[ \t].*)?)[ \t]*$/;
+
+/**
+ * The page, split at its dated nodes, each part read as its own story.
+ *
+ * Fence-aware the way every heading rule in this app is (src/lib/markdown-parse.ts): a
+ * dated `###` inside a ``` block is code somebody quoted, not an edge. Empty parts are
+ * dropped — a page that opens straight on a node has no opening to show — and a page
+ * with no nodes at all comes back as one telling, so every record drawn before this
+ * shape existed draws exactly as it did.
+ */
+export function readHumanTellings(source: string): HumanTelling[] {
+  const text = (source ?? "").replace(/\r\n/g, "\n").trim();
+  if (!text) return [];
+  const parts: { ts: string | null; lines: string[] }[] = [{ ts: null, lines: [] }];
+  let fence: string | null = null;
+  for (const line of text.split("\n")) {
+    if (fence) {
+      parts[parts.length - 1].lines.push(line);
+      if (new RegExp(`^\\s*${fence}{3,}\\s*$`).test(line)) fence = null;
+      continue;
+    }
+    const node = line.match(TELLING_NODE);
+    if (node) {
+      parts.push({ ts: node[1].trim(), lines: [] });
+      continue;
+    }
+    const open = line.match(/^\s*(`{3,}|~{3,})/);
+    if (open) fence = open[1][0];
+    parts[parts.length - 1].lines.push(line);
+  }
+  const kept = parts
+    .map((p) => ({ ts: p.ts, source: p.lines.join("\n").trim() }))
+    .filter((p) => p.source !== "");
+  if (kept.length === 0) return [{ ts: null, story: readHumanStory(text) }];
+  return kept.map((p) => ({ ts: p.ts, story: readHumanStory(p.source) }));
+}

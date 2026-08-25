@@ -2780,37 +2780,34 @@ a.button {
  * width: the content box lands exactly one measure wide, and the floor under it is
  * `--space-8`, for the narrow window where the column is barely a measure wide.
  */
-.human-sheet {
+/* The human view is the agent page's own skeleton now (owner, 2026-08-25): the same
+   `record-section` blocks, the same rail, the same cards — HumanView.tsx builds it from
+   those parts, so there is no sheet to style. What survives of the sheet is the reading
+   treatment *inside* the blocks, below. The container itself only has to keep the page's
+   rhythm: it sits where one section used to, holding several, so it spaces them the way
+   `.detail-main` spaces its own. */
+.human-view {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  /* One step more than the app's card padding, top and bottom: this is the surface the
-     stylesheet above says spends pixels on air, and the opening paragraph is the largest
-     type in it. */
-  padding-block: var(--space-10);
-  padding-inline: max(var(--space-8), calc((100% - var(--human-measure)) / 2));
-  /* `ch` resolves against this element's font size, which is why the reading size is set
-     here rather than on the paragraphs inside it: one declaration sizes both the type and
-     the measure, and they step together at the two wide breakpoints (tokens.css). */
-  font-size: var(--text-read);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  gap: var(--space-8);
+  min-width: 0;
 }
 
-/* Inside the sheet the renderer's own measure is off — the sheet is the measure — and the
-   type is the reading size rather than the record body's.
+/* Inside the human blocks the type is the reading size rather than the record body's.
 
    This rule outranks the wide-window steps on `.prose` (0,0,2,0 against 0,0,1,0), which for a
    round meant it silently *cancelled* them: the agent half went 14 → 15 → 16px across the two
    breakpoints and the retelling stayed at 15 through all three, so the half that is read was
    the same size as the half that is scanned at 1600 and a size smaller at 1900. Winning that
    cascade is correct — the human area has its own scale — but only because the scale it wins
-   with now steps at the same two widths (tokens.css). */
+   with now steps at the same two widths (tokens.css). The measure is the reading one, not
+   the record body's: `--prose-max` is 78ch for a body that is skimmed, and at the reading
+   size that line ran wall-wide — the owner read one and said so. 62ch is the sheet's old
+   measure, kept without the sheet. */
 .human-view .prose {
-  max-width: none;
   font-size: var(--text-read);
   line-height: var(--leading-normal);
+  max-width: var(--human-measure);
 }
 
 /* …and the figures inside it get a real step, because half of `.figure`'s marking is not
@@ -2821,7 +2818,7 @@ a.button {
    and thinner than a number a whole claim rests on deserves. One step further up the same
    scale, and nothing else changes — no colour, no box, no extraction: every character stays
    where the author typed it (src/lib/markdown.tsx). */
-.human-sheet .figure {
+.human-view .figure {
   font-weight: var(--weight-semibold);
 }
 
@@ -2853,6 +2850,36 @@ a.button {
   font-size: var(--text-read-lede);
   line-height: var(--leading-snug);
   letter-spacing: var(--tracking-tight);
+}
+
+/* …and only the page's. A grown page holds one telling per update (SPEC.md, "The human
+   area"), each with an opening run of its own, and a standfirst repeated down a page is a
+   page with no standfirst: the later openings read at body size. */
+.human-view .prose.human-lede.is-later > p:first-child {
+  font-size: inherit;
+  line-height: var(--leading-normal);
+  letter-spacing: normal;
+}
+
+/* A telling's blocks, wherever they sit — bare under the Overview title, inside a node's
+   `.update-card`, inside the closing `.outcome-card` — keep the reading rhythm the sheet
+   had: one column, the sheet's own gap. The card paddings come from the cards themselves
+   (`.update-body`, `.outcome-body`), which is what makes the two halves one design. */
+.human-telling-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* The first beat under a card header or a section title needs no divider hat: the edge
+   above it is already drawn. */
+.human-telling-body > .human-beat:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.human-telling-body > .human-beat:first-child .human-beat-num {
+  top: 1px;
 }
 
 /* One beat of the chase: the author's own bold lead-in, promoted to a heading, and the
@@ -2897,6 +2924,13 @@ a.button {
 
 .human-view .prose.human-beat-body {
   margin-top: var(--space-3);
+}
+
+/* A numbered paragraph block: the card mode's promotion of a plain paragraph to a beat
+   row (HumanView.tsx, `numberParas`). No lead-in above the body, so the body starts on
+   the row's own top line, beside its number. */
+.human-beat.is-plain .human-beat-body {
+  margin-top: 0;
 }
 
 /* The beat's scene: the picture its author put first in the beat, drawn between the lead-in
@@ -3020,15 +3054,41 @@ a.button {
 }
 
 /* The app-feedback board draws the same two halves inside a row, which is a card already:
-   the sheet there is the row, so it gives up its own frame and keeps the reading column.
-   Not the page composition either — a row is not a page, so the measure is a cap on the
-   left rather than a column centred in a card. */
-.feedback-human .human-sheet,
+   the human view there gives up the page's air and keeps the reading column — a cap on
+   the left rather than a column centred in a card. A feedback item's page is one story
+   (its human area is replaced whole, never grown node by node), so the "Overview" title
+   the detail pages draw would be the same word repeated down every retold row: the row's
+   own title is the header here, and the section title is not drawn. */
+.feedback-human .human-view,
 .feedback-human .human-empty {
   max-width: var(--human-measure);
   padding: 0;
   background: none;
   border: none;
+}
+
+.feedback-human .human-view {
+  gap: var(--space-4);
+}
+
+.feedback-human .human-view .section-title {
+  display: none;
+}
+
+/* …and the overview card sheds its box inside a row for the same reason the sheet once
+   did: the row is the card. The header goes with it — the row's own title and meta line
+   already say what and when. */
+.feedback-human .human-overview-card {
+  border: 0;
+  border-radius: 0;
+}
+
+.feedback-human .human-overview-card > .update-head {
+  display: none;
+}
+
+.feedback-human .human-overview-card > .update-body {
+  padding: 0;
 }
 
 .feedback-human .human-empty {

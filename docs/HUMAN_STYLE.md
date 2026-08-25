@@ -21,10 +21,11 @@ Count the names as well as the words: one per fact, about one per fifty words �
 Then read it back a second time and mark every phrase that stranger could repeat but not restate — your own shorthand and your squeezed noun-phrases too, not only the names on the list. Each gets plain words in the same sentence, or the fact goes.
 Claim only what this record claims, of the thing and in the place it says it. No invented example, no stand-in number, no step nobody recorded. Before writing that nothing does X, reread to its end the sentence X came from: it often names the thing that does.
 One everyday analogy, marked as one ("it is like…"), on the central mechanism, carrying no number or cause of its own.
+Every beat opens on its scene: an SVG you draw under the project's `assets/`, named `<record>-<beat>-<what>.svg`, cited as the first line of that beat's body — `![what it shows](assets/…)` — showing only that beat's own cast and claims; `npm run check:scenes` proves the geometry. Skip a beat's picture only where its facts draw nothing (a check that ran and passed, a number that moved) — the skip is a claim about the beat, never about the time a drawing costs.
 Short sentences, one fact each, most under 20 words. Say who did what, in plain verbs — "I watched one send", not "what was watched was one send". Five sentences end a paragraph; a hard mechanism is two short paragraphs, never one wall.
 Open each beat after the first with a bold lead-in that states something — "**The stored number is wrong twice a year.**" — not a label ("**The stored offset.**"), never a stage of an essay ("**How we know.**").
 Count last, and over either count cut in this order: first a name carrying no fact of its own, then a whole fact — never a gloss. 150 words thin, 300 for most, 450 where the mechanism is genuinely hard. A ceiling bounds one telling, never a record's total: a record that shipped several separate things — wherever it names them, its title, its What, or a list further down — covers every one, one short beat-block each after the shared opening. Never write to a ceiling — stop when the facts are spent.
-Your text replaces the stored human area whole — nothing appends, and what it removes survives nowhere. A record still open retells everything it has done so far, never this update alone: one telling per update, in the order they happened, the earlier ones carried forward and rewritten only where this round changed their facts, the newest last. A text telling only the latest round deletes the rest. Closing verbs rewrite the whole on purpose — the ending changed the story.
+With a `--message` (a progress note, a bug comment), your `--human` is one new telling and agentmon APPENDS it: a dated entry after the tellings already on the page, paired with the note it retells. So tell this update's events alone — never the whole record again, which would say everything twice — and shape it as short paragraphs, one fact each: the page numbers them 1·2·3 inside the entry's card. Closing verbs append the ending the same way. `--human` alone (a refresh) is the one write that replaces the page whole — use it to merge or repair tellings, knowing what it removes survives nowhere.
 Close on one sentence the reader could repeat tomorrow. No selling, no fake excitement, no emoji.
 <!-- /compact-rules -->
 
@@ -77,8 +78,10 @@ Three kinds survive the first read:
 - **Five sentences end a paragraph.** Nobody gives up on a long text; they give up on a long sentence and a nine-sentence block. The mechanism beat is where they are
   lost: give it the shortest sentences, the analogy — *like a key cut to open every door in the building, including the one you meant to lock* — and a second lead-in
   rather than one wall.
-- **A picture is one beat's scene, and it earns its place or it is decoration.** Reach for one where that beat's fact is a shape — two things side by side, a path that
-  forks and rejoins, a name that matched more than it meant — and words would spend more than about three sentences drawing it. What you draw is that beat's own cast
+- **Every beat opens on its scene, and a scene may claim only what its beat says.** The default is a picture per beat (owner decision, 2026-08-25 — the earlier
+  "reach for one where it earns its place" produced records with none at all). Skip one only where that beat's facts draw nothing — a check that ran and passed, a
+  number that moved — and the skip has to hold as a claim about the beat, never about the time a drawing costs. What earns a picture most is a fact that is a shape —
+  two things side by side, a path that forks and rejoins, a name that matched more than it meant. What you draw is that beat's own cast
   and the one thing that happened to it: the *kinds* of things as plain geometric icons — a page for a file, a folder for a folder, a box with one lit dot for a
   server, a window with three dots for what you look at, an eye for the part that watches, a clock for a wait, a bubble for what somebody said — and every relation
   between them as an arrow with a word on it. Drawing a kind is glossing it in another medium, and it may claim exactly what a gloss may: a file is a page because
@@ -86,8 +89,9 @@ Three kinds survive the first read:
   second name goes.
 - **The scene goes inside the beat, above its words.** Draw it as an SVG under the project's `assets/` folder, named for the record and the beat, and put it in with
   `![what it shows](assets/bug-0025-3-the-repo-has-the-same-name.svg)` as the **first line of that beat's body** — after the bold lead-in, before the paragraph — so
-  the reader takes the beat once as a picture and once in words. That is the default for a beat that earns one, and the honest valve is per beat: a beat whose facts
-  give you no scene carries no picture and its paragraph is the whole beat, because a panel invented to keep the rhythm going is decoration with a caption on it. An
+  the reader takes the beat once as a picture and once in words. That is where every beat's picture goes, and the honest valve stays per beat but is the exception,
+  not the default: a beat whose facts give you no scene carries no picture and its paragraph is the whole beat, because a panel invented to keep the rhythm going is
+  decoration with a caption on it — but a page of beats with no picture anywhere is not the valve, and `agentmon doctor` says so. An
   image anywhere else in the retelling still lands where you put it. The alt text is the caption the reader is left holding, so say what the picture shows.
 - **Bands, top to bottom, or the labels land on each other.** A scene is rows: the icons in one band, the words naming those icons in the next, and the line the scene
   closes on in a band of its own at the foot; an arrow's word rides above the arrow, inside the icons' own band. Nothing may cross into another band at any width the
@@ -101,12 +105,12 @@ Three kinds survive the first read:
   reaches the Inter this app carries: ask for that by name and the reader gets a face that is not it, sitting under prose that is. Ask instead for
   `system-ui, "Segoe UI", sans-serif` and the picture is set in the reader's own interface face — a different width on every machine, so keep the words inside a
   picture few and leave a fifth of every label's box empty. Size those labels for the narrowest column a record page ever gives a picture, and that column is not the one in
-  the smallest window: it is 525 across in the window this app opens in and wider in a maximized one, but it falls to 395 in two bands in the middle — just above
-  1100, where a record's rail comes back beside a page still too narrow to hold it, and just above 820, where the sidebar does the same. On both sides of each
-  band it is 525 again, so a wide shot and a narrow one can both look right while a reader at half a screen gets the picture at its smallest; 1152 and 1104 sit in
-  the upper band, and this app is already photographed and measured at both. A 700-wide drawing arrives there a shade over half size, and 11 is the bottom of this
-  app's type scale. So draw on a grid you can halve — 700 across, nothing under 22, and no taller than half again that, past which the page's own 560-pixel
-  ceiling shrinks it below what the halving promised — then halve every number you wrote: that is the narrow band's scale, rounded the safe way, and what comes
+  the smallest window: a picture sits inside a card now — the overview card, a node card on the rail, the outcome card — and walking the window from 700 to 1920 with
+  a Human view open, the node card's column is the narrowest of the three, at its tightest **464 CSS px** just above 1100, where a record's rail comes back beside a
+  page still too narrow to hold it. The contract's number stays **395**: it predates the cards, every shipped scene was drawn to it, and a floor measured once must
+  not chase the layout — it may only be re-measured wider, never assumed. A 700-wide drawing arrives at that floor a shade over half size, and 11 is the bottom of
+  this app's type scale. So draw on a grid you can halve — 700 across, nothing under 22, and no taller than half again that, past which the page's own 560-pixel
+  ceiling shrinks it below what the halving promised — then halve every number you wrote: that is the floor's scale, rounded the safe way, and what comes
   back must still be 11. Settle it by arithmetic and never by how the file looks opened on its own, then let `npm run check:scenes` settle it a second time: it
   re-measures every label at that 395-wide column, in both faces, and fails one that comes back under 11. Nothing else here reads inside a drawing — the words in a
   picture sit inside an `<img>`, and the check that hunts this app for cut text reads the page, not the picture. Then read the scene back the way you read the
@@ -123,11 +127,13 @@ Three kinds survive the first read:
   list further down, an "Alongside:" under *How* — owes each one: after the shared opening, one short beat-block per thing, bounded on its own. Three deliverables are three
   tellings, not one 450-word squeeze that drops two of them whole and takes their facts with them. `agentmon doctor` counts it that way too — the longest run between your bold
   lead-ins, never the record's total. And never write up to a ceiling: stop when that thing's facts are spent, and let a thin thing stay thin.
-- **An update replaces the whole area, so write the whole record so far.** `--human` — the `human` field, over MCP — overwrites; it never appends, and the text it removes
-  survives in no note and no event. The retelling of a record still open therefore mirrors the record's own timeline: after the shared opening, one telling per update, oldest
-  first — the same beats the agent area's `## Updates` holds, told for the reader who was not there. Carry the earlier tellings forward, rewrite one only where this round
-  changed what its reader would see, and add the new round's telling last. A `--human` that tells only the newest round is not a shorter retelling — it deletes, at exit 0,
-  every telling before it. Closing verbs replace on purpose: the ending changed the story, so the final text is written fresh, one finished piece covering the whole.
+- **An update's telling is appended, so tell only what this update did.** `--human` beside a `--message` — the `human` field, over MCP — becomes one dated entry on the page,
+  added after the tellings already there and stamped like the note it travels with, so the page mirrors the agent area's `## Updates` node for node and nothing already told can
+  be lost. The unit is still the telling: this note's events, retold whole for the reader who was not there, never a diff-speak fragment that leans on the entry above it — and
+  never the whole record again, which would put every earlier telling on the page twice. Shape it as short paragraphs, one fact each: the app draws each entry as a card and
+  numbers those paragraphs 1·2·3 inside it, so a single dense run arrives as one unbroken block where three facts would have arrived as three. Closing verbs append the ending
+  as the last entry, drawn inside the page's closing card. The one write that replaces the page whole is `--human` alone (a refresh): that is where merging rounds into one
+  story, or repairing an earlier telling, happens — deliberately, never as a side effect.
 - **Close on a rule of thumb, not a summary**: *a backup you have never restored is not a backup*.
 
 ## Stay inside the record

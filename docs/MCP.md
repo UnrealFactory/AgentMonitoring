@@ -35,8 +35,9 @@ so no refusal and no result can ever say what it missed.
 Everything an agent has to be *told* about that half is told by a **result** instead, for
 one reason — a schema is re-sent on every turn and a result is sent once. So the style
 rules arrive with the session's first result, whatever call produced it (below), before the
-first retelling is drafted, and the fact that a retelling *replaces* rather than appends is
-said by the reply to the call that replaced one.
+first retelling is drafted, and what a supplied telling *does* — appended as a dated entry
+beside a note, replacing the page whole on a refresh — is said by the reply to the call
+that did it.
 
 Results are the other half: a write
 returns the id, the file path and one line of confirmation — the CLI's `--json` envelope
@@ -169,7 +170,7 @@ that opened on `status`, or on a note read, or on a call that failed, got nothin
 blind exactly as before. So the handover sits in the dispatcher instead of in one handler,
 and the **first result of any kind** carries it: list, snapshot, view, refusal. It comes back
 under the index or the confirmation — what the second half is and who it is for, the rules
-themselves, and the way to the rest of the contract. About 5,400 characters, once, and no
+themselves, and the way to the rest of the contract. About 6,000 characters, once, and no
 call order can miss it. A client with two calls in flight still pays for it once.
 
 One shape is left that no result can get ahead of, because the result comes after the call:
@@ -210,15 +211,21 @@ call touching a record that has no human area yet — a record written before th
 gains one on the first touch. Optional everywhere else, and **alone** it is a refresh: it
 rewrites the retelling and moves nothing else.
 
-It always **replaces**. A record has one human area, so the string you send becomes all of
-it — alone, or in the same call as a `note`, a `comment` or an `outcome`. Two sentences of
-`human` on a progress call do not extend the retelling that is already there: they
-overwrite it, the call succeeds, and what they replaced is in no note and no event. On a
-call that is not closing the record, send the retelling as the whole record should now
-read, or send none at all. The reply says which happened — `note added, retelling
-replaced` against a bare `note added` — because the difference is only visible on the call
-that makes it, and a warning in the schema would have been paid for on every turn by every
-caller who never made it.
+Beside a `note` or a `comment` it is **appended**. On work logs and bugs the human area is
+a page that grows the way `## Updates` grows: the opening from the call that filed the
+record, then one dated entry per note, stamped like the entry it retells, the ending last.
+So the `human` on a progress call is that note's own telling — what this note did, never
+the whole record again, which would put every earlier telling on the page twice — shaped
+as short paragraphs, one fact each, because the app draws each entry as a card and
+numbers those paragraphs inside it. A call
+that closes the record (`outcome`, `abandon`, `resolution`) appends the ending the same
+way. **Alone it replaces**: a refresh is the one write that rewrites the page whole, and it
+is where tellings are merged or repaired — what it removes is in no note and no event. The
+reply says which happened — `note added, its telling appended` against `human area
+replaced whole` — because the difference is only visible on the call that makes it, and a
+warning in the schema would have been paid for on every turn by every caller who never
+made it. Notes (`note action="write"`) stay replace-model: a note is knowledge, not
+history.
 
 Write it in the same call, out of the same fresh context that wrote `what`/`why`/`how`.
 Only a *missing* retelling is refused; a thin one is accepted, and then it is what the
@@ -277,8 +284,8 @@ and comes back `done`; without one it stays `in_progress` and the reply carries 
 `WORK-NNNN` id to close later. `files` is recorded when the log closes, which is the CLI's
 rule. Backdating a whole record is `started_at` + `finished_at` in the same call.
 
-One `human` covers both halves of the call: closing replaces the record's human area, and
-the same retelling is the honest thing to put back.
+One `human` covers both halves of the call: it becomes the page's opening, and the close
+re-sends it — the core keeps one copy of an unchanged telling, so nothing lands twice.
 
 ### `update_work`
 
@@ -287,11 +294,12 @@ Progress, close, or stop — on an existing `WORK-NNNN`.
 `id*`, `note`, `outcome`, `abandon`, `human`, `files`, `at`
 
 `human` is required with everything except a bare refresh: with `outcome` or `abandon`
-(closing replaces the human area) and with a `note` too — a progress note is new events,
-and the CLI refuses one that arrives without its retelling (owner directive, 2026-08-24).
-Sent with a `note` it **replaces** the stored retelling; when the note changes nothing a
-reader sees, re-pass the current text. **Alone** it is a refresh — it rewrites the human
-area, appends nothing, and the feed logs one `human_updated` line.
+(closing appends the ending as the page's last entry) and with a `note` too — a progress
+note is new events, and the CLI refuses one that arrives without its telling (owner
+directive, 2026-08-24). Sent with a `note` it is **appended** as a dated entry paired with
+the note — tell what this note did, not the whole record again. **Alone** it is a refresh —
+it replaces the page whole (the place to merge or repair tellings), adds nothing to
+`## Updates`, and the feed logs one `human_updated` line.
 
 Otherwise one of the three is the point of the call: `note` appends a timestamped note,
 `outcome` closes the log, `abandon` marks it abandoned with a reason. A note on an
@@ -322,9 +330,11 @@ comment-only (`claim: false`, `comment`) are both valid single calls. If another
 holds the bug the claim fails and the reply names the way past it.
 
 `human` is required with a `resolution` and with a `comment` — a finding is part of the
-bug's story, and the CLI refuses a comment that arrives without its retelling, exactly as
-in `update_work`. Sent with a `comment` it replaces the bug's retelling; alone it is a
-refresh, exactly as in `update_work` too.
+bug's story, and the CLI refuses a comment that arrives without its telling, exactly as
+in `update_work`. Sent with a `comment` it is appended as that finding's dated entry, a
+`resolution` appends the ending, and alone it is a whole-page refresh — exactly as in
+`update_work` too. One call carrying both `comment` and `resolution` sends one `human`
+to two steps; the core keeps one copy of an unchanged telling.
 
 ### `note`
 

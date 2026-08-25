@@ -72,14 +72,17 @@ const BUDGET = {
   // a fixed bug. 5200 -> 5800 when it took on the replace rule — an update's retelling covers
   // the whole record so far, one telling per update — after agents in the field replaced a
   // record's accumulated tellings with the newest round's and the old text survived nowhere.
+  // 5800 -> 6200 when the picture default landed (owner decision, 2026-08-25: every beat
+  // opens on its scene, and a skip is a per-beat claim) — agents in the field were drawing
+  // no scenes at all, and rules that never reach the drafter do not exist.
   // Raise this deliberately, with the doc change that earned it — nothing else
   // caps the block, and a handover nobody reads teaches as little as none.
-  primer: 5800,
+  primer: 6200,
   // The style contract, which is a document rather than a record: `status(mode=
   // "human_style")` returns docs/HUMAN_STYLE.md whole, because it is what an agent reads
   // *before* writing its first human area, and the worked example at the end is the part
   // a summary cannot stand in for. Sized to that file with room to grow.
-  contract: 29000,
+  contract: 30500,
 };
 
 /* ------------------------------------------------------------------ runner */
@@ -1167,8 +1170,8 @@ section("the human area: required through MCP, refreshable, and the rules travel
     const md = readFileSync(path.join(DATA, "worklogs", `${workId}.md`), "utf8");
     assert(md.includes("## For humans"), md);
     assert(md.indexOf("## Outcome") < md.indexOf("## For humans"), `not last:\n${md}`);
-    assert(md.match(/## For humans/g).length === 1, "closing replaced it rather than adding one");
-    assertIncludes(md, "a quarter of a second", "the closing retelling replaced the opening one");
+    assert(md.match(/## For humans/g).length === 1, "closing appends inside it, never a second section");
+    assertIncludes(md, "a quarter of a second", "the closing telling is on the page");
   });
 
   // A refresh: human alone, no note, one human_updated line.
@@ -1191,25 +1194,31 @@ section("the human area: required through MCP, refreshable, and the rules travel
     assertIncludes(lines[lines.length - 1], "human_updated", "events");
   });
 
-  // The combination that used to be warned about in the schema, on every turn, whether or
-  // not anyone made it: a note appends, and the `human` beside it REPLACES. Said now by
-  // the result of the call that does it, so it is read at the one moment it is visible.
+  // A note and its `human` travel as a pair, and the telling is APPENDED as a dated
+  // entry on the page (owner decision, 2026-08-25 — `append_telling` in
+  // agentmon-core/src/human.rs). Said by the result of the call that does it, so it is
+  // read at the one moment it is visible.
   const both = await client.call("update_work", {
     id: workId,
     note: "Correction: the watcher re-arms after a rename, which the note above did not say.",
-    human: "Rewritten again, with the correction folded in: the window keeps noticing new records even after a file is renamed.",
+    human: "One correction: the window keeps noticing new records even after a file is renamed.",
   });
   budgeted("update_work (note + human)", both);
-  check("a note with a retelling says the retelling was replaced", () => {
+  check("a note with a telling says the telling was appended", () => {
     assert(!both.isError, both.text);
-    assertIncludes(both.text, "replaced", "result");
+    assertIncludes(both.text, "appended", "result");
   });
-  check("…and the record shows the note appended and the retelling swapped", () => {
+  check("…and the record shows the note appended and the telling on the page's end", () => {
     const md = readFileSync(path.join(DATA, "worklogs", `${workId}.md`), "utf8");
     assertIncludes(md, "Correction: the watcher re-arms", "record");
     assertIncludes(md, "even after a file is renamed", "record");
-    assert(!md.includes("Rewritten afterwards"), "the previous retelling should be gone");
+    assert(
+      md.includes("Rewritten afterwards"),
+      "the page the refresh wrote stays — an update deletes nothing"
+    );
     assert(md.match(/## For humans/g).length === 1, "a second human area was appended");
+    const human = md.slice(md.indexOf("## For humans"));
+    assert(human.match(/### \d{4}-/), "the telling is a dated entry on the page");
   });
 
   // The same shape for a note and for a bug.

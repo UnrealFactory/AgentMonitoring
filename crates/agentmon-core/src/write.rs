@@ -110,8 +110,8 @@ pub struct StartWork {
 pub struct FinishWork {
     pub agent: String,
     pub outcome: String,
-    /// The human area, rewritten: closing changed the story, so the ending replaces
-    /// whatever the record said while it was open.
+    /// The ending's telling — appended as the page's last `### <ts>` node, after the
+    /// tellings the record gathered while it was open.
     pub human: String,
     pub files: Vec<String>,
     pub refs: Vec<String>,
@@ -128,7 +128,7 @@ pub struct AbandonWork {
     pub agent: String,
     /// Why it stopped, and what a reader should do instead. Appended under `## Updates`.
     pub reason: String,
-    /// The human area, rewritten: stopping is an ending too.
+    /// The ending's telling — stopping is an ending too, appended like any other.
     pub human: String,
     pub at: Option<String>,
 }
@@ -548,16 +548,24 @@ impl Store {
     /// the end of the timeline, its timestamp must be at or after everything already in the
     /// record (including `finished`, so a note cannot pretend to predate the close), the
     /// status does not change, and the event is still `work_updated`.
-    /// `human` alone is a **refresh**: nothing is appended to `## Updates`, only the human
-    /// area is rewritten, and the one event logged is `human_updated`. That is how a record
-    /// written before the human area existed gains one without inventing a progress note
-    /// that never happened.
+    /// `human` alone is a **refresh**: nothing is appended to `## Updates`, the human area
+    /// is **replaced whole**, and the one event logged is `human_updated`. That is how a
+    /// record written before the human area existed gains one without inventing a progress
+    /// note that never happened — and, since the append rule below, the one deliberate way
+    /// to curate the page (merge tellings, repair wording).
     ///
     /// `--message` **requires** `--human` with it (owner directive, 2026-08-24): a progress
     /// note is new events, and a retelling that omits them is stale by definition. The rule
     /// used to require the pair only on a record that had no human area yet, and agents
     /// used the gap as a bypass — the real content went into `## Updates` and the human
     /// area froze at the day the record was started.
+    ///
+    /// That `--human` is **one telling, appended** (owner decision, 2026-08-25): a
+    /// `### <ts>` node carrying the same timestamp as the note it retells, so the two
+    /// halves pair node for node. Replace-with-the-whole-story was the rule before, taught
+    /// by the compact rules, and it did not hold — agents kept sending only the newest
+    /// round, wiping every telling before it at exit 0 (ElmwoodOnline's WORK-0017: twenty
+    /// agent nodes, one round's story). Appending makes that loss impossible to write.
     pub fn update_work(
         &self,
         id: &str,
@@ -596,8 +604,9 @@ impl Store {
             (None, Some(_)) => {
                 return Err(human::missing(
                     &id,
-                    "--message adds to what this record tells, so the retelling has to be \
-                     rewritten with it",
+                    "--message adds to what this record tells, so its telling has to travel \
+                     with it — retell just this note's events; it is appended after the \
+                     tellings already on the record",
                 ))
             }
             (None, None) => None,
@@ -611,7 +620,14 @@ impl Store {
         // Ordering rules apply to a refresh too: the human area is part of the record, and
         // a rewrite dated before the record's last activity would be a lie about when.
         require_note_time(&ts, &meta, &agent_md)?;
-        let human_text = resolve_human(supplied_human, existing_human, &id)?;
+        // With a note, the telling is appended as a node stamped like the note itself;
+        // alone, it is a refresh and replaces the page whole — the curation path.
+        let human_text = match (&note, supplied_human) {
+            (Some(_), Some(new)) => {
+                human::append_telling(existing_human.as_deref(), &ts, &new)
+            }
+            (_, supplied) => resolve_human(supplied, existing_human, &id)?,
+        };
 
         let mut sections = body::sections(&agent_md);
         if let Some(note) = &note {
@@ -689,18 +705,18 @@ impl Store {
             "agentmon work update WORK-0011 --agent recovery-agent --replayed \\\n  \
              --at 2026-08-22T10:05:00Z \\\n  \
              --message \"Halfway: the parser round-trips; the writer still drops unknown keys.\" \\\n  \
-             --human \"<the record's retelling — re-pass the current one if the replay \
-             changes nothing a reader sees>\"",
+             --human \"<this note's own telling — it is inserted into the page at the \
+             note's time>\"",
         )?;
         let id = validate_id(id, "WORK")?;
         let supplied_human = match human_arg {
-            Some(h) => Some(human::require(h, &id)?),
+            Some(h) => human::require(h, &id)?,
             None => {
                 return Err(human::missing(
                     &id,
-                    "a replayed note still adds to what this record tells, so the retelling \
-                     has to be rewritten with it (re-pass the current one if the replay \
-                     changes nothing a reader sees)",
+                    "a replayed note still adds to what this record tells, so its telling \
+                     has to travel with it — retell just this note's events; it is inserted \
+                     into the page at the note's own time",
                 ))
             }
         };
@@ -712,7 +728,10 @@ impl Store {
 
         // The floor is not waived: a record has no history before it began.
         time::require_at_or_after(&ts, "--at", &meta.started, "the work log's started time")?;
-        let human_text = resolve_human(supplied_human, existing_human, &id)?;
+        // The telling replays too: its node lands at the note's place in the page's
+        // timeline, exactly as the agent-side entry lands in `## Updates` below.
+        let human_text =
+            human::insert_telling_by_time(existing_human.as_deref(), &ts, &supplied_human);
 
         let entry = if agent == meta.agent {
             note.clone()
@@ -753,12 +772,12 @@ impl Store {
              here was kept.\"",
         )?;
         let id = validate_id(id, "WORK")?;
-        let human_text = human::require(&req.human, &id)?;
+        let final_telling = human::require(&req.human, &id)?;
         let ts = time::stamp(req.at.as_deref(), "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("worklogs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_work(&path, &id)?;
-        let (md, _) = human::split(&md);
+        let (md, existing_human) = human::split(&md);
 
         match meta.status {
             WorkStatus::InProgress => {}
@@ -791,7 +810,8 @@ impl Store {
         };
         let mut sections = body::sections(&md);
         body::append_entry(&mut sections, "Updates", &ts, &entry, WORK_SECTIONS);
-        // Closing verbs replace the human area: the ending changed the story.
+        // Closing appends the ending's telling: the page keeps its whole timeline.
+        let human_text = human::append_telling(existing_human.as_deref(), &ts, &final_telling);
         write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &mut sections, &human_text)?;
 
         let event = self.append_event_at(
@@ -812,7 +832,7 @@ impl Store {
         let outcome = validate::outcome(&req.outcome)?;
         let extra_refs = self.normalize_refs(&req.refs)?;
         let id = validate_id(id, "WORK")?;
-        let human_text = human::require(&req.human, &id)?;
+        let final_telling = human::require(&req.human, &id)?;
         let finished = time::stamp(req.finished_at.as_deref(), "--finished-at")?;
         let restart = req
             .started_at
@@ -822,7 +842,7 @@ impl Store {
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("worklogs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_work(&path, &id)?;
-        let (md, _) = human::split(&md);
+        let (md, existing_human) = human::split(&md);
 
         match meta.status {
             WorkStatus::InProgress => {}
@@ -876,7 +896,9 @@ impl Store {
             format!("_Completed by {agent}._\n\n{outcome}")
         };
         body::upsert_section(&mut sections, "Outcome", &outcome_body, WORK_SECTIONS);
-        // Closing verbs replace the human area: the ending changed the story.
+        // Closing appends the ending's telling: the page keeps its whole timeline.
+        let human_text =
+            human::append_telling(existing_human.as_deref(), &finished, &final_telling);
         write_record(&path, &meta.to_frontmatter(), &fm, WORK_KEYS, &mut sections, &human_text)?;
 
         let event = self.append_event_at(
@@ -1010,12 +1032,14 @@ impl Store {
         Ok(Written::new(id, &path, event, record))
     }
 
-    /// `human` alone is a **refresh**: no comment is added to the thread, only the human
-    /// area changes, and the event is `human_updated`.
+    /// `human` alone is a **refresh**: no comment is added to the thread, the human area
+    /// is replaced whole, and the event is `human_updated`.
     ///
     /// `--message` **requires** `--human` with it, same rule and same reason as
     /// [`Store::update_work`]: a finding on the thread is part of the bug's story, and the
-    /// optional pair was being used to keep the whole story on the agent side.
+    /// optional pair was being used to keep the whole story on the agent side. And that
+    /// `--human` is one telling **appended** as a `### <ts>` node, same rule and same
+    /// reason again — replace-and-carry-forward was a teaching rule agents kept breaking.
     pub fn comment_bug(
         &self,
         id: &str,
@@ -1054,8 +1078,9 @@ impl Store {
             (None, Some(_)) => {
                 return Err(human::missing(
                     &id,
-                    "--message adds to what this bug tells, so the retelling has to be \
-                     rewritten with it",
+                    "--message adds to what this bug tells, so its telling has to travel \
+                     with it — retell just this finding; it is appended after the tellings \
+                     already on the record",
                 ))
             }
             (None, None) => None,
@@ -1067,7 +1092,14 @@ impl Store {
         let (md, existing_human) = human::split(&md);
         time::require_at_or_after(&ts, "--at", &meta.created, "the bug's created time")?;
         time::require_at_or_after(&ts, "--at", &last_comment(&md), "the previous comment")?;
-        let human_text = resolve_human(supplied_human, existing_human, &id)?;
+        // Same split as `update_work`: a comment's telling is appended as a node stamped
+        // like the comment; `--human` alone replaces the page whole (refresh/curation).
+        let human_text = match (&note, supplied_human) {
+            (Some(_), Some(new)) => {
+                human::append_telling(existing_human.as_deref(), &ts, &new)
+            }
+            (_, supplied) => resolve_human(supplied, existing_human, &id)?,
+        };
 
         let mut sections = body::sections(&md);
         if let Some(note) = &note {
@@ -1124,18 +1156,18 @@ impl Store {
              --at 2026-08-22T10:05:00Z \\\n  \
              --message \"Root cause: the watcher was never started, so no change event was \
              ever emitted.\" \\\n  \
-             --human \"<the bug's retelling — re-pass the current one if the replay changes \
-             nothing a reader sees>\"",
+             --human \"<this comment's own telling — it is inserted into the page at the \
+             comment's time>\"",
         )?;
         let id = validate_id(id, "BUG")?;
         let supplied_human = match human_arg {
-            Some(h) => Some(human::require(h, &id)?),
+            Some(h) => human::require(h, &id)?,
             None => {
                 return Err(human::missing(
                     &id,
-                    "a replayed comment still adds to what this bug tells, so the retelling \
-                     has to be rewritten with it (re-pass the current one if the replay \
-                     changes nothing a reader sees)",
+                    "a replayed comment still adds to what this bug tells, so its telling \
+                     has to travel with it — retell just this finding; it is inserted into \
+                     the page at the comment's own time",
                 ))
             }
         };
@@ -1145,7 +1177,8 @@ impl Store {
         let (fm, meta, md) = read_bug(&path, &id)?;
         let (md, existing_human) = human::split(&md);
         time::require_at_or_after(&ts, "--at", &meta.created, "the bug's created time")?;
-        let human_text = resolve_human(supplied_human, existing_human, &id)?;
+        let human_text =
+            human::insert_telling_by_time(existing_human.as_deref(), &ts, &supplied_human);
 
         let mut sections = body::sections(&md);
         body::insert_entry_by_time(
@@ -1181,12 +1214,12 @@ impl Store {
         human::check_agent_text(resolution, "--resolution/--resolution-file")?;
         let text = validate::resolution(resolution)?;
         let id = validate_id(id, "BUG")?;
-        let human_text = human::require(human_arg, &id)?;
+        let final_telling = human::require(human_arg, &id)?;
         let ts = time::stamp(at, "--at")?;
         let _lock = ProjectLock::acquire(&dir)?;
         let path = dir.join("bugs").join(format!("{id}.md"));
         let (fm, mut meta, md) = read_bug(&path, &id)?;
-        let (md, _) = human::split(&md);
+        let (md, existing_human) = human::split(&md);
 
         match meta.status {
             BugStatus::Open | BugStatus::InProgress => {}
@@ -1233,7 +1266,8 @@ impl Store {
 
         let mut sections = body::sections(&md);
         body::upsert_section(&mut sections, "Resolution", &text, BUG_SECTIONS);
-        // Closing verbs replace the human area: the ending changed the story.
+        // Closing appends the ending's telling: the page keeps its whole timeline.
+        let human_text = human::append_telling(existing_human.as_deref(), &ts, &final_telling);
         write_record(&path, &meta.to_frontmatter(), &fm, BUG_KEYS, &mut sections, &human_text)?;
 
         let event = self.append_event_at(

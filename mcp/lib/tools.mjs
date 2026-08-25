@@ -45,9 +45,10 @@ const when = { type: "string", description: "UTC ISO8601 of when it really happe
  * area that a *result* can carry is bought here. `required: [...]` says which calls demand
  * one. Who the retelling is for is the opening line of the block `handOver` below sends —
  * said once, on the session's first result, rather than six times in a tool list on every
- * turn of the conversation. That a supplied retelling *replaces* the stored one is said by
- * the result of the call that replaces it. And the rules themselves — the part that decides
- * whether the retelling is any good — are that same block, handed over whole.
+ * turn of the conversation. What a supplied telling *does* — appended as a dated entry
+ * beside a note, replacing the page whole on a refresh — is said by the result of the call
+ * that did it. And the rules themselves — the part that decides whether the retelling is
+ * any good — are that same block, handed over whole.
  *
  * The description that used to sit here read "Retold for a non-programmer." An A/B run by
  * this initiative's critic put the same task through this schema with those bytes present
@@ -380,8 +381,8 @@ async function compactRules(at) {
  *
  * One shape is left that no result can reach in time, because the result comes after the
  * call: a session whose first call *is* a write. `written` catches it one draft late, with
- * a head that says so and names `repair` — the call that rewrites this very record, id
- * filled in, replacing the retelling and touching nothing else. Nothing always-on is spent
+ * a head that says so and names `repair` — the refresh that rewrites this very record's
+ * page, id filled in, touching nothing else. Nothing always-on is spent
  * trying to get ahead of it: a bullet about this in the project's CLAUDE.md was written,
  * then measured against its own absence, and the repo without it saved a conforming record
  * on the same attempt as the repo with it. Those bytes are re-sent on every turn of every
@@ -410,8 +411,8 @@ const PRE_DRAFT_HEAD =
 const primerHead = (repair) =>
   `The retelling you just sent is held to the rules below. Nothing refused this call, so ` +
   `they come here instead — once, this session. Read it back against them; whatever it ` +
-  `misses, fix with ${repair}, which replaces the retelling and changes nothing else ` +
-  `about the record.`;
+  `misses, fix with ${repair}, which replaces the human area whole and changes nothing ` +
+  `else about the record.`;
 
 const PRIMER_TAIL = 'The whole contract, worked example included: status(mode="human_style").';
 
@@ -442,8 +443,9 @@ async function logWork(args, ctx) {
   const { at, who } = ident(args, ctx);
   need(args, ["title", "what", "why", "how"], "log_work");
   const body = `## What\n\n${args.what.trim()}\n\n## Why\n\n${args.why.trim()}\n\n## How\n\n${args.how.trim()}\n`;
-  // One human field for a call that may open *and* close the record: closing replaces the
-  // human area, and the same retelling is the honest thing to put back.
+  // One human field for a call that may open *and* close the record: on open it is the
+  // page's opening; the close re-sends the same text, and the core keeps one copy of an
+  // unchanged telling (`append_telling`, agentmon-core/src/human.rs).
   const human = humanText(args, "log_work");
 
   const startArgs = ["work", "start", "--agent", who, "--title", oneLine(args.title), "--body-file", "-", "--json"];
@@ -526,11 +528,11 @@ async function updateWork(args, ctx) {
     // never travels without --human), and that refusal carries the style contract — the
     // teaching this wrapper must not shorten or pre-empt.
     if (!r.ok) return fail(cliErrorText(r));
-    // The retelling sent with a note REPLACES the stored one while the note is appended
-    // (`resolve_human` in crates/agentmon-core/src/write.rs is `(Some(new), _) => Ok(new)`).
-    // Said here, on the call that did it, rather than in a schema clause every turn pays
-    // for — the caller reads it at the one moment the difference is visible.
-    done.push(note ? "note added, retelling replaced" : "human area rewritten");
+    // The telling sent with a note is APPENDED as a dated entry paired with it
+    // (`append_telling` in crates/agentmon-core/src/human.rs); `human` alone is the
+    // refresh that replaces the page whole. Said here, on the call that did it, rather
+    // than in a schema clause every turn pays for.
+    done.push(note ? "note added, its telling appended" : "human area replaced whole");
     file = r.json?.path ?? file;
     stamp = r.json?.event?.ts ?? stamp;
     state = r.json?.record?.status ?? state;
@@ -645,9 +647,9 @@ async function resolveBug(args, ctx) {
     const r = await runCli(at, a, comment || undefined);
     // A comment without a human is refused by the CLI, exactly as in `update_work`.
     if (!r.ok) return fail(stepFailure(done, cliErrorText(r)));
-    // Same replace-not-append as `update_work`, said on the call that did it: the comment
-    // joins the thread, the retelling takes the old one's place.
-    done.push(comment ? "commented, retelling replaced" : "human area rewritten");
+    // Same append-with-a-message as `update_work`, said on the call that did it: the
+    // comment joins the thread, its telling joins the page as a dated entry.
+    done.push(comment ? "commented, its telling appended" : "human area replaced whole");
     file = r.json?.path ?? file;
     state = r.json?.record?.status ?? state;
   }

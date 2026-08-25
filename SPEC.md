@@ -269,15 +269,26 @@ migrated project arrives as legacy records and gains its human areas on first to
 - Mutations that create or close a record **require** the human area
   (`--human s | --human-file f`): `work start`, `work done`, `work abandon`,
   `bug create`, `bug resolve`, `note add`, `note update` when `--body` is given,
-  `app-feedback add`. Closing verbs **replace** it — the ending changed the story.
+  `app-feedback add`. On work logs and bugs, closing verbs **append** the ending's
+  telling as the page's last node (see below); notes stay replace-in-place — they
+  are knowledge, not history.
 - Mutations that write agent prose onto a record require it too (owner directive,
   2026-08-24): `work update` and `bug comment` refuse a `--message` without `--human`
   — replayed or not — because a progress note or a finding is new events, and a
-  retelling that omits them is stale by definition. The supplied text **replaces**
-  the stored one; when the note changes nothing a reader sees, re-passing the
-  current retelling is the honest fill. (Before this, `--message` alone was legal on
-  a record that already had a human area, and agents used the gap as a bypass: the
-  real content went into `## Updates`/`## Comments` and the human area froze.)
+  retelling that omits them is stale by definition. (Before this, `--message` alone
+  was legal on a record that already had a human area, and agents used the gap as a
+  bypass: the real content went into `## Updates`/`## Comments` and the human area
+  froze.)
+- That `--human` is **one telling, appended** (owner decision, 2026-08-25): inside
+  the human area it becomes a `### <ts>` node carrying the same timestamp as the
+  `## Updates`/`## Comments` entry it travels with, after everything already on the
+  page — so the two halves pair node for node and no earlier telling can be lost.
+  A replayed note's telling is inserted at its place in that timeline instead. The
+  first text a record's human area receives (`work start`, `bug create`, or the
+  first touch of a legacy record) is the page's opening and carries no node heading.
+  (Replace-with-the-whole-story was the rule before, taught by the compact rules,
+  and it did not hold: agents kept passing only the newest round, deleting every
+  telling before it at exit 0.)
 - Any mutation touching a record that still lacks a human area must supply one
   (legacy records gain it on first touch). The exception is the three flagless
   status flips `app-feedback done` / `reopen` / `delete`: they take no `--agent`
@@ -288,7 +299,9 @@ migrated project arrives as legacy records and gains its human areas on first to
   (`work update`, `bug comment`, `note update`, `app-feedback update` — the last
   exists for this). A refresh never writes into `## Updates`/`## Comments`; in a
   project, a refresh-only mutation logs a `human_updated` event, otherwise the
-  mutation's own event covers it. `app-feedback update` logs nothing at all: the
+  mutation's own event covers it. A refresh **replaces the page whole** — since the
+  append rule it is the one deliberate way to curate the human area (merge tellings,
+  repair an earlier one). `app-feedback update` logs nothing at all: the
   app-feedback board is machine-level, has no `events.jsonl`, and carries the time
   of the refresh in the item's own `updated` frontmatter instead.
 - Missing or blank → exit 2, and the error itself prints the compact style rules
@@ -318,7 +331,7 @@ agentmon project list                     # the machine's registry (informationa
 agentmon project mcp-json [--agent h]     # write/refresh .mcp.json for an existing project
 agentmon work start   --agent <name> --title <t> (--body s | --body-file f) --human s|--human-file f [--tags] [--started-at T]
 agentmon work update  <WORK-ID> --agent <name> --human s|--human-file f [--message s | --body-file|--message-file f] [--at T] [--replayed]
-                      # --human alone is a refresh; --message never travels without --human
+                      # --human alone is a refresh (replaces the page); with --message it is one telling, appended
 agentmon work done    <WORK-ID> --agent <name> (--outcome s | --outcome-file f) --human s|--human-file f [--files a,b] [--finished-at T] [--started-at T]
 agentmon work abandon <WORK-ID> --agent <name> (--reason s | --reason-file f) --human s|--human-file f [--at T]
 agentmon work list    [--status s] [--agent a] [--json]
@@ -326,7 +339,7 @@ agentmon work view    <WORK-ID> [--json]
 agentmon bug create   --agent <name> --title <t> --severity <s> (--body s | --body-file f) --human s|--human-file f [--labels] [--created-at T]
 agentmon bug claim    <BUG-ID> --agent <name> [--human s|--human-file f] [--at T]
 agentmon bug comment  <BUG-ID> --agent <name> --human s|--human-file f [--message s | --body-file|--message-file f] [--at T] [--replayed]
-                      # --human alone is a refresh; --message never travels without --human
+                      # --human alone is a refresh (replaces the page); with --message it is one telling, appended
 agentmon bug resolve  <BUG-ID> --agent <name> (--resolution s | --resolution-file f) --human s|--human-file f [--at T]
 agentmon bug list     [--status s] [--severity] [--label] [--json]
 agentmon bug view     <BUG-ID> [--json]
@@ -417,8 +430,11 @@ recipe lives in docs/AGENT_MANUAL.md, "Two machines, one repo".
    (work completed over time, bugs opened vs resolved, per-agent activity).
 3. **Work list** — filterable table (status, agent, tag, search).
 4. **Work detail** (vscode merged-PR bar) — title, meta (agent, status, dates, tags, files),
-   rendered What/Why/How, Updates timeline, Outcome. A reader who never saw the work must
-   be able to reconstruct what/why/how.
+   rendered What/Why/How, Updates timeline, Outcome — in that order on the page, and the
+   timeline **chronological** (owner decision, 2026-08-25: start edge, notes 1..N, status
+   edge, the Outcome card below the trail — the page reads the way the work ran; the bug
+   thread and its Resolution card follow the same rule). A reader who never saw the work
+   must be able to reconstruct what/why/how.
 5. **Bug board** (vscode issues bar) — filterable list (status, severity, label, assignee),
    open/resolved counts, severity badges.
 6. **Bug detail** — report, comment thread, resolution record, status history.
@@ -433,7 +449,15 @@ recipe lives in docs/AGENT_MANUAL.md, "Two machines, one repo".
 Every record detail screen (4, 6, 8, and App feedback's) carries an **Agent / Human
 toggle**: Agent shows the areas above; Human renders the record's human area — the
 eli5 friendly-explainer concept reinterpreted strictly through this app's design
-tokens, so it reads as native next to every other screen. The toggle defaults to
+tokens, so it reads as native next to every other screen. Since the owner's
+2026-08-25 decisions the Human view is the agent page's **own skeleton** carrying the
+easy-language content: an Overview card (the opening telling, standfirst plus
+numbered blocks, the record's start stamped on its header), the timeline rail with
+one numbered node card per dated telling — chronological, paired with the agent
+half's entries by timestamp — and the ending's telling inside the same outcome card
+the agent half closes on. Inside a card, a telling without bold lead-ins renders
+each paragraph as a numbered block; the accent-marked closing line appears only on a
+page with no outcome card. The toggle defaults to
 Human when the record has a human area, the choice persists for the session, and a
 record without one shows a designed empty state naming the exact CLI command that
 adds it.

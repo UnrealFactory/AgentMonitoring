@@ -308,7 +308,7 @@ fn entries(body: &str, is_entry: impl Fn(&str) -> bool) -> Vec<(String, String)>
 /// inside its message: without it, that line became an entry whose "timestamp" was a
 /// sentence — drawn as "—" in the app, and string-`>` than every real ISO stamp, so it
 /// poisoned lastActivity and the record's sort position too.
-fn starts_with_date(text: &str) -> bool {
+pub(crate) fn starts_with_date(text: &str) -> bool {
     let b = text.trim_start().as_bytes();
     b.len() >= 10
         && b[..4].iter().all(u8::is_ascii_digit)
