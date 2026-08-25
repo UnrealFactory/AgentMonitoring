@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 340" width="700" height="340" role="img" aria-label="에이전트 페이지와 사람 페이지가 같은 뼈대로 나란히 서 있다: 글 섹션, 노드 카드의 줄, 마지막의 결과 카드.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that; at the 395 column every 22 lands at 12.5, over the 11
+       floor. Type by role, never by name; every label keeps a fifth of its box empty.
+       Icons in one band, their words in the next, the closing line in its own band.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the two identical columns — "사람 쪽 화면이 에이전트 페이지와 같은 뼈대가 되었습니다"
+         · each column's top block — "개요(글 섹션)"
+         · each column's two dotted rows — "노드 카드가 차례로"
+         · each column's bottom green-marked card — "결과 카드가 맨 마지막"
+         · the closing line — "두 화면은 이제 같은 뼈대를 같은 순서로 읽습니다" -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+  </style>
+
+  <rect width="700" height="340" rx="8" fill="#121317"/>
+
+  <!-- the agent half -->
+  <rect x="130.5" y="36.5" width="150" height="30" rx="6" fill="#0e0f11" stroke="#fff" stroke-opacity="0.09"/>
+  <circle cx="146" cy="88" r="5" fill="#5e6ad2"/>
+  <rect x="160.5" y="76.5" width="120" height="24" rx="6" fill="none" stroke="#fff" stroke-opacity="0.09"/>
+  <circle cx="146" cy="122" r="5" fill="#5e6ad2"/>
+  <rect x="160.5" y="110.5" width="120" height="24" rx="6" fill="none" stroke="#fff" stroke-opacity="0.09"/>
+  <rect x="130.5" y="146.5" width="150" height="28" rx="6" fill="none" stroke="#4cb782" stroke-opacity="0.85" stroke-width="1.6"/>
+  <path d="M142,160 l5,5 l9,-9" fill="none" stroke="#4cb782" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- the human half, the same shapes -->
+  <rect x="420.5" y="36.5" width="150" height="30" rx="6" fill="#0e0f11" stroke="#fff" stroke-opacity="0.09"/>
+  <circle cx="436" cy="88" r="5" fill="#5e6ad2"/>
+  <rect x="450.5" y="76.5" width="120" height="24" rx="6" fill="none" stroke="#fff" stroke-opacity="0.09"/>
+  <circle cx="436" cy="122" r="5" fill="#5e6ad2"/>
+  <rect x="450.5" y="110.5" width="120" height="24" rx="6" fill="none" stroke="#fff" stroke-opacity="0.09"/>
+  <rect x="420.5" y="146.5" width="150" height="28" rx="6" fill="none" stroke="#4cb782" stroke-opacity="0.85" stroke-width="1.6"/>
+  <path d="M432,160 l5,5 l9,-9" fill="none" stroke="#4cb782" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- the words band -->
+  <text class="s" x="205" y="216" font-size="22" fill="#e8e9eb" text-anchor="middle">에이전트</text>
+  <text class="s" x="495" y="216" font-size="22" fill="#e8e9eb" text-anchor="middle">사람</text>
+  <text class="s" x="205" y="248" font-size="22" fill="#8a8f98" text-anchor="middle">글 · 노드 · 결과</text>
+  <text class="s" x="495" y="248" font-size="22" fill="#8a8f98" text-anchor="middle">같은 뼈대</text>
+
+  <!-- the closing line -->
+  <text class="s" x="350" y="302" font-size="22" fill="#8a8f98" text-anchor="middle">같은 순서로 읽습니다: 시작 → 노드 → <tspan fill="#4cb782">결과</tspan></text>
+</svg>

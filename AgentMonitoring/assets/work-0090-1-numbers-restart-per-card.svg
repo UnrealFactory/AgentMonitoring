@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 320" width="700" height="320" role="img" aria-label="두 개의 노드 카드가 나란히 있고, 각 카드 안의 단락 번호가 둘 다 1부터 다시 시작한다.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that; at the 395 column every 22 lands at 12.5, over the 11
+       floor. Type by role, never by name; every label keeps a fifth of its box empty.
+       Icons in one band, their words in the next, the closing line in its own band.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the two cards with header strips — "날짜가 달린 이야기 하나하나가 카드로 그려집니다"
+         · the numbered chips 1·2 inside each — "각 카드 안에서 단락 번호가 1부터 다시 시작합니다"
+         · the left/right labels — the same two sentences, one each
+         · the closing line — "번호는 카드마다 1부터" -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+  </style>
+
+  <rect width="700" height="320" rx="8" fill="#121317"/>
+
+  <!-- first node card -->
+  <rect x="120.5" y="40.5" width="180" height="110" rx="10" fill="#0e0f11" stroke="#fff" stroke-opacity="0.09"/>
+  <line x1="121" y1="68" x2="300" y2="68" stroke="#fff" stroke-opacity="0.09"/>
+  <circle cx="150" cy="94" r="13" fill="none" stroke="#5e6ad2" stroke-width="2.2"/>
+  <text class="s" x="150" y="101" font-size="22" fill="#a5adf0" text-anchor="middle">1</text>
+  <line x1="172" y1="94" x2="280" y2="94" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="150" cy="126" r="13" fill="none" stroke="#5e6ad2" stroke-width="2.2"/>
+  <text class="s" x="150" y="133" font-size="22" fill="#a5adf0" text-anchor="middle">2</text>
+  <line x1="172" y1="126" x2="262" y2="126" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- second node card -->
+  <rect x="400.5" y="40.5" width="180" height="110" rx="10" fill="#0e0f11" stroke="#fff" stroke-opacity="0.09"/>
+  <line x1="401" y1="68" x2="580" y2="68" stroke="#fff" stroke-opacity="0.09"/>
+  <circle cx="430" cy="94" r="13" fill="none" stroke="#5e6ad2" stroke-width="2.2"/>
+  <text class="s" x="430" y="101" font-size="22" fill="#a5adf0" text-anchor="middle">1</text>
+  <line x1="452" y1="94" x2="560" y2="94" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="430" cy="126" r="13" fill="none" stroke="#5e6ad2" stroke-width="2.2"/>
+  <text class="s" x="430" y="133" font-size="22" fill="#a5adf0" text-anchor="middle">2</text>
+  <line x1="452" y1="126" x2="542" y2="126" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- the words band -->
+  <text class="s" x="210" y="200" font-size="22" fill="#8a8f98" text-anchor="middle">첫 노드 카드</text>
+  <text class="s" x="490" y="200" font-size="22" fill="#8a8f98" text-anchor="middle">다음 노드 카드</text>
+
+  <!-- the closing line -->
+  <text class="s" x="350" y="268" font-size="22" fill="#e8e9eb" text-anchor="middle">번호는 카드마다 <tspan fill="#a5adf0">1</tspan>부터 다시</text>
+</svg>

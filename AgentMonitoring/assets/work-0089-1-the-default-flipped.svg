@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 340" width="700" height="340" role="img" aria-label="The rule flipped: a page whose beats had no pictures under the old wording, and the same page with a scene opening every beat under the new default.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no
+       taller than half again that; at the 395 column every 22 lands at 12.5, over the 11
+       floor. Type by role, never by name; every label keeps a fifth of its box empty.
+       Icons in one band, their words in the next, the closing line in its own band.
+
+       Every actor, arrow, label and number below is a sentence of this record:
+         · the left page and its bare lines — "the old wording ... produced pages with no picture at all"
+         · the left quote — the old rule's own words, "where it earns its place"
+         · the arrow "the default flipped" — "The default flipped on 25 August 2026"
+         · the right page, each line opening on a lit box — "every beat opens on its scene"
+         · the right label "a skip is a claim about the beat" — "skipping is allowed only when a beat's facts draw nothing, and the skip is a claim about the beat"
+         · the closing line — "a beat whose facts draw nothing stays bare" -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+    .m { font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+  </style>
+
+  <rect width="700" height="340" rx="8" fill="#121317"/>
+
+  <!-- the page as it was: beats, no pictures -->
+  <path d="M96,44 h44 l20,20 v66 h-64 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M140,44 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="108" y1="82" x2="148" y2="82" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="108" y1="99" x2="148" y2="99" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="108" y1="116" x2="136" y2="116" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- the default flipped -->
+  <text class="s" x="322" y="64" font-size="22" fill="#8a8f98" text-anchor="middle">the default flipped</text>
+  <line x1="210" y1="85" x2="420" y2="85" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M403.5,92.3 L420,85 L403.5,77.7" fill="none" stroke="#8a8f98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- the page as it is: every beat opens on its scene -->
+  <path d="M496,44 h44 l20,20 v66 h-64 z" fill="none" stroke="#e8e9eb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M540,44 v20 h20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="508" y="75" width="13" height="11" rx="2" fill="none" stroke="#4cb782" stroke-width="2.2"/>
+  <line x1="529" y1="81" x2="548" y2="81" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <rect x="508" y="94" width="13" height="11" rx="2" fill="none" stroke="#4cb782" stroke-width="2.2"/>
+  <line x1="529" y1="100" x2="548" y2="100" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <rect x="508" y="113" width="13" height="11" rx="2" fill="none" stroke="#4cb782" stroke-width="2.2"/>
+  <line x1="529" y1="119" x2="540" y2="119" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- the words band -->
+  <text class="s" x="36" y="176" font-size="22" fill="#8a8f98">“earns its place”</text>
+  <text class="s" x="36" y="208" font-size="22" fill="#f2994a">no picture at all</text>
+  <text class="s" x="664" y="176" font-size="22" fill="#e8e9eb" text-anchor="end">a scene on every beat</text>
+  <text class="s" x="664" y="208" font-size="22" fill="#8a8f98" text-anchor="end">a skip is a claim</text>
+
+  <!-- the closing line -->
+  <text class="s" x="350" y="284" font-size="22" fill="#8a8f98" text-anchor="middle">a beat whose facts draw nothing stays bare</text>
+</svg>

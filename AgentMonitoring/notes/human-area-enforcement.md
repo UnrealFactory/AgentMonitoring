@@ -2,13 +2,13 @@
 name: human-area-enforcement
 title: The human area is enforced in agentmon-core, and its rules are cut from the doc at build time
 type: memory
-description: The human area is enforced in agentmon-core; the ceiling bounds one telling, the guard is only as wide as body.rs says a heading is, and its Node twin must match
+description: The human area is enforced in agentmon-core; updates append tellings as dated nodes, only a refresh replaces the page, and the Node twin must match
 agent: d2-human-area-builder
-updated_by: fable-human-timeline
+updated_by: fable-scene-default
 created: 2026-08-22T08:20:45Z
-updated: 2026-08-24T13:44:01Z
+updated: 2026-08-25T02:49:55Z
 tags: [human-area, core, cli, parsing]
-refs: [WORK-0066, WORK-0067, WORK-0086, WORK-0087]
+refs: [WORK-0066, WORK-0067, WORK-0086, WORK-0087, WORK-0088, WORK-0089]
 ---
 
 **Where the rules live.** `crates/agentmon-core/src/human.rs` is the only place that knows
@@ -53,18 +53,29 @@ the real write path; `scripts/markdown-smoke.mjs` reads the same file and holds
 `project-fs.mjs` and `parseBlocks` to it, plus the end-to-end property — no agent-area payload
 ever renders a level-2 heading reading "For humans". Add a spelling there, not to one test.
 
+**The page is a timeline now: an update APPENDS its telling.** Since WORK-0088 (owner
+decision, 2026-08-25), on work logs and bugs a `--human` beside a `--message` becomes a
+`### <ts>` node inside `## For humans`, stamped like the `## Updates`/`## Comments` entry
+it travels with, appended after everything already on the page — `append_telling` in
+human.rs; `--replayed` inserts at its time (`insert_telling_by_time`). Closing verbs
+(`work done`/`abandon`, `bug resolve`) append the ending as the last node. The opening
+(`work start`, `bug create`, or a legacy record's first touch) carries no node heading.
+Replace-and-carry-forward was the rule before, taught by the compact rules since WORK-0087,
+and teaching did not hold — ElmwoodOnline's WORK-0017 reached ~20 agent nodes with one
+round's telling on the page. Two consequences worth knowing: an unchanged telling appends
+once (one MCP call is legally two CLI steps sending the same `human` — log_work open+close,
+resolve_bug comment+resolve), and node edges are date-gated like `body::starts_with_date`,
+so an author's own `### Background` subheading stays inside its telling. The **refresh**
+(`--human` alone on `work update`/`bug comment`) is now the only whole-page replace — the
+deliberate curation path for merging or repairing tellings. Notes and app feedback stay
+replace-model everywhere: they are knowledge, not history.
+
 **The matrix, in one line each.** Required: `work start/done/abandon`, `bug create`,
 `bug resolve`, `note add`, `note update --body`, `app-feedback add` — and, since the
 owner's 2026-08-24 directive, `work update`/`bug comment` whenever `--message` is passed,
 `--replayed` included: agents were using the optional pair as a bypass, posting the real
-content as notes while the retelling froze, so a message now travels with its retelling
-(which *replaces* the stored one — re-pass the current text when nothing a reader sees
-changed). Replacement bred the next bypass — a `--human` telling only the newest round,
-wiping every telling before it (ElmwoodOnline's WORK-0017 kept four update nodes and one
-round's retelling) — so since WORK-0087 the compact rules themselves teach it: an open
-record's retelling covers the whole record so far, one telling per update in timeline
-order, earlier tellings carried forward, newest last. Closing verbs *replace* it.
-Required on the first touch of a record that has
+content as notes while the retelling froze, so a message now travels with its telling
+(appended, per the paragraph above). Required on the first touch of a record that has
 none (that is why `bug claim` has an optional `--human` the SPEC's CLI block does not
 list — the alternative was a dead end on legacy bugs). Alone on `work update` /
 `bug comment` / `note update` / `app-feedback update` it is a refresh: nothing lands in
@@ -87,26 +98,37 @@ the mcp test suite fails when that figure, or its primer budget, drifts from the
 
 **Length is a warning, never a refusal, and it bounds one telling.** `human::WORDS_MAX` (450)
 is the ceiling on a single telling, never on a record's total, so what `doctor::check` reads is
-`human::longest_telling()` — the longest run of words between bold lead-ins, fences tracked —
-and not `human::words()`, which stays the token count (split on `body::is_space`, so the two
-runtimes cannot disagree about a length either). A run never spans two tellings, because a
-telling that follows another opens with a lead-in of its own, so the count is a floor and the
-warning fires only when some telling really is over. Each such record lands in one
-`Level::Warning` carrying that telling's count, beside the missing-human sweep. `require()`
+`human::longest_telling()` — the longest run of words between bold lead-ins and dated
+`### <ts>` nodes (both are telling edges now), fences tracked — and not `human::words()`,
+which stays the token count (split on `body::is_space`, so the two runtimes cannot disagree
+about a length either). A run never spans two tellings, because a
+telling that follows another opens with a lead-in or a node of its own, so the count is a
+floor and the warning fires only when some telling really is over. Each such record lands in
+one `Level::Warning` carrying that telling's count, beside the missing-human sweep. `require()`
 does not look at length, because a long retelling is correct and readable and the repair is a
 rewrite by the agent that wrote it; `--strict` still turns the warning into a failure. Before
 WORK-0074 the ceiling lived only in docs/HUMAN_STYLE.md and nothing read it — a 703-word human
 area shipped, and a hand count was the only thing that caught it. WORK-0075 made it per-telling
 after the per-record version reported a work log that shipped five things and told all five,
 and the agent sent to fix it deleted two: a gate whose false positive is "cut a fact you owed"
-is worse than no gate. The same reasoning kept WORK-0087 teaching-only: a doctor heuristic
-comparing telling count to update count was considered and dropped — legitimate curation
-merges rounds, and its false positive is the same cut-a-fact repair.
+is worse than no gate. The same reasoning kept WORK-0087 teaching-only — a doctor heuristic
+comparing telling count to update count was considered and dropped — and WORK-0088 made the
+heuristic moot: the pairing is structural now.
+
+**Pictures are swept at the same level.** Since WORK-0089 (owner decision, 2026-08-25)
+the contract's default is a scene per beat, so doctor also warns — work logs and bugs
+only, never notes — when a page has beats (`human::beat_count`) and not one whole-line
+figure (`human::figure_count`, the FIGURE_BLOCK mirror). Whole-page, never per-beat: the
+valve ("this beat's facts draw nothing") is the writer's claim, and a per-beat demand
+would demand the invented panel the contract forbids. The first live run flagged 109
+records.
 
 **On disk vs on the wire.** The file is the one place both areas cohabit. Every parsed
 payload (`--json`, both app transports) has `body` = the agent area only and `human` =
 `string | null`. If you add a reader, split before you parse sections, or the section
-lands in `extra_sections` as well.
+lands in `extra_sections` as well. The app's telling-aware reader is `readHumanTellings`
+in src/lib/human.ts (fence-aware, date-gated) — HumanView draws one dated seam per node
+and numbers beats through the whole page.
 
 ## For humans
 
@@ -130,6 +152,10 @@ It is like a doorman working from a printed list while the party inside knows ev
 
 A guard narrower than the screen it protects is not a guard.
 
-**Since 24 August, adding to a record demands the plain telling too.** Adding a progress note or a bug finding used to be allowed without touching the people-half, and some agents leaned on that: the real news piled up in the technical half while the plain telling stayed frozen on day one. Now a note refuses to save unless the plain telling comes with it, brought up to date — and if the note truly changes nothing a reader would see, sending the current telling back unchanged is the honest move.
+**Since 24 August, adding to a record demands the plain telling too.** Adding a progress note or a bug finding used to be allowed without touching the people-half, and some agents leaned on that: the real news piled up in the technical half while the plain telling stayed frozen on day one. Now a note refuses to save unless the plain telling comes with it.
 
-**Demanding the telling was not enough: agents then sent only the newest chapter.** The people-half is one page each save replaces whole, and in another project a work log's page kept losing every earlier round because each save carried only the latest one — four entries in the technical half, one round's story on the page. Later on 24 August the short rules every agent meets — in the refusal and in the tools' one-time handover — gained the missing sentences: the page is replaced whole, so retell everything done so far, one telling per entry, oldest first, newest last, the earlier ones copied forward.
+**Demanding the telling was not enough, and neither was teaching how to write it.** The people-half used to be one page each save replaced whole, and agents kept sending only the newest chapter — in another project a work log lost every earlier round, save after save, until some twenty technical entries stood over a single round's story. The instructions were rewritten once to say "retell everything so far" and the losses continued anyway.
+
+**Since 25 August the page is not replaced on updates at all.** Each note's plain telling is added to the page as its own dated entry, the same way the technical entries stack, and finishing a record adds the ending as the last one. Losing an earlier telling by accident is now impossible; joining tellings into one story is still allowed, through a separate command whose whole and only job is to rewrite the page on purpose. Notes like this one are the exception on purpose — a note holds what is true now, so its page is still rewritten in place.
+
+**Since the same day, a story with no pictures is complained about too.** Every step of a story now gets a drawing by default, and the checker flags a page that tells its story in steps with not one drawing anywhere — only that shape, because a single step with honestly nothing to draw may stay bare, and a checker cannot judge which step that is.
