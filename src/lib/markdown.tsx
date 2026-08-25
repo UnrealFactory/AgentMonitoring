@@ -481,9 +481,14 @@ function RecordImage({
   // be more motion than information.
   if (!state.url) return null;
 
+  /* A figure that is an SVG fills its column: a drawing is vector, so width costs it
+     nothing, and a root that carries only a `viewBox` has no intrinsic size at all — left
+     to the <img> default it arrives at 300×150, which is how a cited scene once rendered
+     at the height of a letter. Raster images keep their own size; blown up they only blur. */
+  const fill = !inline && /\.svg$/i.test(src);
   const img = (
     <img
-      className={inline ? "prose-img-inline" : "prose-img"}
+      className={inline ? "prose-img-inline" : fill ? "prose-img prose-img-fill" : "prose-img"}
       src={state.url}
       alt={alt}
       loading="lazy"

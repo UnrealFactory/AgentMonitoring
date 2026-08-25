@@ -170,7 +170,7 @@ that opened on `status`, or on a note read, or on a call that failed, got nothin
 blind exactly as before. So the handover sits in the dispatcher instead of in one handler,
 and the **first result of any kind** carries it: list, snapshot, view, refusal. It comes back
 under the index or the confirmation — what the second half is and who it is for, the rules
-themselves, and the way to the rest of the contract. About 6,000 characters, once, and no
+themselves, and the way to the rest of the contract. About 6,200 characters, once, and no
 call order can miss it. A client with two calls in flight still pays for it once.
 
 One shape is left that no result can get ahead of, because the result comes after the call:

@@ -6781,6 +6781,13 @@ a.ref-inline.is-unknown:hover {
   padding: var(--space-3);
 }
 
+/* An SVG figure fills the column (markdown.tsx says why: vector, and a viewBox-only root
+   otherwise has no size at all). The height cap above still holds — a tall drawing is
+   letterboxed by object-fit, not stretched. */
+.prose-img-fill {
+  width: 100%;
+}
+
 /* The rare image inside a sentence: capped to the line, never a layout event. */
 .prose-img-inline {
   display: inline-block;

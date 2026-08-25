@@ -253,23 +253,54 @@ pub fn beat_count(text: &str) -> usize {
     count
 }
 
+/// Is this line one `![alt](src)` image and nothing else — the shape the app draws as a
+/// beat's scene? Mirrors `FIGURE_BLOCK` in src/lib/human.ts (whole line, no whitespace in
+/// the target), so the counts below and the screen cannot disagree about what one line is.
+fn is_figure_line(line: &str) -> bool {
+    let t = body::trim(line);
+    let Some(rest) = t.strip_prefix("![") else { return false };
+    let Some(mid) = rest.find("](") else { return false };
+    let target = &rest[mid + 2..];
+    let Some(url) = target.strip_suffix(')') else { return false };
+    !url.is_empty() && !url.contains(char::is_whitespace)
+}
+
 /// Figure blocks in a retelling: lines that are one `![alt](src)` image and nothing else
-/// — the shape the app draws as a beat's scene. The test mirrors `FIGURE_BLOCK` in
-/// src/lib/human.ts (whole line, no whitespace in the target), so this count and the
-/// screen cannot disagree about whether a page has pictures.
+/// — the shape the app draws as a beat's scene.
 pub fn figure_count(text: &str) -> usize {
     let mut fences = body::Fences::default();
     let mut count = 0usize;
     for line in text.lines() {
-        if fences.feed(line) {
+        if !fences.feed(line) && is_figure_line(line) {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// Figure lines welded into a paragraph: a scene citation with prose directly above or
+/// below it, no blank line between. Markdown reads such a line as part of the paragraph
+/// around it, so a page that renders the paragraph draws the picture inline, at the height
+/// of a letter — the contract asks for a blank line on each side (docs/HUMAN_STYLE.md,
+/// "The scene goes inside the beat"). The app's own renderer promotes a lone image line to
+/// a figure anyway, but the file is read by more renderers than ours, and the welded shape
+/// is the one that shipped a bean-sized scene before either guard existed.
+pub fn welded_figure_count(text: &str) -> usize {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut fences = body::Fences::default();
+    let mut in_code = vec![false; lines.len()];
+    for (i, line) in lines.iter().enumerate() {
+        in_code[i] = fences.feed(line);
+    }
+    let blank = |i: usize| -> bool {
+        lines.get(i).map(|l| is_blank(l)).unwrap_or(true)
+    };
+    let mut count = 0usize;
+    for (i, line) in lines.iter().enumerate() {
+        if in_code[i] || !is_figure_line(line) {
             continue;
         }
-        let t = body::trim(line);
-        let Some(rest) = t.strip_prefix("![") else { continue };
-        let Some(mid) = rest.find("](") else { continue };
-        let target = &rest[mid + 2..];
-        let Some(url) = target.strip_suffix(')') else { continue };
-        if !url.is_empty() && !url.contains(char::is_whitespace) {
+        if (i > 0 && !blank(i - 1)) || !blank(i + 1) {
             count += 1;
         }
     }
@@ -881,6 +912,25 @@ mod tests {
         assert_eq!(figure_count("![](assets/a.svg)"), 1);
         // A dated node's heading is not a beat; a lead-in under it is.
         assert_eq!(beat_count("Opening.\n\n### 2026-08-25T01:00:00Z\n\n**A beat.** x"), 1);
+    }
+
+    /// A scene citation welded into a paragraph — no blank line above or below — is the
+    /// shape that rendered bean-sized, and doctor warns on it.
+    #[test]
+    fn welded_figures_are_the_ones_without_blank_lines() {
+        // The failing shape: the citation on the line right after the lead-in.
+        let welded = "**First beat.**\n![cast](assets/work-0001-1-cast.svg)\n\nWords.";
+        assert_eq!(welded_figure_count(welded), 1);
+        assert_eq!(figure_count(welded), 1, "it still counts as present");
+        // The contract's shape: a paragraph of its own.
+        let clean = "**First beat.**\n\n![cast](assets/work-0001-1-cast.svg)\n\nWords.";
+        assert_eq!(welded_figure_count(clean), 0);
+        // Welded below counts too; alone at the very start or end of the page does not.
+        assert_eq!(welded_figure_count("![c](assets/a.svg)\nWords under it."), 1);
+        assert_eq!(welded_figure_count("Words.\n\n![c](assets/a.svg)"), 0);
+        // An image inside a sentence is not a figure line at all, and a fence is code.
+        assert_eq!(welded_figure_count("See ![c](assets/a.svg) here.\nMore."), 0);
+        assert_eq!(welded_figure_count("```\ntext\n![c](assets/a.svg)\n```"), 0);
     }
 
     /// A dated node bounds a telling the way a lead-in bounds a beat — and its stamp is

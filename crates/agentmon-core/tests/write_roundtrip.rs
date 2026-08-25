@@ -879,6 +879,79 @@ fn doctor_warns_on_a_page_of_beats_with_no_scene_and_only_on_records() {
     assert!(!report.problems.iter().any(|p| p.message.contains("no scene")), "{:#?}", report.problems);
 }
 
+/// The two shapes that shipped a bean-sized scene past every check (owner feedback,
+/// 2026-08-25): a citation with no blank line around it, which markdown folds into the
+/// paragraph and draws inline, and a cited SVG whose root has a `viewBox` but no
+/// width/height, which leaves an `<img>` no intrinsic size. Both rendered, so the save,
+/// the figure count and the geometry gate all stayed green — doctor now names each.
+#[test]
+fn doctor_warns_on_a_welded_scene_citation_and_on_a_sizeless_scene_root() {
+    let tp = TempProject::new("doctor-scene-shapes");
+    let id = start(&tp, "Wire the change watcher into the desktop app");
+
+    // The exact failing shape: the citation on the line right after the bold lead-in.
+    let welded = "The opening.\n\n**One thing shipped.**\n\
+                  ![the cast](assets/work-0000-1-cast.svg)\n\nIts words.";
+    tp.store.update_work(&id, "cli-builder", None, Some(welded), None).unwrap();
+    fs::create_dir_all(tp.path("assets")).unwrap();
+    // A root with viewBox only — and `stroke-width` must not pass for `width`.
+    fs::write(
+        tp.path("assets/work-0000-1-cast.svg"),
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 700 430\" stroke-width=\"2\">\
+         <text>cast</text></svg>",
+    )
+    .unwrap();
+
+    let report = doctor::check(&tp.store).unwrap();
+    let welded_warns: Vec<&doctor::Problem> =
+        report.problems.iter().filter(|p| p.message.contains("inside a paragraph")).collect();
+    assert_eq!(welded_warns.len(), 1, "{:#?}", report.problems);
+    assert!(welded_warns[0].message.contains(&format!("{id} (1 welded citation(s))")), "{}", welded_warns[0].message);
+    assert!(welded_warns[0].fix.contains("blank line"), "{}", welded_warns[0].fix);
+    let size_warns: Vec<&doctor::Problem> =
+        report.problems.iter().filter(|p| p.message.contains("no width/height")).collect();
+    assert_eq!(size_warns.len(), 1, "{:#?}", report.problems);
+    assert!(
+        size_warns[0].message.contains(&format!("assets/work-0000-1-cast.svg (cited by {id})")),
+        "{}",
+        size_warns[0].message
+    );
+    assert_eq!(report.errors(), 0, "both are untidy, not broken");
+    // The page still counts as having a scene: the welded warning is the signal, not a
+    // second "no scene" one.
+    assert!(!report.problems.iter().any(|p| p.message.contains("no scene")), "{:#?}", report.problems);
+
+    // Blank lines around the citation and a sized root: both sweeps go silent.
+    let clean = "The opening.\n\n**One thing shipped.**\n\n\
+                 ![the cast](assets/work-0000-1-cast.svg)\n\nIts words.";
+    tp.store.update_work(&id, "cli-builder", None, Some(clean), None).unwrap();
+    fs::write(
+        tp.path("assets/work-0000-1-cast.svg"),
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"700\" height=\"430\" \
+         viewBox=\"0 0 700 430\"><text>cast</text></svg>",
+    )
+    .unwrap();
+    let report = doctor::check(&tp.store).unwrap();
+    assert!(
+        !report.problems.iter().any(|p| p.message.contains("inside a paragraph") || p.message.contains("no width/height")),
+        "{:#?}",
+        report.problems
+    );
+
+    // A record that *documents* the citation syntax in backticks cites nothing, so a
+    // sizeless file it names in code never reaches the sweep.
+    let documented = "The opening.\n\n**The manual shows the syntax.** \
+                      Write `![alt](assets/sizeless.svg)` on its own line.";
+    tp.store.update_work(&id, "cli-builder", None, Some(documented), None).unwrap();
+    fs::write(tp.path("assets/sizeless.svg"), "<svg viewBox=\"0 0 10 10\"/>").unwrap();
+    let report = doctor::check(&tp.store).unwrap();
+    assert!(
+        !report.problems.iter().any(|p| p.message.contains("no width/height")),
+        "{:#?}",
+        report.problems
+    );
+}
+
 /// The style contract's word ceiling is checked — on **one telling**, which is what it
 /// bounds — and it is a warning rather than a refusal.
 ///

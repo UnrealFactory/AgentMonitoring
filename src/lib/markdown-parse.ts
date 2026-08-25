@@ -47,7 +47,7 @@ export type Block =
   | { kind: "list"; ordered: boolean; start: number; items: ListItem[] }
   | { kind: "quote"; text: string }
   | { kind: "callout"; tone: CalloutTone; text: string }
-  /** A paragraph that is exactly one image: drawn as a figure with the alt as caption. */
+  /** A line that is exactly one image: drawn as a figure with the alt as caption. */
   | { kind: "figure"; alt: string; src: string }
   | { kind: "rule" }
   | { kind: "table"; header: string[]; rows: string[][] };
@@ -66,6 +66,17 @@ function interruptsParagraph(line: string): boolean {
 }
 
 const isTableRow = (l: string) => /^\s*\|.*\|\s*$/.test(l);
+
+/**
+ * A line that is exactly `![alt](src)` — a figure, wherever it stands. CommonMark would
+ * fold an unbroken line into the paragraph around it and draw the image inline, at the
+ * height of a letter — which is what happened to a beat's scene cited, as the style
+ * contract says, "as the first line of that beat's body" with no blank line after the
+ * lead-in. The contract now asks for the blank lines, but the renderer forgives the
+ * welded spelling: a line an author gave wholly to an image is a picture, not a word in a
+ * sentence. An image *beside* text on its own line stays inline prose.
+ */
+const FIGURE_LINE = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
 
 const cells = (l: string) =>
   l
@@ -202,6 +213,13 @@ export function parseBlocks(src: string): Block[] {
       continue;
     }
 
+    const figureLine = line.trim().match(FIGURE_LINE);
+    if (figureLine) {
+      blocks.push({ kind: "figure", alt: figureLine[1], src: figureLine[2] });
+      i += 1;
+      continue;
+    }
+
     const para: string[] = [];
     while (
       i < lines.length &&
@@ -211,18 +229,14 @@ export function parseBlocks(src: string): Block[] {
       !interruptsParagraph(lines[i]) &&
       !/^\s*>/.test(lines[i]) &&
       !/^(?: {4}|\t)\S/.test(lines[i]) &&
-      !isTableRow(lines[i])
+      !isTableRow(lines[i]) &&
+      !FIGURE_LINE.test(lines[i].trim())
     ) {
       para.push(lines[i]);
       i += 1;
     }
     if (para.length) {
-      const text = para.join("\n");
-      // A paragraph that is exactly one image is a figure — the way agents actually place
-      // a diagram — and its alt is the caption. An image inside a sentence stays inline.
-      const figure = text.trim().match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
-      if (figure) blocks.push({ kind: "figure", alt: figure[1], src: figure[2] });
-      else blocks.push({ kind: "paragraph", text });
+      blocks.push({ kind: "paragraph", text: para.join("\n") });
     } else i += 1;
   }
 

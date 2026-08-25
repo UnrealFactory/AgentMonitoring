@@ -75,14 +75,18 @@ const BUDGET = {
   // 5800 -> 6200 when the picture default landed (owner decision, 2026-08-25: every beat
   // opens on its scene, and a skip is a per-beat claim) — agents in the field were drawing
   // no scenes at all, and rules that never reach the drafter do not exist.
+  // 6200 -> 6400 when the citation's spelling grew teeth (owner feedback, 2026-08-25): a
+  // scene cited with no blank line under its lead-in, from an SVG root carrying no
+  // width/height, rendered at the height of a letter and passed every check — so the
+  // compact block now names the blank lines and the root size.
   // Raise this deliberately, with the doc change that earned it — nothing else
   // caps the block, and a handover nobody reads teaches as little as none.
-  primer: 6200,
+  primer: 6400,
   // The style contract, which is a document rather than a record: `status(mode=
   // "human_style")` returns docs/HUMAN_STYLE.md whole, because it is what an agent reads
   // *before* writing its first human area, and the worked example at the end is the part
   // a summary cannot stand in for. Sized to that file with room to grow.
-  contract: 30500,
+  contract: 31500,
 };
 
 /* ------------------------------------------------------------------ runner */

@@ -28,9 +28,14 @@
  * back under 11 at the narrow column. Then it does the whole pass again with the two faces
  * forced to wide ones (Verdana, Lucida Console), standing in for a reader whose interface
  * face is wider than this machine's — which is what "leave a fifth of the box empty" is
- * asking for, checked rather than estimated.
+ * asking for, checked rather than estimated. It also fails a root that carries a `viewBox`
+ * and no `width`/`height`: an `<img>` has no intrinsic size for such a file and draws it
+ * small — a scene shipped exactly that way (owner feedback, 2026-08-25), green here
+ * because this gate read the geometry and never the root.
  *
- * It also keeps the folder honest in both directions: a scene a record points at must
+ * What it measures is every scene-named file **and every SVG any record cites** — not the
+ * name pattern alone, which skipped the drawings notes cite (their names carry no record
+ * id). It also keeps the folder honest in both directions: a scene a record points at must
  * exist, and a scene file no record points at is a leftover from a rework (three were, the
  * day per-beat scenes replaced one diagram per record).
  *
@@ -50,10 +55,12 @@ if (args.includes("--help") || args.includes("-h")) {
   npm run check:scenes
   node scripts/check-scenes.mjs [--dir <project folder>] [--verbose]
 
-Opens each scene SVG in Chromium and fails on a label that overlaps another, one that sits
-within ${14} units of the edge, or type that comes back under 11 at the narrowest column a
-record page gives a picture — twice, the second time in a deliberately wider face. Also
-fails on a scene no record references, and on a reference to a scene that is not there.`);
+Opens every scene SVG a record cites (and every scene-named one) in Chromium and fails on
+a label that overlaps another, one that sits within ${14} units of the edge, or type that
+comes back under 11 at the narrowest column a record page gives a picture — twice, the
+second time in a deliberately wider face. Also fails on an <svg> root with no
+width/height (an <img> has no size for it), on a scene no record references, and on a
+reference to a scene that is not there.`);
   process.exit(0);
 }
 
@@ -91,7 +98,6 @@ if (!existsSync(assets)) {
 }
 
 /* ── which scenes are there, and does anything point at them ────────────────── */
-const files = readdirSync(assets).filter((f) => SCENE.test(f));
 const records = ["bugs", "worklogs", "notes", "feedback"]
   .map((d) => join(projectDir, d))
   .filter((d) => existsSync(d))
@@ -114,6 +120,15 @@ for (const file of records) {
     referenced.set(m[1].slice("assets/".length), file.split(/[\\/]/).slice(-1)[0]);
   }
 }
+
+/**
+ * What gets measured: every scene-named file, and every SVG any record actually cites —
+ * a note's drawing carries no record id in its name, and skipping it left a whole class
+ * of shipped pictures that nothing ever measured.
+ */
+const files = readdirSync(assets).filter(
+  (f) => /\.svg$/i.test(f) && (SCENE.test(f) || referenced.has(f)),
+);
 
 const problems = [];
 for (const [asset, record] of referenced) {
@@ -156,6 +171,7 @@ try {
         return {
           w: vb.width,
           h: vb.height,
+          sized: root.hasAttribute("width") && root.hasAttribute("height"),
           texts: [...root.querySelectorAll("text")].map((t) => {
             const b = t.getBBox();
             return {
@@ -173,6 +189,14 @@ try {
       if (!found) {
         problems.push(`${where}: no <svg> element — the file is not a drawing`);
         continue;
+      }
+      // The root's own size, once per file: a viewBox-only root gives an <img> no
+      // intrinsic size, and every page that hangs the drawing in one draws it small.
+      if (!wide && !found.sized) {
+        problems.push(
+          `${where}: the <svg> root has no width/height, so an <img> has no size for it — ` +
+            `write the grid onto the root (width="${found.w}" height="${found.h}")`,
+        );
       }
       const scale = Math.min(NARROW / found.w, MAX_HEIGHT / found.h);
       for (const t of found.texts) {

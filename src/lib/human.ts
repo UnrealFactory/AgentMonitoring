@@ -44,12 +44,13 @@ export interface HumanBeat {
    * which image that is, so the one that stands **first** in the body is handed over
    * separately and the rest of the body follows it.
    *
-   * First, and nothing weaker: the line has to be the beat's own opening block, alone in its
-   * paragraph — the same shape lib/markdown-parse.ts already draws as a figure. An image
-   * further down a beat, one between two beats, one in the opening run, one sharing a
-   * paragraph with a sentence: every one of those is left exactly where it was and rendered
-   * by the same renderer as before. Nothing is moved, and no beat gains a picture it did not
-   * have.
+   * First, and given the whole line: the body's opening line has to be the image and
+   * nothing else — the same shape lib/markdown-parse.ts draws as a figure wherever it
+   * stands, blank-line-separated or welded straight under the lead-in ({@link liftFigure}
+   * says why the weld lifts). An image further down a beat, one between two beats, one in
+   * the opening run, one sharing its line with a sentence: every one of those is left
+   * exactly where it was and rendered by the same renderer as before. Nothing is moved,
+   * and no beat gains a picture it did not have.
    */
   figure: string | null;
   /** Markdown source of the rest of the beat. */
@@ -106,22 +107,27 @@ const MAX_TAKEAWAY = 200;
 const NOT_PROSE = /^\s*(?:[-*+]|\d{1,9}[.)]|>|#{1,6}\s|```|~~~|\||!\[)/;
 
 /**
- * A block that is nothing but `![alt](src)`.
+ * A line that is nothing but `![alt](src)`.
  *
- * The same test lib/markdown-parse.ts applies to decide that a paragraph is a *figure*
- * rather than a sentence with a picture in it, so the two cannot disagree about what one
- * line is: an image with a word beside it stays inline prose there and stays in the body
- * here.
+ * The same test lib/markdown-parse.ts applies (`FIGURE_LINE`) to decide that a line is a
+ * *figure* rather than part of a sentence, and the same one agentmon-core's
+ * `figure_count` applies to count a page's scenes, so the three cannot disagree about
+ * what one line is: an image with a word beside it stays inline prose everywhere.
  */
 const FIGURE_BLOCK = /^!\[[^\]]*\]\([^)\s]+\)$/;
 
 /**
  * Lift the scene off the front of a beat, when the author opened the beat with one.
  *
- * The block has to be the *first* one in the body and has to be the whole of it — the
- * author's own paragraph break is what says "this line is a picture, not a sentence", and
- * without one the line is part of the paragraph it was typed into. Everything else about
- * the beat is untouched, including a body that is nothing but the picture.
+ * The line has to be the *first* of the body and wholly the image. It used to have to be
+ * a paragraph of its own as well — the blank line under it read as the author saying
+ * "this is a picture" — but the style contract's own words, "cited as the first line of
+ * that beat's body", led authors to weld the citation straight under the lead-in, and
+ * that shape shipped a scene drawn inline at text height. A line an author gave wholly to
+ * an image is a picture whatever touches it (lib/markdown-parse.ts now reads it the same
+ * way), so the welded spelling lifts too. Everything else about the beat is untouched,
+ * including a body that is nothing but the picture; an image further down, or one sharing
+ * its line with words, is left exactly where it was.
  *
  * Called after the closing line has been lifted, deliberately: that reading is of the bytes
  * as the author left them ({@link readHumanStory}), and a beat carved here first would hand
@@ -129,11 +135,9 @@ const FIGURE_BLOCK = /^!\[[^\]]*\]\([^)\s]+\)$/;
  */
 function liftFigure(beat: HumanBeat): HumanBeat {
   const lines = beat.body.split("\n");
-  let end = 0;
-  while (end < lines.length && lines[end].trim()) end += 1;
-  const first = lines.slice(0, end).join("\n").trim();
+  const first = (lines[0] ?? "").trim();
   if (!FIGURE_BLOCK.test(first)) return beat;
-  return { ...beat, figure: first, body: lines.slice(end).join("\n").replace(/^\s+/, "") };
+  return { ...beat, figure: first, body: lines.slice(1).join("\n").replace(/^\s+/, "") };
 }
 
 /**

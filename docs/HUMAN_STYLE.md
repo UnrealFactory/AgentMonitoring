@@ -21,7 +21,7 @@ Count the names as well as the words: one per fact, about one per fifty words �
 Then read it back a second time and mark every phrase that stranger could repeat but not restate — your own shorthand and your squeezed noun-phrases too, not only the names on the list. Each gets plain words in the same sentence, or the fact goes.
 Claim only what this record claims, of the thing and in the place it says it. No invented example, no stand-in number, no step nobody recorded. Before writing that nothing does X, reread to its end the sentence X came from: it often names the thing that does.
 One everyday analogy, marked as one ("it is like…"), on the central mechanism, carrying no number or cause of its own.
-Every beat opens on its scene: an SVG you draw under the project's `assets/`, named `<record>-<beat>-<what>.svg`, cited as the first line of that beat's body — `![what it shows](assets/…)` — showing only that beat's own cast and claims; `npm run check:scenes` proves the geometry. Skip a beat's picture only where its facts draw nothing (a check that ran and passed, a number that moved) — the skip is a claim about the beat, never about the time a drawing costs.
+Every beat opens on its scene: an SVG you draw under the project's `assets/`, `width` and `height` written on its root beside the `viewBox` (an `<img>` learns its size nowhere else), named `<record>-<beat>-<what>.svg`, cited as the first line of that beat's body — `![what it shows](assets/…)`, a blank line above and below, or markdown welds the line into a paragraph and a page draws the picture at text height — showing only that beat's own cast and claims; `npm run check:scenes` proves the geometry. Skip a beat's picture only where its facts draw nothing (a check that ran and passed, a number that moved) — the skip is a claim about the beat, never about the time a drawing costs.
 Short sentences, one fact each, most under 20 words. Say who did what, in plain verbs — "I watched one send", not "what was watched was one send". Five sentences end a paragraph; a hard mechanism is two short paragraphs, never one wall.
 Open each beat after the first with a bold lead-in that states something — "**The stored number is wrong twice a year.**" — not a label ("**The stored offset.**"), never a stage of an essay ("**How we know.**").
 Count last, and over either count cut in this order: first a name carrying no fact of its own, then a whole fact — never a gloss. 150 words thin, 300 for most, 450 where the mechanism is genuinely hard. A ceiling bounds one telling, never a record's total: a record that shipped several separate things — wherever it names them, its title, its What, or a list further down — covers every one, one short beat-block each after the shared opening. Never write to a ceiling — stop when the facts are spent.
@@ -89,7 +89,10 @@ Three kinds survive the first read:
   second name goes.
 - **The scene goes inside the beat, above its words.** Draw it as an SVG under the project's `assets/` folder, named for the record and the beat, and put it in with
   `![what it shows](assets/bug-0025-3-the-repo-has-the-same-name.svg)` as the **first line of that beat's body** — after the bold lead-in, before the paragraph — so
-  the reader takes the beat once as a picture and once in words. That is where every beat's picture goes, and the honest valve stays per beat but is the exception,
+  the reader takes the beat once as a picture and once in words. First line means a paragraph of its own: one blank line between the lead-in and the image line, and
+  another after it. Markdown folds unbroken lines into one paragraph, and a citation welded into one is drawn inline, at the height of a letter — this app promotes a
+  lone image line to a figure anyway and `agentmon doctor` warns on the welded shape, but other renderers do neither, so the blank lines are the citation's one
+  correct spelling. That is where every beat's picture goes, and the honest valve stays per beat but is the exception,
   not the default: a beat whose facts give you no scene carries no picture and its paragraph is the whole beat, because a panel invented to keep the rhythm going is
   decoration with a caption on it — but a page of beats with no picture anywhere is not the valve, and `agentmon doctor` says so. An
   image anywhere else in the retelling still lands where you put it. The alt text is the caption the reader is left holding, so say what the picture shows.
@@ -111,7 +114,9 @@ Three kinds survive the first read:
   not chase the layout — it may only be re-measured wider, never assumed. A 700-wide drawing arrives at that floor a shade over half size, and 11 is the bottom of
   this app's type scale. So draw on a grid you can halve — 700 across, nothing under 22, and no taller than half again that, past which the page's own 560-pixel
   ceiling shrinks it below what the halving promised — then halve every number you wrote: that is the floor's scale, rounded the safe way, and what comes
-  back must still be 11. Settle it by arithmetic and never by how the file looks opened on its own, then let `npm run check:scenes` settle it a second time: it
+  back must still be 11. Write the grid onto the root as `width` and `height` beside the `viewBox`: the page hangs the drawing in an `<img>`, and a root that
+  carries only a `viewBox` hands the `<img>` no size of its own, so the picture arrives small everywhere the column does not force one — `agentmon doctor` warns
+  on a cited scene missing them. Settle it by arithmetic and never by how the file looks opened on its own, then let `npm run check:scenes` settle it a second time: it
   re-measures every label at that 395-wide column, in both faces, and fails one that comes back under 11. Nothing else here reads inside a drawing — the words in a
   picture sit inside an `<img>`, and the check that hunts this app for cut text reads the page, not the picture. Then read the scene back the way you read the
   draft, one element at a time: every actor, every arrow, every label and every number is a sentence of this record, and a scene may not introduce a name the

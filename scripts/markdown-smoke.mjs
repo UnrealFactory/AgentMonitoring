@@ -468,6 +468,16 @@ console.log("fixtures");
   eq("a beat that is a lead-in and a picture keeps the picture", only.beats[0].figure, img);
   eq("…with an empty body", only.beats[0].body, "");
   eq("…and no closing line invented out of it", only.takeaway, null);
+
+  // The welded spelling: the citation on the line straight after the lead-in, no blank
+  // line — what the contract's "first line of that beat's body" read as before it named
+  // the blank lines. It shipped a scene drawn inline at text height (owner feedback,
+  // 2026-08-25), so a line that is wholly an image now lifts however it is spaced.
+  const welded = readHumanStory(
+    doc(opening, `**But the repository is itself named AgentMonitoring.**\n${img}\nSo the watcher skipped all of them.`, close),
+  );
+  eq("a scene welded under its lead-in still lifts", welded.beats[0].figure, img);
+  eq("…and the words after it are the beat's body", welded.beats[0].body, "So the watcher skipped all of them.");
 }
 
 // 11. A resolution written as plain prose is left exactly as it is — no invented headings.
@@ -527,6 +537,16 @@ console.log("fixtures");
   const img = parseInline("See ![icon](assets/dot.png) beside it.").find((n) => n.kind === "image");
   check("inline image parsed", !!img);
   eq("…with its src", img.src, "assets/dot.png");
+
+  // …and a line wholly given to an image is a figure even with no blank line around it:
+  // welded into a paragraph, CommonMark would draw it inline at the height of a letter,
+  // which is how a beat's scene once shipped bean-sized (owner feedback, 2026-08-25).
+  const welded = parseBlocks("**Lead-in.**\n![flow of a delivery](assets/flow.svg)\nThe words under it.");
+  eq("a welded image line splits its paragraph", welded.length, 3);
+  eq("…prose above stays a paragraph", welded[0].kind, "paragraph");
+  eq("…the image line is a figure", welded[1].kind, "figure");
+  eq("…with its src", welded[1].src, "assets/flow.svg");
+  eq("…and the words below stay a paragraph", welded[2].text, "The words under it.");
 }
 
 // 17. `[[note-name]]` is an explicit cross-reference (the way a live vault indexes its

@@ -322,11 +322,63 @@ pub fn check(store: &Store) -> Result<Report> {
             "the style contract's default is a picture per beat (docs/HUMAN_STYLE.md — \
              every beat opens on its scene; only a beat whose facts draw nothing stays \
              bare). Draw each beat's own cast as an SVG under assets/, named \
-             <record>-<beat>-<what>.svg, cite it as the first line of that beat's body \
-             (`![what it shows](assets/…)`), prove the geometry with `npm run \
-             check:scenes`, then re-pass the whole page with the pictures in it as a \
-             refresh (`--human-file` alone)",
+             <record>-<beat>-<what>.svg, width/height written on its root, cite it as \
+             the first line of that beat's body (`![what it shows](assets/…)`, a blank \
+             line above and below), then re-pass the whole page with the pictures in it \
+             as a refresh (`--human-file` alone). The geometry gate, `npm run \
+             check:scenes`, lives in the AgentMonitoring app's own repo — where it is \
+             not at hand, settle the label sizes by the contract's arithmetic",
         ));
+    }
+    // The two shapes that shipped a bean-sized scene past every check (owner feedback,
+    // 2026-08-25): a citation welded into its paragraph, and a root with no size. Both
+    // render — as a picture the height of a letter — so nothing else ever refused them.
+    if !gaps.welded_scene.is_empty() {
+        problems.push(Problem::warn(
+            "human area",
+            format!(
+                "{} record(s) cite a scene inside a paragraph — prose sits directly \
+                 against the `![…](assets/…)` line, so markdown folds the picture into \
+                 the paragraph and a page draws it inline, at the height of a letter: {}",
+                gaps.welded_scene.len(),
+                listing(&gaps.welded_scene)
+            ),
+            "a scene citation is a paragraph of its own: a blank line between the bold \
+             lead-in and the image line, and another after it (docs/HUMAN_STYLE.md, \"The \
+             scene goes inside the beat\"). Fix the spacing and re-pass the page whole as \
+             a refresh (`--human-file` alone)",
+        ));
+    }
+    {
+        use std::collections::HashSet;
+        let mut seen: HashSet<&str> = HashSet::new();
+        let mut sizeless: Vec<String> = Vec::new();
+        for (asset, id) in &gaps.svg_refs {
+            if !seen.insert(asset.as_str()) {
+                continue;
+            }
+            // A citation whose file is missing renders as a loud refusal in the app
+            // already; this sweep is for the quiet failure, the file that renders small.
+            if let Ok(raw) = fs::read_to_string(dir.join(asset)) {
+                if svg_root_sized(&raw) == Some(false) {
+                    sizeless.push(format!("{asset} (cited by {id})"));
+                }
+            }
+        }
+        if !sizeless.is_empty() {
+            problems.push(Problem::warn(
+                "assets",
+                format!(
+                    "{} cited scene file(s) have no width/height on the `<svg>` root, so \
+                     an `<img>` has no intrinsic size for them and draws them small: {}",
+                    sizeless.len(),
+                    listing(&sizeless)
+                ),
+                "write the grid the drawing was made on onto the root — e.g. \
+                 `width=\"700\" height=\"430\"` beside the `viewBox` \
+                 (docs/HUMAN_STYLE.md, the scene grid)",
+            ));
+        }
     }
 
     // -- events.jsonl -------------------------------------------------------
@@ -624,6 +676,15 @@ struct HumanGaps {
     /// picture default (a scene per beat, owner decision 2026-08-25) exists to end. Notes
     /// are never in it: a note is knowledge, short, and owes no picture.
     pictureless: Vec<String>,
+    /// Records whose human area cites a scene with prose welded directly against the
+    /// image line — no blank line above or below — which markdown reads as part of that
+    /// paragraph, so a renderer draws the picture inline at the height of a letter. All
+    /// three kinds: the welded shape misdraws wherever it appears.
+    welded_scene: Vec<String>,
+    /// Every `assets/….svg` a record's body cites (outside code), with the record that
+    /// cites it — the worklist for the root-size sweep, which needs the project dir and so
+    /// runs in `check` after the walk.
+    svg_refs: Vec<(String, String)>,
 }
 
 /// Note the record if its body carries no human area (SPEC.md, "The human area"), if
@@ -634,7 +695,11 @@ struct HumanGaps {
 /// person's editor shows, which is the body's line plus the frontmatter above it.
 /// `owes_scenes` is true for work logs and bugs — the chase stories the picture default
 /// was written for — and false for notes.
+///
+/// Also collects the record's `assets/….svg` citations (whole body, outside code) into
+/// `gaps.svg_refs`, so `check` can sweep the cited files' root attributes afterwards.
 fn note_human(raw: &str, md: &str, id: &str, owes_scenes: bool, gaps: &mut HumanGaps) {
+    collect_svg_refs(md, id, &mut gaps.svg_refs);
     match crate::human::split(md).1 {
         None => {
             gaps.missing.push(id.to_string());
@@ -661,8 +726,76 @@ fn note_human(raw: &str, md: &str, id: &str, owes_scenes: bool, gaps: &mut Human
                     gaps.pictureless.push(format!("{id} ({beats} beat(s), no scene)"));
                 }
             }
+            // A citation welded into a paragraph misdraws whatever kind of record it is
+            // in, so this one is not gated on `owes_scenes`. This shape shipped: a scene
+            // cited on the line right after its lead-in passed every check — the save,
+            // this sweep's figure count, the geometry gate — and rendered at the height
+            // of a letter, because no check read the blank lines.
+            let welded = crate::human::welded_figure_count(&human);
+            if welded > 0 {
+                gaps.welded_scene.push(format!("{id} ({welded} welded citation(s))"));
+            }
         }
     }
+}
+
+/// Every `assets/….svg` the body cites as an image, outside fences and code spans —
+/// the same two exclusions scripts/check-scenes.mjs makes, and for the same reason: a
+/// record that *documents* the `![alt](assets/…)` syntax in backticks is not citing a
+/// file.
+fn collect_svg_refs(md: &str, id: &str, out: &mut Vec<(String, String)>) {
+    let mut fences = body::Fences::default();
+    for line in md.lines() {
+        if fences.feed(line) {
+            continue;
+        }
+        // Inline code spans off: split on backticks, odd segments are code.
+        for (i, seg) in line.split('`').enumerate() {
+            if i % 2 == 1 {
+                continue;
+            }
+            let mut rest = seg;
+            while let Some(open) = rest.find("![") {
+                rest = &rest[open + 2..];
+                let Some(mid) = rest.find("](") else { break };
+                let target = &rest[mid + 2..];
+                let Some(end) = target.find(')') else { break };
+                let url = &target[..end];
+                if url.starts_with("assets/")
+                    && url.to_ascii_lowercase().ends_with(".svg")
+                    && !url.contains(char::is_whitespace)
+                {
+                    out.push((url.to_string(), id.to_string()));
+                }
+                rest = &target[end..];
+            }
+        }
+    }
+}
+
+/// Does the file's `<svg>` root carry both `width` and `height`? A root with only a
+/// `viewBox` gives an `<img>` no intrinsic size, and every page that hangs the drawing in
+/// one — this app, GitHub — draws it small. `None` when there is no root tag at all.
+fn svg_root_sized(raw: &str) -> Option<bool> {
+    let start = raw.find("<svg")?;
+    let rest = &raw[start..];
+    let tag = &rest[..rest.find('>').unwrap_or(rest.len())];
+    Some(has_attr(tag, "width") && has_attr(tag, "height"))
+}
+
+/// Is `name=` present in the tag as an attribute of its own — not the tail of another,
+/// the way `stroke-width=` carries `width=`?
+fn has_attr(tag: &str, name: &str) -> bool {
+    let mut from = 0;
+    while let Some(pos) = tag[from..].find(name) {
+        let at = from + pos;
+        let clean_before = tag[..at].chars().next_back().is_some_and(char::is_whitespace);
+        if clean_before && tag[at + name.len()..].trim_start().starts_with('=') {
+            return true;
+        }
+        from = at + name.len();
+    }
+    false
 }
 
 fn check_note(path: &Path, problems: &mut Vec<Problem>, gaps: &mut HumanGaps) {
