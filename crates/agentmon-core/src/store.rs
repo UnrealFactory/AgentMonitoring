@@ -189,7 +189,15 @@ impl Store {
         let dir = self.root.join("worklogs");
         let mut out: Vec<WorklogSummary> = Vec::new();
         for path in record_files(&dir, "WORK-")? {
-            let detail = self.parse_worklog(&path)?;
+            // A record this build cannot parse is skipped, not fatal. One hand-mangled (or
+            // once, one mis-serialized) frontmatter used to fail this whole list — and with
+            // it status, note, every write's read-back — locking the project behind its own
+            // file (FB-0003/FB-0004). The skip is not silent: `agentmon doctor` names the
+            // file and the parse error, and reading that record by id still says what is
+            // wrong with it.
+            let Ok(detail) = self.parse_worklog(&path) else {
+                continue;
+            };
             let mut parts: Vec<&str> = vec![&detail.what, &detail.why, &detail.how];
             parts.extend(detail.updates.iter().map(|u| u.body.as_str()));
             if let Some(o) = &detail.outcome {
@@ -283,7 +291,11 @@ impl Store {
         let dir = self.root.join("bugs");
         let mut out: Vec<BugSummary> = Vec::new();
         for path in record_files(&dir, "BUG-")? {
-            let detail = self.parse_bug(&path)?;
+            // Same rule as `worklogs`: a record that does not parse is doctor's finding,
+            // not the whole board's failure.
+            let Ok(detail) = self.parse_bug(&path) else {
+                continue;
+            };
             let mut parts: Vec<&str> = vec![&detail.report];
             for c in &detail.comments {
                 // the commenter's name too: a bug is often remembered by who answered on it
@@ -383,7 +395,11 @@ impl Store {
         let dir = self.root.join("notes");
         let mut out: Vec<NoteSummary> = Vec::new();
         for path in record_files(&dir, "")? {
-            let detail = self.parse_note(&path)?;
+            // Same rule as `worklogs`: a note that does not parse is doctor's finding,
+            // not the whole list's failure.
+            let Ok(detail) = self.parse_note(&path) else {
+                continue;
+            };
             out.push(NoteSummary {
                 excerpt: body::excerpt(&detail.body, 180),
                 search_text: body::search_text(&[
@@ -873,6 +889,57 @@ mod tests {
             }
         }
         store.status().expect("status snapshot");
+    }
+
+    /// One record with mangled frontmatter must not lock the project (FB-0003/FB-0004:
+    /// a bracketed path written unquoted did exactly that — every list, status and
+    /// write's read-back exited 6 until the file was hand-fixed). The lists skip it; the
+    /// by-id read still says what is wrong; doctor names the file.
+    #[test]
+    fn a_malformed_record_is_skipped_not_fatal() {
+        let base = std::env::temp_dir().join(format!(
+            "agentmon-store-broken-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let data = base.join(DATA_DIR);
+        fs::create_dir_all(data.join("worklogs")).unwrap();
+        fs::write(
+            data.join("project.json"),
+            r#"{ "version": 2, "id": "prj-broken", "name": "Broken", "createdAt": "2026-08-20T00:00:00Z" }"#,
+        )
+        .unwrap();
+        fs::write(
+            data.join("worklogs").join("WORK-0001.md"),
+            "---\nid: WORK-0001\ntitle: Fine\nagent: a\nstatus: done\n\
+             started: 2026-08-20T01:00:00Z\nfinished: 2026-08-20T02:00:00Z\n\
+             tags: []\nrefs: []\nfiles: []\n---\n\n## What\n\nA healthy record.\n\
+             \n## Why\n\nIt proves the list still reads.\n\n## How\n\nBy existing.\n",
+        )
+        .unwrap();
+        // The exact FB-0003 shape: an unquoted bracketed path in the files flow list.
+        fs::write(
+            data.join("worklogs").join("WORK-0002.md"),
+            "---\nid: WORK-0002\ntitle: Broken\nagent: a\nstatus: done\n\
+             started: 2026-08-20T03:00:00Z\nfinished: 2026-08-20T04:00:00Z\n\
+             tags: []\nrefs: []\nfiles: [src/app/api/payments/[id]/route.ts]\n---\n\n\
+             ## What\n\nNever parses.\n",
+        )
+        .unwrap();
+
+        let store = Store::open(&base).unwrap();
+        let works = store.worklogs().expect("the list survives the broken record");
+        assert_eq!(works.len(), 1);
+        assert_eq!(works[0].meta.id, "WORK-0001");
+        let status = store.status().expect("status survives too");
+        assert_eq!(status.project.counts.work_total, 1);
+        // The by-id read still reports the real problem — the record is findable, not gone.
+        let err = store.worklog("WORK-0002").expect_err("the broken record itself still errors");
+        assert!(err.to_string().contains("frontmatter"), "{err}");
+        fs::remove_dir_all(&base).ok();
     }
 
     #[test]

@@ -1062,6 +1062,50 @@ section("the human area: required through MCP, refreshable, and the rules travel
     });
   }
 
+  // The refusals that used to arrive *after* `work start` had created the record — a
+  // leading `## ` heading in a section field ("`## How` is empty", read as a validator
+  // bug), a heading inside the outcome, and a finished_at the closing step would refuse
+  // (FB-0003/FB-0004 side notes). All three are checked before the CLI runs, so a
+  // refused call leaves no half-done record to repair.
+  {
+    const before = readdirSync(path.join(DATA, "worklogs")).length;
+    const fields = {
+      title: "A record assembled from parts that cannot compose",
+      what: "Send log_work fields the composed body cannot carry.",
+      why: "Each used to fail only at the CLI, some of them after the record existed.",
+      how: "Send the bad value and expect a refusal that says nothing was written.",
+      human: "잘못 보낸 호출은 기록을 반쯤 만들어 두지 않고, 아무것도 쓰기 전에 거절됩니다.",
+    };
+    const headed = await client.call("log_work", { ...fields, how: "## Approach\nLock, then rename." });
+    check("a section field that starts with ## is refused naming the heading that ate it", () => {
+      assert(headed.isError, headed.text);
+      assertIncludes(headed.text, "`## How` is empty", "error");
+      assertIncludes(headed.text, "`## Approach`", "error");
+    });
+    const future = await client.call("log_work", {
+      ...fields,
+      outcome: "Shipped and verified by the suite; every check passed.",
+      finished_at: "2099-01-01T00:00:00Z",
+    });
+    check("a future finished_at is refused before the record exists", () => {
+      assert(future.isError, future.text);
+      assertIncludes(future.text, "in the future", "error");
+    });
+    const outHeaded = await client.call("log_work", {
+      ...fields,
+      outcome: "## Result\nShipped and verified by the suite.",
+    });
+    check("an outcome carrying a ## heading is refused before the record exists", () => {
+      assert(outHeaded.isError, outHeaded.text);
+      assertIncludes(outHeaded.text, "## Result", "error");
+    });
+    check("none of those refusals wrote anything", () =>
+      assert(
+        readdirSync(path.join(DATA, "worklogs")).length === before,
+        "a refused call left a record behind"
+      ));
+  }
+
   // A body that leaves a code fence open would swallow the `## For humans` section
   // appended after it: the record would save with no human area and could never gain one.
   const openFence = await client.call("log_work", {

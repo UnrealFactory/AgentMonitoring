@@ -203,7 +203,25 @@ pub fn work_body(raw: &str) -> Result<WorkBody> {
         match body::take_section(&mut probe, name) {
             None => problems.push(format!("missing the `## {name}` section")),
             Some(content) if content.trim().is_empty() => {
-                problems.push(format!("`## {name}` is empty"))
+                // The usual cause is text that *begins* with its own `## ` heading: that
+                // line opens a new section right where this one's content should start,
+                // and "`## How` is empty" alone sent an agent hunting in the wrong place
+                // (FB-0004's side note). Name the heading that ate it.
+                let swallowed = sections
+                    .iter()
+                    .position(|s| s.title == name)
+                    .and_then(|i| sections.get(i + 1))
+                    .filter(|s| !s.title.is_empty() && !WORK_SECTIONS.contains(&s.title.as_str()));
+                match swallowed {
+                    Some(next) => problems.push(format!(
+                        "`## {name}` is empty — its text starts with the heading `## {}`, \
+                         and a `## ` line opens a new section, leaving `## {name}` with \
+                         nothing. Start the section with prose, or demote that heading \
+                         to `###`",
+                        next.title
+                    )),
+                    None => problems.push(format!("`## {name}` is empty")),
+                }
             }
             Some(content) if is_placeholder(&content) => problems.push(format!(
                 "`## {name}` says only {:?} — write the real answer",
@@ -517,6 +535,19 @@ mod tests {
     use super::*;
 
     const GOOD: &str = "## What\n\nAdd the write path to agentmon-core.\n\n## Why\n\nAgents cannot log their own work until the CLI can write records.\n\n## How\n\nA project lock guards id allocation; records are written temp-then-rename.\n";
+
+    /// A section whose text begins with its own `## ` heading is empty by the grammar —
+    /// the heading opened a new section — and the refusal names that heading instead of
+    /// leaving the agent to guess (FB-0004's side note).
+    #[test]
+    fn an_empty_section_names_the_heading_that_swallowed_it() {
+        let body = "## What\n\nAdd the write path.\n\n## Why\n\nAgents cannot log their own \
+                    work yet.\n\n## How\n\n## Approach\n\nLock, then temp-file rename.\n";
+        let err = work_body(body).unwrap_err().to_string();
+        assert!(err.contains("`## How` is empty"), "{err}");
+        assert!(err.contains("`## Approach`"), "{err}");
+        assert!(err.contains("demote"), "{err}");
+    }
 
     #[test]
     fn accepts_a_real_body() {

@@ -302,6 +302,41 @@ function flag(args, name, value) {
 }
 
 /**
+ * The instant a `when` field names, by the same grammar the CLI accepts
+ * (crates/agentmon-core/src/time.rs: RFC3339, the naive forms read as UTC, a bare date
+ * as midnight UTC) — or null when the text matches none of them.
+ *
+ * This exists for one caller, `log_work`'s pre-flight: the CLI's own check is the
+ * authority, but it runs at the closing step, after `work start` has already created
+ * the record.
+ */
+function whenInstant(raw) {
+  const t = String(raw ?? "").trim();
+  const m = t.match(
+    /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|z|[+-]\d{2}:\d{2})?)?$/
+  );
+  if (!m) return null;
+  const d = new Date(`${m[1]}T${m[2] ?? "00:00:00"}${(m[3] ?? "Z").toUpperCase()}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Matches the CLI's clock-skew allowance for "now" (time.rs, FUTURE_SKEW_SECS). */
+const FUTURE_SKEW_MS = 60_000;
+
+/**
+ * The first `## ` line of `text` outside code fences — the only heading level that ends
+ * a record section (crates/agentmon-core/src/body.rs splits on level-2 headings alone).
+ */
+function sectionHeading(text) {
+  let fenced = false;
+  for (const line of String(text ?? "").split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    else if (!fenced && /^##\s/.test(line)) return line.trim();
+  }
+  return null;
+}
+
+/**
  * A replacement-list flag, for the one verb where lists replace rather than attach
  * (`note update`). Absent leaves the stored list alone; anything sent — an explicit
  * empty array included — replaces it, `""` being how the CLI spells "clear". Through
@@ -442,6 +477,50 @@ async function written(at, human, repair, ...parts) {
 async function logWork(args, ctx) {
   const { at, who } = ident(args, ctx);
   need(args, ["title", "what", "why", "how"], "log_work");
+
+  // What/why/how are not pre-checked here: `work start` refuses before any record
+  // exists, and its refusals teach more than this wrapper could — a field that begins
+  // with its own `## ` heading now gets the CLI's "`## How` is empty — its text starts
+  // with the heading …" (validate.rs, FB-0004's side note), and a smuggled reserved
+  // heading gets the human-area teaching. Only the *closing* step's rules move up.
+
+  // The closing step runs after `work start` has already created the record, so a value
+  // it would refuse strands a half-done state the caller must then repair (FB-0003's
+  // side note: a finished_at seconds in the future). The rules the CLI applies there are
+  // applied here first, while refusing still costs nothing.
+  const closing = String(args.outcome ?? "").trim();
+  if (closing) {
+    const outHeading = sectionHeading(closing);
+    if (outHeading)
+      throw new ToolError(
+        `log_work: outcome contains the heading "${outHeading}" — an outcome is written ` +
+          `into the record's ## Outcome section, which a ## line would end. Use ` +
+          `**bold** lead-ins or ### subheadings. Nothing was written.`
+      );
+    const rawFinished = String(args.finished_at ?? "").trim();
+    if (rawFinished) {
+      const finished = whenInstant(rawFinished);
+      if (!finished)
+        throw new ToolError(
+          `log_work: finished_at "${rawFinished}" is not a timestamp the CLI accepts — ` +
+            `use UTC ISO8601 like 2026-08-18T09:12:00Z. Nothing was written.`
+        );
+      if (finished.getTime() - Date.now() > FUTURE_SKEW_MS)
+        throw new ToolError(
+          `log_work: finished_at ${rawFinished} is in the future — a record documents ` +
+            `work that already happened. Send a time at or before now, or leave ` +
+            `finished_at off to use now. Nothing was written.`
+        );
+      const started = whenInstant(args.started_at);
+      if (started && finished < started)
+        throw new ToolError(
+          `log_work: finished_at ${rawFinished} is before started_at ${String(
+            args.started_at
+          ).trim()}. Nothing was written.`
+        );
+    }
+  }
+
   const body = `## What\n\n${args.what.trim()}\n\n## Why\n\n${args.why.trim()}\n\n## How\n\n${args.how.trim()}\n`;
   // One human field for a call that may open *and* close the record: on open it is the
   // page's opening; the close re-sends the same text, and the core keeps one copy of an

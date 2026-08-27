@@ -595,39 +595,6 @@ export function HourBars({
   );
 }
 
-/* --------------------------------------------------------------------------
-   The per-agent split: one stacked bar per agent, beside its own numbers
-   ----------------------------------------------------------------------- */
-
-export function SplitBar({
-  parts,
-  total,
-  max,
-  title,
-}: {
-  parts: { value: number; color: string; label: string }[];
-  total: number;
-  /** The busiest agent's total: every row is drawn against the same scale. */
-  max: number;
-  title: string;
-}) {
-  const share = max > 0 ? total / max : 0;
-  return (
-    <span className="split-bar" style={{ width: `${Math.max(share * 100, total > 0 ? 4 : 0)}%` }} title={title}>
-      {parts
-        .filter((p) => p.value > 0)
-        .map((p) => (
-          <span
-            key={p.label}
-            className="split-seg"
-            style={{ flexGrow: p.value, background: p.color }}
-            aria-hidden="true"
-          />
-        ))}
-    </span>
-  );
-}
-
 /**
  * A chart's legend. Always rendered when a chart has two or more series, and it carries
  * each series' current value — so the number is a direct label, not something only a

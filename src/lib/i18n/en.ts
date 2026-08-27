@@ -416,6 +416,7 @@ export const en = {
   "md.calloutWarning": "Warning",
   "md.calloutCaution": "Caution",
   "md.imageFailed": "Could not load the image",
+  "md.imageZoom": "Click to view full size",
   "rec.corrections": (n: number, where: string) =>
     `**${n === 1 ? "1 correction" : `${n} corrections`}** to this record — see ${where}`,
   "ui.severityOf": (label: string) => `${label} severity`,
@@ -470,7 +471,6 @@ export const en = {
   "wd.shipped": "shipped",
   "wd.recorded": "recorded",
   "wd.insideOutcome": "Inside this outcome",
-  "wd.doneCount": "Work logs this agent marked done",
 
   /* -- bug detail ------------------------------------------------------------- */
 
@@ -673,7 +673,7 @@ export const en = {
   "dash.liveTip": "Something was recorded in the last two hours",
   "dash.lastActivity": (when: string) => `Last activity ${when}`,
   "dash.scope": (range: string) =>
-    `The charts, the agents and the feed below cover ${range}. The strip above is always now, and every date and time on this page is in this computer's timezone.`,
+    `The charts and the feed below cover ${range}. The strip above is always now, and every date and time on this page is in this computer's timezone.`,
   "dash.rangeDays": (days: number) => `the last ${days} days`,
   "dash.rangeOneEvent": (date: string) => `the one recorded event, from ${date}`,
   "dash.rangeAllEvents": (n: number, date: string) =>
@@ -752,32 +752,6 @@ export const en = {
   "dash.seriesFiled": "filed",
   "dash.nounWorkLogs": "work logs",
   "dash.nounBugs": "bugs",
-
-  "dash.agentsCard": "Agents",
-  "dash.agentsEmpty": "No agent has recorded anything in this range",
-  "dash.agentsEmptyHint":
-    "Widen the range above, or check the project folder: every CLI mutation appends one line to events.jsonl.",
-  "dash.colAgent": "Agent",
-  "dash.colActivity": "Activity",
-  "dash.colDone": "Done",
-  "dash.colFiled": "Filed",
-  "dash.colResolved": "Resolved",
-  "dash.colLastSeen": "Last seen",
-  "dash.colFiledTip": "Bugs this agent filed",
-  "dash.colResolvedTip": "Bugs this agent resolved",
-  "dash.legendWork": "work",
-  "dash.legendBugs": "bugs",
-  "dash.legendNotes": "notes",
-  "dash.legendProject": "project",
-  "dash.agentBarTip": (total: number, work: number, notes: number, bugs: number, project: number) =>
-    `${total === 1 ? "1 event" : `${total} events`} — ${work} on work${notes ? `, ${notes} on notes` : ""}, ${bugs} on bugs${project ? `, ${project} on the project` : ""}`,
-  "dash.agentDotTip": (count: string, inProgress: string, seen: string) =>
-    `${count} ${inProgress} · last seen ${seen}`,
-  "dash.agentIdleTip": (inProgress: string, seen: string) =>
-    `No work log ${inProgress} · last seen ${seen}`,
-  "dash.agentIdleLabel": "No work log in progress",
-  "dash.agentTableNote": (events: number) =>
-    `Every one of ${events === 1 ? "1 event" : `${events} events`} in this range, counted against the agent who recorded it — project changes included.`,
 
   "dash.activity": "Activity",
   "dash.activityNote": (events: number, days: number) =>

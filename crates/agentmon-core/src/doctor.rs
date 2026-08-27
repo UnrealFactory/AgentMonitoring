@@ -938,7 +938,8 @@ fn check_worklog(
                 scope,
                 format!("frontmatter does not parse: {e}"),
                 "required keys: id, title, agent, status (in_progress|done|abandoned), started. \
-                 Quote any title containing a colon",
+                 Quote any value holding a colon or brackets (e.g. files: \
+                 [\"src/app/[id]/route.ts\"]); the lists skip this record until it parses",
             ));
             return;
         }

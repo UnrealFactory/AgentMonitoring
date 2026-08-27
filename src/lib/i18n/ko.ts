@@ -467,6 +467,7 @@ export const ko: Dict = {
   "md.calloutWarning": "주의",
   "md.calloutCaution": "경고",
   "md.imageFailed": "이미지를 불러오지 못했습니다",
+  "md.imageZoom": "클릭하면 크게 보기",
   "rec.corrections": (n, where) => `이 기록에 **정정 ${n}건** — ${where} 참고`,
   "ui.severityOf": (label) => `심각도 ${label}`,
   "ui.handoff": (from, to) => `등록 ${from} · 담당 ${to}`,
@@ -518,7 +519,6 @@ export const ko: Dict = {
   "wd.shipped": "적용:",
   "wd.recorded": "기록됨",
   "wd.insideOutcome": "결과 안의 항목",
-  "wd.doneCount": "이 에이전트가 완료 처리한 작업 로그",
 
   /* -- bug detail ------------------------------------------------------------- */
 
@@ -730,7 +730,7 @@ export const ko: Dict = {
      띠는 현재일 수 없고, 화면에 '현황 띠'라는 이름도 없다. 맨 위 카드들이 실제로 달고 있는
      이름(현재 상태)으로 부른다. */
   "dash.scope": (range) =>
-    `아래 차트와 에이전트, 활동 기록은 ${range} 기준입니다. 맨 위 현재 상태는 기간과 상관없이 항상 지금이며, 이 페이지의 모든 날짜와 시각은 이 컴퓨터의 시간대를 따릅니다.`,
+    `아래 차트와 활동 기록은 ${range} 기준입니다. 맨 위 현재 상태는 기간과 상관없이 항상 지금이며, 이 페이지의 모든 날짜와 시각은 이 컴퓨터의 시간대를 따릅니다.`,
   "dash.rangeDays": (days) => `최근 ${days}일`,
   "dash.rangeOneEvent": (date) => `${date}에 기록된 이벤트 1건`,
   "dash.rangeAllEvents": (n, date) => `${date}까지 거슬러 올라가는 전체 이벤트 ${n}건`,
@@ -808,35 +808,6 @@ export const ko: Dict = {
   "dash.seriesFiled": "등록",
   "dash.nounWorkLogs": "작업 로그",
   "dash.nounBugs": "버그",
-
-  "dash.agentsCard": "에이전트",
-  "dash.agentsEmpty": "이 기간에 기록을 남긴 에이전트가 없습니다",
-  /* `events.jsonl에` — 파일 이름은 고정 문자열이고 `에`는 형태가 하나뿐인 조사이므로 이 파일의
-     예외 규칙(위 err.* 머리말)에 해당한다. 예외라도 조사는 붙여 쓴다: `events.jsonl 에`처럼 띄우면
-     `_ 만`과 같은 흔적이 된다. 같은 문장이 dash.activityEmptyHint에도 있다. */
-  "dash.agentsEmptyHint":
-    "위에서 기간을 넓히거나 프로젝트 폴더를 확인하세요. CLI로 무언가 바꿀 때마다 events.jsonl에 한 줄이 추가됩니다.",
-  "dash.colAgent": "에이전트",
-  "dash.colActivity": "활동",
-  "dash.colDone": "완료",
-  "dash.colFiled": "등록",
-  "dash.colResolved": "해결",
-  "dash.colLastSeen": "마지막 기록",
-  "dash.colFiledTip": "이 에이전트가 등록한 버그",
-  "dash.colResolvedTip": "이 에이전트가 해결한 버그",
-  "dash.legendWork": "작업",
-  "dash.legendBugs": "버그",
-  "dash.legendNotes": "메모",
-  "dash.legendProject": "프로젝트",
-  /* 앞의 합계만 `건`을 달고 뒤의 내역은 맨 숫자로 두면 한 문장 안에서 세는 방식이 두 가지가
-     된다. 내역도 같은 이벤트를 세므로 같은 단위를 단다(dash.countPart와 같은 이유). */
-  "dash.agentBarTip": (total, work, notes, bugs, project) =>
-    `이벤트 ${total}건 — 작업 ${work}건${notes ? `, 메모 ${notes}건` : ""}, 버그 ${bugs}건${project ? `, 프로젝트 ${project}건` : ""}`,
-  "dash.agentDotTip": (count, inProgress, seen) => `${count} ${inProgress} · 마지막 기록 ${seen}`,
-  "dash.agentIdleTip": (inProgress, seen) => `${inProgress}인 작업 로그 없음 · 마지막 기록 ${seen}`,
-  "dash.agentIdleLabel": "진행 중인 작업 로그 없음",
-  "dash.agentTableNote": (events) =>
-    `이 기간의 이벤트 ${events}건을 각각 기록한 에이전트 앞으로 모두 집계했습니다 — 프로젝트 변경 포함.`,
 
   "dash.activity": "활동",
   "dash.activityNote": (events, days) => `이벤트 ${events}건 · ${days}일`,

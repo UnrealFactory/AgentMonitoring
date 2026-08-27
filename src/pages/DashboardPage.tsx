@@ -12,8 +12,10 @@
  *      (what is in progress, what is unresolved). Cumulative rather than per-day columns
  *      because these projects are small: eight bugs over three weeks drawn as columns is
  *      mostly empty air, while two lines read the same at any density.
- *   3. **Who and what** — the agents, each with the split of what they have been doing, and
- *      the event log itself cut into days with the recent ones open.
+ *   3. **What happened** — the event log itself cut into days with the recent ones open.
+ *      (A per-agent activity table sat between the charts and the feed until the owner cut
+ *      it, 2026-08-27: everything it counted the feed and the boards already say, and the
+ *      per-agent split was a number nobody acted on.)
  *
  * Two rules the whole screen obeys:
  *
@@ -30,10 +32,9 @@ import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp, useProjectId, useDataNonce } from "../AppContext";
 import { api, failureTitle, nothingToRetry, projectGone } from "../lib/api";
-import { agentColumnWidth } from "../lib/columns";
 import { useAsync } from "../lib/useAsync";
 import { useUrlFilters } from "../lib/useUrlFilters";
-import { BurnUp, HourBars, Legend, SplitBar, useNow } from "../components/charts";
+import { BurnUp, HourBars, Legend, useNow } from "../components/charts";
 import { useContextMenu } from "../components/ContextMenu";
 import { useRecordMenu, type RecordRef } from "../lib/menus";
 import { EventIcon } from "../components/EventIcon";
@@ -62,13 +63,11 @@ import {
   unassignedFor,
   unresolved,
   unresolvedMeans,
-  workLogs,
   workLogsInProgressOf,
   workLower,
   workStatusLabel,
 } from "../lib/words";
 import {
-  agentRows,
   bugSeries,
   DAY,
   DAY_PREVIEW,
@@ -104,7 +103,7 @@ import type {
   WorklogSummary,
   WorkUpdate,
 } from "../lib/types";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 type Snapshot = [Project, WorklogSummary[], BugSummary[], NoteSummary[], VaultEvent[]];
 
@@ -310,7 +309,6 @@ export function DashboardPage() {
     () => events.filter((e) => Date.parse(e.ts) >= axis.from),
     [events, axis.from]
   );
-  const agents = useMemo(() => agentRows(scoped, works), [scoped, works]);
   const dayGroups = useMemo(() => groupByDay(scoped), [scoped]);
 
   if (failure) {
@@ -457,8 +455,6 @@ export function DashboardPage() {
           />
         </ChartCard>
       </div>
-
-      <AgentsCard projectId={projectId} rows={agents} total={scoped.length} now={now} />
 
       <ActivityCard
         projectId={projectId}
@@ -985,160 +981,6 @@ function ChartCard({
         {action}
       </header>
       <div className="card-body">{children}</div>
-    </section>
-  );
-}
-
-/* ==========================================================================
-   Agents
-   ======================================================================= */
-
-function AgentsCard({
-  projectId,
-  rows,
-  total,
-  now,
-}: {
-  projectId: string;
-  rows: ReturnType<typeof agentRows>;
-  /** Events in the range — the number the Activity card below prints. */
-  total: number;
-  now: number;
-}) {
-  /* The name column is sized from this project's own agent names — `nova` and
-     `p0-foundation-builder` cannot share one width — and the name is the one thing in the
-     row allowed to give ground, because it is the one thing that ellipsises and carries a
-     tooltip. Everything else in the row is a number that would be a lie if it were cut
-     (vault BUG-0006). */
-  /* `chrome` is everything in the cell that is not the name, measured: the status dot
-     (8px), the avatar (18px) and the two gaps (8 + 6). */
-  const nameWidth = agentColumnWidth(
-    rows.map((r) => r.agent),
-    { chrome: 40, min: 118, max: 210 }
-  );
-  const max = Math.max(1, ...rows.map((r) => r.total));
-  const anyProject = rows.some((r) => r.project > 0);
-  const anyNotes = rows.some((r) => r.notes > 0);
-
-  return (
-    <section className="card">
-      <header className="card-head">
-        <h2 className="card-title">{t("dash.agentsCard")}</h2>
-        <Legend
-          items={[
-            { color: "var(--series-work)", label: t("dash.legendWork") },
-            ...(anyNotes ? [{ color: "var(--series-note)", label: t("dash.legendNotes") }] : []),
-            { color: "var(--series-bug)", label: t("dash.legendBugs") },
-            ...(anyProject ? [{ color: "var(--grey)", label: t("dash.legendProject") }] : []),
-          ]}
-        />
-        <Link className="card-action" to={`/p/${projectId}/work`}>
-          {t("dash.allWork")}
-        </Link>
-      </header>
-      <div className="card-body">
-        {rows.length === 0 ? (
-          <EmptyState title={t("dash.agentsEmpty")} hint={t("dash.agentsEmptyHint")} />
-        ) : (
-          <div className="agent-table" style={{ "--agent-col": nameWidth } as CSSProperties}>
-            <div className="agent-head" role="row">
-              <span className="agent-cell-name">{t("dash.colAgent")}</span>
-              <span className="agent-cell-bar">{t("dash.colActivity")}</span>
-              <span className="agent-cell-num" title={t("wd.doneCount")}>
-                {t("dash.colDone")}
-              </span>
-              <span className="agent-cell-num" title={t("dash.colFiledTip")}>
-                {t("dash.colFiled")}
-              </span>
-              <span className="agent-cell-num" title={t("dash.colResolvedTip")}>
-                {t("dash.colResolved")}
-              </span>
-              <span className="agent-cell-seen">{t("dash.colLastSeen")}</span>
-            </div>
-            <ul className="agent-rows">
-              {rows.map((r) => {
-                /* The dot means "has a work log in progress"; how bright it is means "and
-                   was here recently". An agent holding one who has not been seen since
-                   yesterday gets the same hollow dot their idle colleagues get, because
-                   that is what is true. */
-                const state = freshness(r.lastActivity, now);
-                return (
-                  <li key={r.agent}>
-                    <Link
-                      className="agent-row"
-                      to={
-                        r.hasWorklogs
-                          ? `/p/${projectId}/work?agent=${encodeURIComponent(r.agent)}`
-                          : `/p/${projectId}/bugs?tab=all&reporter=${encodeURIComponent(r.agent)}`
-                      }
-                    >
-                      <span className="agent-cell-name">
-                        {r.activeNow > 0 ? (
-                          <span
-                            className={`sdot ${FRESH_DOT[state]}`}
-                            role="img"
-                            aria-label={`${workLogs(r.activeNow)} ${inProgress()}`}
-                            title={t(
-                              "dash.agentDotTip",
-                              workLogs(r.activeNow),
-                              inProgress(),
-                              formatRelative(r.lastActivity, new Date(now))
-                            )}
-                          />
-                        ) : (
-                          /* "Who is free right now" was inferable only from a hollow circle
-                             with no title on it (round 2 critic). */
-                          <span
-                            className="sdot sdot-idle"
-                            role="img"
-                            aria-label={t("dash.agentIdleLabel")}
-                            title={t(
-                              "dash.agentIdleTip",
-                              inProgress(),
-                              formatRelative(r.lastActivity, new Date(now))
-                            )}
-                          />
-                        )}
-                        <AgentChip name={r.agent} />
-                      </span>
-                      <span className="agent-cell-bar">
-                        <SplitBar
-                          max={max}
-                          total={r.total}
-                          title={t("dash.agentBarTip", r.total, r.work, r.notes, r.bugs, r.project)}
-                          /* Note sits between work and bugs: the pairs it touches are the
-                             ones the palette validator passed (tokens.css, --series-note),
-                             and the grey project segment keeps its old neighbour. */
-                          parts={[
-                            { value: r.work, color: "var(--series-work)", label: "work" },
-                            { value: r.notes, color: "var(--series-note)", label: "notes" },
-                            { value: r.bugs, color: "var(--series-bug)", label: "bugs" },
-                            { value: r.project, color: "var(--grey)", label: "project" },
-                          ]}
-                        />
-                        <span className="agent-total tabular">{r.total}</span>
-                      </span>
-                      <span className="agent-cell-num tabular">{r.done}</span>
-                      <span className="agent-cell-num tabular">{r.filed}</span>
-                      <span className="agent-cell-num tabular">{r.fixed}</span>
-                      <span
-                        className="agent-cell-seen tabular"
-                        title={formatDateTimeUtc(r.lastActivity)}
-                      >
-                        {formatRelative(r.lastActivity, new Date(now))}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-            {/* The sum of this column is the number on the card below it, and saying so is
-                cheaper than leaving a reader to add four rows up and find 83 under an
-                "85 events" heading (round 2 critic). */}
-            <p className="table-note">{t("dash.agentTableNote", total)}</p>
-          </div>
-        )}
-      </div>
     </section>
   );
 }

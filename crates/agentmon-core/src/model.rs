@@ -446,7 +446,13 @@ fn yaml_scalar(value: &str) -> String {
         // line and the file stays readable. The write paths refuse a title or an agent
         // name with one before it gets this far; this is the floor under every other key.
         || value.contains(['\n', '\r', '\t'])
-        || value.starts_with(['"', '\'', '[', ']', '{', '}', '&', '*', '!', '|', '>', '%', '@', '`'])
+        // Flow indicators break parsing *anywhere* in a plain scalar inside a `[a, b]`
+        // list, not only at the start. The case that proved it: a Next.js dynamic-route
+        // path (`src/app/api/.../[id]/route.ts`) in `files:` — the naked `[` opened a
+        // nested sequence mid-item, the record's frontmatter stopped parsing, and every
+        // project-wide read exited 6 until the file was fixed by hand (FB-0003/FB-0004).
+        || value.contains(['[', ']', '{', '}', ','])
+        || value.starts_with(['"', '\'', '&', '*', '!', '|', '>', '%', '@', '`'])
         || matches!(
             value.to_ascii_lowercase().as_str(),
             "null" | "true" | "false" | "yes" | "no" | "on" | "off" | "~"
@@ -713,6 +719,33 @@ mod tests {
         let back: Bug = serde_yaml::from_str(&yaml).expect("frontmatter parses back");
         assert_eq!(back.severity, Severity::High);
         assert!(back.status.is_open());
+    }
+
+    /// A bracketed path — a Next.js dynamic route is the everyday case — survives the
+    /// `files: [...]` flow list. Unquoted, the `[` in `[id]` opened a nested sequence and
+    /// the whole file stopped parsing (FB-0003/FB-0004: one such record made every
+    /// project-wide read exit 6).
+    #[test]
+    fn flow_indicators_inside_a_list_item_are_quoted() {
+        let w = Worklog {
+            id: "WORK-0013".into(),
+            title: "Braces {a,b} and commas, quoted".into(),
+            agent: "external-agent".into(),
+            status: WorkStatus::Done,
+            started: "2026-08-18T09:12:00Z".into(),
+            finished: Some("2026-08-18T10:00:00Z".into()),
+            tags: vec!["a,b".into()],
+            refs: vec![],
+            files: vec![
+                "src/qa/toss-stub.ts".into(),
+                "src/app/api/admin/payments/[id]/refund/route.ts".into(),
+            ],
+        };
+        let yaml = w.to_frontmatter();
+        let back: Worklog = serde_yaml::from_str(&yaml).expect("frontmatter parses back");
+        assert_eq!(back.files, w.files, "{yaml}");
+        assert_eq!(back.tags, w.tags, "{yaml}");
+        assert_eq!(back.title, w.title, "{yaml}");
     }
 
     /// A frontmatter value stays on its own line, whatever is in it.

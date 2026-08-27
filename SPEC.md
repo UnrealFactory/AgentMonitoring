@@ -427,7 +427,9 @@ recipe lives in docs/AGENT_MANUAL.md, "Two machines, one repo".
    keyboard focus visible. Routes carry the project **id**.
 2. **Dashboard** (per project; Grafana bar) — current status: now-active agents & their
    in-progress work, open bug count by severity, activity timeline (events feed), charts
-   (work completed over time, bugs opened vs resolved, per-agent activity).
+   (work completed over time, bugs opened vs resolved). The per-agent activity table that
+   sat between the charts and the feed was removed at the owner's direction (2026-08-27):
+   everything it counted, the feed and the filterable boards already say.
 3. **Work list** — filterable table (status, agent, tag, search).
 4. **Work detail** (vscode merged-PR bar) — title, meta (agent, status, dates, tags, files),
    rendered What/Why/How, Updates timeline, Outcome — in that order on the page, and the

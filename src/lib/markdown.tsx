@@ -8,13 +8,14 @@
  * those records — an agent writing "see BUG-0004" is making a cross-reference, and a
  * reader should be able to follow it. Ids inside code spans stay literal.
  */
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useContextMenu } from "../components/ContextMenu";
 import { api } from "./api";
 import { highlightCode } from "./highlight";
 import { t } from "./i18n";
 import { recordKind, useRecordMenu } from "./menus";
+import { useModalLock } from "./modal";
 import { parseBlocks, parseInline, type CalloutTone, type Inline } from "./markdown-parse";
 
 /** Resolves a record id to a route, or null when we are not inside a project. */
@@ -429,6 +430,7 @@ function RecordImage({
   const external = /^https?:/i.test(src);
   const relative = !external && !src.includes(":");
   const [state, setState] = useState<{ url?: string; error?: string }>({});
+  const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
     if (!projectId || !relative) return;
@@ -495,11 +497,82 @@ function RecordImage({
       onError={() => setState({ error: t("md.imageFailed") })}
     />
   );
-  if (inline) return img;
+  /* Every image that draws is also a button to its full-size view: an attached photo is
+     capped at 560px in the column (or 1.4em in a sentence), and reading it used to mean
+     opening the file outside the app (owner feedback, 2026-08-27). The wrapper is a real
+     <button> so the keyboard reaches it like everything else. */
+  const zoom = (
+    <button
+      type="button"
+      className={inline ? "img-zoom is-inline" : fill ? "img-zoom is-fill" : "img-zoom"}
+      onClick={() => setZoomed(true)}
+      title={t("md.imageZoom")}
+    >
+      {img}
+    </button>
+  );
+  const box = zoomed && (
+    <ImageLightbox url={state.url} alt={alt} svg={/\.svg$/i.test(src)} onClose={() => setZoomed(false)} />
+  );
+  if (inline)
+    return (
+      <>
+        {zoom}
+        {box}
+      </>
+    );
   return (
     <figure className="prose-figure">
-      {img}
+      {zoom}
       {alt && <figcaption>{alt}</figcaption>}
+      {box}
     </figure>
+  );
+}
+
+/**
+ * The full-size view of one record image. A dialog like any other in this app: it takes
+ * the modal lock so window-level key handlers stand down (src/lib/modal.ts), Escape and
+ * any click close it, and focus comes back to the image button that opened it.
+ */
+function ImageLightbox({
+  url,
+  alt,
+  svg,
+  onClose,
+}: {
+  url: string;
+  alt: string;
+  svg: boolean;
+  onClose: () => void;
+}) {
+  useModalLock(true);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    ref.current?.focus();
+    return () => opener?.focus();
+  }, []);
+  return (
+    <div
+      ref={ref}
+      className="lightbox-scrim"
+      role="dialog"
+      aria-label={alt || t("md.imageZoom")}
+      tabIndex={-1}
+      onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      {/* An SVG has no useful intrinsic size to inherit, so it takes the whole width the
+          viewport offers; a raster image keeps its own pixels — blown past them it only
+          blurs — and the caps in the CSS letterbox both. */}
+      <img className={svg ? "lightbox-img is-svg" : "lightbox-img"} src={url} alt={alt} />
+      {alt && <span className="lightbox-caption">{alt}</span>}
+    </div>
   );
 }

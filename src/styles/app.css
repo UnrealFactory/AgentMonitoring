@@ -5254,146 +5254,6 @@ kbd {
   color: var(--text-primary);
 }
 
-/* --- agents --------------------------------------------------------------- */
-
-.agent-table {
-  display: flex;
-  flex-direction: column;
-}
-
-/* One grid for the header and every row, so a column cannot drift out of line.
-   The name track is `minmax(0, …)`: it may shrink below its ideal width, and when
-   it does the name inside it ellipsises rather than the row pushing a number out
-   of the card. */
-.agent-head,
-.agent-row {
-  display: grid;
-  /* The number columns are as wide as the *word above them*, not as the digits in them:
-     "Resolved" is this app's one word for a fixed bug (lib/words.ts), and it is drawn
-     uppercase with wide tracking, so it needs 71px where the number under it needs 20.
-     46px shipped "RES…"; 62px, measured by eye, shipped "RESOL…". These are the rendered
-     max-content widths of the three headings — 39, 38 and 71 — plus a few pixels of air.
-     They cannot be `max-content`: the header and each row are separate grids (below), and
-     a track that sizes itself per grid puts the heading over a column of its own. The gate
-     that would have caught both wrong guesses is in scripts/check-clipping.mjs, which now
-     fails on any heading that truncates, ellipsis or not. */
-  grid-template-columns:
-    minmax(0, var(--agent-col, 160px))
-    minmax(56px, 1fr)
-    46px 46px 74px
-    78px;
-  gap: var(--space-3);
-  align-items: center;
-  padding: 0 var(--space-3);
-}
-
-.agent-head {
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-.agent-rows {
-  list-style: none;
-}
-
-.agent-row {
-  height: 38px;
-  border-radius: var(--radius);
-  transition: background var(--duration-fast) var(--ease);
-}
-
-.agent-row:hover {
-  background: var(--bg-hover);
-}
-
-.agent-cell-name {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  overflow: hidden;
-}
-
-.agent-cell-name .agent {
-  min-width: 0;
-}
-
-.sdot-idle {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--border-strong);
-}
-
-.agent-cell-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-/* Bars share one scale — the busiest agent's total is full width — so a row's
-   length is comparable with the row above it. Square at the baseline, 4px round
-   at the data end, 2px of surface between the two segments. */
-.split-bar {
-  display: flex;
-  gap: 2px;
-  height: 8px;
-  min-width: 0;
-  border-radius: 0 4px 4px 0;
-  overflow: hidden;
-}
-
-.split-seg {
-  min-width: 2px;
-  flex-basis: 0;
-}
-
-.agent-total {
-  flex: none;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  min-width: 18px;
-}
-
-.agent-cell-num {
-  text-align: right;
-  font-size: var(--text-base);
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-/* The header cells are plain spans; each takes the alignment of the column it names, so a
-   heading always sits over its own numbers. */
-.agent-head .agent-cell-bar,
-.agent-head .agent-cell-num,
-.agent-head .agent-cell-seen {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* What a table's numbers add up to, said once under them rather than left to the reader. */
-.table-note {
-  padding: var(--space-3) var(--space-2) var(--space-1);
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.agent-cell-seen {
-  text-align: right;
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* --- activity feed, cut into days ----------------------------------------- */
 
 .day-list {
@@ -6798,6 +6658,78 @@ a.ref-inline.is-unknown:hover {
 .prose-figure figcaption {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Every drawn image is a button to its full-size view (markdown.tsx, ImageLightbox).
+   The wrapper is invisible chrome: the image inside keeps every style it had. */
+.img-zoom {
+  display: block;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.img-zoom.is-fill {
+  width: 100%;
+}
+
+.img-zoom.is-inline {
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+.img-zoom:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+/* The full-size view: a dialog-weight scrim (same layer as .modal-scrim — it holds the
+   modal lock, so nothing opens over it), the image letterboxed to the viewport, and the
+   alt text under it. Any click closes; the cursor says so. */
+.lightbox-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--bg-scrim);
+  backdrop-filter: blur(1.5px);
+  cursor: zoom-out;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: calc(100vh - 104px);
+  object-fit: contain;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  /* The same well the figure sat in: a drawing with dark strokes and no background of
+     its own must not dissolve into the scrim. */
+  background: var(--bg-inset);
+  padding: var(--space-3);
+}
+
+/* An SVG root may carry no intrinsic size (markdown.tsx says why); given only caps it
+   would draw at the <img> default. Full width, and the max-height letterboxes it. */
+.lightbox-img.is-svg {
+  width: 100%;
+}
+
+.lightbox-caption {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  max-width: min(70ch, 100%);
+  text-align: center;
   word-break: keep-all;
   overflow-wrap: break-word;
 }

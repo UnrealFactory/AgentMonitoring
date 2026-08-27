@@ -665,7 +665,7 @@ fn doctor_catches_corrupt_frontmatter() {
     .unwrap();
     let found = problems_matching(&tp, "frontmatter does not parse");
     assert_eq!(found.len(), 1, "{found:#?}");
-    assert!(found[0].contains("Quote any title"), "{found:#?}");
+    assert!(found[0].contains("Quote any value"), "{found:#?}");
     assert!(doctor::check(&tp.store).unwrap().errors() > 0);
 
     // a file with no frontmatter at all
