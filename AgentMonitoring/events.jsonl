@@ -817,3 +817,6 @@
 {"ts":"2026-08-27T02:28:28Z","actor":"fable-feedback-round","type":"work_done","ref":"WORK-0095","summary":"Removed the dashboard's per-agent activity table end to end: AgentsCard + agents memo (DashboardPage.tsx), SplitBar (charts.tsx), AgentRow/agentRows…"}
 {"ts":"2026-08-27T02:28:52Z","actor":"fable-feedback-round","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body, human area"}
 {"ts":"2026-08-27T02:28:56Z","actor":"fable-feedback-round","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title"}
+{"ts":"2026-08-27T02:34:51Z","actor":"fable-feedback-round","type":"work_updated","ref":"WORK-0094","summary":"Released as v1.4.1: versions bumped across the three sources, main pushed through b423390, npm run release built AgentMonitoring_1.4.1_x64-setup.exe and…"}
+{"ts":"2026-08-27T02:34:51Z","actor":"fable-feedback-round","type":"work_updated","ref":"WORK-0095","summary":"Released as v1.4.1 together with WORK-0094 — same build, same installer (AgentMonitoring_1.4.1_x64-setup.exe), tag…"}
+{"ts":"2026-08-27T02:35:31Z","actor":"fable-feedback-round","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body, human area"}
