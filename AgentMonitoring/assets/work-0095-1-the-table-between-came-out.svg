@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 470" width="700" height="470" role="img" aria-label="대시보드 카드 배열 두 가지: 차트와 활동 기록 사이에 에이전트 표가 있던 예전 모습과, 그 표가 빠져 차트에서 활동 기록으로 바로 이어지는 지금 모습.">
+  <!-- Drawn on the grid docs/HUMAN_STYLE.md sets: 700 across, nothing under 22, no taller
+       than half again that; at the 395 column every 22 lands at 12.4, over the 11 floor.
+       Type by role, never by name; every label keeps a fifth of its box empty.
+
+       Every actor, arrow, label and number below is a sentence of this record (WORK-0095):
+         · the left column's three tiers — "차트 두 장과 활동 기록 사이에, 에이전트마다
+           막대와 숫자를 단 표가 한 장 있었습니다"
+         · the left middle tier's bars of differing lengths — "에이전트마다 막대와 숫자"
+         · the right column's two tiers — "이제 차트에서 활동 기록으로 바로 이어집니다"
+         · the closing line — "그 표가 세던 것은 활동 기록과 목록 화면이 이미 다
+           말해 줍니다" -->
+  <style>
+    .s { font-family: system-ui, "Segoe UI", sans-serif; }
+  </style>
+
+  <rect width="700" height="470" rx="8" fill="#121317"/>
+
+  <!-- before: charts, the agents table, the feed -->
+  <rect x="90.5" y="48.5" width="100" height="52" rx="8" fill="#16171a" stroke="#fff" stroke-opacity="0.09"/>
+  <path d="M104,86 l20,-16 l18,8 l26,-20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="210.5" y="48.5" width="100" height="52" rx="8" fill="#16171a" stroke="#fff" stroke-opacity="0.09"/>
+  <path d="M224,86 l22,-10 l16,-12 l24,-2" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="90.5" y="112.5" width="220" height="76" rx="8" fill="#16171a" stroke="#f2994a" stroke-width="2"/>
+  <rect x="106" y="126" width="30" height="9" rx="2" fill="#8a8f98"/>
+  <rect x="146" y="126" width="118" height="9" rx="2" fill="#f2994a"/>
+  <rect x="106" y="144" width="30" height="9" rx="2" fill="#8a8f98"/>
+  <rect x="146" y="144" width="76" height="9" rx="2" fill="#f2994a"/>
+  <rect x="106" y="162" width="30" height="9" rx="2" fill="#8a8f98"/>
+  <rect x="146" y="162" width="44" height="9" rx="2" fill="#f2994a"/>
+
+  <rect x="90.5" y="200.5" width="220" height="64" rx="8" fill="#16171a" stroke="#fff" stroke-opacity="0.09"/>
+  <circle cx="110" cy="220" r="4" fill="#8a8f98"/>
+  <line x1="124" y1="220" x2="288" y2="220" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="110" cy="244" r="4" fill="#8a8f98"/>
+  <line x1="124" y1="244" x2="264" y2="244" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- after: the same page, the table gone -->
+  <rect x="390.5" y="48.5" width="100" height="52" rx="8" fill="#16171a" stroke="#fff" stroke-opacity="0.09"/>
+  <path d="M404,86 l20,-16 l18,8 l26,-20" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="510.5" y="48.5" width="100" height="52" rx="8" fill="#16171a" stroke="#fff" stroke-opacity="0.09"/>
+  <path d="M524,86 l22,-10 l16,-12 l24,-2" fill="none" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="390.5" y="112.5" width="220" height="64" rx="8" fill="#16171a" stroke="#fff" stroke-opacity="0.09"/>
+  <circle cx="410" cy="132" r="4" fill="#8a8f98"/>
+  <line x1="424" y1="132" x2="588" y2="132" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="410" cy="156" r="4" fill="#8a8f98"/>
+  <line x1="424" y1="156" x2="564" y2="156" stroke="#8a8f98" stroke-width="2.2" stroke-linecap="round"/>
+
+  <path d="M436,232 l12,12 l24,-24" fill="none" stroke="#4cb782" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- the words band -->
+  <text class="s" x="200" y="322" font-size="22" fill="#e8e9eb" text-anchor="middle">전에는</text>
+  <text class="s" x="200" y="354" font-size="22" fill="#8a8f98" text-anchor="middle">차트와 기록 사이의 표</text>
+  <text class="s" x="500" y="322" font-size="22" fill="#e8e9eb" text-anchor="middle">이제는</text>
+  <text class="s" x="500" y="354" font-size="22" fill="#8a8f98" text-anchor="middle">차트에서 기록으로 바로</text>
+
+  <!-- the closing line -->
+  <text class="s" x="350" y="420" font-size="22" fill="#8a8f98" text-anchor="middle">그 표가 세던 것은 기록과 목록 화면이 이미 말해 줍니다</text>
+</svg>
