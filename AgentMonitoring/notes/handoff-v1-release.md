@@ -1,79 +1,49 @@
 ---
 name: handoff-v1-release
-title: "v1.4.1 is live — how to ship, and the traps around the installer"
+title: v1.5.0 배포 완료 — 다음 배포 절차와 설치 파일 주의사항
 type: handoff
-description: v1.4.1 remains published; WORK-0096 adds local AGENTS.md generation beside CLAUDE.md. Release steps and installer naming stay the same.
+description: "v1.5.0 정식 배포 완료. AGENTS.md 생성 지원, 기능 커밋 b6503be, 설치 파일 크기·해시 확인. 다음 배포 순서와 Windows 설치 주의사항."
 agent: fable-release-builder
 updated_by: codex
 created: 2026-08-21T08:29:26Z
-updated: 2026-09-05T10:17:24Z
+updated: 2026-09-05T10:27:47Z
 tags: []
 refs: []
 ---
 
-Unreleased local change (2026-09-05, WORK-0096): project creation now offers independent CLAUDE.md and AGENTS.md language choices, and existing project menus can write either file. CLI: init --agents-md ko|en and project agents-md --lang ko|en. Both files share the same templates and preserve existing content; they are independent copies. This does not configure Codex MCP. The installed release remains v1.4.1; no installer was published for this work.
-Where things stand (2026-08-27, v1.4.1 released):
+현재 공개 버전은 **v1.5.0**입니다(2026-09-05).
 
-- Release v1.4.1 is live with AgentMonitoring_1.4.1_x64-setup.exe; main is pushed through
-  b423390 (WORK-0094/0095 + records + bump). It ships the external-feedback round
-  (WORK-0094: frontmatter list values quoted against `[`/`{`/`,` so Next.js `[id]` paths
-  round-trip; one unreadable record no longer locks a project's reads — lists skip it and
-  doctor names it; MCP log_work pre-flights the closing step before `work start`; record
-  images open full size on click) and the dashboard cut (WORK-0095: the per-agent
-  activity table removed at the owner's direction — SPEC.md's Dashboard entry records
-  the decision).
+## 현재 배포
 
-- v1.4.0 shipped the scene-citation fix (owner feedback, 2026-08-25): the style contract
-  spells the citation as a blank-lined paragraph of its own and requires
-  `width`/`height` on a scene's SVG root; the renderer promotes a whole-line image to a
-  figure wherever it stands and SVG figures fill their column; `agentmon doctor` warns
-  on a welded citation and on a cited SVG with a sizeless root; check:scenes measures
-  every cited SVG. The compact rules grew with this, so other projects teach the new
-  spelling only once they update past this version and their MCP servers restart;
-  docs/MCP.md republishes the measured hand-over (about 6,200 chars).
+- 릴리스: https://github.com/UnrealFactory/AgentMonitoring/releases/tag/v1.5.0
+- v1.5.0 태그가 가리키는 기능 커밋: b6503bee6a637f2a9bf9c31e29e8416e3be355d5.
+- 설치 파일: AgentMonitoring_1.5.0_x64-setup.exe, 8,099,711바이트.
+- SHA-256: 046a3c7a19187adf497514581f99c19487c45a87bab3e5bdf83e7e015d404588. GitHub 업로드 자산과 로컬 파일의 크기 및 해시가 같음을 확인했습니다.
+- WORK-0096은 기능 구현, WORK-0097은 버전 변경·커밋·푸시·설치 파일 공개 기록입니다.
+- 새 프로젝트에서 CLAUDE.md와 AGENTS.md를 각각 또는 함께 만들고 언어를 독립적으로 선택합니다. 기존 프로젝트 메뉴에서도 각 파일을 생성할 수 있습니다. 기존 내용은 보존하며 이미 있는 안내는 중복되지 않습니다.
+- CLI: init --agents-md ko|en, project agents-md --lang ko|en. 두 파일은 같은 템플릿의 독립적인 복사본입니다. AGENTS.md 생성은 Codex의 MCP 연결을 자동으로 설정하지 않습니다.
+- 사용자 확인용 개발 앱과 5173 서버는 배포 전에 종료했습니다. 로컬 설치 프로그램은 실행하지 않았습니다.
 
-- The line before it: v1.3.0 was human area v2 (WORK-0088..0092 — tellings append as
-  dated nodes, a scene on every beat by default, the Human view sharing the agent page's
-  skeleton). v1.2.1 shipped the compact rules teaching the replace rule (WORK-0087).
-  v1.2.0 made `--message` require `--human` everywhere. v1.1.1 de-metered the update
-  check (BUG-0029) and carried three MCP fixes. v1.1.0 was the dual-record release
-  (agent + human areas on every record, the Agent/사람 toggle, `agentmon reconcile`,
-  the boot locale fix, silent updates that leave the desktop icon alone).
+## 다음 버전을 배포할 때
 
-- To ship a new version: bump the version in package.json + src-tauri/tauri.conf.json +
-  Cargo.toml (root, workspace version — all three, release.mjs refuses if they disagree),
-  then npm run release. The preflight also runs scripts/check-humanstyle-drift.mjs — if it
-  refuses, rebuild the CLI so the embedded contract matches docs/HUMAN_STYLE.md. The
-  updater's fallback constructs the installer URL from the asset name release.mjs uploads
-  (AgentMonitoring_<version>_x64-setup.exe) — renaming that asset breaks the un-metered
-  path (a unit test in update.rs pins it).
+- package.json, src-tauri/tauri.conf.json, 루트 Cargo.toml의 버전을 맞추고 package-lock.json 및 Cargo.lock의 로컬 패키지 버전도 갱신합니다. 배포 스크립트는 세 기본 버전이 다르면 중단합니다.
+- npm run release는 지침 계약 확인, CLI·앱·NSIS 빌드, GitHub 릴리스 등록을 수행합니다. 소스와 태그를 먼저 정확히 푸시합니다. 빌드와 공개를 나눌 때는 node scripts/check-humanstyle-drift.mjs → npm run tauri:build → git 태그 푸시 → gh release create --verify-tag --notes-file 순서로 진행할 수 있습니다.
+- 설치 파일 이름 AgentMonitoring_<version>_x64-setup.exe를 유지합니다. 업데이트 코드가 이 이름으로 다운로드 주소를 만들기 때문에 이름을 바꾸면 업데이트가 끊깁니다.
+- scripts/check-humanstyle-drift.mjs가 실패하면 배포용 CLI를 다시 빌드합니다. docs/HUMAN_STYLE.md의 전체 계약과 압축 규칙이 바이너리에 내장된 내용과 같아야 합니다. 작성 규칙은 지침 파일에 상시 추가하지 않고 쓰기 시점의 CLI 거절 메시지, MCP 첫 응답, agentmon human-style에서 전달합니다.
+- Windows 배포에는 mcp/server.mjs, mcp/lib, mcp/node_modules와 CLI가 함께 들어갑니다. Tauri 리소스 경로는 디렉터리 매핑을 유지합니다. glob 매핑은 경로를 평탄화하여 같은 파일명끼리 덮어쓸 수 있습니다.
+- PowerShell 5.1의 Invoke-WebRequest에는 -UseBasicParsing이 필요합니다.
+- NSIS는 HKCU/Software/agentmonitoring/AgentMonitoring의 마지막 설치 위치를 기억합니다. 시험 설치가 다음 기본 설치 위치에 영향을 줄 수 있습니다.
+- .mcp.json은 Claude Code용 MCP 등록 경로입니다(init --mcp-json / project mcp-json). 다른 클라이언트의 등록은 각 도구의 설정을 사용합니다.
+- v1.1.0 이후 자동 업데이트는 바탕화면 아이콘 상태를 보존합니다. v1.0.1 이하에서 올리는 경우에는 예전 콘솔 업데이트 동작이 나타날 수 있습니다.
 
-- Writing rules are write-time only: nothing in CLAUDE.md; the CLI rejection, the MCP first
-  result and `agentmon human-style` deliver the compact rules; per-piece history is
-  progress/rounds.jsonl (D1-D11).
-
-- Gotchas that already bit once, still true: Invoke-WebRequest needs -UseBasicParsing on
-  PowerShell 5.1; Tauri resources maps flatten glob sources; NSIS remembers the last
-  install dir in HKCU/Software/agentmonitoring/AgentMonitoring, so a scratch install
-  redirects the next "default" one until that key is deleted.
-
-- .mcp.json is the registration path (init --mcp-json / project mcp-json); updating FROM
-  ≤1.0.1 still shows the old visible-console updater, from 1.0.2 the WPF splash, and from
-  1.1.0 onward silent updates leave the desktop icon state alone.
+이전 배포의 기능별 상세 경위는 해당 작업 기록과 progress/rounds.jsonl에서 확인합니다.
 
 ## For humans
 
-The published app is still version 1.4.1. On 5 September, WORK-0096 added another instruction-file choice in this checkout: users can create guidance for Claude Code, Codex, or both. The new option is available when creating a project and from an existing project's menu. It preserves rules already in the files. No installer was published for this change, and Codex still needs its own connection settings for the recording tools.
-이 노트는 작업 세션 사이의 바통입니다. 다음 사람이 지금 세상에 나가 있는 버전과 다음 버전을 내보내는 방법을 여기서 읽습니다. 마지막으로 다시 쓴 날은 2026년 8월 27일, 1.4.1이 나간 날입니다.
+2026년 9월 5일, 1.5.0을 최신 정식 버전으로 공개했습니다. 이제 설치 파일을 받으면 Claude Code와 Codex가 읽는 지침 파일을 각각 또는 함께 만드는 기능을 사용할 수 있습니다. 기존 파일에 적힌 규칙도 보존합니다.
 
-**1.4.1이 사람들 손에 있습니다.** 이번 버전은 외부 프로젝트의 제보들을 고친 판입니다. 대괄호가 든 파일 이름이 기록을 깨뜨리고, 그 깨진 기록 하나가 프로젝트 전체를 잠그던 문제를 풀었습니다. 기록이 반쪽만 남던 사고를 쓰기 전 검사로 막았고, 기록에 붙은 그림을 눌러 화면 크기로 보는 기능이 들어갔으며, 주인의 지시로 대시보드의 에이전트 표를 들어냈습니다. 저장소도 그 상태 그대로 밀어 올려져 있어, 작업 폴더에 내보내지 않은 수정은 없습니다.
+배포 파일은 빌드한 파일과 크기 및 내용 확인용 해시값이 일치했습니다. 개발 앱과 개발 서버는 종료했고, 이 컴퓨터에서 설치 프로그램을 직접 실행하지는 않았습니다.
 
-**그 앞의 1.4.0은 그림 인용 문제를 고친 판입니다.** 기록의 쉬운 말 페이지에 넣는 장면 그림이, 빈 줄 없이 붙여 쓰거나 그림 파일 첫 줄에 크기가 안 적혀 있으면 글자 한 줄 높이로 쪼그라든 채 실려 나갔습니다. 규칙서에 올바른 철자를 적고, 앱이 잘못된 철자도 그림으로 그려 주고, 점검 명령 `agentmon doctor`가 두 모양을 경고하게 해서 세 겹으로 막았습니다. 글쓰기 규칙은 설치된 프로그램 안에 실려 다니므로, 다른 프로젝트들은 새 버전으로 올려야 새 규칙을 받습니다.
+다음 배포에서도 설치 파일 이름을 유지해야 합니다. 앱이 업데이트를 받는 주소를 그 이름으로 계산하기 때문입니다. 또 화면에 보이는 앱 버전과 함께 들어가는 기록 도구의 버전을 맞춰야 합니다. 같은 상자에 넣는 설명서와 제품의 판번호를 맞추는 것과 같습니다.
 
-**그 앞은 이렇게 흘러왔습니다.** 1.3.0은 쉬운 말 페이지의 두 번째 판 — 저장마다 날짜 달린 항목으로 쌓이고, 이야기의 걸음마다 그림이 기본이 된 판입니다. 1.2.1은 짧은 규칙이 "전체를 다시 말하라"를 가르치게 된 판, 1.2.0은 기록에 노트를 달 때 쉬운 말 절반을 함께 내라고 강제한 판입니다.
-
-**다음 버전을 내보내는 일은 세 군데 수정과 명령 하나입니다.** 버전 숫자가 사는 세 파일이 같아야 하고, 다르면 릴리스 스크립트가 거절합니다. 빌드 전에 규칙서와 도구 속 사본이 같은지도 검사합니다 — 거절당하면 명령줄 도구를 먼저 다시 빌드하십시오. 무료 업데이트 경로는 스크립트가 올리는 설치 파일의 정확한 이름으로 설치본을 찾으므로, 그 이름을 바꾸면 안 됩니다.
-
-**바닥의 함정 목록은 흉터입니다.** 하나하나가 이미 한나절을 잡아먹은 실수라서, 문장 하나로 피할 수 있게 적어 두었습니다.
-
-이 노트를 먼저 읽고, 세-파일-한-명령 순서로 내보내십시오.
+지침 파일을 만드는 것과 기록 도구를 연결하는 것은 별도입니다. Codex를 쓰는 프로젝트는 해당 도구의 연결 설정도 준비해야 합니다.
