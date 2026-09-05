@@ -589,6 +589,7 @@ function CreateProject({
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [claudeMd, setClaudeMd] = useState<"" | "ko" | "en">("");
+  const [agentsMd, setAgentsMd] = useState<"" | "ko" | "en">("");
   /* On by default: the app is the one party that knows where its bundled mcp/server.mjs
      lives, so registering it here is the difference between tools that are simply there
      and a CLAUDE.md that assigns the agent homework. */
@@ -629,6 +630,7 @@ function CreateProject({
           .map((t) => t.trim())
           .filter(Boolean),
         claudeMd: claudeMd || undefined,
+        agentsMd: agentsMd || undefined,
         mcpJson,
         mcpAgent: mcpJson ? mcpAgent.trim() || undefined : undefined,
       });
@@ -701,39 +703,45 @@ function CreateProject({
             onChange={(e) => setTags(e.target.value)}
           />
         </label>
-        <div className="field field-wide claude-md-field">
-          <span className="field-label" id="claude-md-label">
-            {t("proj.form.claudeMd")}
-          </span>
-          {/* Each language names itself in its own language, like the locale toggle: the
-              label tells you what the generated file will read like. */}
-          <div
-            className="segmented claude-md-choice"
-            role="radiogroup"
-            aria-labelledby="claude-md-label"
-          >
-            {(["", "ko", "en"] as const).map((v) => (
-              <button
-                key={v || "none"}
-                type="button"
-                role="radio"
-                aria-checked={claudeMd === v}
-                className={`segment${claudeMd === v ? " is-active" : ""}`}
-                onClick={() => setClaudeMd(v)}
-              >
-                {v === "" ? t("proj.form.claudeMdNone") : v === "ko" ? "한국어" : "English"}
-              </button>
-            ))}
+        {([
+          { kind: "claude", value: claudeMd, set: setClaudeMd },
+          { kind: "agents", value: agentsMd, set: setAgentsMd },
+        ] as const).map(({ kind, value, set }) => (
+          <div className="field field-wide instruction-md-field" key={kind}>
+            <span className="field-label" id={`${kind}-md-label`}>
+              {t(kind === "claude" ? "proj.form.claudeMd" : "proj.form.agentsMd")}
+            </span>
+            {/* Each language names itself: the label describes the generated file. */}
+            <div
+              className="segmented instruction-md-choice"
+              role="radiogroup"
+              aria-labelledby={`${kind}-md-label`}
+            >
+              {(["", "ko", "en"] as const).map((v) => (
+                <button
+                  key={v || "none"}
+                  type="button"
+                  role="radio"
+                  aria-checked={value === v}
+                  className={`segment${value === v ? " is-active" : ""}`}
+                  onClick={() => set(v)}
+                >
+                  {v === "" ? t("proj.form.instructionMdNone") : v === "ko" ? "한국어" : "English"}
+                </button>
+              ))}
+            </div>
+            <span className="field-hint">
+              {t(kind === "claude" ? "proj.form.claudeMdHint" : "proj.form.agentsMdHint")}
+            </span>
           </div>
-          <span className="field-hint">{t("proj.form.claudeMdHint")}</span>
-        </div>
-        <div className="field field-wide claude-md-field">
+        ))}
+        <div className="field field-wide instruction-md-field">
           <span className="field-label" id="mcp-json-label">
             {t("proj.form.mcpJson")}
           </span>
           <div className="mcp-json-row">
             <div
-              className="segmented claude-md-choice"
+              className="segmented instruction-md-choice"
               role="radiogroup"
               aria-labelledby="mcp-json-label"
             >

@@ -1048,7 +1048,8 @@ line — `agentmon --json work list` and `agentmon work list --json` are the sam
 
 ```
 agentmon init [--dir <folder>] --name <n> [--description <d>] [--tags a,b]
-              [--agent <name>] [--at <ISO8601>] [--claude-md ko|en] [--json]
+              [--agent <name>] [--at <ISO8601>] [--claude-md ko|en] [--agents-md ko|en]
+              [--mcp-json [--mcp-agent <handle>]] [--json]
 ```
 
 Creates a project: an `AgentMonitoring` folder inside `--dir` (default: the current
@@ -1056,18 +1057,39 @@ directory), holding `project.json`, `worklogs/`, `bugs/` and the `project_create
 and registers it in the machine's project list, so it appears in the app. Refuses (exit
 `5`) if that folder already holds a project — it will never reset a live one.
 
-`--claude-md ko|en` also writes agent instructions — record here, read the notes first,
-write for the reader, in that language, and how to register the MCP server when the tools
-are missing — to `CLAUDE.md` at the repo root, next to the `AgentMonitoring` folder, where
-coding agents load it. A CLAUDE.md the repo already has is
-never overwritten: the section is appended after a blank line, and if either language's
-section is already present the file is left alone.
+`--claude-md ko|en` writes work-recording instructions for Claude Code to `CLAUDE.md`.
+`--agents-md ko|en` writes the same instructions for Codex and compatible tools to
+`AGENTS.md`. Both files live at the repo root, next to the `AgentMonitoring` folder.
+Use either flag or both together; each file can have its own language. Existing content
+is preserved: the section is appended after a blank line, and a file already carrying
+either language's section is left alone. The files are independent copies of the same
+template, so creating either one does not modify the other.
+
+These instructions refer to the agentmon MCP tools. `--mcp-json` separately creates the
+MCP registration used by Claude Code; other clients need their own MCP configuration
+(see [MCP setup](MCP.md)). Creating `AGENTS.md` does not register a server in Codex.
 
 ```bash
 cd /your/repo && agentmon init --name "Checkout rewrite" \
   --description "Replace the legacy checkout flow." --tags frontend,payments \
-  --claude-md ko
+  --claude-md ko --agents-md ko
 ```
+
+The app's **New project** form offers the same independent choices: skip, Korean or
+English for each file. Existing projects expose both writes in their project menu,
+using the app's current language.
+
+### `agentmon project claude-md` / `agentmon project agents-md`
+
+```bash
+agentmon project claude-md --lang ko
+agentmon project agents-md --lang en
+```
+
+Add instructions after a project has been created. Both commands preserve existing
+content and skip a section already present, even if you request a different language.
+`--json` returns `{ "ok": true, "path": "…", "outcome": "created" }`; outcome may also
+be `appended` or `already_present`.
 
 ### `agentmon project view`
 

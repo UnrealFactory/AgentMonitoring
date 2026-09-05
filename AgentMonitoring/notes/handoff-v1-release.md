@@ -2,15 +2,16 @@
 name: handoff-v1-release
 title: "v1.4.1 is live — how to ship, and the traps around the installer"
 type: handoff
-description: v1.4.1 published (feedback fixes + agents-table cut); main pushed through b423390; npm run release ships; keep the installer asset name; UseBasicParsing / NSIS gotchas.
+description: v1.4.1 remains published; WORK-0096 adds local AGENTS.md generation beside CLAUDE.md. Release steps and installer naming stay the same.
 agent: fable-release-builder
-updated_by: fable-feedback-round
+updated_by: codex
 created: 2026-08-21T08:29:26Z
-updated: 2026-08-27T02:35:31Z
+updated: 2026-09-05T10:17:24Z
 tags: []
 refs: []
 ---
 
+Unreleased local change (2026-09-05, WORK-0096): project creation now offers independent CLAUDE.md and AGENTS.md language choices, and existing project menus can write either file. CLI: init --agents-md ko|en and project agents-md --lang ko|en. Both files share the same templates and preserve existing content; they are independent copies. This does not configure Codex MCP. The installed release remains v1.4.1; no installer was published for this work.
 Where things stand (2026-08-27, v1.4.1 released):
 
 - Release v1.4.1 is live with AgentMonitoring_1.4.1_x64-setup.exe; main is pushed through
@@ -62,6 +63,7 @@ Where things stand (2026-08-27, v1.4.1 released):
 
 ## For humans
 
+The published app is still version 1.4.1. On 5 September, WORK-0096 added another instruction-file choice in this checkout: users can create guidance for Claude Code, Codex, or both. The new option is available when creating a project and from an existing project's menu. It preserves rules already in the files. No installer was published for this change, and Codex still needs its own connection settings for the recording tools.
 이 노트는 작업 세션 사이의 바통입니다. 다음 사람이 지금 세상에 나가 있는 버전과 다음 버전을 내보내는 방법을 여기서 읽습니다. 마지막으로 다시 쓴 날은 2026년 8월 27일, 1.4.1이 나간 날입니다.
 
 **1.4.1이 사람들 손에 있습니다.** 이번 버전은 외부 프로젝트의 제보들을 고친 판입니다. 대괄호가 든 파일 이름이 기록을 깨뜨리고, 그 깨진 기록 하나가 프로젝트 전체를 잠그던 문제를 풀었습니다. 기록이 반쪽만 남던 사고를 쓰기 전 검사로 막았고, 기록에 붙은 그림을 눌러 화면 크기로 보는 기능이 들어갔으며, 주인의 지시로 대시보드의 에이전트 표를 들어냈습니다. 저장소도 그 상태 그대로 밀어 올려져 있어, 작업 폴더에 내보내지 않은 수정은 없습니다.

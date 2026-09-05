@@ -318,16 +318,20 @@ migrated project arrives as legacy records and gains its human areas on first to
 
 ```
 agentmon init [--dir <folder>] --name <n> [--description <d>] [--tags a,b] [--at T] [--claude-md ko|en]
-              [--mcp-json [--mcp-agent h]]
+              [--agents-md ko|en] [--mcp-json [--mcp-agent h]]
                                           # creates <folder>/AgentMonitoring; --claude-md also
                                           # writes agent instructions to <folder>/CLAUDE.md
                                           # (append if the file exists; skip if already there);
+                                          # --agents-md does the same for <folder>/AGENTS.md;
+                                          # both flags may be used together, with independent languages
                                           # --mcp-json also writes <folder>/.mcp.json registering
                                           # the agentmon MCP server (only the agentmon entry is
                                           # ever added or replaced in an existing file)
 agentmon project view [--json]
 agentmon project update [--name <n>] [--description <d>] [--tags a,b] [--at T]
 agentmon project list                     # the machine's registry (informational)
+agentmon project claude-md --lang ko|en    # add instructions to CLAUDE.md for an existing project
+agentmon project agents-md --lang ko|en    # add instructions to AGENTS.md for an existing project
 agentmon project mcp-json [--agent h]     # write/refresh .mcp.json for an existing project
 agentmon work start   --agent <name> --title <t> (--body s | --body-file f) --human s|--human-file f [--tags] [--started-at T]
 agentmon work update  <WORK-ID> --agent <name> --human s|--human-file f [--message s | --body-file|--message-file f] [--at T] [--replayed]

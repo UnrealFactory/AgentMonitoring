@@ -161,6 +161,10 @@ enum Command {
         /// is already there.
         #[arg(long, value_name = "ko|en")]
         claude_md: Option<String>,
+        /// Also write AGENTS.md instructions for Codex and compatible tools.
+        /// Can be combined with --claude-md. Preserves existing content.
+        #[arg(long, value_name = "ko|en")]
+        agents_md: Option<String>,
         /// Also write <location>/.mcp.json registering the agentmon MCP server, so
         /// project-scope clients (Claude Code reads the file on its own) have the tools
         /// from their first session. Only the `agentmon` entry is added or replaced;
@@ -307,6 +311,14 @@ enum ProjectCmd {
         Re-run it after an app update to pick up a refreshed template: an unchanged \
         section reports `already_present` and writes nothing.")]
     ClaudeMd {
+        /// Language of the instructions: ko or en.
+        #[arg(long, value_name = "ko|en")]
+        lang: String,
+    },
+    /// Write the agentmon instructions into this repo's AGENTS.md for Codex and
+    /// compatible tools. Appends to existing rules; skips a section already present.
+    #[command(name = "agents-md", after_help = "EXAMPLE\n  agentmon project agents-md --lang ko")]
+    AgentsMd {
         /// Language of the instructions: ko or en.
         #[arg(long, value_name = "ko|en")]
         lang: String,
@@ -1088,6 +1100,7 @@ fn run(cli: &Cli) -> CliResult {
             agent,
             at,
             claude_md,
+            agents_md,
             mcp_json,
             mcp_agent,
         } => cmd_init(
@@ -1098,6 +1111,7 @@ fn run(cli: &Cli) -> CliResult {
             agent,
             at.as_deref(),
             claude_md.as_deref(),
+            agents_md.as_deref(),
             *mcp_json,
             mcp_agent,
         ),
@@ -1144,12 +1158,14 @@ fn cmd_init(
     agent: &str,
     at: Option<&str>,
     claude_md: Option<&str>,
+    agents_md: Option<&str>,
     mcp_json: bool,
     mcp_agent: &str,
 ) -> CliResult {
-    // Parsed before anything is written: a typo in --claude-md must not leave behind a
+    // Parsed before anything is written: a typo in either language must not leave behind a
     // project that a corrected re-run then refuses to create.
     let claude_md = claude_md.map(agentmon_core::parse_claude_md_lang).transpose()?;
+    let agents_md = agents_md.map(agentmon_core::parse_agents_md_lang).transpose()?;
     // `init` is the one command that must not resolve an existing project: the location
     // is --dir, $AGENTMON_DIR or the current directory, taken literally.
     let location = cli
@@ -1171,6 +1187,9 @@ fn cmd_init(
     let registered = register(&store);
     let claude = claude_md
         .map(|lang| agentmon_core::write_claude_md(store.location(), lang))
+        .transpose()?;
+    let agents = agents_md
+        .map(|lang| agentmon_core::write_agents_md(store.location(), lang))
         .transpose()?;
     let mcp = if mcp_json {
         // The server ships beside this binary (installed app) or at <repo>/mcp (source
@@ -1200,7 +1219,7 @@ fn cmd_init(
     if registered {
         println!("  registered in the app's project list");
     }
-    if let Some((path, outcome)) = claude {
+    for (path, outcome) in [claude, agents].into_iter().flatten() {
         use agentmon_core::ClaudeMdOutcome as O;
         match outcome {
             O::Created => println!("  wrote {}", path.display()),
@@ -1451,14 +1470,17 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
             println!("  server: {}", server.display());
             Ok(())
         }
-        ProjectCmd::ClaudeMd { lang } => {
+        ProjectCmd::ClaudeMd { lang } | ProjectCmd::AgentsMd { lang } => {
             let lang = agentmon_core::parse_claude_md_lang(lang).map_err(|e| {
                 let mut err = CliError::from(e);
                 err.message = err.message.replace("--claude-md", "--lang");
                 err
             })?;
             let store = open(cli)?;
-            let (path, outcome) = agentmon_core::write_claude_md(store.location(), lang)?;
+            let (path, outcome) = match cmd {
+                ProjectCmd::AgentsMd { .. } => agentmon_core::write_agents_md(store.location(), lang)?,
+                _ => agentmon_core::write_claude_md(store.location(), lang)?,
+            };
             if cli.json {
                 use agentmon_core::ClaudeMdOutcome as O;
                 return print_json(&serde_json::json!({

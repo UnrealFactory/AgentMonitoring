@@ -292,10 +292,10 @@ const CHROME = [".ref-inline.is-unknown"];
  * is the one rule every language picker keeps: a reader who landed in the wrong one has to
  * be able to read their way out. So it is the one place Hangul is allowed on an English
  * screen, and the tooltip on each segment carries the same name. The New project form's
- * CLAUDE.md choice keeps the same rule for the same reason: the label tells you what the
+ * Instruction-file choices keep the same rule for the same reason: the label tells you what the
  * generated file will read like, in that file's own language.
  */
-const OTHER_TONGUE = [".locale-toggle", ".claude-md-choice"];
+const OTHER_TONGUE = [".locale-toggle", ".instruction-md-choice"];
 
 /** Values that are data rather than language, and are the same in every locale. */
 const TOKENS = [
@@ -306,7 +306,8 @@ const TOKENS = [
   /\bagentmon\b/g,
   /\bvault\.json\b/g,
   /\bevents\.jsonl\b/g,
-  /\bCLAUDE\.md\b/g,
+  /\b(?:CLAUDE|AGENTS)\.md\b/g,
+  /\b(?:Claude Code|Codex)\b/g, // product names on the instruction-file choices
   /\.mcp\.json\b/g, // the client config file the project menu writes, named as-is
   /\bprojects\/[^\s]*/g,
   /\bAGENTMON_DIRS?\b/g,

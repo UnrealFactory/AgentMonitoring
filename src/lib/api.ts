@@ -270,6 +270,8 @@ export const api = {
     agent?: string;
     /** Also write agent instructions to `<location>/CLAUDE.md`, in this language. */
     claudeMd?: "ko" | "en";
+    /** Also write `<location>/AGENTS.md`; may be selected together with CLAUDE.md. */
+    agentsMd?: "ko" | "en";
     /** Also write `<location>/.mcp.json` registering the agentmon MCP server. */
     mcpJson?: boolean;
     /** Default agent handle inside that registration; a call can override it. */
@@ -283,6 +285,7 @@ export const api = {
           tags: input.tags ?? [],
           agent: input.agent ?? DEFAULT_ACTOR,
           claudeMd: input.claudeMd ?? null,
+          agentsMd: input.agentsMd ?? null,
           mcpJson: input.mcpJson ?? false,
           mcpAgent: input.mcpAgent ?? null,
         })
@@ -303,6 +306,15 @@ export const api = {
       ? invokeCommand<ScaffoldOutcome>("write_project_claude_md", { id, lang })
       : fetchJson<{ outcome: ScaffoldOutcome }>(
           `/project-api/projects/${encodeURIComponent(id)}/claude-md`,
+          { method: "POST", body: JSON.stringify({ lang }) }
+        ).then((r) => r.outcome),
+
+  /** Write AGENTS.md with the same content-preserving rules as CLAUDE.md. */
+  writeAgentsMd: (id: string, lang: "ko" | "en"): Promise<ScaffoldOutcome> =>
+    isTauri()
+      ? invokeCommand<ScaffoldOutcome>("write_project_agents_md", { id, lang })
+      : fetchJson<{ outcome: ScaffoldOutcome }>(
+          `/project-api/projects/${encodeURIComponent(id)}/agents-md`,
           { method: "POST", body: JSON.stringify({ lang }) }
         ).then((r) => r.outcome),
 

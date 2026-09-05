@@ -35,7 +35,10 @@ pub mod time;
 pub mod validate;
 pub mod write;
 
-pub use claude_md::{parse_claude_md_lang, write_claude_md, ClaudeMdLang, ClaudeMdOutcome};
+pub use claude_md::{
+    parse_agents_md_lang, parse_claude_md_lang, write_agents_md, write_claude_md,
+    ClaudeMdLang, ClaudeMdOutcome,
+};
 pub use error::{BodyRejection, CoreError, HumanRejection, Result};
 pub use human::{COMPACT_RULES as HUMAN_COMPACT_RULES, STYLE as HUMAN_STYLE};
 pub use mcp_json::{find_mcp_server, write_mcp_json, McpJsonOutcome};

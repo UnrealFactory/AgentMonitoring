@@ -322,6 +322,7 @@ fn create_project(
     tags: Vec<String>,
     agent: String,
     claude_md: Option<String>,
+    agents_md: Option<String>,
     mcp_json: Option<bool>,
     mcp_agent: Option<String>,
     app: AppHandle,
@@ -331,6 +332,11 @@ fn create_project(
     let claude_md = claude_md
         .as_deref()
         .map(agentmon_core::parse_claude_md_lang)
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    let agents_md = agents_md
+        .as_deref()
+        .map(agentmon_core::parse_agents_md_lang)
         .transpose()
         .map_err(|e| e.to_string())?;
     let location = PathBuf::from(location);
@@ -353,6 +359,10 @@ fn create_project(
     if let Some(lang) = claude_md {
         agentmon_core::write_claude_md(store.location(), lang)
             .map_err(|e| format!("the project was created, but CLAUDE.md was not: {e}"))?;
+    }
+    if let Some(lang) = agents_md {
+        agentmon_core::write_agents_md(store.location(), lang)
+            .map_err(|e| format!("the project was created, but AGENTS.md was not: {e}"))?;
     }
     if mcp_json.unwrap_or(false) {
         // This process knows where its bundled mcp/server.mjs is — the whole reason the
@@ -412,6 +422,25 @@ fn write_project_claude_md(
     let store = store_for(&extra, &id)?;
     let (_, outcome) =
         agentmon_core::write_claude_md(store.location(), lang).map_err(|e| e.to_string())?;
+    Ok(match outcome {
+        agentmon_core::ClaudeMdOutcome::Created => "created",
+        agentmon_core::ClaudeMdOutcome::Appended => "appended",
+        agentmon_core::ClaudeMdOutcome::AlreadyPresent => "already_present",
+    }
+    .to_string())
+}
+
+/// Add AGENTS.md instructions to an existing project, preserving its existing rules.
+#[tauri::command]
+fn write_project_agents_md(
+    id: String,
+    lang: String,
+    extra: State<'_, ExtraRoots>,
+) -> CmdResult<String> {
+    let lang = agentmon_core::parse_agents_md_lang(&lang).map_err(|e| e.to_string())?;
+    let store = store_for(&extra, &id)?;
+    let (_, outcome) =
+        agentmon_core::write_agents_md(store.location(), lang).map_err(|e| e.to_string())?;
     Ok(match outcome {
         agentmon_core::ClaudeMdOutcome::Created => "created",
         agentmon_core::ClaudeMdOutcome::Appended => "appended",
@@ -982,6 +1011,7 @@ pub fn run() {
             remove_project,
             delete_project,
             write_project_claude_md,
+            write_project_agents_md,
             write_project_mcp_json,
             list_app_feedback,
             set_app_feedback_status,

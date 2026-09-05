@@ -6088,12 +6088,12 @@ a.feed-row:hover .feed-ref {
 /* A file name is data: the label's uppercase must not shout CLAUDE.md into CLAUDE.MD.
    And the choice hugs its three segments like every other segmented control instead of
    stretching a border across the column. */
-.claude-md-field .field-label {
+.instruction-md-field .field-label {
   text-transform: none;
   letter-spacing: normal;
 }
 
-.claude-md-choice {
+.instruction-md-choice {
   align-self: flex-start;
 }
 
@@ -6105,7 +6105,7 @@ a.feed-row:hover .feed-ref {
   gap: var(--space-2);
 }
 
-.mcp-json-row .claude-md-choice {
+.mcp-json-row .instruction-md-choice {
   align-self: auto;
   flex: none;
 }

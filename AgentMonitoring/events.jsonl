@@ -820,3 +820,7 @@
 {"ts":"2026-08-27T02:34:51Z","actor":"fable-feedback-round","type":"work_updated","ref":"WORK-0094","summary":"Released as v1.4.1: versions bumped across the three sources, main pushed through b423390, npm run release built AgentMonitoring_1.4.1_x64-setup.exe and…"}
 {"ts":"2026-08-27T02:34:51Z","actor":"fable-feedback-round","type":"work_updated","ref":"WORK-0095","summary":"Released as v1.4.1 together with WORK-0094 — same build, same installer (AgentMonitoring_1.4.1_x64-setup.exe), tag…"}
 {"ts":"2026-08-27T02:35:31Z","actor":"fable-feedback-round","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, body, human area"}
+{"ts":"2026-09-05T10:14:36Z","actor":"codex","type":"work_started","ref":"WORK-0096","summary":"CLAUDE.md와 함께 AGENTS.md 지침 생성 지원"}
+{"ts":"2026-09-05T10:17:24Z","actor":"codex","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: description, body, human area"}
+{"ts":"2026-09-05T10:18:44Z","actor":"codex","type":"work_done","ref":"WORK-0096","summary":"새 프로젝트 폼, 기존 프로젝트의 공통 메뉴, Tauri/브라우저 API, CLI에서 AGENTS.md 생성이 동작한다. 두 지침 파일은 독립적으로 언어를 선택하고 기존 내용을 보존하며 같은 안내가 이미 있으면 건너뛴다. 문서와 배포 인계 노트에 미배포 로컬 변경을 기록했다."}
+{"ts":"2026-09-05T10:22:24Z","actor":"codex","type":"work_started","ref":"WORK-0097","summary":"AGENTS.md 생성 기능을 포함한 v1.5.0 배포"}

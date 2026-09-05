@@ -878,9 +878,11 @@ fn closing_a_record_appends_the_ending_after_the_earlier_tellings() {
     let raw = f.raw(&format!("bugs/{bug}.md"));
     assert_eq!(raw.matches("## For humans").count(), 1, "{raw}");
     assert!(raw.find("## Resolution").unwrap() < raw.find("## For humans").unwrap());
-    let human = f.store.bug(&bug).unwrap().human.unwrap();
+    let resolved_bug = f.store.bug(&bug).unwrap();
+    let resolved_at = resolved_bug.meta.resolved.as_ref().unwrap();
+    let human = resolved_bug.human.as_ref().unwrap();
     assert!(human.ends_with("remembers it in the address."), "{human}");
-    assert!(human.contains("### 2026-08-"), "the ending is a dated node: {human}");
+    assert!(human.contains(&format!("### {resolved_at}")), "the ending is stamped with the resolution: {human}");
 
     let other = f.start();
     f.store

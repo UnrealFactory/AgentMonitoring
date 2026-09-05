@@ -1,7 +1,7 @@
 {
   "name": "agentmonitoring",
   "private": true,
-  "version": "1.4.1",
+  "version": "1.5.0",
   "type": "module",
   "description": "Central record house where AI agents document their own work for humans.",
   "scripts": {
@@ -25,6 +25,7 @@
     "check:counts": "node scripts/check-counts.mjs",
     "check:live": "node scripts/check-live.mjs",
     "check:projects": "node scripts/check-projects.mjs",
+    "check:instructions": "node scripts/check-instructions.mjs",
     "check:mcp": "npm --prefix mcp test",
     "check:humanstyle": "node scripts/check-humanstyle-drift.mjs",
     "check:scenes": "node scripts/check-scenes.mjs"

@@ -207,11 +207,13 @@ export const ko: Dict = {
      title — cannot take 을/를 without knowing how the value ends. Noun-final says the same
      thing and is right whatever is copied. */
   "menu.copiedWhat": (what) => `${what} 복사됨`,
-  /* 새 프로젝트 대화상자의 두 옵션을 만든 뒤에도 누를 수 있게 한 것 — 템플릿과 서버 경로는
+  /* 새 프로젝트 대화상자의 옵션을 만든 뒤에도 누를 수 있게 한 것 — 템플릿과 서버 경로는
      앱과 함께 움직인다. 쓰기는 코어의 보수적 규칙 그대로라 몇 번 눌러도 안전하고, 토스트가
      실제로 일어난 일을 말한다. */
   "menu.claudeMd": "CLAUDE.md 지침 쓰기",
   "menu.claudeMdHint": "없으면 만들고, 있으면 덧붙입니다",
+  "menu.agentsMd": "AGENTS.md 지침 쓰기",
+  "menu.agentsMdHint": "없으면 만들고, 있으면 덧붙입니다",
   "menu.mcpJson": ".mcp.json MCP 등록",
   "menu.mcpJsonHint": "agentmon 항목만 갱신 — 다른 서버는 보존",
   "menu.scaffoldCreated": (file) => `${file} 파일을 만들었습니다`,
@@ -628,9 +630,12 @@ export const ko: Dict = {
   "proj.form.tags": "태그",
   "proj.form.tagsPlaceholder": "frontend, payments",
   "proj.form.claudeMd": "CLAUDE.md",
-  "proj.form.claudeMdNone": "추가 안 함",
+  "proj.form.agentsMd": "AGENTS.md",
+  "proj.form.instructionMdNone": "추가 안 함",
   "proj.form.claudeMdHint":
-    "코딩 에이전트가 작업을 여기에 기록하도록 안내하는 CLAUDE.md를 저장소 루트에 만듭니다. 파일이 이미 있으면 안내 섹션만 덧붙입니다.",
+    "Claude Code용 작업 기록 지침을 저장소 루트에 만듭니다. 기존 내용은 보존하며, AGENTS.md와 함께 만들 수 있습니다.",
+  "proj.form.agentsMdHint":
+    "Codex 등 AGENTS.md를 지원하는 도구용 작업 기록 지침을 저장소 루트에 만듭니다. 기존 내용은 보존하며, CLAUDE.md와 함께 만들 수 있습니다.",
   "proj.form.mcpJson": "MCP 자동 등록 (.mcp.json)",
   "proj.form.mcpJsonOn": "만들기",
   "proj.form.mcpJsonOff": "안 만듦",

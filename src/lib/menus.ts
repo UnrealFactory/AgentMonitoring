@@ -160,22 +160,23 @@ export function useProjectMenu() {
   const { refresh } = useApp();
   const { toast } = useContextMenuApi();
 
-  /* The New-project options, reachable after creation: the CLAUDE.md template and the
+  /* The New-project options, reachable after creation: the instruction templates and the
      .mcp.json server path move with the app, and a project made last month has no other
-     way to catch up. Both writes are core's conservative ones (create / append / touch
+     way to catch up. These writes are core's conservative ones (create / append / touch
      only the agentmon entry), so the item is safe to press twice — the toast conjugates
-     what actually happened. CLAUDE.md is written in the app's current language, the same
-     default the create dialog opens on. */
+     what actually happened. Instruction files use the app's current language. */
   const scaffold = useCallback(
-    (p: Project, kind: "claude" | "mcp") => {
+    (p: Project, kind: "claude" | "agents" | "mcp") => {
       void (async () => {
-        const file = kind === "claude" ? "CLAUDE.md" : ".mcp.json";
+        const file = { claude: "CLAUDE.md", agents: "AGENTS.md", mcp: ".mcp.json" }[kind];
         let outcome: ScaffoldOutcome;
         try {
           outcome =
             kind === "claude"
               ? await api.writeClaudeMd(p.id, getLocale())
-              : await api.writeMcpJson(p.id);
+              : kind === "agents"
+                ? await api.writeAgentsMd(p.id, getLocale())
+                : await api.writeMcpJson(p.id);
         } catch (err) {
           toast(
             plainMarks(
@@ -240,6 +241,12 @@ export function useProjectMenu() {
           hint: t("menu.claudeMdHint"),
           separator: true,
           run: () => scaffold(p, "claude"),
+        },
+        {
+          id: "agents-md",
+          label: t("menu.agentsMd"),
+          hint: t("menu.agentsMdHint"),
+          run: () => scaffold(p, "agents"),
         },
         {
           id: "mcp-json",

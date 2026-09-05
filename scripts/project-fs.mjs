@@ -1174,11 +1174,11 @@ export function handleProjectWrite(reader, repoRoot, pathname, body) {
   // Scaffolding for a project that already exists — the New-project options, reachable
   // later. Shells the CLI verbs (`agentmon project claude-md` / `project mcp-json`), so
   // the conservative write rules are agentmon's own; --dir targets the served folder.
-  if (a === "projects" && b && (c === "claude-md" || c === "mcp-json") && !parts[4]) {
+  if (a === "projects" && b && ["claude-md", "agents-md", "mcp-json"].includes(c) && !parts[4]) {
     const store = reader.byId(b);
     const args = ["--dir", store.root, "project"];
-    if (c === "claude-md") {
-      args.push("claude-md", "--lang", REQUIRED(body, "lang"));
+    if (c === "claude-md" || c === "agents-md") {
+      args.push(c, "--lang", REQUIRED(body, "lang"));
     } else {
       args.push("mcp-json");
       const agent = typeof body?.mcpAgent === "string" ? body.mcpAgent.trim() : "";
@@ -1198,6 +1198,8 @@ export function handleProjectWrite(reader, repoRoot, pathname, body) {
     // Validated by the CLI, like everything else on this path.
     const claudeMd = typeof body.claudeMd === "string" ? body.claudeMd.trim() : "";
     if (claudeMd) args.push("--claude-md", claudeMd);
+    const agentsMd = typeof body.agentsMd === "string" ? body.agentsMd.trim() : "";
+    if (agentsMd) args.push("--agents-md", agentsMd);
     // The MCP registration too: the CLI finds mcp/server.mjs from its own location,
     // which in browser mode is this repo's checkout — the right path for a dev machine.
     if (body.mcpJson === true) {

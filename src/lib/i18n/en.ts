@@ -146,6 +146,8 @@ export const en = {
      safe; the toast says what actually happened. */
   "menu.claudeMd": "Write CLAUDE.md instructions",
   "menu.claudeMdHint": "creates, or appends to yours",
+  "menu.agentsMd": "Write AGENTS.md instructions",
+  "menu.agentsMdHint": "creates, or appends to yours",
   "menu.mcpJson": "Register MCP in .mcp.json",
   "menu.mcpJsonHint": "touches only the agentmon entry",
   "menu.scaffoldCreated": (file: string) => `Wrote ${file}`,
@@ -578,9 +580,12 @@ export const en = {
   "proj.form.tags": "Tags",
   "proj.form.tagsPlaceholder": "frontend, payments",
   "proj.form.claudeMd": "CLAUDE.md",
-  "proj.form.claudeMdNone": "Don't add",
+  "proj.form.agentsMd": "AGENTS.md",
+  "proj.form.instructionMdNone": "Don't add",
   "proj.form.claudeMdHint":
-    "Writes a CLAUDE.md at the repo root telling coding agents to record their work here. If the file already exists, only the section is appended.",
+    "Writes work-recording instructions for Claude Code at the repo root. Keeps existing content. You can create this alongside AGENTS.md.",
+  "proj.form.agentsMdHint":
+    "Writes work-recording instructions for Codex and other AGENTS.md-compatible tools at the repo root. Keeps existing content. You can create this alongside CLAUDE.md.",
   "proj.form.mcpJson": "MCP registration (.mcp.json)",
   "proj.form.mcpJsonOn": "Create",
   "proj.form.mcpJsonOff": "Skip",

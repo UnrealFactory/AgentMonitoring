@@ -1,10 +1,10 @@
-//! The optional CLAUDE.md a new project can start with.
+//! Optional CLAUDE.md and AGENTS.md instructions a project can start with.
 //!
 //! A project's records are only as good as the agents' habit of writing them, and the
 //! habit comes from the repo's own agent instructions. This module owns the two
 //! canonical instruction texts (Korean and English) and the one way they reach a repo:
-//! written to `<location>/CLAUDE.md` — the repo root, *next to* the AgentMonitoring
-//! folder, because that is the file coding agents actually load.
+//! written to `<location>/CLAUDE.md` or `<location>/AGENTS.md` — the repo root,
+//! *next to* the AgentMonitoring folder. Both files use the same templates.
 //!
 //! The write is deliberately conservative about a file it does not own:
 //!
@@ -46,11 +46,19 @@ impl ClaudeMdLang {
 
 /// Parse a language from the CLI / app, listing the alternatives on failure.
 pub fn parse_claude_md_lang(value: &str) -> Result<ClaudeMdLang> {
+    parse_instruction_lang(value, "--claude-md")
+}
+
+pub fn parse_agents_md_lang(value: &str) -> Result<ClaudeMdLang> {
+    parse_instruction_lang(value, "--agents-md")
+}
+
+fn parse_instruction_lang(value: &str, flag: &str) -> Result<ClaudeMdLang> {
     match value.trim().to_ascii_lowercase().as_str() {
         "ko" => Ok(ClaudeMdLang::Ko),
         "en" => Ok(ClaudeMdLang::En),
         _ => Err(CoreError::InvalidValue {
-            what: "--claude-md".to_string(),
+            what: flag.to_string(),
             value: value.trim().to_string(),
             expected: "one of: ko, en".to_string(),
         }),
@@ -69,7 +77,21 @@ pub enum ClaudeMdOutcome {
 /// that holds the `AgentMonitoring` folder ([`Store::location`](crate::Store::location)),
 /// not the data folder itself.
 pub fn write_claude_md(location: &Path, lang: ClaudeMdLang) -> Result<(PathBuf, ClaudeMdOutcome)> {
-    let path = location.join("CLAUDE.md");
+    write_instructions(location, "CLAUDE.md", lang)
+}
+
+/// Write the same instructions for Codex and other AGENTS.md-compatible tools.
+/// Existing content is preserved, with duplicate detection scoped to this file.
+pub fn write_agents_md(location: &Path, lang: ClaudeMdLang) -> Result<(PathBuf, ClaudeMdOutcome)> {
+    write_instructions(location, "AGENTS.md", lang)
+}
+
+fn write_instructions(
+    location: &Path,
+    filename: &str,
+    lang: ClaudeMdLang,
+) -> Result<(PathBuf, ClaudeMdOutcome)> {
+    let path = location.join(filename);
     let existing = match fs::read_to_string(&path) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -176,5 +198,43 @@ mod tests {
         assert_eq!(parse_claude_md_lang("en").unwrap(), ClaudeMdLang::En);
         let err = parse_claude_md_lang("kr").unwrap_err();
         assert!(err.to_string().contains("ko, en"), "{err}");
+        assert_eq!(parse_agents_md_lang(" KO ").unwrap(), ClaudeMdLang::Ko);
+        assert!(parse_agents_md_lang("kr")
+            .unwrap_err()
+            .to_string()
+            .contains("--agents-md"));
+    }
+
+    #[test]
+    fn agents_instructions_preserve_existing_rules_and_coexist_with_claude() {
+        let dir = tmp("both");
+        let (claude_path, _) = write_claude_md(&dir, ClaudeMdLang::Ko).unwrap();
+        let claude_before = fs::read(&claude_path).unwrap();
+        let (agents_path, outcome) = write_agents_md(&dir, ClaudeMdLang::En).unwrap();
+        assert_eq!(agents_path, dir.join("AGENTS.md"));
+        assert_eq!(outcome, ClaudeMdOutcome::Created);
+        assert_eq!(
+            fs::read_to_string(&agents_path).unwrap(),
+            ClaudeMdLang::En.template()
+        );
+
+        let theirs = "# Repository rules\r\n\r\nKeep the user's instructions.\r\n";
+        fs::write(&agents_path, theirs).unwrap();
+        assert_eq!(
+            write_agents_md(&dir, ClaudeMdLang::Ko).unwrap().1,
+            ClaudeMdOutcome::Appended
+        );
+        let appended = fs::read_to_string(&agents_path).unwrap();
+        assert!(appended.starts_with(theirs));
+        assert!(appended.ends_with(ClaudeMdLang::Ko.template()));
+        for lang in [ClaudeMdLang::Ko, ClaudeMdLang::En] {
+            assert_eq!(
+                write_agents_md(&dir, lang).unwrap().1,
+                ClaudeMdOutcome::AlreadyPresent
+            );
+            assert_eq!(fs::read_to_string(&agents_path).unwrap(), appended);
+        }
+        assert_eq!(fs::read(&claude_path).unwrap(), claude_before);
+        fs::remove_dir_all(&dir).unwrap();
     }
 }
