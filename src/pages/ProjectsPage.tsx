@@ -595,6 +595,8 @@ function CreateProject({
      and a CLAUDE.md that assigns the agent homework. */
   const [mcpJson, setMcpJson] = useState(true);
   const [mcpAgent, setMcpAgent] = useState("claude");
+  const [codexMcp, setCodexMcp] = useState(false);
+  const [codexAgent, setCodexAgent] = useState("codex");
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -633,6 +635,8 @@ function CreateProject({
         agentsMd: agentsMd || undefined,
         mcpJson,
         mcpAgent: mcpJson ? mcpAgent.trim() || undefined : undefined,
+        codexMcp,
+        codexAgent: codexMcp ? codexAgent.trim() || undefined : undefined,
       });
       onCreated(project.id);
     } catch (err) {
@@ -735,41 +739,46 @@ function CreateProject({
             </span>
           </div>
         ))}
-        <div className="field field-wide instruction-md-field">
-          <span className="field-label" id="mcp-json-label">
-            {t("proj.form.mcpJson")}
-          </span>
-          <div className="mcp-json-row">
-            <div
-              className="segmented instruction-md-choice"
-              role="radiogroup"
-              aria-labelledby="mcp-json-label"
-            >
-              {([true, false] as const).map((v) => (
-                <button
-                  key={String(v)}
-                  type="button"
-                  role="radio"
-                  aria-checked={mcpJson === v}
-                  className={`segment${mcpJson === v ? " is-active" : ""}`}
-                  onClick={() => setMcpJson(v)}
-                >
-                  {v ? t("proj.form.mcpJsonOn") : t("proj.form.mcpJsonOff")}
-                </button>
-              ))}
+        {([
+          { kind: "mcp-json", label: "proj.form.mcpJson", hint: "proj.form.mcpJsonHint", enabled: mcpJson, setEnabled: setMcpJson, agent: mcpAgent, setAgent: setMcpAgent, placeholder: "claude" },
+          { kind: "codex-mcp", label: "proj.form.codexMcp", hint: "proj.form.codexMcpHint", enabled: codexMcp, setEnabled: setCodexMcp, agent: codexAgent, setAgent: setCodexAgent, placeholder: "codex" },
+        ] as const).map(({ kind, label, hint, enabled, setEnabled, agent, setAgent, placeholder }) => (
+          <div className="field field-wide instruction-md-field" key={kind}>
+            <span className="field-label" id={`${kind}-label`}>
+              {t(label)}
+            </span>
+            <div className="mcp-json-row">
+              <div
+                className="segmented instruction-md-choice"
+                role="radiogroup"
+                aria-labelledby={`${kind}-label`}
+              >
+                {([true, false] as const).map((v) => (
+                  <button
+                    key={String(v)}
+                    type="button"
+                    role="radio"
+                    aria-checked={enabled === v}
+                    className={`segment${enabled === v ? " is-active" : ""}`}
+                    onClick={() => setEnabled(v)}
+                  >
+                    {v ? t("proj.form.mcpJsonOn") : t("proj.form.mcpJsonOff")}
+                  </button>
+                ))}
+              </div>
+              {enabled && (
+                <input
+                  className="input mcp-agent-input"
+                  value={agent}
+                  aria-label={`${t(label)} — ${t("proj.form.mcpAgent")}`}
+                  placeholder={placeholder}
+                  onChange={(e) => setAgent(e.target.value)}
+                />
+              )}
             </div>
-            {mcpJson && (
-              <input
-                className="input mcp-agent-input"
-                value={mcpAgent}
-                aria-label={t("proj.form.mcpAgent")}
-                placeholder="claude"
-                onChange={(e) => setMcpAgent(e.target.value)}
-              />
-            )}
+            <span className="field-hint">{t(hint)}</span>
           </div>
-          <span className="field-hint">{t("proj.form.mcpJsonHint")}</span>
-        </div>
+        ))}
       </div>
 
       {error && (

@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agentmon-cli"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "agentmon-core",
  "anyhow",
@@ -22,18 +22,19 @@ dependencies = [
 
 [[package]]
 name = "agentmon-core"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "chrono",
  "serde",
  "serde_json",
  "serde_yaml",
  "thiserror 2.0.20",
+ "toml_edit 0.20.2",
 ]
 
 [[package]]
 name = "agentmonitoring"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "agentmon-core",
  "notify",

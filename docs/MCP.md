@@ -51,12 +51,29 @@ is exceeded, so the numbers in this paragraph cannot quietly rot.
 
 ## Install
 
-**The usual path is: don't install anything.** Creating a project — in the app's New
-project dialog, or `agentmon init --mcp-json` — writes a `.mcp.json` into the repo that
-registers this server with the right absolute paths for this machine; `agentmon project
-mcp-json` does the same for a project that already exists. Claude Code reads that file on
-its own, so the tools are simply there. The rest of this section is for registering by
-hand (another client, another scope).
+In **New project**, select **Add Claude MCP**, **Add Codex MCP**, or both. For an existing
+project, choose **Add MCP → Claude / Codex** in its context menu. Instructions are grouped
+separately under **Write instructions → Claude / Codex**. Each registration uses the
+server bundled with this app and absolute paths for this machine.
+
+| Client | Project configuration | CLI at creation | CLI for an existing project |
+|---|---|---|---|
+| Claude Code | `.mcp.json` | `init --claude-mcp` | `project claude-mcp` |
+| Codex | `.codex/config.toml` | `init --codex-mcp` | `project codex-mcp` |
+
+The old `--mcp-json` flag and `project mcp-json` command remain aliases for Claude MCP.
+Both options can be combined. Record authors default to `claude` and `codex`; override
+them with `--mcp-agent` and `--codex-agent` at creation, or `--agent` on the project commands.
+These names label records; they do not select the client.
+
+Only the `agentmon` server entry is added or replaced. Other servers and Codex settings
+and comments are preserved. An identical registration leaves the file unchanged; invalid
+JSON or TOML is refused. Re-run the action after moving the app or project to refresh paths.
+Codex loads project configuration only after you trust the project. This action does not
+alter global configuration or grant trust. See the [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
+Instruction files (`CLAUDE.md` / `AGENTS.md`) and MCP connections are independent options.
+
+The rest of this section covers manual registration and other scopes.
 
 **Installed the desktop app?** Everything is already on disk: the server, its
 dependencies and the `agentmon` CLI ship inside the install folder, so the server is at

@@ -166,9 +166,9 @@ export function useProjectMenu() {
      only the agentmon entry), so the item is safe to press twice — the toast conjugates
      what actually happened. Instruction files use the app's current language. */
   const scaffold = useCallback(
-    (p: Project, kind: "claude" | "agents" | "mcp") => {
+    (p: Project, kind: "claude" | "agents" | "mcp" | "codex-mcp") => {
       void (async () => {
-        const file = { claude: "CLAUDE.md", agents: "AGENTS.md", mcp: ".mcp.json" }[kind];
+        const file = { claude: "CLAUDE.md", agents: "AGENTS.md", mcp: ".mcp.json", "codex-mcp": ".codex/config.toml" }[kind];
         let outcome: ScaffoldOutcome;
         try {
           outcome =
@@ -176,7 +176,9 @@ export function useProjectMenu() {
               ? await api.writeClaudeMd(p.id, getLocale())
               : kind === "agents"
                 ? await api.writeAgentsMd(p.id, getLocale())
-                : await api.writeMcpJson(p.id);
+                : kind === "codex-mcp"
+                  ? await api.writeCodexMcp(p.id)
+                  : await api.writeMcpJson(p.id);
         } catch (err) {
           toast(
             plainMarks(
@@ -236,23 +238,21 @@ export function useProjectMenu() {
           run: () => copy(p.path, p.path),
         },
         {
-          id: "claude-md",
-          label: t("menu.claudeMd"),
-          hint: t("menu.claudeMdHint"),
+          id: "instructions",
+          label: t("menu.instructions"),
           separator: true,
-          run: () => scaffold(p, "claude"),
+          children: [
+            { id: "claude-md", label: "Claude", hint: "CLAUDE.md", run: () => scaffold(p, "claude") },
+            { id: "agents-md", label: "Codex", hint: "AGENTS.md", run: () => scaffold(p, "agents") },
+          ],
         },
         {
-          id: "agents-md",
-          label: t("menu.agentsMd"),
-          hint: t("menu.agentsMdHint"),
-          run: () => scaffold(p, "agents"),
-        },
-        {
-          id: "mcp-json",
-          label: t("menu.mcpJson"),
-          hint: t("menu.mcpJsonHint"),
-          run: () => scaffold(p, "mcp"),
+          id: "mcp",
+          label: t("menu.mcp"),
+          children: [
+            { id: "mcp-json", label: "Claude", hint: ".mcp.json", run: () => scaffold(p, "mcp") },
+            { id: "codex-mcp", label: "Codex", hint: ".codex/config.toml", run: () => scaffold(p, "codex-mcp") },
+          ],
         },
         /* The undoable way off the list, above the destructive one and nothing like it:
            removing unregisters the path and touches no files. Desktop only — browser

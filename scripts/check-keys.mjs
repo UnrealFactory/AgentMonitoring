@@ -641,7 +641,7 @@ try {
   check(
     "the breadcrumb at the head of a record opens its project's menu",
     (await page.getAttribute(".ctx-menu", "aria-label")) === crumbName &&
-      same(await menuItems(page), ["open", "work", "bugs", "notes", "copy-path", "claude-md", "agents-md", "mcp-json", "delete"]),
+      same(await menuItems(page), ["open", "work", "bugs", "notes", "copy-path", "instructions", "mcp", "delete"]),
     `label ${await page.getAttribute(".ctx-menu", "aria-label")} vs ${crumbName}, items ${JSON.stringify(await menuItems(page))}`,
   );
   await page.keyboard.press("Escape");
@@ -1123,7 +1123,7 @@ try {
   );
   check(
     "…the same items the small copy of that project below it opens",
-    same(await menuItems(page), ["open", "work", "bugs", "notes", "copy-path", "claude-md", "agents-md", "mcp-json", "delete"]),
+    same(await menuItems(page), ["open", "work", "bugs", "notes", "copy-path", "instructions", "mcp", "delete"]),
     JSON.stringify(await menuItems(page)),
   );
   check(
@@ -1352,7 +1352,7 @@ try {
   check(
     "a vault-feed row about the project itself opens the project menu",
     (await wide.getAttribute(".ctx-menu", "aria-label")) === evName &&
-      same(await menuItems(wide), ["open", "work", "bugs", "notes", "copy-path", "claude-md", "agents-md", "mcp-json", "delete"]),
+      same(await menuItems(wide), ["open", "work", "bugs", "notes", "copy-path", "instructions", "mcp", "delete"]),
     `label ${await wide.getAttribute(".ctx-menu", "aria-label")} vs ${evName}, items ${JSON.stringify(await menuItems(wide))}`,
   );
   await wide.keyboard.press("Escape");

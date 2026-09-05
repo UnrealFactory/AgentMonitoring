@@ -43,6 +43,37 @@ try {
   check("init without options leaves both instruction files absent", () => {
     assert(!existsSync(join(none, "CLAUDE.md")));
     assert(!existsSync(join(none, "AGENTS.md")));
+    assert(!existsSync(join(none, ".mcp.json")));
+    assert(!existsSync(join(none, ".codex/config.toml")));
+  });
+  const codexOnly = init("Codex MCP 한글", "--codex-mcp", "--codex-agent", "codex-team");
+  check("Codex MCP alone creates the project TOML with the chosen author", () => {
+    assert(!existsSync(join(codexOnly, ".mcp.json")));
+    const config = read(codexOnly, ".codex/config.toml");
+    assert.match(config, /\[mcp_servers\.agentmon\]/);
+    assert(config.includes('"codex-team"'));
+    assert(config.includes(codexOnly.replaceAll("\\", "/")));
+  });
+  const bothMcp = init("Both MCP", "--claude-mcp", "--codex-mcp");
+  check("both MCP flags register separate clients and default authors", () => {
+    assert.equal(JSON.parse(read(bothMcp, ".mcp.json")).mcpServers.agentmon.args.at(-1), "claude");
+    assert(read(bothMcp, ".codex/config.toml").includes('"codex"'));
+    assert.equal(cli(["--dir", bothMcp, "project", "claude-mcp"]).outcome, "already_present");
+    assert.equal(cli(["--dir", bothMcp, "project", "mcp-json"]).outcome, "already_present");
+    assert.equal(cli(["--dir", bothMcp, "project", "codex-mcp"]).outcome, "already_present");
+  });
+  const legacy = init("Legacy MCP", "--mcp-json");
+  check("legacy MCP flag still creates only Claude configuration", () => {
+    assert(existsSync(join(legacy, ".mcp.json")));
+    assert(!existsSync(join(legacy, ".codex/config.toml")));
+  });
+  const broken = init("Invalid Codex TOML");
+  mkdirSync(join(broken, ".codex"));
+  writeFileSync(join(broken, ".codex/config.toml"), "[invalid");
+  check("CLI rejects broken TOML without overwriting it", () => {
+    const result = cli(["--dir", broken, "project", "codex-mcp"], 6);
+    assert.match(result, /TOML/);
+    assert.equal(read(broken, ".codex/config.toml"), "[invalid");
   });
   const onlyAgents = init("Codex only", "--agents-md", "en");
   check("AGENTS.md alone uses the requested language", () => {
@@ -104,11 +135,17 @@ try {
     mkdirSync(location);
     const existing = "# Team conventions\n\nPreserve our review rules.\n";
     writeFileSync(join(location, "AGENTS.md"), existing);
+    mkdirSync(join(location, ".codex"));
+    const originalConfig = "# Keep my settings\nmodel = 'my-model'\n\n[mcp_servers.other]\ncommand = 'keep'\n";
+    writeFileSync(join(location, ".codex/config.toml"), originalConfig);
     await form.getByLabel(T("proj.form.name"), { exact: true }).fill(`Claude + Codex (${locale})`);
     await form.getByPlaceholder(T("proj.form.locationPlaceholder"), { exact: true }).fill(location);
     await group("claude").getByRole("radio", { name: "한국어", exact: true }).click();
     await group("agents").getByRole("radio", { name: "English", exact: true }).click();
-    await form.locator('[aria-labelledby="mcp-json-label"]').getByRole("radio", { name: T("proj.form.mcpJsonOff"), exact: true }).click();
+    const withClaude = locale === "en";
+    await form.locator('[aria-labelledby="mcp-json-label"]').getByRole("radio", { name: T(withClaude ? "proj.form.mcpJsonOn" : "proj.form.mcpJsonOff"), exact: true }).click();
+    await form.locator('[aria-labelledby="codex-mcp-label"]').getByRole("radio", { name: T("proj.form.mcpJsonOn"), exact: true }).click();
+    await form.getByPlaceholder("codex", { exact: true }).fill("codex-ui");
     for (const width of [960, 1600]) {
       await page.setViewportSize({ width, height: 1000 });
       const overflow = await form.evaluate((el) => el.scrollWidth > el.clientWidth);
@@ -124,15 +161,76 @@ try {
       assert.equal(read(location, "CLAUDE.md"), template("ko"));
       assert(read(location, "AGENTS.md").startsWith(existing));
       assert(read(location, "AGENTS.md").endsWith(template("en")));
-      assert(!existsSync(join(location, ".mcp.json")));
+      assert.equal(existsSync(join(location, ".mcp.json")), withClaude);
+      const config = read(location, ".codex/config.toml");
+      assert(config.startsWith(originalConfig));
+      assert(config.includes('"codex-ui"'));
     });
 
     // Remove only the scratch file, then use the existing-project menu to create it.
     rmSync(join(location, "AGENTS.md"));
     await page.goto(`${origin}/projects`);
     const row = page.locator(".project-row").filter({ hasText: project.name });
+    const focusedItem = () => page.evaluate(() => document.activeElement?.getAttribute("data-item"));
+    await row.click({ button: "right" });
+    const rootMenu = page.locator('.ctx-menu:not(.ctx-submenu)');
+    assert.deepEqual(await rootMenu.locator('.ctx-item').evaluateAll(items => items.map(el => el.dataset.item)),
+      ['open', 'work', 'bugs', 'notes', 'copy-path', 'instructions', 'mcp', 'delete']);
+    await page.locator('.ctx-item[data-item="instructions"]').focus();
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await focusedItem(), 'claude-md');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await focusedItem(), 'agents-md');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await focusedItem(), 'instructions');
+    assert.equal(await page.locator('.ctx-submenu').count(), 0);
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    assert.equal(await focusedItem(), 'mcp-json');
+    await page.keyboard.press('End');
+    assert.equal(await focusedItem(), 'codex-mcp');
+    await page.keyboard.press('Escape');
+    assert.equal(await focusedItem(), 'mcp');
+    assert.equal(await rootMenu.count(), 1);
+    await page.keyboard.press('Escape');
+    assert.equal(await rootMenu.count(), 0);
+    assert(await row.evaluate(el => el === document.activeElement || el.contains(document.activeElement)));
+    checks++;
+    console.log(`  ok ${locale} grouped menu: arrows, Enter, two-step Escape and focus restoration`);
+
+    // Place the real menu at each viewport edge; both levels must stay readable.
+    await page.setViewportSize({ width: 960, height: 620 });
+    // Resizing dismisses menus by design; let that event finish before opening one.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    for (const x of [12, 948]) {
+      await row.evaluate((el, clientX) => el.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true, cancelable: true, button: 2, clientX, clientY: 608,
+      })), x);
+      await page.locator('.ctx-item[data-item="mcp"]').click();
+      const boxes = await page.locator('.ctx-menu').evaluateAll(menus => menus.map(el => {
+        const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      }));
+      assert.equal(boxes.length, 2);
+      assert(boxes.every(r => r.left >= 0 && r.top >= 0 && r.right <= 960 && r.bottom <= 620));
+      assert(boxes[0].top > 200, 'the mouse event must actually anchor near the bottom');
+      if (x > 480) {
+        assert(boxes[0].left > 400, 'the root menu must be near the right edge');
+        assert(boxes[1].right <= boxes[0].left + 8, 'the submenu must flip to the left');
+      } else {
+        assert(boxes[1].left >= boxes[0].right - 8, 'the submenu must open to the right');
+      }
+      const clipped = await page.locator('.ctx-submenu .ctx-label, .ctx-submenu .ctx-hint').evaluateAll(els => els.some(el => el.scrollWidth > el.clientWidth));
+      assert(!clipped, `${locale}: a submenu label is clipped`);
+      await page.screenshot({ path: join(shots, `${locale}-menu-${x}.png`) });
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Escape');
+    }
+    checks++;
+    console.log(`  ok ${locale} submenus stay inside both bottom corners without clipped labels`);
+    await page.setViewportSize({ width: 1600, height: 1000 });
     const writeFromMenu = async () => {
       await row.click({ button: "right" });
+      await page.locator('.ctx-item[data-item="instructions"]').click();
       const written = page.waitForResponse((r) => r.url().endsWith(`/projects/${project.id}/agents-md`) && r.request().method() === "POST");
       await page.locator('.ctx-item[data-item="agents-md"]').click();
       const result = await written;
@@ -148,6 +246,31 @@ try {
       assert.equal(read(location, "CLAUDE.md"), template("ko"));
       assert.deepEqual(pageErrors, []);
     });
+    for (const [item, filename, author] of [["mcp-json", ".mcp.json", "claude"], ["codex-mcp", ".codex/config.toml", "codex"]]) {
+      // Exercise the create path and then the repeat path through real UI requests.
+      if (existsSync(join(location, filename))) rmSync(join(location, filename));
+      const addMcp = async () => {
+        await row.click({ button: "right" });
+        await page.locator('.ctx-item[data-item="mcp"]').click();
+        const menuItem = page.locator(`.ctx-item[data-item="${item}"]`);
+        assert.equal(await menuItem.locator('.ctx-label').textContent(), author === 'claude' ? 'Claude' : 'Codex');
+        const pending = page.waitForResponse(r => r.url().endsWith(`/projects/${project.id}/${item}`) && r.request().method() === "POST");
+        await menuItem.click();
+        const result = await pending;
+        assert(result.ok(), await result.text());
+        return result.json();
+      };
+      const first = await addMcp();
+      const before = read(location, filename);
+      const again = await addMcp();
+      check(`${locale} menu adds ${author} MCP and preserves the file on repeat`, () => {
+        assert.equal(first.outcome, "created");
+        assert.equal(again.outcome, "already_present");
+        assert.equal(read(location, filename), before);
+        assert(before.includes(`"${author}"`));
+      });
+    }
+    assert.deepEqual(pageErrors, []);
     await page.close();
   }
   console.log(`[check:instructions] ${checks} checks passed; screenshots: ${shots}`);

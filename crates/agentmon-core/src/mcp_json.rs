@@ -4,9 +4,8 @@
 //! CLAUDE.md that *teaches an agent* how to register the agentmon MCP server, the app
 //! (or `agentmon init --mcp-json`) registers it — it is the one party that actually
 //! knows where `mcp/server.mjs` is on this machine, so making the agent go find it was
-//! always the wrong direction. Claude Code (and every client that honours project-scope
-//! MCP config) reads `<repo>/.mcp.json` on its own; the tools are just *there* from the
-//! agent's first session.
+//! always the wrong direction. Claude Code reads `<repo>/.mcp.json`; Codex uses the
+//! separate writer in [`codex_mcp`](crate::codex_mcp).
 //!
 //! The write is conservative about a file it does not own, the way `write_claude_md` is
 //! about CLAUDE.md: other servers in an existing `.mcp.json` are preserved untouched,
@@ -62,16 +61,20 @@ fn json_path(p: &Path) -> String {
 
 /// The `mcpServers.agentmon` value: `node <server> --dir <location> [--agent <handle>]`.
 fn agentmon_entry(server: &Path, location: &Path, agent: Option<&str>) -> serde_json::Value {
+    serde_json::json!({ "command": "node", "args": agentmon_args(server, location, agent) })
+}
+
+pub(crate) fn agentmon_args(server: &Path, location: &Path, agent: Option<&str>) -> Vec<String> {
     let mut args = vec![json_path(server), "--dir".to_string(), json_path(location)];
     if let Some(handle) = agent.map(str::trim).filter(|h| !h.is_empty()) {
         args.push("--agent".to_string());
         args.push(handle.to_string());
     }
-    serde_json::json!({ "command": "node", "args": args })
+    args
 }
 
 /// Write (or update) `<location>/.mcp.json` so the agentmon MCP server is registered for
-/// every agent that opens this repo. `location` is the folder that holds the
+/// Claude Code. `location` is the folder that holds the
 /// `AgentMonitoring` folder — the repo root, where clients look for the file — and
 /// `server` is the `mcp/server.mjs` to point at ([`find_mcp_server`]). `agent` is the
 /// default handle written onto records; `None` leaves it to each call.

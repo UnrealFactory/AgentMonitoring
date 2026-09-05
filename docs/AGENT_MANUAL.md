@@ -1049,7 +1049,8 @@ line — `agentmon --json work list` and `agentmon work list --json` are the sam
 ```
 agentmon init [--dir <folder>] --name <n> [--description <d>] [--tags a,b]
               [--agent <name>] [--at <ISO8601>] [--claude-md ko|en] [--agents-md ko|en]
-              [--mcp-json [--mcp-agent <handle>]] [--json]
+              [--claude-mcp [--mcp-agent <handle>]]
+              [--codex-mcp [--codex-agent <handle>]] [--json]
 ```
 
 Creates a project: an `AgentMonitoring` folder inside `--dir` (default: the current
@@ -1066,8 +1067,12 @@ either language's section is left alone. The files are independent copies of the
 template, so creating either one does not modify the other.
 
 These instructions refer to the agentmon MCP tools. `--mcp-json` separately creates the
-MCP registration used by Claude Code; other clients need their own MCP configuration
-(see [MCP setup](MCP.md)). Creating `AGENTS.md` does not register a server in Codex.
+MCP registration used by Claude Code. Select **Add Codex MCP** to create
+`.codex/config.toml` as well, or use `init --codex-mcp` / `project codex-mcp`.
+Codex loads it only in trusted projects. **Add Claude MCP** uses `init --claude-mcp` /
+`project claude-mcp`; the old `--mcp-json` / `project mcp-json` names remain aliases.
+Both registrations can be selected together (see [MCP setup](MCP.md)).
+Creating `AGENTS.md` alone does not register a server in Codex.
 
 ```bash
 cd /your/repo && agentmon init --name "Checkout rewrite" \

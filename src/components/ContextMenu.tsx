@@ -50,7 +50,7 @@ import { t } from "../lib/i18n";
 import { plainMarks } from "./ui";
 
 /** One line of a menu. Deliberately data, not JSX: the same item is built in three places. */
-export interface MenuItem {
+interface MenuItemBase {
   /** Stable inside its menu; also the hook a gate can drive it by (`data-item`). */
   id: string;
   label: string;
@@ -64,8 +64,10 @@ export interface MenuItem {
    * it: 삭제 on a project, which opens a dialog rather than acting.
    */
   danger?: boolean;
-  run: () => void;
 }
+
+type MenuAction = MenuItemBase & { run: () => void; children?: never };
+export type MenuItem = MenuAction | (MenuItemBase & { children: MenuAction[]; run?: never });
 
 /** A menu, and the thing it is about (its accessible name). */
 export interface MenuSpec {
@@ -315,8 +317,45 @@ const WARN: ToastOptions = { tone: "warn" };
 function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const submenuRef = useRef<HTMLDivElement>(null);
+  const childRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [submenu, setSubmenu] = useState<number | null>(null);
+  const [childPosition, setChildPosition] = useState<Point | null>(null);
   const [placed, setPlaced] = useState<{ id: number; left: number; top: number } | null>(null);
   const { items } = request.spec;
+  const children = submenu === null ? undefined : items[submenu].children;
+
+  const closeSubmenu = useCallback(() => {
+    if (submenu !== null) itemRefs.current[submenu]?.focus({ preventScroll: true });
+    setSubmenu(null);
+  }, [submenu]);
+
+  const openSubmenu = (i: number) => {
+    if (!items[i].children?.length) return;
+    if (submenu === i) {
+      childRefs.current[0]?.focus({ preventScroll: true });
+      return;
+    }
+    setChildPosition(null);
+    setSubmenu(i);
+  };
+
+  // A sibling layer avoids clipping the flyout inside the main menu's scroll area.
+  useLayoutEffect(() => {
+    if (submenu === null || !submenuRef.current) return;
+    const anchor = itemRefs.current[submenu]?.getBoundingClientRect();
+    if (!anchor) return;
+    const { width, height } = submenuRef.current.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    let x = anchor.right + NUDGE;
+    if (x + width > vw - MARGIN) x = anchor.left - width - NUDGE;
+    setChildPosition({
+      x: Math.max(MARGIN, Math.min(x, vw - width - MARGIN)),
+      y: Math.max(MARGIN, Math.min(anchor.top, vh - height - MARGIN)),
+    });
+    childRefs.current[0]?.focus({ preventScroll: true });
+  }, [submenu]);
 
   // While it is up it owns the keyboard: the list screens' window-level handler stands down
   // (src/lib/modal.ts), so ↓ moves the menu and never the board behind it. As a *menu* —
@@ -379,7 +418,8 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       e.preventDefault();
       e.stopPropagation();
-      onClose();
+      if (submenu !== null) closeSubmenu();
+      else onClose();
     };
     const close = () => onClose();
     window.addEventListener("keydown", onKey, true);
@@ -390,15 +430,18 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
       window.removeEventListener("resize", close);
       window.removeEventListener("blur", close);
     };
-  }, [onClose]);
+  }, [onClose, submenu, closeSubmenu]);
 
-  const focusAt = (i: number) => {
-    const list = itemRefs.current.filter((el): el is HTMLButtonElement => !!el);
+  const focusAt = (i: number, nested: boolean) => {
+    const refs = nested ? childRefs : itemRefs;
+    if (!nested) setSubmenu(null);
+    const list = refs.current.filter((el): el is HTMLButtonElement => !!el);
     if (list.length) list[(i + list.length) % list.length].focus();
   };
 
-  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    const list = itemRefs.current.filter((el): el is HTMLButtonElement => !!el);
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>, nested = false) => {
+    const refs = nested ? childRefs : itemRefs;
+    const list = refs.current.filter((el): el is HTMLButtonElement => !!el);
     const at = list.indexOf(document.activeElement as HTMLButtonElement);
     const handled = () => {
       e.preventDefault();
@@ -407,20 +450,28 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
     switch (e.key) {
       case "ArrowDown":
         handled();
-        return focusAt(at + 1);
+        return focusAt(at + 1, nested);
       case "ArrowUp":
         handled();
-        return focusAt(at - 1);
+        return focusAt(at - 1, nested);
       // PageUp/PageDown are here so that nothing a key can do scrolls the page out from
       // under a menu anchored to a row on it. In a five-item menu, an end is what they mean.
       case "Home":
       case "PageUp":
         handled();
-        return focusAt(0);
+        return focusAt(0, nested);
       case "End":
       case "PageDown":
         handled();
-        return focusAt(list.length - 1);
+        return focusAt(list.length - 1, nested);
+      case "ArrowRight":
+        handled();
+        if (!nested && at >= 0) openSubmenu(at);
+        return;
+      case "ArrowLeft":
+        handled();
+        if (nested) closeSubmenu();
+        return;
       case "Tab":
         // A menu is not a place to Tab through: it closes, and the row gets the focus back.
         handled();
@@ -431,7 +482,11 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
     }
   };
 
-  const run = (item: MenuItem) => {
+  const run = (item: MenuItem, i: number) => {
+    if (item.children) {
+      openSubmenu(i);
+      return;
+    }
     item.run();
     onClose();
   };
@@ -470,7 +525,8 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
         onMouseDown={(e) => e.stopPropagation()}
         // Scrolling a menu tall enough to have its own overflow must not dismiss it.
         onWheel={(e) => e.stopPropagation()}
-        onKeyDown={onKeyDown}
+        onKeyDown={(e) => onKeyDown(e)}
+        onScroll={() => setSubmenu(null)}
       >
         {/* A Fragment, not a wrapper element: `role="menu"` may only own menu items,
             groups and separators, and a stray <div> between them is a lie to a screen
@@ -482,6 +538,9 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
               type="button"
               role="menuitem"
               data-item={item.id}
+              aria-haspopup={item.children ? "menu" : undefined}
+              aria-expanded={item.children ? submenu === i : undefined}
+              aria-controls={item.children && submenu === i ? `ctx-submenu-${request.id}` : undefined}
               className={`ctx-item${item.danger ? " is-danger" : ""}`}
               ref={(el) => {
                 itemRefs.current[i] = el;
@@ -491,15 +550,53 @@ function Menu({ request, onClose }: { request: Request; onClose: () => void }) {
                  element normally asks the browser to reveal it, and on a long screen that
                  scrolled the page a pixel under a menu whose whole job is to stay anchored
                  to the row it was opened on (which then dismissed itself). */
-              onMouseEnter={(e) => e.currentTarget.focus({ preventScroll: true })}
-              onClick={() => run(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.focus({ preventScroll: true });
+                if (submenu !== i) setSubmenu(null);
+              }}
+              onClick={() => run(item, i)}
             >
               <span className="ctx-label">{item.label}</span>
               {item.hint && <span className="ctx-hint">{item.hint}</span>}
+              {item.children && <span className="ctx-chevron" aria-hidden="true">›</span>}
             </button>
           </Fragment>
         ))}
       </div>
+      {children && submenu !== null && (
+        <div
+          className="ctx-menu ctx-submenu"
+          ref={submenuRef}
+          id={`ctx-submenu-${request.id}`}
+          role="menu"
+          aria-label={items[submenu].label}
+          style={{
+            left: childPosition?.x ?? 0,
+            top: childPosition?.y ?? 0,
+            maxHeight: `calc(100vh - ${MARGIN * 2}px)`,
+            opacity: childPosition ? 1 : 0,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+          onKeyDown={(e) => onKeyDown(e, true)}
+        >
+          {children.map((item, i) => (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              data-item={item.id}
+              className="ctx-item"
+              ref={(el) => { childRefs.current[i] = el; }}
+              onMouseEnter={(e) => e.currentTarget.focus({ preventScroll: true })}
+              onClick={() => run(item, i)}
+            >
+              <span className="ctx-label">{item.label}</span>
+              {item.hint && <span className="ctx-hint">{item.hint}</span>}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -276,6 +276,9 @@ export const api = {
     mcpJson?: boolean;
     /** Default agent handle inside that registration; a call can override it. */
     mcpAgent?: string;
+    /** Also register Codex in `<location>/.codex/config.toml`. */
+    codexMcp?: boolean;
+    codexAgent?: string;
   }): Promise<Project> =>
     isTauri()
       ? invokeCommand<Project>("create_project", {
@@ -288,6 +291,8 @@ export const api = {
           agentsMd: input.agentsMd ?? null,
           mcpJson: input.mcpJson ?? false,
           mcpAgent: input.mcpAgent ?? null,
+          codexMcp: input.codexMcp ?? false,
+          codexAgent: input.codexAgent ?? null,
         })
       : fetchJson<Project>("/project-api/projects", {
           method: "POST",
@@ -327,11 +332,20 @@ export const api = {
     isTauri()
       ? invokeCommand<ScaffoldOutcome>("write_project_mcp_json", {
           id,
-          agent: mcpAgent ?? null,
+          agent: mcpAgent ?? "claude",
         })
       : fetchJson<{ outcome: ScaffoldOutcome }>(
           `/project-api/projects/${encodeURIComponent(id)}/mcp-json`,
-          { method: "POST", body: JSON.stringify({ mcpAgent: mcpAgent ?? "" }) }
+          { method: "POST", body: JSON.stringify({ mcpAgent: mcpAgent ?? "claude" }) }
+        ).then((r) => r.outcome),
+
+  /** Add Codex MCP while preserving unrelated TOML settings and comments. */
+  writeCodexMcp: (id: string, agent = "codex"): Promise<ScaffoldOutcome> =>
+    isTauri()
+      ? invokeCommand<ScaffoldOutcome>("write_project_codex_mcp", { id, agent })
+      : fetchJson<{ outcome: ScaffoldOutcome }>(
+          `/project-api/projects/${encodeURIComponent(id)}/codex-mcp`,
+          { method: "POST", body: JSON.stringify({ mcpAgent: agent }) }
         ).then((r) => r.outcome),
 
   /**

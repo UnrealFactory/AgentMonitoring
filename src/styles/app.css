@@ -1075,6 +1075,26 @@
   color: var(--text-primary);
 }
 
+.ctx-item[aria-expanded="true"] {
+  background: var(--bg-selected);
+  color: var(--text-primary);
+}
+
+.ctx-chevron {
+  margin-left: auto;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-tertiary);
+}
+
+.ctx-submenu {
+  min-width: 240px;
+}
+
+.ctx-submenu .ctx-label {
+  flex: none;
+}
+
 /* Delete. Red at rest — a destructive item that only turns red once the pointer is on it
    has already been read by somebody about to click it — and the highlight is the same red,
    so the row does not go grey at the moment of decision. Colour is not the message: the

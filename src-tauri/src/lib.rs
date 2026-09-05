@@ -325,6 +325,8 @@ fn create_project(
     agents_md: Option<String>,
     mcp_json: Option<bool>,
     mcp_agent: Option<String>,
+    codex_mcp: Option<bool>,
+    codex_agent: Option<String>,
     app: AppHandle,
 ) -> CmdResult<Project> {
     // Parsed before anything is written: a bad language must not leave behind a project
@@ -372,8 +374,17 @@ fn create_project(
              mcp/server.mjs beside it"
                 .to_string()
         })?;
-        agentmon_core::write_mcp_json(store.location(), &server, mcp_agent.as_deref())
-            .map_err(|e| format!("the project was created, but .mcp.json was not: {e}"))?;
+        agentmon_core::write_mcp_json(
+            store.location(), &server, mcp_agent.as_deref().or(Some("claude")),
+        ).map_err(|e| format!("the project was created, but .mcp.json was not: {e}"))?;
+    }
+    if codex_mcp.unwrap_or(false) {
+        let server = agentmon_core::find_mcp_server().ok_or_else(|| {
+            "the project was created, but .codex/config.toml was not: this build has no mcp/server.mjs beside it".to_string()
+        })?;
+        agentmon_core::write_codex_mcp(
+            store.location(), &server, codex_agent.as_deref().or(Some("codex")),
+        ).map_err(|e| format!("the project was created, but .codex/config.toml was not: {e}"))?;
     }
     Ok(project)
 }
@@ -467,6 +478,28 @@ fn write_project_mcp_json(
     let (_, outcome) =
         agentmon_core::write_mcp_json(store.location(), &server, agent.as_deref())
             .map_err(|e| e.to_string())?;
+    Ok(match outcome {
+        agentmon_core::McpJsonOutcome::Created => "created",
+        agentmon_core::McpJsonOutcome::Updated => "updated",
+        agentmon_core::McpJsonOutcome::AlreadyPresent => "already_present",
+    }
+    .to_string())
+}
+
+/// Add Codex's project MCP settings without modifying global configuration or trust.
+#[tauri::command]
+fn write_project_codex_mcp(
+    id: String,
+    agent: Option<String>,
+    extra: State<'_, ExtraRoots>,
+) -> CmdResult<String> {
+    let store = store_for(&extra, &id)?;
+    let server = agentmon_core::find_mcp_server().ok_or_else(|| {
+        "this build has no mcp/server.mjs beside it (see docs/MCP.md)".to_string()
+    })?;
+    let (_, outcome) = agentmon_core::write_codex_mcp(
+        store.location(), &server, agent.as_deref().or(Some("codex")),
+    ).map_err(|e| e.to_string())?;
     Ok(match outcome {
         agentmon_core::McpJsonOutcome::Created => "created",
         agentmon_core::McpJsonOutcome::Updated => "updated",
@@ -1013,6 +1046,7 @@ pub fn run() {
             write_project_claude_md,
             write_project_agents_md,
             write_project_mcp_json,
+            write_project_codex_mcp,
             list_app_feedback,
             set_app_feedback_status,
             delete_app_feedback,

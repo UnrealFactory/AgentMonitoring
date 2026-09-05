@@ -210,12 +210,8 @@ export const ko: Dict = {
   /* 새 프로젝트 대화상자의 옵션을 만든 뒤에도 누를 수 있게 한 것 — 템플릿과 서버 경로는
      앱과 함께 움직인다. 쓰기는 코어의 보수적 규칙 그대로라 몇 번 눌러도 안전하고, 토스트가
      실제로 일어난 일을 말한다. */
-  "menu.claudeMd": "CLAUDE.md 지침 쓰기",
-  "menu.claudeMdHint": "없으면 만들고, 있으면 덧붙입니다",
-  "menu.agentsMd": "AGENTS.md 지침 쓰기",
-  "menu.agentsMdHint": "없으면 만들고, 있으면 덧붙입니다",
-  "menu.mcpJson": ".mcp.json MCP 등록",
-  "menu.mcpJsonHint": "agentmon 항목만 갱신 — 다른 서버는 보존",
+  "menu.instructions": "지침 쓰기",
+  "menu.mcp": "MCP 추가하기",
   "menu.scaffoldCreated": (file) => `${file} 파일을 만들었습니다`,
   "menu.scaffoldAppended": (file) => `${file}에 지침을 덧붙였습니다`,
   "menu.scaffoldUpdated": (file) => `${file}의 agentmon 항목을 갱신했습니다`,
@@ -636,12 +632,15 @@ export const ko: Dict = {
     "Claude Code용 작업 기록 지침을 저장소 루트에 만듭니다. 기존 내용은 보존하며, AGENTS.md와 함께 만들 수 있습니다.",
   "proj.form.agentsMdHint":
     "Codex 등 AGENTS.md를 지원하는 도구용 작업 기록 지침을 저장소 루트에 만듭니다. 기존 내용은 보존하며, CLAUDE.md와 함께 만들 수 있습니다.",
-  "proj.form.mcpJson": "MCP 자동 등록 (.mcp.json)",
-  "proj.form.mcpJsonOn": "만들기",
-  "proj.form.mcpJsonOff": "안 만듦",
-  "proj.form.mcpAgent": "기본 에이전트 핸들",
+  "proj.form.mcpJson": "Claude MCP 추가하기",
+  "proj.form.codexMcp": "Codex MCP 추가하기",
+  "proj.form.mcpJsonOn": "추가",
+  "proj.form.mcpJsonOff": "추가 안 함",
+  "proj.form.mcpAgent": "기록에 남길 에이전트 이름",
   "proj.form.mcpJsonHint":
-    "agentmon MCP 서버를 등록하는 .mcp.json을 저장소 루트에 만듭니다 — Claude Code가 이 파일을 스스로 읽어, 에이전트는 첫 세션부터 기록 도구를 가집니다. 파일이 이미 있으면 agentmon 항목만 더하거나 바꿉니다. 오른쪽은 기록에 남을 기본 에이전트 핸들입니다.",
+    "Claude Code에서 기록 도구를 사용하도록 .mcp.json에 연결 설정을 추가합니다. 다른 서버는 보존합니다. 오른쪽은 기록에 남길 에이전트 이름입니다.",
+  "proj.form.codexMcpHint":
+    "Codex에서 기록 도구를 사용하도록 .codex/config.toml에 연결 설정을 추가합니다. 다른 설정과 주석은 보존하며, Codex에서 이 프로젝트를 신뢰한 뒤 적용됩니다. 오른쪽은 기록에 남길 에이전트 이름입니다.",
   "proj.form.writes": (location) =>
     `\`${location}\\AgentMonitoring\` 폴더에 project.json과 첫 이벤트를 만듭니다 —`,
   "proj.form.writesTail": "명령과 똑같습니다.",

@@ -144,12 +144,8 @@ export const en = {
   /* The New-project options, reachable after creation — the template and the server path
      move with the app. The writes are core's conservative ones, so pressing twice is
      safe; the toast says what actually happened. */
-  "menu.claudeMd": "Write CLAUDE.md instructions",
-  "menu.claudeMdHint": "creates, or appends to yours",
-  "menu.agentsMd": "Write AGENTS.md instructions",
-  "menu.agentsMdHint": "creates, or appends to yours",
-  "menu.mcpJson": "Register MCP in .mcp.json",
-  "menu.mcpJsonHint": "touches only the agentmon entry",
+  "menu.instructions": "Write instructions",
+  "menu.mcp": "Add MCP",
   "menu.scaffoldCreated": (file: string) => `Wrote ${file}`,
   "menu.scaffoldAppended": (file: string) => `Appended the instructions to ${file}`,
   "menu.scaffoldUpdated": (file: string) => `Updated the agentmon entry in ${file}`,
@@ -586,12 +582,15 @@ export const en = {
     "Writes work-recording instructions for Claude Code at the repo root. Keeps existing content. You can create this alongside AGENTS.md.",
   "proj.form.agentsMdHint":
     "Writes work-recording instructions for Codex and other AGENTS.md-compatible tools at the repo root. Keeps existing content. You can create this alongside CLAUDE.md.",
-  "proj.form.mcpJson": "MCP registration (.mcp.json)",
-  "proj.form.mcpJsonOn": "Create",
+  "proj.form.mcpJson": "Add Claude MCP",
+  "proj.form.codexMcp": "Add Codex MCP",
+  "proj.form.mcpJsonOn": "Add",
   "proj.form.mcpJsonOff": "Skip",
-  "proj.form.mcpAgent": "Default agent handle",
+  "proj.form.mcpAgent": "Agent name on records",
   "proj.form.mcpJsonHint":
-    "Writes a .mcp.json at the repo root registering the agentmon MCP server — Claude Code reads the file on its own, so agents have the recording tools from their first session. If the file already exists, only the agentmon entry is added or replaced. The input is the default agent handle written onto records.",
+    "Adds the recording tools to Claude Code through .mcp.json. Keeps other servers. The input is the agent name written onto records.",
+  "proj.form.codexMcpHint":
+    "Adds the recording tools to Codex through .codex/config.toml. Keeps other settings and comments. Takes effect after you trust this project in Codex. The input is the agent name written onto records.",
   "proj.form.writes": (location: string) =>
     `Creates \`${location}\\AgentMonitoring\` with its project.json and first event, exactly as`,
   "proj.form.writesTail": "would.",

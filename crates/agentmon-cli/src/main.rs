@@ -165,16 +165,21 @@ enum Command {
         /// Can be combined with --claude-md. Preserves existing content.
         #[arg(long, value_name = "ko|en")]
         agents_md: Option<String>,
-        /// Also write <location>/.mcp.json registering the agentmon MCP server, so
-        /// project-scope clients (Claude Code reads the file on its own) have the tools
-        /// from their first session. Only the `agentmon` entry is added or replaced;
-        /// other servers in an existing file are kept.
-        #[arg(long)]
+        /// Add Claude MCP in <location>/.mcp.json. Preserves other servers.
+        /// May be combined with --codex-mcp.
+        #[arg(long = "claude-mcp", visible_alias = "mcp-json")]
         mcp_json: bool,
         /// Default agent handle inside that registration; any call can override it
         /// per record.
         #[arg(long, value_name = "handle", default_value = "claude", requires = "mcp_json")]
         mcp_agent: String,
+        /// Add Codex MCP in <location>/.codex/config.toml. Preserves other settings.
+        /// Codex loads project settings only for trusted projects.
+        #[arg(long)]
+        codex_mcp: bool,
+        /// Default record author for the Codex MCP registration.
+        #[arg(long, value_name = "handle", default_value = "codex", requires = "codex_mcp")]
+        codex_agent: String,
     },
     /// View or update this project's metadata; list registered projects.
     #[command(subcommand)]
@@ -293,14 +298,22 @@ enum ProjectCmd {
         the app. An empty list does not mean no projects exist; it means none are registered.")]
     List,
     /// Write (or refresh) this project's `.mcp.json`, registering the agentmon MCP
-    /// server for project-scope clients — what `init --mcp-json` does, for a project
+    /// server for Claude Code — what `init --claude-mcp` does, for a project
     /// that already exists. Only the `agentmon` entry is touched.
-    #[command(name = "mcp-json", after_help = "EXAMPLE\n  agentmon project mcp-json\n\n  \
+    #[command(name = "claude-mcp", visible_alias = "mcp-json", after_help = "EXAMPLE\n  agentmon project claude-mcp\n\n  \
         Points the file at the mcp/server.mjs found near this binary (the installed app, \
         or this checkout), with absolute paths — re-run it on the machine the repo moves to.")]
     McpJson {
         /// Default agent handle inside the registration; any call can override it.
         #[arg(long, value_name = "handle", default_value = "claude")]
+        agent: String,
+    },
+    /// Add or refresh Codex MCP in this project's .codex/config.toml.
+    /// Replaces only agentmon; keeps other settings and comments.
+    #[command(after_help = "EXAMPLE\n  agentmon project codex-mcp\n\n  Codex reads this file only in trusted projects.")]
+    CodexMcp {
+        /// Default record author; any MCP call can override it.
+        #[arg(long, value_name = "handle", default_value = "codex")]
         agent: String,
     },
     /// Write the agentmon instructions into this repo's CLAUDE.md — what
@@ -1103,6 +1116,8 @@ fn run(cli: &Cli) -> CliResult {
             agents_md,
             mcp_json,
             mcp_agent,
+            codex_mcp,
+            codex_agent,
         } => cmd_init(
             cli,
             name,
@@ -1114,6 +1129,8 @@ fn run(cli: &Cli) -> CliResult {
             agents_md.as_deref(),
             *mcp_json,
             mcp_agent,
+            *codex_mcp,
+            codex_agent,
         ),
         Command::Project(cmd) => run_project(cli, cmd),
         Command::Work(cmd) => run_work(cli, cmd),
@@ -1161,6 +1178,8 @@ fn cmd_init(
     agents_md: Option<&str>,
     mcp_json: bool,
     mcp_agent: &str,
+    codex_mcp: bool,
+    codex_agent: &str,
 ) -> CliResult {
     // Parsed before anything is written: a typo in either language must not leave behind a
     // project that a corrected re-run then refuses to create.
@@ -1191,25 +1210,28 @@ fn cmd_init(
     let agents = agents_md
         .map(|lang| agentmon_core::write_agents_md(store.location(), lang))
         .transpose()?;
-    let mcp = if mcp_json {
+    let mut registrations = Vec::new();
+    for (enabled, codex, handle) in [(mcp_json, false, mcp_agent), (codex_mcp, true, codex_agent)] {
+        if !enabled {
+            continue;
+        }
+        let file = if codex { ".codex/config.toml" } else { ".mcp.json" };
         // The server ships beside this binary (installed app) or at <repo>/mcp (source
         // checkout); pointing .mcp.json at a path that is not there helps nobody.
         let server = agentmon_core::find_mcp_server().ok_or_else(|| CliError {
             code: exit::NOT_FOUND,
             kind: "not_found",
-            message: "the project was created, but .mcp.json was not: no mcp/server.mjs \
+            message: format!("the project was created, but {file} was not: no mcp/server.mjs \
                       found near this agentmon binary — write the file by hand instead \
-                      (see docs/MCP.md)"
-                .to_string(),
+                      (see docs/MCP.md)"),
         })?;
-        Some(agentmon_core::write_mcp_json(
-            store.location(),
-            &server,
-            Some(mcp_agent),
-        )?)
-    } else {
-        None
-    };
+        let result = if codex {
+            agentmon_core::write_codex_mcp(store.location(), &server, Some(handle))
+        } else {
+            agentmon_core::write_mcp_json(store.location(), &server, Some(handle))
+        };
+        registrations.push(result?);
+    }
     let project = store.project()?;
     if cli.json {
         return print_json(&project);
@@ -1229,7 +1251,7 @@ fn cmd_init(
             }
         }
     }
-    if let Some((path, outcome)) = mcp {
+    for (path, outcome) in registrations {
         use agentmon_core::McpJsonOutcome as O;
         match outcome {
             O::Created => println!("  wrote {} (MCP server registered)", path.display()),
@@ -1436,7 +1458,7 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
             println!("  {}", written.path);
             Ok(())
         }
-        ProjectCmd::McpJson { agent } => {
+        ProjectCmd::McpJson { agent } | ProjectCmd::CodexMcp { agent } => {
             let store = open(cli)?;
             let server = agentmon_core::find_mcp_server().ok_or_else(|| CliError {
                 code: exit::NOT_FOUND,
@@ -1445,8 +1467,12 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
                           file by hand instead (see docs/MCP.md)"
                     .to_string(),
             })?;
-            let (path, outcome) =
-                agentmon_core::write_mcp_json(store.location(), &server, Some(agent))?;
+            let (path, outcome) = match cmd {
+                ProjectCmd::CodexMcp { .. } => {
+                    agentmon_core::write_codex_mcp(store.location(), &server, Some(agent))?
+                }
+                _ => agentmon_core::write_mcp_json(store.location(), &server, Some(agent))?,
+            };
             if cli.json {
                 use agentmon_core::McpJsonOutcome as O;
                 return print_json(&serde_json::json!({

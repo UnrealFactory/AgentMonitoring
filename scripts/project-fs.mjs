@@ -1174,13 +1174,13 @@ export function handleProjectWrite(reader, repoRoot, pathname, body) {
   // Scaffolding for a project that already exists — the New-project options, reachable
   // later. Shells the CLI verbs (`agentmon project claude-md` / `project mcp-json`), so
   // the conservative write rules are agentmon's own; --dir targets the served folder.
-  if (a === "projects" && b && ["claude-md", "agents-md", "mcp-json"].includes(c) && !parts[4]) {
+  if (a === "projects" && b && ["claude-md", "agents-md", "mcp-json", "codex-mcp"].includes(c) && !parts[4]) {
     const store = reader.byId(b);
     const args = ["--dir", store.root, "project"];
     if (c === "claude-md" || c === "agents-md") {
       args.push(c, "--lang", REQUIRED(body, "lang"));
     } else {
-      args.push("mcp-json");
+      args.push(c);
       const agent = typeof body?.mcpAgent === "string" ? body.mcpAgent.trim() : "";
       if (agent) args.push("--agent", agent);
     }
@@ -1206,6 +1206,11 @@ export function handleProjectWrite(reader, repoRoot, pathname, body) {
       args.push("--mcp-json");
       const mcpAgent = typeof body.mcpAgent === "string" ? body.mcpAgent.trim() : "";
       if (mcpAgent) args.push("--mcp-agent", mcpAgent);
+    }
+    if (body.codexMcp === true) {
+      args.push("--codex-mcp");
+      const codexAgent = typeof body.codexAgent === "string" ? body.codexAgent.trim() : "";
+      if (codexAgent) args.push("--codex-agent", codexAgent);
     }
     const project = runAgentmon(repoRoot, args);
     const root = rootOf(resolve(location));

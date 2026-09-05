@@ -21,6 +21,7 @@
 
 pub mod body;
 pub mod claude_md;
+pub mod codex_mcp;
 pub mod doctor;
 pub mod error;
 pub mod feedback;
@@ -40,6 +41,7 @@ pub use claude_md::{
     ClaudeMdLang, ClaudeMdOutcome,
 };
 pub use error::{BodyRejection, CoreError, HumanRejection, Result};
+pub use codex_mcp::write_codex_mcp;
 pub use human::{COMPACT_RULES as HUMAN_COMPACT_RULES, STYLE as HUMAN_STYLE};
 pub use mcp_json::{find_mcp_server, write_mcp_json, McpJsonOutcome};
 pub use feedback::{
