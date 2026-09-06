@@ -1,44 +1,46 @@
 ---
 name: handoff-v1-release
-title: v1.5.1 배포 완료 — Claude·Codex MCP 추가와 프로젝트 하위 메뉴
+title: v1.5.2 배포 완료 — 기록 정책·기존 지침 갱신·피드백 수정
 type: handoff
-description: v1.5.1을 main·태그와 함께 공개했습니다. 설치 파일을 다시 다운로드하여 크기·SHA-256 일치를 확인했습니다. 개발 앱과 서버는 종료했습니다.
+description: v1.5.2를 main·태그와 함께 공개했습니다. 설치 파일 다운로드의 크기·SHA-256을 확인했습니다. 설치 후 지침 쓰기로 기존 프로젝트를 갱신합니다.
 agent: fable-release-builder
 updated_by: codex
 created: 2026-08-21T08:29:26Z
-updated: 2026-09-05T11:13:22Z
+updated: 2026-09-06T10:24:43Z
 tags: []
-refs: [WORK-0099, WORK-0101, WORK-0103]
+refs: [WORK-0099, WORK-0101, WORK-0103, WORK-0108, WORK-0109, WORK-0110]
 ---
 
-현재 공개 버전은 **v1.5.1**입니다(2026-09-05).
+현재 공개 버전은 **v1.5.2**입니다(2026-09-06).
 
 ## 현재 배포
 
-- 릴리스: https://github.com/UnrealFactory/AgentMonitoring/releases/tag/v1.5.1
-- GitHub 최신 릴리스 API에서 v1.5.1, draft=false, prerelease=false, 공개 시각 2026-09-05T11:09:55Z를 확인했습니다.
-- v1.5.1 태그가 가리키는 기능 커밋: c289bab940799dd6249353f076ccd3233340542b. main과 주석 태그를 origin에 푸시했습니다. 배포 완료 기록은 후속 문서 커밋으로 남깁니다.
-- 설치 파일: AgentMonitoring_1.5.1_x64-setup.exe, **8,245,386바이트**.
-- SHA-256: **34df333304168645ee0b2a2b49cfe58ede01ed3113d26cb25ded2ced931f4c2f**.
-- 로컬 빌드, GitHub 자산 메타데이터, 공개 자산을 다시 내려받은 파일의 크기·해시가 일치했습니다. 로컬 앱 실행 파일의 ProductVersion과 FileVersion도 1.5.1입니다.
-- WORK-0099는 MCP 생성 기능, WORK-0101은 프로젝트 메뉴 정리, WORK-0103은 버전 변경·커밋·푸시·설치 파일 공개 기록입니다.
-- 사용자 확인용 개발 앱과 5173 서버는 배포 전에 종료했습니다. 로컬 설치 프로그램은 실행하지 않았습니다.
+- 릴리스: https://github.com/UnrealFactory/AgentMonitoring/releases/tag/v1.5.2
+- 최신 릴리스 API: v1.5.2, draft=false, prerelease=false, 공개 시각 2026-09-06T10:23:11Z입니다. 업데이트 코드가 사용하는 /releases/latest의 HEAD 리다이렉트도 v1.5.2를 가리킵니다.
+- 기능 커밋: 02007200d4c34456e9748c66f500d7295d3d03be. main과 주석 태그 v1.5.2를 origin에 원자적으로 푸시했고 원격 태그가 같은 커밋을 가리킴을 확인했습니다. 배포 완료 기록은 후속 문서 커밋으로 남깁니다.
+- 설치 파일: AgentMonitoring_1.5.2_x64-setup.exe, 8255128바이트.
+- SHA-256: aa79028932602572635a63e8b30f411a713ec91d2e33f92d780d438da610fffa.
+- 로컬 빌드, GitHub 자산 메타데이터, 공개 주소에서 다시 내려받은 파일의 크기·해시가 모두 일치했습니다. 앱 ProductVersion/FileVersion과 CLI --version도 1.5.2입니다.
+- WORK-0108은 정책·지침 갱신·refs·SVG 검사, WORK-0109는 EOF 수정과 피드백 4건 처리, WORK-0110은 이번 배포 기록입니다. 이전 Claude·Codex MCP 등록과 메뉴 구현은 WORK-0099/0101/0103을 참고하세요.
 
-## 배포된 기능과 검증
+## 포함된 변경과 적용 방법
 
-새 프로젝트에서 CLAUDE.md와 AGENTS.md를 각각 또는 함께 만들고 언어를 독립적으로 선택합니다. 두 파일은 같은 템플릿의 독립적인 복사본입니다. 지침 파일 생성만으로 MCP가 등록되지는 않습니다.
+목적·완료 조건으로 WORK를 묶고 미완료 작업을 이어가는 기록 정책 v4를 앱·CLI·MCP에 포함했습니다. 설명 대화마다 기록을 쪼개지 않고 미채택 제안과 채택한 결정을 구분합니다. 노트 목록 페이지 이동, work-/bug- 노트 이름의 refs 및 화면 링크, WORK·BUG 끝 빈 줄도 수정했습니다. 내용에 맞는 시각화 정책과 SVG 기하 검사 개선도 소스에 포함됩니다. 검사 스크립트 자체는 소스 저장소의 개발 도구입니다.
 
-MCP 추가는 Claude와 Codex를 각각 또는 함께 선택합니다. Claude는 .mcp.json, Codex는 .codex/config.toml의 [mcp_servers.agentmon]에 작성합니다. Codex 설정의 다른 항목·주석을 보존하고 같은 등록을 중복하지 않습니다. 잘못된 TOML은 오류를 반환하며 덮어쓰지 않습니다. Codex의 프로젝트 신뢰 설정은 변경하지 않습니다.
+앱을 1.5.2로 업데이트한 뒤 프로젝트 우클릭 → 지침 쓰기 → Codex / Claude를 실행하면 기존 AGENTS.md / CLAUDE.md의 AgentMonitoring 부분을 갱신합니다. 바깥 프로젝트 규칙과 기존 언어를 보존합니다. 정확한 구형 템플릿과 정상 관리 구간은 자동 갱신하고 직접 수정된 구형 지침·손상된 표시는 파일을 보존하며 수동 병합을 안내합니다. 기존 프로젝트 지침을 일괄 수정하지 않습니다.
 
-기존 프로젝트 우클릭 메뉴는 지침 쓰기 → Claude / Codex, MCP 추가하기 → Claude / Codex의 두 단계입니다. 하위 메뉴는 화면 가장자리에서 방향을 바꾸며 키보드로 열기·닫기·이전 항목 복귀를 지원합니다.
+실행 중인 MCP 연결은 재연결해야 새 서버 코드·도구 설명을 사용합니다. 이번 작업에서는 이 기기의 설치 프로그램 실행, .codex/config.toml 변경, 다른 프로젝트 지침 갱신을 수행하지 않았습니다. 따라서 공개 배포 완료와 로컬 설치본 적용을 구분하세요.
 
-CLI는 init --claude-mcp / --codex-mcp, project claude-mcp / codex-mcp입니다. 이전 --mcp-json / project mcp-json은 Claude 등록 별칭입니다. 작성자 기본값은 claude와 codex이며 init의 --mcp-agent / --codex-agent로 바꿉니다. 새 프로젝트 화면 기본 선택은 기존처럼 Claude만 켜져 있습니다. 지침은 init --agents-md ko|en, project agents-md --lang ko|en으로도 생성합니다.
+## 검증
 
-- Codex 설정 코어 테스트 4개, 최종 check:instructions 23개, check:keys 276개가 통과했습니다. 파일 생성·보존·오류 처리·별칭, 한국어/영어 화면, 하위 메뉴 키보드와 화면 양쪽 아래 위치를 확인했습니다.
-- 실제 WebView2에서 생성과 갱신·이미 등록된 경우·잘못된 TOML을 별도 임시 프로젝트/레지스트리/앱 식별자로 검증했습니다. Codex 클라이언트의 실제 재연결은 시험하지 않았습니다.
-- 배포용 CLI 1.5.1을 다시 빌드한 후 check:instructions 23개와 node scripts/check-humanstyle-drift.mjs가 통과했습니다.
-- npm run tauri:build가 프런트엔드·앱·NSIS 설치 파일 빌드까지 종료 코드 0으로 완료되었습니다.
-- 새 기록 파일의 마지막 빈 줄은 기록 도구가 생성한 형식이라 직접 수정하지 않았습니다. 소스 파일 대상 git 공백 검사는 통과했습니다.
+- npm run tauri:build: 프런트엔드·CLI·앱·NSIS 설치 파일까지 종료 0입니다.
+- cargo test --workspace: 211개 통과했습니다.
+- check:instructions: 기존 파일 갱신·사용자 규칙 보존·한영 화면·메뉴를 포함하여 33개 통과했습니다.
+- MCP: 267개, markdown smoke: 1069개 통과했습니다.
+- HUMAN_STYLE 전체 16,377자·compact 5,491자가 배포 CLI 내장 내용과 일치합니다.
+- 독립 release_review가 버전·잠금 파일·구형 지침 fixture·MCP 설치 리소스 경로·필수 신규 소스를 대조하여 배포 차단 결함을 발견하지 못했습니다.
+- 지침 행동 시험·SVG 회귀·Git EOF 재현의 상세 결과는 WORK-0108/0109에 있습니다. 이번 배포에서 설치 프로그램을 실행하거나 실제 Codex 클라이언트 재연결을 시험하지는 않았습니다.
+- 기존 WORK-0104~0108의 구형 도구 생성 EOF 빈 줄은 이력 그대로 보존했습니다. 소스 파일의 staged Git 공백 검사는 통과했습니다.
 
 ## 다음 버전을 배포할 때
 
@@ -56,10 +58,8 @@ CLI는 init --claude-mcp / --codex-mcp, project claude-mcp / codex-mcp입니다.
 
 ## For humans
 
-2026년 9월 5일, AgentMonitoring 1.5.1을 공개했습니다. Claude와 Codex의 연결 설정 생성 기능과 프로젝트 메뉴 정리가 포함되어 있습니다.
+2026년 9월 6일, AgentMonitoring 1.5.2를 공개했습니다. 목적에 맞춰 작업을 기록하는 정책과 기존 지침 갱신, 노트 링크와 파일 끝 빈 줄 수정이 포함됐습니다.
 
-**공개된 설치 파일까지 확인했습니다.** GitHub에서 설치 파일을 다시 내려받아 크기와 SHA-256을 비교했습니다. SHA-256은 파일 내용이 같은지 확인하는 값입니다. 포장을 마친 물건을 다시 열어 출고품과 대조하는 것과 같습니다. 두 값 모두 로컬 빌드와 같았습니다.
+Windows 설치 파일을 공개 주소에서 다시 내려받아 크기와 SHA-256을 비교했고 로컬 빌드와 같았습니다. Rust 211개, 지침 화면 33개, MCP 267개, 기록 표시 1,069개 검사도 통과했습니다.
 
-**앱 제작과 동작 검사를 통과했습니다.** 파일 생성과 화면 선택 검사 23개, 키보드 검사 276개가 통과했습니다. 배포용 빌드도 완료했습니다. 설치 프로그램을 직접 실행하거나 Codex에서 실제 재연결하는 과정은 시험하지 않았습니다.
-
-현재 다운로드 가능한 버전은 1.5.1이며, 개발 앱과 서버는 종료했습니다.
+앱 업데이트 후 프로젝트의 지침 쓰기에서 Codex 또는 Claude를 선택하면 기존 지침을 갱신할 수 있습니다. 실행 중인 MCP 연결도 다시 연결해 주세요. 이번 작업에서는 이 기기에 설치 프로그램을 실행하지 않았습니다.

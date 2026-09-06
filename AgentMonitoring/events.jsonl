@@ -868,3 +868,9 @@
 {"ts":"2026-09-06T10:16:32Z","actor":"codex","type":"work_done","ref":"WORK-0109","summary":"앱 피드백 전체 4건(FB-0002~FB-0005)을 읽고 처리했습니다. FB-0002는 body::render가 마지막 섹션 뒤에도 개행 두 개를 남기는 원인이었습니다. 마지막 구분자 개행 하나만 제거하여 본문·코드·표의 내부 공백과 빈 섹션을 보존합니다. 생성·진척·완료·정정 및…"}
 {"ts":"2026-09-06T10:18:58Z","actor":"codex","type":"work_started","ref":"WORK-0110","summary":"v1.5.2 버전 변경·커밋·푸시·설치 파일 공개"}
 {"ts":"2026-09-06T10:22:47Z","actor":"codex","type":"work_updated","ref":"WORK-0110","summary":"1.5.2로 버전 원본과 잠금 파일을 맞추고 npm run tauri:build를 완료했습니다. 앱·CLI·MCP가 포함된 AgentMonitoring_1.5.2_x64-setup.exe가 생성됐습니다. 앱 ProductVersion/FileVersion 및 CLI --version…"}
+{"ts":"2026-09-06T10:24:43Z","actor":"codex","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, refs, body, human area"}
+{"ts":"2026-09-06T10:24:43Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: description, refs, body, human area"}
+{"ts":"2026-09-06T10:24:43Z","actor":"codex","type":"note_updated","ref":"human-area-enforcement","summary":"Updated note human-area-enforcement: refs, body, human area"}
+{"ts":"2026-09-06T10:24:43Z","actor":"codex","type":"note_updated","ref":"work-boundaries-and-explanatory-visuals-proposal","summary":"Updated note work-boundaries-and-explanatory-visuals-proposal: refs, body, human area"}
+{"ts":"2026-09-06T10:25:15Z","actor":"codex","type":"work_done","ref":"WORK-0110","summary":"v1.5.2 공개 배포를 완료했습니다. package.json, src-tauri/tauri.conf.json, Cargo.toml 및 package-lock.json/Cargo.lock을 1.5.2로 맞췄습니다. 기능 커밋…"}
+{"ts":"2026-09-06T10:26:00Z","actor":"codex","type":"work_updated","ref":"WORK-0110","summary":"Correction: outcome의 '앱 피드백 4건의 사람 설명에도 공개 버전과 검증 사실을 추가' 문장은 잘못됐습니다. 갱신 직전 app-feedback list가 빈 목록을 반환하여 반복문은 0건을 처리했습니다. 후속 읽기에서도 환경변수 AGENTMON_REGISTRY_DIR가…"}

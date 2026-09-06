@@ -2,13 +2,13 @@
 name: start-here
 title: 시작 색인 — 현재 상태와 필요한 지침을 찾는 곳
 type: essential
-description: "배포 상태는 handoff-v1-release, 현재 소스의 기록 정책 v4·행동 검증은 work-boundaries-and-explanatory-visuals-proposal에서 확인하세요."
+description: "현재 공개 버전은 v1.5.2입니다. 배포·적용 절차는 handoff-v1-release, 기록 정책과 행동 검증은 work-boundaries-and-explanatory-visuals-proposal에서 확인하세요."
 agent: fable-updater-splash
 updated_by: codex
 created: 2026-08-21T13:21:48Z
-updated: 2026-09-06T10:08:29Z
+updated: 2026-09-06T10:24:43Z
 tags: []
-refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, scene-geometry-is-measured, quality-bars, event-reconciliation, work-boundaries-and-explanatory-visuals-proposal, WORK-0108]
+refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, scene-geometry-is-measured, quality-bars, event-reconciliation, work-boundaries-and-explanatory-visuals-proposal, WORK-0108, WORK-0110]
 ---
 
 # 먼저 확인하세요
@@ -17,7 +17,7 @@ refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, re
 
 - **공개 배포 상태·다음 배포 절차**: `handoff-v1-release`를 먼저 읽으세요. 공개 버전과 개발 소스 변경을 구분합니다.
 - **현재 소스의 WORK·메모리·그림 정책(2026-09-06)**: [[work-boundaries-and-explanatory-visuals-proposal]]을 읽으세요. 사용자 승인 후 WORK-0108에서 구현·행동 검증한 v4 정책입니다. 이름에 proposal이 남아 있지만 현재 노트 유형은 decision입니다.
-- **적용 범위**: 이 저장소의 AGENTS.md·CLAUDE.md와 소스, 재빌드한 target/release/agentmon.exe에 반영했습니다. 설치 앱 공개 배포 및 다른 프로젝트 지침 갱신은 하지 않았습니다. `.codex/config.toml`이 가리키는 설치 MCP 서버도 변경하지 않았습니다.
+- **적용 범위**: 기록 정책·지침 갱신과 피드백 수정을 v1.5.2로 공개했습니다(WORK-0110). 이 기기의 설치 프로그램 실행과 다른 프로젝트 지침 일괄 갱신은 하지 않았습니다. 앱 업데이트 뒤 각 프로젝트에서 지침 쓰기 → Codex / Claude를 실행하고 MCP 연결을 다시 연결하세요. `.codex/config.toml`은 기기별 설정으로 커밋하지 않았습니다.
 
 # 스크립트·검사 전에
 
@@ -45,6 +45,6 @@ WORK는 목적과 완료 조건을 가진 개발·수정·검증 또는 별도�
 
 ## For humans
 
-작업을 시작할 때 공개 배포 상태와 현재 개발 소스의 정책을 구분해 읽으시면 됩니다. 새 기록 정책은 질문마다 작업을 만들지 않고, 개발 목적과 필요한 현재 지식을 이어가도록 바뀌었습니다.
+현재 공개 버전은 1.5.2입니다. 새 기록 정책은 질문마다 작업을 만들지 않고 개발 목적과 필요한 현재 지식을 이어가도록 바뀌었습니다.
 
-서브에이전트가 설명·개발 착수·세션 인계·별도 조사 상황을 실제로 수행한 결과는 연결된 정책 노트에 있습니다. 설치 앱에는 아직 공개 배포하지 않았으므로 현재 소스의 변경과 설치본 동작은 다를 수 있습니다.
+배포 파일 확인 결과와 적용 방법은 배포 노트에 있습니다. 앱 업데이트 후 각 프로젝트에서 지침 쓰기를 실행하면 기존 지침을 갱신할 수 있습니다. 이 기기의 설치본 적용과 다른 프로젝트 파일 갱신은 별도입니다.
