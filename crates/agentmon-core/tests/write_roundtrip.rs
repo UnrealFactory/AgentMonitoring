@@ -49,6 +49,13 @@ impl TempProject {
     fn path(&self, rel: &str) -> PathBuf {
         self.location.join(DATA_DIR).join(rel)
     }
+
+    fn assert_record_eof(&self, id: &str) {
+        let folder = if id.starts_with("WORK-") { "worklogs" } else { "bugs" };
+        let text = fs::read_to_string(self.path(&format!("{folder}/{id}.md"))).unwrap();
+        assert!(text.ends_with('\n'), "{id}: missing final newline");
+        assert!(!text.ends_with("\n\n"), "{id}: new blank line at EOF (FB-0002)");
+    }
 }
 
 impl Drop for TempProject {
@@ -135,10 +142,12 @@ fn work_start_writes_a_record_the_reader_understands() {
 fn update_then_done_round_trips_through_the_reader() {
     let tp = TempProject::new("work-done");
     let id = start(&tp, "Wire the change watcher into the desktop app");
+    tp.assert_record_eof(&id);
 
     tp.store
         .update_work(&id, "cli-builder", Some("Watcher is running; a single save produced four raw notify events, so the debounce is not optional."), Some(HUMAN), None)
         .unwrap();
+    tp.assert_record_eof(&id);
     tp.store
         .update_work(&id, "cli-builder", Some("Debounce set to 250ms; one reload per save."), Some(HUMAN), None)
         .unwrap();
@@ -158,6 +167,7 @@ fn update_then_done_round_trips_through_the_reader() {
         .unwrap();
 
     let d = tp.store.worklog(&id).unwrap();
+    tp.assert_record_eof(&id);
     assert_eq!(d.meta.status, WorkStatus::Done);
     assert!(d.meta.finished.is_some());
     assert_eq!(d.updates.len(), 2);
@@ -227,6 +237,7 @@ fn a_finished_work_log_takes_corrections_but_never_changes_state() {
         .store
         .update_work(&id, "reviewer", Some("Correction: the note above says four workers; the config says two."), Some(HUMAN), None)
         .expect("a correction may be appended to a finished record");
+    tp.assert_record_eof(&id);
     assert_eq!(w.event.event_type, "work_updated", "still a work_updated event");
     let after = tp.store.worklog(&id).unwrap();
     assert_eq!(after.meta.status, WorkStatus::Done, "the status does not move");
@@ -346,6 +357,7 @@ fn file_bug(tp: &TempProject) -> String {
 fn bug_lifecycle_round_trips() {
     let tp = TempProject::new("bug-life");
     let id = file_bug(&tp);
+    tp.assert_record_eof(&id);
     assert_eq!(id, "BUG-0001");
 
     let b = tp.store.bug(&id).unwrap();
@@ -357,6 +369,7 @@ fn bug_lifecycle_round_trips() {
     assert!(b.resolution.is_none());
 
     tp.store.claim_bug(&id, "cli-builder", None, None).unwrap();
+    tp.assert_record_eof(&id);
     let b = tp.store.bug(&id).unwrap();
     assert_eq!(b.meta.status, BugStatus::InProgress);
     assert_eq!(b.meta.assignee.as_deref(), Some("cli-builder"));
@@ -365,6 +378,7 @@ fn bug_lifecycle_round_trips() {
     tp.store
         .comment_bug(&id, "cli-builder", Some("Root cause: the Tauri shell never started a watcher, so `project-changed` was never emitted."), Some(HUMAN), None)
         .unwrap();
+    tp.assert_record_eof(&id);
     let b = tp.store.bug(&id).unwrap();
     assert_eq!(b.comments.len(), 1);
     assert_eq!(b.comments[0].agent, "cli-builder");
@@ -374,6 +388,7 @@ fn bug_lifecycle_round_trips() {
     tp.store
         .resolve_bug(&id, "cli-builder", "Started a debounced notify watcher in setup() and re-armed it on registry change. Verified with cargo check and by watching the dashboard refresh.", "A plain-words retelling for whoever reads this later.", None)
         .unwrap();
+    tp.assert_record_eof(&id);
     let b = tp.store.bug(&id).unwrap();
     assert_eq!(b.meta.status, BugStatus::Resolved);
     assert_eq!(b.meta.resolved_by.as_deref(), Some("cli-builder"));
@@ -837,18 +852,16 @@ fn compound_human(things: usize, each: usize) -> String {
     out
 }
 
-/// The picture default (a scene per beat, owner decision 2026-08-25) is swept the same
-/// way the word ceiling is: a warning, never a refusal, and only on the shape that cannot
-/// be the contract's own valve — a page of beats with not one scene. One figure anywhere
-/// silences it (the valve is per beat, and doctor cannot judge which beat's facts draw
-/// nothing), a beat-less thin retelling owes none, and a note never warns.
+/// v4 chooses pictures by explanatory need. Bold paragraphs in a short factual
+/// update do not imply an absent picture is a defect. Citation defects are still
+/// checked independently in the following test.
 #[test]
-fn doctor_warns_on_a_page_of_beats_with_no_scene_and_only_on_records() {
+fn doctor_does_not_infer_missing_pictures_from_paragraph_structure() {
     let tp = TempProject::new("doctor-scenes");
     let id = start(&tp, "Wire the change watcher into the desktop app");
 
-    // Beats, no picture anywhere: the warning, naming the record and the beat count.
-    let bare = "The opening.\n\n**One thing shipped.** Its words.\n\n**Another thing.** More words.";
+    let bare = "The settings were updated.\n\n**The new path is saved.** The path check passed.\n\n\
+                **The integration check remains.** Work is still in progress.";
     tp.store.update_work(&id, "cli-builder", None, Some(bare), None).unwrap();
     let report = doctor::check(&tp.store).unwrap();
     let scene_warns: Vec<String> = report
@@ -857,13 +870,11 @@ fn doctor_warns_on_a_page_of_beats_with_no_scene_and_only_on_records() {
         .filter(|p| p.message.contains("no scene"))
         .map(|p| format!("{}: {}", p.message, p.fix))
         .collect();
-    assert_eq!(scene_warns.len(), 1, "{:#?}", report.problems);
-    assert!(scene_warns[0].contains(&format!("{id} (2 beat(s)")), "{}", scene_warns[0]);
-    assert!(scene_warns[0].contains("check:scenes"), "{}", scene_warns[0]);
-    assert_eq!(report.errors(), 0, "a missing picture is untidy, not broken");
+    assert!(scene_warns.is_empty(), "{:#?}", report.problems);
+    assert_eq!(report.errors(), 0, "a concise update needs no decorative picture");
+    assert_eq!(report.warnings(), 0, "{:#?}", report.problems);
 
-    // One scene on the page and the sweep is silent — the per-beat valve is the
-    // contract's to judge, not doctor's.
+    // Existing illustrated records remain readable too.
     let pictured = "The opening.\n\n**One thing shipped.**\n\n\
                     ![the cast](assets/work-0000-1-cast.svg)\n\nIts words.\n\n\
                     **Another thing.** More words.";
@@ -1010,7 +1021,7 @@ fn doctor_warns_on_a_telling_past_the_ceiling_and_never_on_covering_everything()
         "{msgs:#?}"
     );
     // …and the hint hands back the contract's own order. An agent reads this line and does
-    // what it says, so it says split first, and says what may never be traded for a number.
+    // what it says: preserve useful evidence without imposing the old story template.
     let fix = report
         .problems
         .iter()
@@ -1018,8 +1029,8 @@ fn doctor_warns_on_a_telling_past_the_ceiling_and_never_on_covering_everything()
         .map(|p| p.fix.clone())
         .unwrap_or_default();
     assert!(fix.contains("never a record's total"), "{fix}");
-    assert!(fix.contains("beat-block"), "{fix}");
-    assert!(fix.contains("Never cut a fact to reach a number"), "{fix}");
+    assert!(fix.contains("preserving the evidence and explanations"), "{fix}");
+    assert!(fix.contains("no fixed narrative structure is required"), "{fix}");
 }
 
 /// A title is one line, and a title that is not one is refused before anything is written.

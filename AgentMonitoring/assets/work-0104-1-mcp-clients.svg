@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="310" viewBox="0 0 720 310">
+  <!-- Grid: 720 x 310. WORK-0104: Claude, Codex and Cursor independently write
+       .mcp.json, .codex/config.toml and .cursor/mcp.json. Arrows represent file
+       generation only, not a verified client connection. No other claim is drawn. -->
+  <style>.s{font-family:Arial,sans-serif;font-size:26px;fill:#e7e9ef}.m{font-family:Consolas,monospace;font-size:24px;fill:#c8c8ff}</style>
+  <rect width="720" height="310" rx="16" fill="#17191f"/>
+  <g fill="#22252f" stroke="#404451">
+    <rect x="24" y="24" width="210" height="70" rx="8"/>
+    <rect x="284" y="24" width="412" height="70" rx="8"/>
+    <rect x="24" y="120" width="210" height="70" rx="8"/>
+    <rect x="284" y="120" width="412" height="70" rx="8"/>
+    <rect x="24" y="216" width="210" height="70" rx="8"/>
+    <rect x="284" y="216" width="412" height="70" rx="8"/>
+  </g>
+  <g stroke="#a6a5ee" stroke-width="2" fill="none">
+    <path d="M244 59h30m-8-7 8 7-8 7"/>
+    <path d="M244 155h30m-8-7 8 7-8 7"/>
+    <path d="M244 251h30m-8-7 8 7-8 7"/>
+  </g>
+  <g class="s" text-anchor="middle">
+    <text x="129" y="68">Claude Code</text>
+    <text x="129" y="164">Codex</text>
+    <text x="129" y="260">Cursor</text>
+  </g>
+  <g class="m" text-anchor="middle">
+    <text x="490" y="68">.mcp.json</text>
+    <text x="490" y="164">.codex/config.toml</text>
+    <text x="490" y="260">.cursor/mcp.json</text>
+  </g>
+</svg>

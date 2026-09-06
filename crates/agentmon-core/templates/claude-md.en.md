@@ -1,54 +1,66 @@
+<!-- agentmon:instructions version=2 lang=en -->
 # Work records — AgentMonitoring
 
-The work history and knowledge of this project live in AgentMonitoring. Humans are
-not the only readers of these records — the agent in the next session, and agents
-working in parallel, use them as shared memory and pick up where you left off. Do
-not keep private memory files or scratch notes; record here, through the agentmon
-MCP tools. Write every record in **English**.
+AgentMonitoring holds this project's development history and shared memory.
+Agents in later sessions and parallel agents read these records too. Use agentmon
+MCP tools instead of private memory files or scratch notes. Write every record in **English**.
 
-## Starting a session
+## Read memory before starting
 
-- Run `note(action: "list")` first. The notes previous sessions left (essential,
-  memory, handoff, decision, reference) are this project's memory — and the
-  **essential** notes the list surfaces on top are required reading before any
-  work: they index the rest. Check `status` for work in progress and open bugs.
+- Run `note(action: "list")` first and read the essential index. Check `status`
+  for work in progress and open bugs, then search and read notes relevant to this
+  topic. When continuing a conversation, first check existing facts, decisions and unfinished WORK.
+- Keep the essential index focused on current state and links to relevant notes.
+  Detailed history belongs in WORK; current knowledge belongs in topic notes.
 
-## When you finish work
+## A WORK is an independent task, not a conversation
 
-- Record every meaningful piece of work with `log_work`. Fill in outcome and the
-  log is opened and closed in one call.
-- Open longer work without an outcome (you get a WORK id), report progress with
-  `update_work` notes, close it with an outcome, or abandon it with a reason —
-  failure is a record too.
-- When writing up work after the fact, put the real times in started_at /
-  finished_at.
+- Open a WORK with its **objective, scope and completion criteria** when starting
+  development, fixes or verification. A separately assigned investigation or
+  comparison with its own deliverable also qualifies. For a short task already
+  finished, fill in outcome in `log_work` to record it in one call.
+- Questions, explanations, ideas, corrections of understanding and ending a chat
+  do not justify a new WORK or a progress entry. Do not split everyday discussion
+  such as investigation → proposal → user correction into separate completed WORKs.
+  Do not rewrite notes either when no fact has changed.
+- Continue the existing **unfinished WORK** for implementation, verification and
+  follow-up fixes serving the same objective. Open long work without an outcome;
+  use `update_work` notes only for significant implementation results, verification
+  or plan changes. Close it with an outcome when its completion criteria are met.
+  Do not reopen completed WORK; link a separate follow-up task to it with refs.
+- A session change or temporary pause leaves the WORK `in_progress`; leave a
+  handoff with current state, remaining work and the next action. Use abandon
+  with a reason only for permanent discontinuation. For records written later,
+  put the real times in started_at / finished_at.
 
-## Bugs and notes
+## Maintain bugs and memory
 
-- Found a bug: `report_bug` (repro, expected, actual). Fixed one: `resolve_bug`
-  (root-cause comment + resolution). Link the related WORK ids with refs.
-- Leave the facts and decisions the next session needs with
-  `note(action: "write")`. When you stop mid-work, always leave a handoff note;
-  update or remove notes that have become wrong.
-- A bug in, or a wish for, this record system (AgentMonitoring) itself goes to
-  `app_feedback` — it reaches the app's maintainer, not the project.
+- Use `report_bug` (repro, expected, actual) for bugs and `resolve_bug` (root-cause
+  comment + resolution) for fixes. Link related WORK ids with refs.
+- When a fact needed in future sessions changes, update the existing topic note
+  using `note(action: "write")`. Distinguish verified facts, proposals under
+  consideration and adopted decisions. Use **decision only for adopted decisions**.
+  Update or remove notes that are wrong.
+- Bugs or feature suggestions about AgentMonitoring itself go to `app_feedback`.
 
-## Write for the reader
+## Write for someone who was not there
 
-- The reader was not there. Name file paths, commands and screens; do not invent
-  abbreviations only this conversation understands. WORK-NNNN / BUG-NNNN in prose
-  become links to those records automatically.
-- Bodies render rich markdown: tables, code blocks, checklists, `> [!note]`
-  callouts, ASCII diagrams inside code blocks. Use them.
-- Put diagrams and images in `AgentMonitoring/assets/` and reference them as
-  `![what it shows](assets/file.svg)` (svg, png, jpg, gif, webp, 10 MB max). The
-  app is dark — give an SVG its own background colour. External image URLs and raw
-  HTML do not render.
+- Explain what changed and why first. Name file paths, commands and screens as
+  specifically as the reader needs. WORK-NNNN / BUG-NNNN become record links automatically.
+- Use a visual to explain a difficult relationship, sequence or change. Do not
+  match pictures to paragraph counts or move explanatory sentences into boxes.
+  Choose a timeline for order, connections for structure, before/after for change,
+  annotations for screens or a table for choices. Check that the central relationship
+  remains visible without the sentences. Simple facts need only brief prose or a table.
+- Put image files in `AgentMonitoring/assets/` and reference them as
+  `![what it shows](assets/file.svg)` (svg, png, jpg, gif, webp, 10 MB max).
+  Give SVGs a background colour and width, height and viewBox attributes.
+  External image URLs and raw HTML do not render.
 
 ## Rules
 
-- Record only what really happened, as it happened. Never claim something was
-  verified when it was not.
-- Never create or edit record files by hand — records go through the tools. The
-  only files you write directly are images under assets/.
+- Record only what really happened. Never claim a check ran when it did not.
+- Never create or edit AgentMonitoring record files by hand. Records go through
+  the tools; within that data folder, only images under assets/ may be written directly.
 - To correct a closed log, append a note that starts with `Correction:`.
+<!-- /agentmon:instructions -->

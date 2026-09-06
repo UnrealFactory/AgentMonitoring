@@ -579,9 +579,9 @@ export const en = {
   "proj.form.agentsMd": "AGENTS.md",
   "proj.form.instructionMdNone": "Don't add",
   "proj.form.claudeMdHint":
-    "Writes work-recording instructions for Claude Code at the repo root. Keeps existing content. You can create this alongside AGENTS.md.",
+    "Creates or refreshes work-recording instructions for Claude Code at the repo root. Keeps custom rules. You can create this alongside AGENTS.md.",
   "proj.form.agentsMdHint":
-    "Writes work-recording instructions for Codex and other AGENTS.md-compatible tools at the repo root. Keeps existing content. You can create this alongside CLAUDE.md.",
+    "Creates or refreshes work-recording instructions for Codex and other AGENTS.md-compatible tools at the repo root. Keeps custom rules. You can create this alongside CLAUDE.md.",
   "proj.form.mcpJson": "Add Claude MCP",
   "proj.form.codexMcp": "Add Codex MCP",
   "proj.form.mcpJsonOn": "Add",

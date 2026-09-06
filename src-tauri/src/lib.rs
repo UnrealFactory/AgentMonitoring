@@ -421,8 +421,8 @@ async fn open_project(app: AppHandle) -> CmdResult<Option<Project>> {
 /// Write (or refresh) a registered project's CLAUDE.md instructions — the New-project
 /// dialog's option, reachable after creation too, because the app's template moves with
 /// the app and a project made last month has no other way to catch up. The write is
-/// core's conservative one: create, or append after what the human wrote, or change
-/// nothing when the section is already there. Returns what happened, for the toast.
+/// core's conservative one: create, append, or refresh only the managed section,
+/// keeping the existing language and custom rules. Returns what happened, for the toast.
 #[tauri::command]
 fn write_project_claude_md(
     id: String,
@@ -436,6 +436,7 @@ fn write_project_claude_md(
     Ok(match outcome {
         agentmon_core::ClaudeMdOutcome::Created => "created",
         agentmon_core::ClaudeMdOutcome::Appended => "appended",
+        agentmon_core::ClaudeMdOutcome::Updated => "updated",
         agentmon_core::ClaudeMdOutcome::AlreadyPresent => "already_present",
     }
     .to_string())
@@ -455,6 +456,7 @@ fn write_project_agents_md(
     Ok(match outcome {
         agentmon_core::ClaudeMdOutcome::Created => "created",
         agentmon_core::ClaudeMdOutcome::Appended => "appended",
+        agentmon_core::ClaudeMdOutcome::Updated => "updated",
         agentmon_core::ClaudeMdOutcome::AlreadyPresent => "already_present",
     }
     .to_string())

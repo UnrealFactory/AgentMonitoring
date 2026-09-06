@@ -22,6 +22,7 @@ import { highlightCode } from "../src/lib/highlight.ts";
 import { parseBlocks, parseInline, inlineText } from "../src/lib/markdown-parse.ts";
 import { splitLabelledSections } from "../src/lib/sections.ts";
 import { readHumanStory } from "../src/lib/human.ts";
+import { recordKind, recordPath } from "../src/lib/record-ref.ts";
 import { sections, splitHuman } from "./project-fs.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -79,6 +80,20 @@ const rendered = (src) => parseBlocks(src).map(blockText).join("\n");
 /* ---------------------------------------------------------------- fixtures */
 
 console.log("fixtures");
+
+// FB-0004: a valid note name starting with work-/bug- must open the note screen,
+// both from a Related link and from the activity feed's record menu.
+for (const [id, kind, page] of [
+  ["WORK-0012", "work", "work"],
+  ["bug-0003", "bug", "bugs"],
+  ["work-boundaries-and-explanatory-visuals-proposal", "note", "notes"],
+  ["bug-investigation", "note", "notes"],
+  ["work-0012-context", "note", "notes"],
+  ["workbench", "note", "notes"],
+]) {
+  eq(`record classification: ${id}`, recordKind(id), kind);
+  eq(`record screen: ${id}`, recordPath("fixture", id), `/p/fixture/${page}/${id}`);
+}
 
 // 1. The bug this file exists for: a wrapped sentence whose second line starts with a
 //    number is a sentence. (vault/projects/relay/worklogs/WORK-0005.md, update 1)

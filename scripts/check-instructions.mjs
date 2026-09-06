@@ -18,6 +18,7 @@ const port = Number(process.env.INSTRUCTIONS_PORT || 5218);
 const origin = `http://localhost:${port}`;
 const shots = join(repoRoot, ".critic-tmp", "instructions");
 const template = (lang) => readFileSync(join(repoRoot, "crates", "agentmon-core", "templates", `claude-md.${lang}.md`), "utf8");
+const legacyTemplate = (lang) => readFileSync(join(repoRoot, "crates", "agentmon-core", "templates", `claude-md.v1.${lang}.md`), "utf8");
 const read = (dir, name) => readFileSync(join(dir, name), "utf8");
 let server;
 let browser;
@@ -112,6 +113,32 @@ try {
       assert.equal(skipped.outcome, "already_present");
       assert.equal(read(none, filename), content);
     });
+    const suffix = "\n\n# Additional user rules\r\nPreserve these too.\r\n";
+    writeFileSync(join(none, filename), original + legacyTemplate("en").trimEnd() + suffix);
+    const migrated = cli(["--dir", none, "project", command, "--lang", "ko"]);
+    check(`${filename} migrates exact legacy, keeping both surrounding rules and the existing language`, () => {
+      assert.equal(migrated.outcome, "updated");
+      assert.equal(read(none, filename), original + template("en").trimEnd() + suffix);
+    });
+    const old = "<!-- agentmon:instructions version=1 lang=ko -->\r\nEarlier managed instructions.\r\n<!-- /agentmon:instructions -->";
+    writeFileSync(join(none, filename), original + old + suffix);
+    const updated = cli(["--dir", none, "project", command, "--lang", "en"]);
+    const refreshed = read(none, filename);
+    check(`${filename} refreshes managed text with CRLF and remains idempotent`, () => {
+      assert.equal(updated.outcome, "updated");
+      assert.equal(refreshed, original + template("ko").replaceAll("\r\n", "\n").trimEnd().replaceAll("\n", "\r\n") + suffix);
+      assert.equal(cli(["--dir", none, "project", command, "--lang", "en"]).outcome, "already_present");
+      assert.equal(read(none, filename), refreshed);
+    });
+    for (const unsafe of [legacyTemplate("en").replace("Write every record", "Our special rule: write every record"), template("en").replace("<!-- /agentmon:instructions -->", "")]) {
+      writeFileSync(join(none, filename), unsafe);
+      const result = cli(["--dir", none, "project", command, "--lang", "ko"], 5);
+      check(`${filename} refuses custom legacy or broken markers without altering user text`, () => {
+        assert.match(result, /manually merge/);
+        assert.equal(read(none, filename), unsafe);
+      });
+    }
+    writeFileSync(join(none, filename), refreshed);
   }
 
   server = startServer(port, { env: { ...env, AGENTMON_DIRS: none, AGENTMON_BIN: binary } });
@@ -244,6 +271,14 @@ try {
       assert.equal(repeated.outcome, "already_present");
       assert.equal(read(location, "AGENTS.md"), template(locale));
       assert.equal(read(location, "CLAUDE.md"), template("ko"));
+      assert.deepEqual(pageErrors, []);
+    });
+    const legacyRules = "# Custom review rules\r\n\r\n";
+    writeFileSync(join(location, "AGENTS.md"), legacyRules + legacyTemplate(locale));
+    const refreshedFromMenu = await writeFromMenu();
+    check(`${locale} project menu upgrades legacy AGENTS.md and reports updated`, () => {
+      assert.equal(refreshedFromMenu.outcome, "updated");
+      assert.equal(read(location, "AGENTS.md"), legacyRules + template(locale));
       assert.deepEqual(pageErrors, []);
     });
     for (const [item, filename, author] of [["mcp-json", ".mcp.json", "claude"], ["codex-mcp", ".codex/config.toml", "codex"]]) {

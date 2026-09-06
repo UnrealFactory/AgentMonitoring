@@ -842,3 +842,29 @@
 {"ts":"2026-09-05T11:08:46Z","actor":"codex","type":"work_updated","ref":"WORK-0103","summary":"버전 원본 3개와 package-lock.json·Cargo.lock을 1.5.1로 맞췄습니다. 개발 앱 PID 11616과 5173 서버를 종료했습니다. 배포용 agentmon 1.5.1 빌드, 지침 계약 일치 검사, 배포용 CLI를 사용하는 check:instructions…"}
 {"ts":"2026-09-05T11:13:22Z","actor":"codex","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, refs, body, human area"}
 {"ts":"2026-09-05T11:13:23Z","actor":"codex","type":"work_done","ref":"WORK-0103","summary":"앱과 CLI 버전을 1.5.1로 맞추고 기능·문서·검사·작업 기록을 c289bab940799dd6249353f076ccd3233340542b로 커밋하여 origin/main에 푸시했습니다. 같은 커밋의 주석 태그 v1.5.1을 푸시하고 GitHub 최신 정식 릴리스…"}
+{"ts":"2026-09-05T11:48:20Z","actor":"codex","type":"work_started","ref":"WORK-0104","summary":"Cursor MCP 선택과 클라이언트별 설정 생성 경로 확장"}
+{"ts":"2026-09-05T11:51:35Z","actor":"codex","type":"work_updated","ref":"WORK-0104","summary":"Cursor 선택을 새 프로젝트 화면·프로젝트 MCP 하위 메뉴·Tauri 명령·개발 서버 API·CLI에 연결했습니다. Claude와 Cursor는 crates/agentmon-core/src/mcp_json.rs의 JSON 병합 함수를 공유합니다. 코어 MCP 테스트 11개,…"}
+{"ts":"2026-09-05T11:52:08Z","actor":"codex","type":"note_created","ref":"mcp-client-registration","summary":"클라이언트별 MCP 등록 — Claude·Codex·Cursor"}
+{"ts":"2026-09-05T11:52:08Z","actor":"codex","type":"work_done","ref":"WORK-0104","summary":"기존 Claude·Codex 등록에 Cursor를 추가했습니다. 새 프로젝트 화면, 기존 프로젝트 MCP 하위 메뉴, Tauri·개발 서버 API, init --cursor-mcp / project cursor-mcp와 --cursor-agent를 연결했습니다.…"}
+{"ts":"2026-09-05T11:53:44Z","actor":"codex","type":"work_started","ref":"WORK-0105","summary":"사용자 요청에 따라 Cursor MCP 추가분 철회"}
+{"ts":"2026-09-05T11:53:44Z","actor":"codex","type":"work_done","ref":"WORK-0105","summary":"cargo build -p agentmon-cli, npm run build, 기존 check:instructions 23개가 통과했습니다. 추적 중인 소스·문서 변경은 남지 않았습니다. WORK-0104는 역사로 보존하고 Correction을 추가하며 현재 공유 노트는…"}
+{"ts":"2026-09-05T11:53:44Z","actor":"codex","type":"work_updated","ref":"WORK-0104","summary":"Correction: 사용자께서 Cursor는 필요하지 않고 사용하지 않는다고 지정하셔서, 이 작업에서 추가한 Cursor 구현·UI·API·CLI·테스트·문서 변경을 모두 철회했습니다. 현재 소스에는 기존 Claude·Codex만 남아 있습니다. 개발 CLI와 프런트엔드를 다시…"}
+{"ts":"2026-09-05T11:53:44Z","actor":"codex","type":"note_updated","ref":"mcp-client-registration","summary":"Updated note mcp-client-registration: title, type, description, refs, body, human area"}
+{"ts":"2026-09-05T11:55:44Z","actor":"codex","type":"work_started","ref":"WORK-0106","summary":"FB-0001의 Claude·Codex MCP 자동 등록 구현 재검증"}
+{"ts":"2026-09-05T11:56:24Z","actor":"codex","type":"work_done","ref":"WORK-0106","summary":"FB-0001의 요청은 현재 v1.5.1 소스(c289bab)에 이미 구현되어 있으며 피드백 상태도 done입니다. Claude는 .mcp.json의 mcpServers.agentmon, Codex는 .codex/config.toml의 [mcp_servers.agentmon]을…"}
+{"ts":"2026-09-06T09:28:42Z","actor":"codex","type":"note_created","ref":"work-boundaries-and-explanatory-visuals-proposal","summary":"검토안 — WORK의 개발 목적 단위와 설명용 그림·메모리 지침"}
+{"ts":"2026-09-06T09:30:27Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: title, description, refs, body, human area"}
+{"ts":"2026-09-06T09:27:17Z","actor":"codex","type":"work_started","ref":"WORK-0107","summary":"WORK 경계·메모리 조회·설명용 그림의 패치 제안서와 관계도 시안을 만들었습니다"}
+{"ts":"2026-09-06T09:30:27Z","actor":"codex","type":"work_done","ref":"WORK-0107","summary":"채택 전 패치 제안서와 SVG 시안을 준비했습니다. Chromium getBBox에서 system-ui·Verdana 두 서체의 글자 겹침·14단위 가장자리 침범이 없었고, 395px 폭 환산 최소 글자는 약 12.41px였습니다. node scripts/check-scenes.mjs…"}
+{"ts":"2026-09-06T09:47:58Z","actor":"codex","type":"work_started","ref":"WORK-0108","summary":"WORK 경계·기억 조회·설명 지침을 수정하고 서브에이전트 행동으로 검증합니다"}
+{"ts":"2026-09-06T10:03:32Z","actor":"codex","type":"work_updated","ref":"WORK-0108","summary":"정책 v4·한/영 템플릿 v2와 안전한 기존 구간 갱신, 노트 페이지 이동 및 work-/bug- 노트의 refs·UI 경로 수정을 구현했습니다. 기존 지침을 읽은 에이전트는 설계 질문 세 번에 완료 WORK 2개와 Correction 업데이트 1개를 만들었습니다. 새 지침 에이전트는…"}
+{"ts":"2026-09-06T10:04:37Z","actor":"codex","type":"note_updated","ref":"human-area-enforcement","summary":"Updated note human-area-enforcement: title, description, refs, body, human area"}
+{"ts":"2026-09-06T10:04:37Z","actor":"codex","type":"note_updated","ref":"scene-geometry-is-measured","summary":"Updated note scene-geometry-is-measured: title, description, refs, body, human area"}
+{"ts":"2026-09-06T10:07:43Z","actor":"codex","type":"note_updated","ref":"work-boundaries-and-explanatory-visuals-proposal","summary":"Updated note work-boundaries-and-explanatory-visuals-proposal: title, type, description, tags, refs, body, human area"}
+{"ts":"2026-09-06T10:08:29Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: title, description, refs, body, human area"}
+{"ts":"2026-09-06T10:09:47Z","actor":"codex","type":"work_done","ref":"WORK-0108","summary":"WORK 경계·현재 지식 관리·내용별 시각화 정책을 구현하고 실제 서브에이전트 행동으로 검증했습니다. 한/영 템플릿 v2, HUMAN_STYLE v4와 MCP 도구 설명이 목적·완료 조건을 기준으로 일치합니다. 지침 생성은 version marker 구간 및 완전 일치 legacy만…"}
+{"ts":"2026-09-06T10:12:52Z","actor":"codex","type":"work_started","ref":"WORK-0109","summary":"앱 피드백 전체 점검과 기록 파일 끝 빈 줄 수정"}
+{"ts":"2026-09-06T10:16:11Z","actor":"codex","type":"note_updated","ref":"human-area-enforcement","summary":"Updated note human-area-enforcement: refs, body, human area"}
+{"ts":"2026-09-06T10:16:32Z","actor":"codex","type":"work_done","ref":"WORK-0109","summary":"앱 피드백 전체 4건(FB-0002~FB-0005)을 읽고 처리했습니다. FB-0002는 body::render가 마지막 섹션 뒤에도 개행 두 개를 남기는 원인이었습니다. 마지막 구분자 개행 하나만 제거하여 본문·코드·표의 내부 공백과 빈 섹션을 보존합니다. 생성·진척·완료·정정 및…"}
+{"ts":"2026-09-06T10:18:58Z","actor":"codex","type":"work_started","ref":"WORK-0110","summary":"v1.5.2 버전 변경·커밋·푸시·설치 파일 공개"}
+{"ts":"2026-09-06T10:22:47Z","actor":"codex","type":"work_updated","ref":"WORK-0110","summary":"1.5.2로 버전 원본과 잠금 파일을 맞추고 npm run tauri:build를 완료했습니다. 앱·CLI·MCP가 포함된 AgentMonitoring_1.5.2_x64-setup.exe가 생성됐습니다. 앱 ProductVersion/FileVersion 및 CLI --version…"}

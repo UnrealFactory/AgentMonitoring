@@ -318,8 +318,8 @@ enum ProjectCmd {
     },
     /// Write the agentmon instructions into this repo's CLAUDE.md — what
     /// `init --claude-md` does, for a project that already exists. Conservative: a file
-    /// already there gets the section appended after what the human wrote, and a file
-    /// that already carries it (either language) is left alone.
+    /// already there keeps its custom rules. Refreshes managed instructions, retaining
+    /// the existing section's language. Edited legacy sections require a manual merge.
     #[command(name = "claude-md", after_help = "EXAMPLE\n  agentmon project claude-md --lang ko\n\n  \
         Re-run it after an app update to pick up a refreshed template: an unchanged \
         section reports `already_present` and writes nothing.")]
@@ -329,7 +329,7 @@ enum ProjectCmd {
         lang: String,
     },
     /// Write the agentmon instructions into this repo's AGENTS.md for Codex and
-    /// compatible tools. Appends to existing rules; skips a section already present.
+    /// compatible tools. Preserves custom rules and refreshes managed instructions.
     #[command(name = "agents-md", after_help = "EXAMPLE\n  agentmon project agents-md --lang ko")]
     AgentsMd {
         /// Language of the instructions: ko or en.
@@ -1246,6 +1246,7 @@ fn cmd_init(
         match outcome {
             O::Created => println!("  wrote {}", path.display()),
             O::Appended => println!("  appended the agent instructions to {}", path.display()),
+            O::Updated => println!("  updated the agent instructions in {}", path.display()),
             O::AlreadyPresent => {
                 println!("  {} already carries the agent instructions", path.display())
             }
@@ -1515,6 +1516,7 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
                     "outcome": match outcome {
                         O::Created => "created",
                         O::Appended => "appended",
+                        O::Updated => "updated",
                         O::AlreadyPresent => "already_present",
                     },
                 }));
@@ -1525,6 +1527,7 @@ fn run_project(cli: &Cli, cmd: &ProjectCmd) -> CliResult {
                 O::Appended => {
                     println!("Appended the agentmon section to {}", path.display())
                 }
+                O::Updated => println!("Updated the agentmon section in {}", path.display()),
                 O::AlreadyPresent => {
                     println!("{} already carries the agentmon section", path.display())
                 }

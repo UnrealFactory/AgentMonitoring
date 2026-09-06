@@ -302,9 +302,8 @@ export const api = {
   /**
    * Write (or refresh) an existing project's CLAUDE.md instructions — the New-project
    * option, reachable after creation, because the template moves with the app. The
-   * write is conservative (create / append / leave alone) and the outcome says which.
-   * Outcomes: `created` / `appended` (CLAUDE.md) or `updated` (.mcp.json) /
-   * `already_present`.
+   * write preserves custom rules and the existing language, refreshing only the
+   * managed section. Outcomes: `created`, `appended`, `updated`, `already_present`.
    */
   writeClaudeMd: (id: string, lang: "ko" | "en"): Promise<ScaffoldOutcome> =>
     isTauri()

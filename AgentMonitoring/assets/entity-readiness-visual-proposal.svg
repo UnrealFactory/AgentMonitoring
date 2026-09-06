@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="810" viewBox="0 0 700 810" role="img" aria-labelledby="title desc">
+  <title id="title">자체 준비와 관계 사용을 구분하는 설명 시안</title>
+  <desc id="desc">WORK-0047의 검토안을 조건별로 설명합니다. 각 Entity는 자기 준비를 끝냅니다. 관계는 양쪽 준비와 참조 확인 후 안전한 실행 시점에 연결합니다. 대상이 사라지면 기존 연결을 해제합니다. 실제 실행 순서를 측정한 그림은 아닙니다.</desc>
+  <!-- Source: ElmwoodOnline WORK-0047, Outcome. These are explanatory states,
+       not measured timestamps or an assertion that this proposal was implemented.
+       A/B label the two generic Entity endpoints; no game object type is invented. -->
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#4cb782" stroke-width="1.5"/></marker>
+    <g id="ready"><circle r="28" fill="#193c30" stroke="#4cb782" stroke-width="2"/><path d="M-12 0l8 8 17-18" fill="none" stroke="#72d5a3" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="waiting"><circle r="28" fill="#292534" stroke="#a5adf0" stroke-width="2"/><path d="M0-15V0l10 7" fill="none" stroke="#c2c7fa" stroke-width="3" stroke-linecap="round"/></g>
+  </defs>
+  <rect width="700" height="810" rx="16" fill="#121317"/>
+  <g font-family="system-ui, Segoe UI, sans-serif" font-size="22" fill="#e8e9eb">
+    <text x="32" y="45" fill="#a5adf0">WORK-0047 · 설명 시안</text>
+    <text x="32" y="86" font-size="28" font-weight="700">자기 준비와 관계 사용은 다릅니다</text>
+    <text x="32" y="124" fill="#aeb3bd">검토안의 조건 설명입니다. 실행 캡처가 아닙니다.</text>
+
+    <path d="M32 150H668" stroke="#343740"/>
+    <text x="32" y="184" font-weight="650">① 각 물체는 자기 준비를 끝냅니다</text>
+    <text x="150" y="222" text-anchor="middle">Entity A</text>
+    <text x="550" y="222" text-anchor="middle">Entity B</text>
+    <use href="#ready" x="150" y="266"/>
+    <use href="#waiting" x="550" y="266"/>
+    <path d="M185 266H515" stroke="#7e8390" stroke-width="2" stroke-dasharray="7 8"/>
+    <text x="350" y="250" text-anchor="middle" fill="#aeb3bd">관계 사용 대기</text>
+    <text x="150" y="318" text-anchor="middle" fill="#72d5a3">준비 완료</text>
+    <text x="550" y="318" text-anchor="middle" fill="#c2c7fa">준비 중</text>
+    <text x="32" y="357" fill="#aeb3bd">상대 준비를 자기 준비의 조건으로 삼지 않습니다.</text>
+
+    <path d="M32 382H668" stroke="#343740"/>
+    <text x="32" y="416" font-weight="650">② 양쪽 준비 + 참조 확인 → 연결합니다</text>
+    <use href="#ready" x="150" y="473"/>
+    <use href="#ready" x="550" y="473"/>
+    <path d="M187 473H513" stroke="#4cb782" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="350" y="457" text-anchor="middle" fill="#72d5a3">참조 확인</text>
+    <text x="150" y="526" text-anchor="middle">A 준비 완료</text>
+    <text x="550" y="526" text-anchor="middle">B 준비 완료</text>
+    <text x="32" y="565" fill="#aeb3bd">안전한 실행 시점에 연결 처리를 호출합니다.</text>
+
+    <path d="M32 590H668" stroke="#343740"/>
+    <text x="32" y="624" font-weight="650">③ 대상이 사라지면 기존 연결을 풉니다</text>
+    <use href="#ready" x="150" y="679"/>
+    <circle cx="550" cy="679" r="28" fill="none" stroke="#aeb3bd" stroke-width="2" stroke-dasharray="4 6"/>
+    <path d="M191 679H323M377 679H509" stroke="#8a8f98" stroke-width="2" stroke-dasharray="7 8"/>
+    <path d="M338 667l24 24m0-24l-24 24" stroke="#f2994a" stroke-width="3"/>
+    <text x="350" y="660" text-anchor="middle" fill="#f5b77e">연결 해제</text>
+    <text x="150" y="732" text-anchor="middle">A는 존재</text>
+    <text x="550" y="732" text-anchor="middle">B는 부재</text>
+    <text x="32" y="777" fill="#aeb3bd">준비된 물체라도 관계를 계속 쓸 수는 없습니다.</text>
+  </g>
+</svg>

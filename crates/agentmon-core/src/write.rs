@@ -1522,10 +1522,17 @@ impl Store {
         let mut out = Vec::new();
         for r in clean_list(refs) {
             let upper = r.to_ascii_uppercase();
-            let id = if upper.starts_with("WORK-") {
-                validate_id(&upper, "WORK")?
-            } else if upper.starts_with("BUG-") {
-                validate_id(&upper, "BUG")?
+            // A note may start with work-/bug-; only a wholly numeric suffix reserves
+            // the record namespace (the same distinction as validate_note_name).
+            let record_prefix = ["WORK", "BUG"].into_iter().find(|prefix| {
+                upper
+                    .strip_prefix(&format!("{prefix}-"))
+                    .is_some_and(|digits| {
+                        !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
+                    })
+            });
+            let id = if let Some(prefix) = record_prefix {
+                validate_id(&upper, prefix)?
             } else {
                 let name = validate_note_name(&r).map_err(|_| CoreError::InvalidId {
                     id: r.clone(),

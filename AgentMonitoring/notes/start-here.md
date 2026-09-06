@@ -1,65 +1,50 @@
 ---
 name: start-here
-title: Start here — what every session reads before working
+title: 시작 색인 — 현재 상태와 필요한 지침을 찾는 곳
 type: essential
-description: "The index: read the release handoff first, then the gotchas that bite scripts; curate notes as you finish."
+description: "배포 상태는 handoff-v1-release, 현재 소스의 기록 정책 v4·행동 검증은 work-boundaries-and-explanatory-visuals-proposal에서 확인하세요."
 agent: fable-updater-splash
-updated_by: d9-scene-builder
+updated_by: codex
 created: 2026-08-21T13:21:48Z
-updated: 2026-08-24T03:15:29Z
+updated: 2026-09-06T10:08:29Z
 tags: []
-refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, scene-geometry-is-measured, quality-bars, event-reconciliation]
+refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, scene-geometry-is-measured, quality-bars, event-reconciliation, work-boundaries-and-explanatory-visuals-proposal, WORK-0108]
 ---
 
-The MEMORY.md of this project. Read top to bottom, open what applies, and keep this
-index true when the set of notes changes.
+# 먼저 확인하세요
 
-**Read first**
-- handoff-v1-release — where the released app stands and how to ship the next version.
+이 노트는 세션마다 읽는 기억 색인입니다. `status`로 현재 작업과 열린 버그를 확인하고 이번 주제에 필요한 노트만 여세요. 목록이 잘렸으면 현재 소스 MCP의 note limit/offset으로 다음 페이지를 읽을 수 있습니다.
 
-**Before writing any script or test**
-- registry-sandbox-in-gates — anything that runs `agentmon init` must sandbox the registry.
-- python-is-a-store-stub — no python on this machine; write Node .cjs/.mjs temp scripts.
-- record-screens-have-two-halves — a record page draws one half at a time; press the one
-  your script means before you read it.
+- **공개 배포 상태·다음 배포 절차**: `handoff-v1-release`를 먼저 읽으세요. 공개 버전과 개발 소스 변경을 구분합니다.
+- **현재 소스의 WORK·메모리·그림 정책(2026-09-06)**: [[work-boundaries-and-explanatory-visuals-proposal]]을 읽으세요. 사용자 승인 후 WORK-0108에서 구현·행동 검증한 v4 정책입니다. 이름에 proposal이 남아 있지만 현재 노트 유형은 decision입니다.
+- **적용 범위**: 이 저장소의 AGENTS.md·CLAUDE.md와 소스, 재빌드한 target/release/agentmon.exe에 반영했습니다. 설치 앱 공개 배포 및 다른 프로젝트 지침 갱신은 하지 않았습니다. `.codex/config.toml`이 가리키는 설치 MCP 서버도 변경하지 않았습니다.
 
-**When the task touches it**
-- human-area-enforcement — every write verb needs `--human`; where that rule lives, and
-  where the error text an agent sees comes from.
-- verify-desktop-via-cdp — driving the real desktop window with Playwright.
-- event-reconciliation — nine lines in `events.jsonl` announce a progress note no
-  record holds; read it before you touch the event log, the activity feed, or doctor.
-- chart-note-series-colour — the one chart-palette constraint that is easy to break.
-- scene-geometry-is-measured — writing or moving a record's pictures: where the per-beat
-  scenes are drawn, and the scripts that prove no label overlaps at any width.
-- quality-bars — the visual/product quality references this app is held to.
+# 스크립트·검사 전에
 
-**How notes work here**
-- notes-are-knowledge-not-history — why notes rewrite in place and may be removed.
-- Curate on your way out: rewrite what your work made stale, remove what now misleads,
-  and keep THIS note pointing at whatever the next session must read.
+- `registry-sandbox-in-gates`: agentmon init을 쓰는 검사는 별도의 AGENTMON_REGISTRY_DIR를 설정해야 합니다.
+- `python-is-a-store-stub`: Python 실행 별칭 함정과 Node 스크립트 사용 안내입니다.
+- `record-screens-have-two-halves`: 화면 검사 전에 기술/사람 영역 중 검사할 영역을 선택하세요.
+
+# 관련 기능을 다룰 때
+
+| 대상 | 노트 |
+|---|---|
+| human 필수·날짜별 추가·전체 교체·v4 전달 | `human-area-enforcement` |
+| 그림 형식·초안 검사·실제 크기와 의미 검증의 차이 | `scene-geometry-is-measured` |
+| 실제 데스크톱 앱 Playwright 검사 | `verify-desktop-via-cdp` |
+| 이벤트 로그·활동 목록·doctor의 과거 불일치 | `event-reconciliation` |
+| 차트 색상 | `chart-note-series-colour` |
+| 화면·제품 품질 기준 | `quality-bars` |
+| 노트 갱신·삭제와 작업 이력의 차이 | `notes-are-knowledge-not-history` |
+
+# 기억을 유지하는 기준
+
+WORK는 목적과 완료 조건을 가진 개발·수정·검증 또는 별도로 맡긴 조사에 사용합니다. 질문·설명·정정마다 새 기록을 만들지 않습니다. 필요한 현재 지식이 바뀌면 기존 주제 노트를 갱신하고, 채택 전 제안은 decision으로 확정하지 않습니다. 미완료 작업은 다음 세션에도 같은 WORK와 handoff로 이어갑니다.
+
+상세 결과와 근거는 해당 WORK·노트에 두고 이 색인은 길잡이로 유지하세요. 관련 사실이 바뀌면 노트와 색인을 함께 최신화하세요.
 
 ## For humans
 
-`start-here` is the note that gets opened before any work begins here. Its instruction is
-plain: go down it from the top, and open whatever applies to the job in front of you.
-Somebody wrote it on 21 August 2026 and it has been rewritten since by whoever finished a
-job, most recently on 24 August.
+작업을 시작할 때 공개 배포 상태와 현재 개발 소스의 정책을 구분해 읽으시면 됩니다. 새 기록 정책은 질문마다 작업을 만들지 않고, 개발 목적과 필요한 현재 지식을 이어가도록 바뀌었습니다.
 
-**Nothing on the page is explained; it says where each thing is explained.** The other
-notes are sorted on it by when you will need them. One is marked read-first:
-`handoff-v1-release`, which says which version of the app is in people's hands and how to
-publish the next one. Next comes a group to open before writing any script or test — the
-traps that catch a script rather than a person, such as this machine having no working
-`python`. Then a group for jobs that happen to touch a particular corner. Last, a note on
-how these notes themselves work.
-
-It is like the sheet taped inside a workshop door. It holds no tools; it tells you which
-drawer.
-
-**Keeping the list true is part of finishing a job.** The rule written on it is that
-whoever finishes a piece of work comes back to the notes afterwards: rewrite whatever the
-work made out of date, take away whatever would now mislead, and leave this one pointing
-at what the next session must read.
-
-An index nobody maintains is a map of a building that has been rebuilt.
+서브에이전트가 설명·개발 착수·세션 인계·별도 조사 상황을 실제로 수행한 결과는 연결된 정책 노트에 있습니다. 설치 앱에는 아직 공개 배포하지 않았으므로 현재 소스의 변경과 설치본 동작은 다를 수 있습니다.

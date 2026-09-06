@@ -296,40 +296,16 @@ pub fn check(store: &Store) -> Result<Report> {
                 crate::human::WORDS_MAX,
                 listing(&gaps.long_telling)
             ),
-            "the ceiling bounds one telling, never a record's total, so split before you cut: \
-             a record that shipped several separate things owes every one of them a beat-block \
-             of its own, opened by a bold lead-in that states something. Never cut a fact to \
-             reach a number — only where one thing's own telling is still over does anything \
-             go, and then a name carrying no fact of its own first, then a fact stated twice, \
-             never a gloss. `agentmon human-style` prints the contract",
+            "the warning bounds one telling, never a record's total. Remove repeated facts \
+             and move execution transcripts to the technical area while preserving the \
+             evidence and explanations the reader needs. Distinct subjects may use short \
+             bold lead-ins when useful; no fixed narrative structure is required. \
+             `agentmon human-style` prints the contract",
         ));
     }
-    // Pictures, at the same level and with the same care about false positives. The
-    // contract's default is a scene per beat (owner decision, 2026-08-25 — before it,
-    // "put one in where it earns its place" produced records with none at all), and the
-    // valve stays per beat: a beat whose facts draw nothing may stay bare, so demanding
-    // one per beat here would demand the invented panel the contract forbids. What cannot
-    // be the valve is a whole page of beats with not one picture, and that is the only
-    // shape this warns on. Work logs and bugs only — a note is knowledge and owes none.
-    if !gaps.pictureless.is_empty() {
-        problems.push(Problem::warn(
-            "human area",
-            format!(
-                "{} record(s) retell in beats with no scene anywhere on the page: {}",
-                gaps.pictureless.len(),
-                listing(&gaps.pictureless)
-            ),
-            "the style contract's default is a picture per beat (docs/HUMAN_STYLE.md — \
-             every beat opens on its scene; only a beat whose facts draw nothing stays \
-             bare). Draw each beat's own cast as an SVG under assets/, named \
-             <record>-<beat>-<what>.svg, width/height written on its root, cite it as \
-             the first line of that beat's body (`![what it shows](assets/…)`, a blank \
-             line above and below), then re-pass the whole page with the pictures in it \
-             as a refresh (`--human-file` alone). The geometry gate, `npm run \
-             check:scenes`, lives in the AgentMonitoring app's own repo — where it is \
-             not at hand, settle the label sizes by the contract's arithmetic",
-        ));
-    }
+    // v4 requires visuals for explanatory mechanisms, not for a paragraph count.
+    // Bold lead-ins cannot tell us whether the subject needs a picture. Validate
+    // actual citations and sizes below; leave that semantic judgment to the author.
     // The two shapes that shipped a bean-sized scene past every check (owner feedback,
     // 2026-08-25): a citation welded into its paragraph, and a root with no size. Both
     // render — as a picture the height of a letter — so nothing else ever refused them.
@@ -343,10 +319,10 @@ pub fn check(store: &Store) -> Result<Report> {
                 gaps.welded_scene.len(),
                 listing(&gaps.welded_scene)
             ),
-            "a scene citation is a paragraph of its own: a blank line between the bold \
-             lead-in and the image line, and another after it (docs/HUMAN_STYLE.md, \"The \
-             scene goes inside the beat\"). Fix the spacing and re-pass the page whole as \
-             a refresh (`--human-file` alone)",
+            "an image citation is a paragraph of its own, with a blank line above and \
+             below it, beside the explanation it supports (docs/HUMAN_STYLE.md, \
+             Render and verify the artifact). No bold lead-in is required. Fix the \
+             spacing and preserve all content when refreshing (`--human-file` alone)",
         ));
     }
     {
@@ -672,10 +648,6 @@ struct HumanGaps {
     /// Records with a single telling past `human::WORDS_MAX`, each with that telling's own
     /// count, so the warning says how far over it is rather than only that it is over.
     long_telling: Vec<String>,
-    /// Work logs and bugs whose retelling has beats but not one scene — the shape the
-    /// picture default (a scene per beat, owner decision 2026-08-25) exists to end. Notes
-    /// are never in it: a note is knowledge, short, and owes no picture.
-    pictureless: Vec<String>,
     /// Records whose human area cites a scene with prose welded directly against the
     /// image line — no blank line above or below — which markdown reads as part of that
     /// paragraph, so a renderer draws the picture inline at the height of a letter. All
@@ -688,17 +660,14 @@ struct HumanGaps {
 }
 
 /// Note the record if its body carries no human area (SPEC.md, "The human area"), if
-/// one telling inside it runs past the style contract's ceiling, or — on the kinds that
-/// owe scenes — if it retells in beats with no picture at all.
+/// one telling inside it runs past the style contract's ceiling, or an actual image
+/// citation is malformed. Paragraph structure alone does not require an image.
 ///
 /// `raw` is the whole file and `md` its body: an open fence is reported at the line a
 /// person's editor shows, which is the body's line plus the frontmatter above it.
-/// `owes_scenes` is true for work logs and bugs — the chase stories the picture default
-/// was written for — and false for notes.
-///
 /// Also collects the record's `assets/….svg` citations (whole body, outside code) into
 /// `gaps.svg_refs`, so `check` can sweep the cited files' root attributes afterwards.
-fn note_human(raw: &str, md: &str, id: &str, owes_scenes: bool, gaps: &mut HumanGaps) {
+fn note_human(raw: &str, md: &str, id: &str, gaps: &mut HumanGaps) {
     collect_svg_refs(md, id, &mut gaps.svg_refs);
     match crate::human::split(md).1 {
         None => {
@@ -715,19 +684,8 @@ fn note_human(raw: &str, md: &str, id: &str, owes_scenes: bool, gaps: &mut Human
             if words > crate::human::WORDS_MAX {
                 gaps.long_telling.push(format!("{id} ({words} words in one telling)"));
             }
-            // Beats with no scene anywhere. Whole-page, not per-beat, on purpose: the
-            // contract's valve is per beat ("a beat whose facts draw nothing may stay
-            // bare"), and a sweep that demanded one per beat would demand the invented
-            // panel the contract forbids. A page of beats with not one picture is the
-            // shape that cannot be the valve.
-            if owes_scenes {
-                let beats = crate::human::beat_count(&human);
-                if beats > 0 && crate::human::figure_count(&human) == 0 {
-                    gaps.pictureless.push(format!("{id} ({beats} beat(s), no scene)"));
-                }
-            }
             // A citation welded into a paragraph misdraws whatever kind of record it is
-            // in, so this one is not gated on `owes_scenes`. This shape shipped: a scene
+            // in. This shape shipped: a scene
             // cited on the line right after its lead-in passed every check — the save,
             // this sweep's figure count, the geometry gate — and rendered at the height
             // of a letter, because no check read the blank lines.
@@ -834,7 +792,7 @@ fn check_note(path: &Path, problems: &mut Vec<Problem>, gaps: &mut HumanGaps) {
         }
     };
 
-    note_human(&raw, md, &meta.name, false, gaps);
+    note_human(&raw, md, &meta.name, gaps);
 
     let stem = file.trim_end_matches(".md");
     if meta.name != stem {
@@ -945,7 +903,7 @@ fn check_worklog(
         }
     };
 
-    note_human(&raw, md, &meta.id, true, gaps);
+    note_human(&raw, md, &meta.id, gaps);
     let (md, _) = crate::human::split(md);
 
     let stem = file.trim_end_matches(".md");
@@ -1108,7 +1066,7 @@ fn check_bug(
         }
     };
 
-    note_human(&raw, md, &meta.id, true, gaps);
+    note_human(&raw, md, &meta.id, gaps);
     let (md, _) = crate::human::split(md);
 
     let stem = file.trim_end_matches(".md");

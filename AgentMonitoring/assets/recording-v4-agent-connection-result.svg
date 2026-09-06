@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="780" viewBox="0 0 700 780">
+  <title>Entity 자체 준비와 참조 연결의 관계</title>
+  <desc>코드에 근거한 조건 도식입니다. A 준비, B 준비, A의 B 참조가 모두 충족되면 연결됩니다. B 준비 전에는 참조만 있고, B 소멸 뒤에도 A 준비와 참조 ID는 남지만 연결은 해제됩니다. 그림의 배열은 필수 실행 순서를 뜻하지 않습니다.</desc>
+  <defs>
+    <marker id="ref" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#a5adf0" stroke-width="1.5"/></marker>
+    <marker id="link" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#4cb782"/></marker>
+  </defs>
+  <rect width="700" height="780" fill="#121317"/>
+  <g font-family="system-ui, 'Segoe UI', sans-serif" fill="#e8e9eb" font-size="24">
+    <text x="28" y="43" font-size="27" font-weight="700">Entity 준비와 연결</text>
+    <text x="28" y="79" fill="#bfc3cc">코드 기반 도식 · 정해진 실행 순서가 아닙니다</text>
+    <text x="28" y="115" fill="#a5adf0">연결 = A 준비 + B 준비 + A의 B 참조</text>
+
+    <circle cx="105" cy="211" r="62" fill="#172c25" stroke="#4cb782" stroke-width="3"/>
+    <circle cx="595" cy="211" r="62" fill="#30261d" stroke="#f2994a" stroke-width="3"/>
+    <text x="105" y="204" text-anchor="middle" font-size="30">A</text>
+    <text x="105" y="239" text-anchor="middle">준비됨</text>
+    <text x="595" y="204" text-anchor="middle" font-size="30">B</text>
+    <text x="595" y="239" text-anchor="middle">준비 전</text>
+    <path d="M 176 197 H 521" stroke="#a5adf0" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#ref)" fill="none"/>
+    <text x="350" y="177" text-anchor="middle" fill="#a5adf0">참조 B</text>
+    <path d="M 176 239 H 319 M 381 239 H 521 M 338 227 L 362 251 M 362 227 L 338 251" stroke="#f2994a" stroke-width="3" fill="none"/>
+    <text x="350" y="290" text-anchor="middle" fill="#f2994a">연결 없음 · B 준비 전</text>
+
+    <circle cx="105" cy="398" r="62" fill="#172c25" stroke="#4cb782" stroke-width="3"/>
+    <circle cx="595" cy="398" r="62" fill="#172c25" stroke="#4cb782" stroke-width="3"/>
+    <text x="105" y="391" text-anchor="middle" font-size="30">A</text>
+    <text x="105" y="426" text-anchor="middle">준비됨</text>
+    <text x="595" y="391" text-anchor="middle" font-size="30">B</text>
+    <text x="595" y="426" text-anchor="middle">준비됨</text>
+    <path d="M 176 384 H 521" stroke="#a5adf0" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#ref)" fill="none"/>
+    <text x="350" y="364" text-anchor="middle" fill="#a5adf0">참조 B</text>
+    <path d="M 176 426 H 521" stroke="#4cb782" stroke-width="4" marker-end="url(#link)" fill="none"/>
+    <text x="350" y="477" text-anchor="middle" fill="#4cb782">A → B 연결 · 세 조건 충족</text>
+
+    <circle cx="105" cy="586" r="62" fill="#172c25" stroke="#4cb782" stroke-width="3"/>
+    <circle cx="595" cy="586" r="62" fill="#121317" stroke="#8a8f98" stroke-width="3" stroke-dasharray="9 7"/>
+    <text x="105" y="579" text-anchor="middle" font-size="30">A</text>
+    <text x="105" y="614" text-anchor="middle">준비됨</text>
+    <text x="595" y="579" text-anchor="middle" font-size="30">B</text>
+    <text x="595" y="614" text-anchor="middle">소멸</text>
+    <path d="M 176 572 H 521" stroke="#a5adf0" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#ref)" fill="none"/>
+    <text x="350" y="552" text-anchor="middle" fill="#a5adf0">참조 ID B 유지</text>
+    <path d="M 176 614 H 319 M 381 614 H 521 M 338 602 L 362 626 M 362 602 L 338 626" stroke="#f2994a" stroke-width="3" fill="none"/>
+    <text x="350" y="665" text-anchor="middle" fill="#f2994a">연결 해제 · A 준비 유지</text>
+
+    <text x="28" y="714" font-size="22" fill="#bfc3cc">점선 화살표: 참조 ID · 초록 화살표: 연결</text>
+    <text x="28" y="749" font-size="22" fill="#bfc3cc">주황 ×: 연결 없음 · 점선 원: 대상 부재</text>
+  </g>
+</svg>

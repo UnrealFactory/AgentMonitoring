@@ -65,19 +65,19 @@ export const TOOLS = [
   {
     name: "log_work",
     description:
-      "Record a piece of work: what, why and how now, plus an outcome to close it in the same call — leave outcome off and it stays in progress under the id returned.",
+      "Record one purpose with a completion condition: development or an assigned investigation; read related notes and status first, reuse matching active work, never create one per question or chat turn.",
     inputSchema: {
       type: "object",
       properties: {
         title: { type: "string", description: "One specific line." },
-        what: { type: "string", description: "What changed; name files, commands, screens." },
+        what: { type: "string", description: "Scope and completion condition; name files, commands, screens." },
         why: { type: "string", description: "The problem, the constraint, the option rejected." },
         how: { type: "string", description: "The approach and the tricky parts." },
         outcome: { type: "string", description: "What shipped and how it was verified; closes the log." },
         human,
         files: { ...strList, description: "Paths touched; recorded when the log closes." },
         tags: strList,
-        refs: { ...strList, description: "Related WORK/BUG ids." },
+        refs: { ...strList, description: "Related WORK/BUG ids or existing note names." },
         started_at: when,
         finished_at: when,
         dir,
@@ -89,7 +89,7 @@ export const TOOLS = [
   {
     name: "update_work",
     description:
-      "Append a progress note to a work log, close it with an outcome, or abandon it with a reason; a closed log still takes notes, which is how it gets corrected.",
+      "Update the same purpose through implementation and checks: material changes only; outcome completes it, abandon stops it for good, session end leaves it open; correct closed work with Correction:.",
     inputSchema: {
       type: "object",
       properties: {
@@ -117,7 +117,7 @@ export const TOOLS = [
         report: { type: "string", description: "Repro steps, expected, actual." },
         human,
         labels: strList,
-        refs: { ...strList, description: "Related WORK/BUG ids." },
+        refs: { ...strList, description: "Related WORK/BUG ids or existing note names." },
         created_at: when,
         dir,
         agent,
@@ -147,7 +147,7 @@ export const TOOLS = [
   {
     name: "note",
     description:
-      "Share the agents' memory across sessions — list scans it, read opens one, write adds or rewrites, remove retires; knowledge, not history: rewrite a note whose fact changed, remove one that misleads.",
+      "Read essential and relevant memory first; list pages, read opens one, write updates changed knowledge, remove retires it; distinguish facts, proposals and adopted decisions, avoid chat logs.",
     inputSchema: {
       type: "object",
       properties: {
@@ -157,7 +157,7 @@ export const TOOLS = [
         type: {
           type: "string",
           enum: ["essential", "memory", "handoff", "decision", "reference"],
-          description: "essential: required session-start reading, the index · memory: durable gotcha · handoff: state for whoever continues · decision: settled choice and why · reference: pointer to a resource.",
+          description: "essential: short required index · memory: current durable facts · handoff: unfinished state and next step · decision: adopted choice, date and why · reference: resource or explicitly unadopted proposal.",
         },
         description: { type: "string", description: "One line a scanner reads instead of the body." },
         body: { type: "string", description: "Free-form markdown; write replaces it." },
@@ -165,6 +165,8 @@ export const TOOLS = [
         tags: strList,
         refs: { ...strList, description: "Related WORK/BUG ids or note names." },
         query: { type: "string", description: "list: match name, title, description, body." },
+        limit: { type: "integer", minimum: 1, maximum: MAX_LIMIT, description: `list: up to this many notes, default ${DEFAULT_LIMIT}, max ${MAX_LIMIT}; text budget may shorten a page.` },
+        offset: { type: "integer", minimum: 0, description: "list: default 0; follow next offset with the same filters." },
         full: { type: "boolean", description: "read: the whole body instead of a summary." },
         at: when,
         dir,
@@ -398,8 +400,8 @@ async function compactRules(at) {
  *
  * **And it hands them over before the first draft.** Riding the first successful write was
  * measured and failed: two graded MCP sessions wrote a human area with nothing but the
- * schema to go on, and both missed the contract's headline rules — no analogy, no beat
- * saying how the agent knew, label-shaped bold lead-ins where the contract asks for ones
+ * schema to go on, and both missed the then-current v3 rules — no analogy, no beat
+ * saying how the agent knew, label-shaped bold lead-ins where that contract asked for ones
  * that state something, the record's own subject never named — and one invented a purpose
  * for a number the record never explained. The block that was meant to govern that draft
  * arrived stapled to the write that ended it.
@@ -425,7 +427,7 @@ async function compactRules(at) {
  * and that is the price.
  *
  * SPEC.md calls the contract write-time reading and never session-start reading, and that
- * still holds for the *contract*: 20,000 characters, the worked example, read when a record
+ * still holds for the *contract*: the whole document and examples, read when a record
  * needs one, `status(mode="human_style")`. What rides the first result is the compact block
  * every refusal already carries.
  *
@@ -796,7 +798,7 @@ async function status(args, ctx) {
     const r = await runCli(at, ["human-style"]);
     if (!r.ok) return fail(cliErrorText(r));
     // This *is* the handover, in full: appending the compact block to the document it was
-    // cut from would charge the session 3,800 characters to repeat itself.
+    // cut from would charge the session for the same rules twice.
     markContractDelivered();
     return text(r.stdout);
   }
@@ -827,6 +829,14 @@ async function note(args, ctx) {
   const name = String(args.name ?? "").trim().toLowerCase();
 
   if (action === "list") {
+    const limit = args.limit ?? DEFAULT_LIMIT;
+    const offset = args.offset ?? 0;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+      throw new ToolError(`note(action=list): limit must be an integer from 1 to ${MAX_LIMIT}.`);
+    }
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+      throw new ToolError("note(action=list): offset must be a non-negative integer.");
+    }
     const { at } = ident(args, ctx, false);
     const a = ["note", "list", "--json"];
     flag(a, "--type", args.type);
@@ -834,7 +844,7 @@ async function note(args, ctx) {
     const r = await runCli(at, a);
     if (!r.ok) return fail(cliErrorText(r));
     const all = Array.isArray(r.json) ? r.json : [];
-    return text(renderNoteList(all, { total: all.length }));
+    return text(renderNoteList(all, { total: all.length, limit, offset }));
   }
 
   if (action === "read") {

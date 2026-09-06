@@ -1062,9 +1062,9 @@ and registers it in the machine's project list, so it appears in the app. Refuse
 `--agents-md ko|en` writes the same instructions for Codex and compatible tools to
 `AGENTS.md`. Both files live at the repo root, next to the `AgentMonitoring` folder.
 Use either flag or both together; each file can have its own language. Existing content
-is preserved: the section is appended after a blank line, and a file already carrying
-either language's section is left alone. The files are independent copies of the same
-template, so creating either one does not modify the other.
+is preserved outside the versioned AgentMonitoring section, which is refreshed when
+the template changes. The files are independent copies of the same template, so
+creating either one does not modify the other. Existing sections keep their language.
 
 These instructions refer to the agentmon MCP tools. `--mcp-json` separately creates the
 MCP registration used by Claude Code. Select **Add Codex MCP** to create
@@ -1091,10 +1091,15 @@ agentmon project claude-md --lang ko
 agentmon project agents-md --lang en
 ```
 
-Add instructions after a project has been created. Both commands preserve existing
-content and skip a section already present, even if you request a different language.
+Add or refresh instructions after a project has been created. Both commands preserve
+custom content outside the `agentmon:instructions` marker pair and keep an existing
+section's language, even if you request another language. The managed section is
+replaced when its template changes; put custom rules outside it. Exact legacy
+templates are migrated to managed sections. Edited legacy sections, duplicate or
+malformed markers, and unsupported newer versions are left untouched with manual
+merge guidance. This avoids guessing where a user's own instructions end.
 `--json` returns `{ "ok": true, "path": "…", "outcome": "created" }`; outcome may also
-be `appended` or `already_present`.
+be `appended`, `updated` or `already_present`.
 
 ### `agentmon project view`
 

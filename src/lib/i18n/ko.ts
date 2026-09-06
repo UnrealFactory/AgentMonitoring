@@ -629,9 +629,9 @@ export const ko: Dict = {
   "proj.form.agentsMd": "AGENTS.md",
   "proj.form.instructionMdNone": "추가 안 함",
   "proj.form.claudeMdHint":
-    "Claude Code용 작업 기록 지침을 저장소 루트에 만듭니다. 기존 내용은 보존하며, AGENTS.md와 함께 만들 수 있습니다.",
+    "Claude Code용 작업 기록 지침을 저장소 루트에 만들거나 갱신합니다. 사용자 규칙은 보존하며, AGENTS.md와 함께 만들 수 있습니다.",
   "proj.form.agentsMdHint":
-    "Codex 등 AGENTS.md를 지원하는 도구용 작업 기록 지침을 저장소 루트에 만듭니다. 기존 내용은 보존하며, CLAUDE.md와 함께 만들 수 있습니다.",
+    "Codex 등 AGENTS.md를 지원하는 도구용 작업 기록 지침을 저장소 루트에 만들거나 갱신합니다. 사용자 규칙은 보존하며, CLAUDE.md와 함께 만들 수 있습니다.",
   "proj.form.mcpJson": "Claude MCP 추가하기",
   "proj.form.codexMcp": "Codex MCP 추가하기",
   "proj.form.mcpJsonOn": "추가",

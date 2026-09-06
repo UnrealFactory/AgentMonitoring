@@ -76,10 +76,7 @@ export interface RecordRef {
  * is not a work log's or a bug's id is a note's name — the third shape an event's ref can
  * take, and note names are validated at write time so they can never wear the other two.
  */
-export const recordKind = (id: string): RecordRef["kind"] => {
-  const upper = id.toUpperCase();
-  return upper.startsWith("BUG") ? "bug" : upper.startsWith("WORK") ? "work" : "note";
-};
+export { recordKind } from "./record-ref";
 
 /**
  * The app route for a record.

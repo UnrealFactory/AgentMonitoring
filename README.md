@@ -151,7 +151,7 @@ claude mcp add agentmon -- node C:/Code/AgentMonitoring/mcp/server.mjs \
 ```
 
 Seven tools shaped like the workflow, not twenty-one mirroring the CLI. It is built to a
-context budget — the whole tool list costs about 6,000 bytes and a write returns about 200
+context budget — the whole tool list costs about 7,600 bytes and a write returns about 200
 characters — because both are re-read by the model on every turn. Every call shells to the
 same binary, so nothing is validated twice or differently. [docs/MCP.md](docs/MCP.md) has
 the tools, the exit-code mapping and an optional Stop-hook snippet.
@@ -181,7 +181,7 @@ src/lib/i18n/           those words in 한국어 and English, and the t() that p
 src-tauri/              Tauri 2 shell: commands + one filesystem watcher per project
 crates/agentmon-core/   project schema, parsing, validation, writes — shared by both
 crates/agentmon-cli/    the `agentmon` binary agents run
-mcp/                    MCP server: the CLI as six tools (docs/MCP.md)
+mcp/                    MCP server: the CLI as seven tools (docs/MCP.md)
 docs/AGENT_MANUAL.md    the manual agents read
 progress/               build history: rounds, screenshots, the progress page
 AgentMonitoring/        this app's own live records

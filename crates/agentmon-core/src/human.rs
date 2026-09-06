@@ -44,8 +44,8 @@ pub const COMPACT_RULES: &str = include_str!(concat!(env!("OUT_DIR"), "/human_co
 /// passes, high enough that "ok" and "fixed" do not.
 const MIN_HUMAN: usize = 12;
 
-/// The style contract's word ceiling — docs/HUMAN_STYLE.md: "150 words thin, 300 for most,
-/// 450 where the mechanism is genuinely hard", and "never fill a ceiling".
+/// The style contract's warning ceiling for one telling. Short notes and progress
+/// updates need only the useful facts; 450 words is never a length target.
 ///
 /// **A ceiling on one telling, never on a record's total.** A record that shipped several
 /// separate things owes each one its own beat-block, so its total is whatever those
@@ -214,8 +214,8 @@ pub fn insert_telling_by_time(existing: Option<&str>, ts: &str, text: &str) -> S
     }
 }
 
-/// Does this line open a beat? — the bold lead-in the contract asks every beat after the
-/// first to start with: "**The stored number is wrong twice a year.**".
+/// Does this line open a labelled explanation? Bold lead-ins are optional under v4;
+/// existing records keep the same parsing and display.
 ///
 /// Only at the top of a block, and only when the bold closes: a `**` opening a line in the
 /// middle of a paragraph is emphasis inside a beat, not the start of the next one. A `-`
@@ -230,11 +230,8 @@ fn is_lead_in(line: &str) -> bool {
     t.strip_prefix("**").is_some_and(|rest| rest.contains("**"))
 }
 
-/// Beats in a retelling: blocks opened by a bold lead-in — the unit the picture rule
-/// counts, since the contract's default became a scene per beat (owner decision,
-/// 2026-08-25: "every beat opens on its scene"). A thin, lead-in-less retelling has no
-/// beats and owes no picture; `## Updates`-style dated nodes do not open beats either,
-/// only the lead-ins inside them do.
+/// Blocks opened by a bold lead-in. Kept for readers of existing records; this count
+/// does not determine whether a picture is needed. Dated nodes do not open beats.
 pub fn beat_count(text: &str) -> usize {
     let mut fences = body::Fences::default();
     let mut count = 0usize;

@@ -1,12 +1,9 @@
 /**
  * The shape a human area already has, made visible.
  *
- * `docs/HUMAN_STYLE.md` asks for one shape and every retelling in this project's records is
- * written in it: an opening paragraph on what somebody could have witnessed, then the chase
- * **in beats**, each beat opening on one short bold sentence that states something ("**We
- * threw away the name that knows the rule.**"), and a closing line the reader could repeat
- * tomorrow. `##` headings are refused outright, so those bold lead-ins are the only
- * structure the text carries.
+ * Older records use an opening, labelled explanations and a closing line. Policy v4
+ * (docs/HUMAN_STYLE.md) also permits short prose with none of those optional labels.
+ * This reader preserves both shapes. `##` headings are reserved by the record format.
  *
  * Rendered as ordinary markdown that structure is invisible: eight paragraphs of even
  * colour, the lead-ins the same weight as any other bolded phrase — the very failure

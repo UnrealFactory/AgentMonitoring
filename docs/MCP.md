@@ -19,9 +19,9 @@ transcript for the rest of the session. So this server is built to a budget rath
 a feature list. The CLI's commands are consolidated into **seven tools shaped like the
 workflow** (do work, update work, file a bug, fix a bug, share a note, look around — and
 tell the app's maintainer where the app itself fell short) instead of mirrored
-one-for-one; each description is one verb-first sentence and no property description
-repeats what its name already says; the whole `tools/list` response, schemas included,
-is **7,168 bytes**.
+one-for-one; concise descriptions define when to use each tool. The whole `tools/list`
+response, schemas included, is **7,577 bytes**, within a 7,600-byte budget. Purpose-based
+WORK boundaries and paginated note lookup are part of that always-available surface.
 
 The human area every record carries is **265** of those bytes, and not one of them teaches
 the duty: six `human` fields with no description at all (156), `human` in the `required`
@@ -48,6 +48,11 @@ for a whole record — whole meaning whole: a full read is never truncated, beca
 human area is a record's last section and any ceiling would cut exactly the part the
 read was spent to reach (FB-0003). `npm test` measures all of it and fails if any budget
 is exceeded, so the numbers in this paragraph cannot quietly rot.
+
+Note lists use `limit` and `offset` to stay inside the same budget without hiding older
+knowledge. Follow the returned `next offset=N` with the same `type`/`query` filters;
+the server counts complete notes actually shown, so a shortened page does not skip any.
+Names are never truncated, and a name and its description stay together.
 
 ## Install
 
@@ -164,42 +169,25 @@ The record's [human area](AGENT_MANUAL.md#the-human-area): the same events retol
 reader who was not there and does not program — the owner of the project, the person who
 files the wish, whoever opens the record six months from now.
 
-**The rules arrive with your session's first tool result — whatever call it was.** They are
-long, they are write-time reading, and none of them is in the tool list. In a terminal an
-agent meets them the first time it forgets `--human`: the refusal prints the compact style
-rules whole and is the one message this server never trims. Through MCP the schema bolts
-that door shut: `human` is `required` on every tool that files a record, so one is always
-supplied, the write succeeds at exit `0`, and the refusal that teaches never fires. Prose in
-the tool list was tried and measured instead: the same task through the same schema, once
-with a clause on `human` naming who the retelling is for and once with it emptied, produced
-a retelling on the same single attempt that missed the same contract rules either way. So
-the rules are **handed over** rather than described.
+**The rules arrive with your session's first tool result — whatever call it was.** The
+first result can be a notes list, snapshot, view, write, or refusal; even two calls in
+flight deliver the compact rules only once. About 5,700 characters, once, with a route to
+the full explanation at `status(mode: "human_style")`. Starting by reading notes puts
+those rules before the first draft. A session that writes first receives the rules after
+that draft, plus the precise call for rewriting the record it just saved.
 
-They are handed over **before the first draft**, which was the second lesson and cost two
-graded sessions to learn: riding the first successful write put them in the transcript one
-call *after* the retelling they were meant to govern, and both of those sessions, drafting
-from the schema alone, missed the contract's headline rules — no analogy, no beat saying how
-the agent knew, label-shaped bold lead-ins, the record's own subject never named.
+Lead with what changed or what is being proposed, explain the mechanism the reader needs,
+and state the evidence and remaining limits. A brief progress update or factual note may
+need only one or two sentences. A development outcome may need several paragraphs and
+a comparison or diagram. There is no prescribed count of paragraphs, images, analogies,
+or closing maxims. Proposed actions and adopted decisions must remain distinct.
 
-Riding the session's first `note(action: "list")` was the third lesson, and it cost two more:
-that is the call every session is *told* to start with, and "told to" is not "did". A session
-that opened on `status`, or on a note read, or on a call that failed, got nothing and drafted
-blind exactly as before. So the handover sits in the dispatcher instead of in one handler,
-and the **first result of any kind** carries it: list, snapshot, view, refusal. It comes back
-under the index or the confirmation — what the second half is and who it is for, the rules
-themselves, and the way to the rest of the contract. About 6,200 characters, once, and no
-call order can miss it. A client with two calls in flight still pays for it once.
-
-One shape is left that no result can get ahead of, because the result comes after the call:
-a session whose very first call *is* a write. That one is caught a draft late, and told so —
-the same block plus the exact call that rewrites the record just written,
-`update_work(id="WORK-0004", human=…)` and its equivalents on the other tools. Nothing
-always-on tries to get ahead of it, and that is a measurement rather than an oversight: a
-line about the human area was put in the project's CLAUDE.md, then measured against its own
-absence, and the repo without it saved a conforming record on the same attempt as the repo
-with it — the refusal did the teaching either way. Bytes on that surface are re-sent on
-every turn of every conversation, so a line that changes no record is not worth one. This
-last shape stays one draft late.
+Choose visuals for the relationship being explained: time axes for execution and waiting,
+structure for ownership and references, before/after for changed behavior, annotated
+screenshots for interactions, tables for choices, and measured graphs for performance.
+For a difficult visual relationship, include a diagram with visible connections or state
+changes. Text in boxes alone is insufficient. Label hypotheses and proposed behavior;
+do not depict them as observed. Geometry checks catch clipping, not misunderstanding.
 
 A session refused once, or one that read the whole contract on purpose, is not charged for
 the same text again by any channel. A session that only reads pays it once, which is the
@@ -258,7 +246,14 @@ second:
 note(action: "list")
 ```
 
-Then one call records the whole piece of work. `what`/`why`/`how` are the record's agent
+Read the essential notes, relevant topic notes, and `status` before changing anything.
+Continue an existing WORK when its purpose matches. A new WORK begins when development
+starts toward a concrete completion condition, or when a separately assigned investigation
+has its own deliverable. Questions, explanations, proposals, and corrections in the same
+conversation do not each create a WORK. A reusable fact can update its existing topic
+note; an unadopted proposal belongs in a clearly marked reference, not a decision.
+
+Then one call can record the whole piece of work. `what`/`why`/`how` are the record's agent
 half — for whoever picks the work up next; `outcome` closes it; `human` is the same events
 for someone who was not there and does not program:
 
@@ -275,22 +270,24 @@ log_work({
 })
 ```
 
-That `human` is what the rules ask for, and it is worth reading before you write your own:
-the same events as the `outcome`, in the order they happened — what was wrong, what the app
-was doing, what it does now, what fooled the agent, how it knows, what is still only checked
-by hand. Each paragraph after the first opens with a short bold sentence that *states*
-something (**"Forgetting is the part that bites."**), never a label (**"Verification."**).
-One name survives, `cargo test --workspace`, and it arrives with its job in the same breath.
-It runs to about 250 words, which is an ordinary record. `status(mode: "human_style")` has
-the rest, including what a bug and a note look like.
+This fictional example shows the same changes and limits as the technical outcome.
+Its measured numbers and claims are examples, never evidence to copy into a real record.
+The bold lead-ins and analogy are optional; the useful parts are the concrete behavior,
+the reason it changed, the evidence, and the remaining limit. Consult
+`status(mode: "human_style")` for visual choices and shorter note/update examples.
 
-Long work opens without an `outcome` and closes later with `update_work`; work that stops
-closes with `abandon`. Before you stop, leave what the next session needs:
+Long work opens without an `outcome` and closes later with `update_work` when its completion
+condition is met. Implementation, meaningful findings, and verification for the same
+purpose remain in that WORK across chat turns and sessions. A session ending does not
+complete or abandon it; `abandon` means the purpose has been stopped for good.
+Before leaving unfinished work, leave what the next session needs:
 `note(action: "write", type: "handoff", …)`.
 
 ### `log_work`
 
-Records a piece of work, start and finish, in one call.
+Records one independently scoped development task or explicitly assigned investigation.
+Name its purpose, scope, and completion condition; inspect related notes and active WORKs
+first. Ordinary questions, explanation follow-ups, and proposal corrections need no new WORK.
 
 `title*`, `what*`, `why*`, `how*`, `human*`, `outcome`, `files`, `tags`, `refs`,
 `started_at`, `finished_at`
@@ -307,6 +304,11 @@ re-sends it — the core keeps one copy of an unchanged telling, so nothing land
 ### `update_work`
 
 Progress, close, or stop — on an existing `WORK-NNNN`.
+
+Reuse the id for the same purpose. Append an update when implementation, a meaningful
+finding, a constraint, or verification changes; do not append a transcript of every reply.
+`outcome` means the completion condition was met, including the evidence and remaining
+limits. A pause or session boundary leaves it open, with a handoff if needed.
 
 `id*`, `note`, `outcome`, `abandon`, `human`, `files`, `at`
 
@@ -360,11 +362,16 @@ in one tool. The essential notes are required session-start reading and sort fir
 
 `action` (`list` default, `read`, `write`, `remove`), `name`, `title`, `type`
 (`essential|memory|handoff|decision|reference`), `description`, `body`, `human`, `tags`,
-`refs`, `query`, `full`, `at`
+`refs`, `query`, `limit`, `offset`, `full`, `at`
 
 - `list` — the index: every note's name, type, author and one-line description —
-  essential notes first, then newest. `type` and `query` filter. Run it at the start of
-  a session and read the essentials before working. Open the session here and this is also
+  essential notes first, then newest. `type` and `query` filter. `limit` is the requested
+  maximum number of notes (default 8, range 1–50); `offset` starts at 0. A page may contain
+  fewer notes to fit 600 characters. Continue at `next offset=N`, keeping the same filters,
+  until the result says `end`; names are complete and each description stays with its name.
+  Offsets apply to the current filtered ordering: if notes change while paging, restart
+  at 0 to inspect the updated index. Run it at the start of a session, follow pages as
+  needed to read all essentials, then query and read relevant topic notes. Open the session here and this is also
   where the [`human`](#human-on-every-write-tool) style rules land — though they ride
   whichever call comes first, so opening elsewhere costs you nothing.
 - `read` — one note by `name`; `full: true` for the whole body.
@@ -383,6 +390,13 @@ in one tool. The essential notes are required session-start reading and sort fir
 - `remove` — retires a note that would mislead if kept. The `note_removed` event stays on
   the feed; work logs and bugs have no such verb, here or anywhere.
 
+Keep the essential index short: current state, reading order, and links to topic notes.
+Update those notes when knowledge changes; historical detail belongs in WORK. Distinguish
+observed facts, proposals, and adopted choices. Only an adopted choice is a `decision`,
+with its date and reason; ordinary consultation need not write anything. Related refs
+accept actual numeric `WORK-`/`BUG-` ids or existing note names, including names beginning
+with `work-` or `bug-` whose remainder is not entirely numeric.
+
 ### `status`
 
 The one read tool: work, bugs, and the style contract.
@@ -398,8 +412,8 @@ The one read tool: work, bugs, and the style contract.
   `full: true` returns the whole record instead — untruncated however long, since the
   human area sits at the tail — and is the only *record* read that may exceed 600
   characters.
-- `human_style` — the [`human`](#human-on-every-write-tool) style contract, whole: about
-  20,000 characters, the same document `agentmon human-style` prints. It is not a record
+- `human_style` — the [`human`](#human-on-every-write-tool) style contract, whole:
+  the same document `agentmon human-style` prints. It is not a record
   and is not summarised. The compact rules inside it reach every caller free — in the
   handover on the session's first result, and in every refusal — so what only this mode has
   is the worked example at the end, which is why it is not clamped. The mode is in the enum
@@ -520,7 +534,7 @@ through, so it can never loop:
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{if(JSON.parse(s||'{}').stop_hook_active)process.exit(0);console.error('Before stopping: if you completed a piece of work, record it with the agentmon log_work tool (title, what, why, how, human, and outcome to close it). If you already logged it, or there was nothing to record, stop again.');process.exit(2);});\""
+            "command": "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{if(JSON.parse(s||'{}').stop_hook_active)process.exit(0);console.error('Before stopping: for development or an assigned investigation, update its existing WORK only if something material changed. Close it only when its completion condition is met; leave unfinished work open with a handoff. Do not create a WORK for each chat turn. If nothing needs recording, stop again.');process.exit(2);});\""
           }
         ]
       }

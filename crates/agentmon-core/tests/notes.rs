@@ -245,6 +245,56 @@ fn refs_may_point_at_records_by_shape_and_at_notes_only_if_they_exist() {
 }
 
 #[test]
+fn work_and_bug_prefixed_note_names_remain_resolvable_refs() {
+    let (location, store) = project("prefixed-note-refs");
+    let names = ["work-boundaries-and-explanatory-visuals-proposal", "bug-investigation", "work-0012-context"];
+    for name in names {
+        store
+            .add_note(&NewNote {
+                name: Some(name.into()),
+                ..new_note("A note whose name starts like a record", "Only numeric suffixes identify records.")
+            })
+            .expect("these names are legal notes");
+    }
+    let linked = store
+        .add_note(&NewNote {
+            name: Some("reference-index".into()),
+            refs: vec![
+                names[0].to_uppercase(),
+                names[1].into(),
+                names[2].into(),
+                "work-0012".into(),
+                "bug-0003".into(),
+            ],
+            ..new_note("Reference index", "Keeps notes and actual record identifiers distinct.")
+        })
+        .expect("valid prefixed notes and numeric record ids are accepted together");
+    assert_eq!(linked.record.meta.refs, vec![names[0], names[1], names[2], "WORK-0012", "BUG-0003"]);
+    store
+        .update_note(&linked.id, &UpdateNote {
+            agent: "tester".into(),
+            refs: Some(vec![names[0].into()]),
+            ..Default::default()
+        })
+        .expect("updating refs uses the same distinction");
+    for name in ["work-missing-note", "bug-missing-note"] {
+        let error = store.update_note(&linked.id, &UpdateNote {
+            agent: "tester".into(),
+            refs: Some(vec![name.into()]),
+            ..Default::default()
+        }).expect_err("missing notes still fail");
+        assert!(error.to_string().contains("no note is named"), "{error}");
+    }
+    let error = store.update_note(&linked.id, &UpdateNote {
+        agent: "tester".into(),
+        refs: Some(vec!["WORK-123456789".into()]),
+        ..Default::default()
+    }).expect_err("an overlong numeric record id is not accepted as a note");
+    assert!(error.to_string().contains("WORK-NNNN"), "{error}");
+    fs::remove_dir_all(&location).ok();
+}
+
+#[test]
 fn non_ascii_titles_need_an_explicit_name_and_reserved_names_are_refused() {
     let (location, store) = project("names");
     let err = store

@@ -7,12 +7,11 @@
  *
  * ## Why this gate exists
  *
- * A record's picture is a **scene**: one drawing per beat of a retelling, drawn inside that
- * beat above its words (docs/HUMAN_STYLE.md, "A picture is one beat's scene"). The contract
- * asks three things of the drawing itself that no other check in this repo can reach:
+ * A record's picture explains a relationship, sequence or visible change. Its layout
+ * follows that question, not a prescribed stack of panels. This checks geometry,
+ * never whether the explanation is meaningful (docs/HUMAN_STYLE.md, policy v4):
  *
- *   * **bands** — icons in one band, the words naming them in the next, the closing line in
- *     its own; nothing crosses into another band *at any width the page draws it at*;
+ *   * **label bounds** — transformed into the same SVG coordinates before comparison;
  *   * **a type floor** — the labels are sized for the narrowest column a record page ever
  *     gives a picture, and 11 is the bottom of this app's type scale (tokens.css);
  *   * **a fifth of every label's box left empty** — the picture is an `<img>`, so it is set
@@ -23,7 +22,7 @@
  * defect there, and the round before this one shipped exactly that — scaled diagram text
  * under the 11px floor in a width band nobody had photographed.
  *
- * So this opens each scene in a real browser, takes `getBBox()` for every `<text>`, and
+ * So this opens each scene in a real browser, transforms `getBBox()` for every `<text>`, and
  * fails on an overlap, a label within {@link MARGIN} units of the edge, or type that comes
  * back under 11 at the narrow column. Then it does the whole pass again with the two faces
  * forced to wide ones (Verdana, Lucida Console), standing in for a reader whose interface
@@ -35,7 +34,8 @@
  *
  * What it measures is every scene-named file **and every SVG any record cites** — not the
  * name pattern alone, which skipped the drawings notes cite (their names carry no record
- * id). It also keeps the folder honest in both directions: a scene a record points at must
+ * id). --asset selects a draft without requiring a premature record. A full scan also
+ * keeps the folder honest in both directions: a scene a record points at must
  * exist, and a scene file no record points at is a leftover from a rework (three were, the
  * day per-beat scenes replaced one diagram per record).
  *
@@ -50,17 +50,18 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 
 if (args.includes("--help") || args.includes("-h")) {
-  console.log(`Measure every per-beat scene in a project's assets/ folder.
+  console.log(`Measure diagram geometry in a project's assets/ folder.
 
   npm run check:scenes
-  node scripts/check-scenes.mjs [--dir <project folder>] [--verbose]
+  node scripts/check-scenes.mjs [--dir <project folder>] [--asset <filename.svg>] [--verbose]
 
 Opens every scene SVG a record cites (and every scene-named one) in Chromium and fails on
 a label that overlaps another, one that sits within ${14} units of the edge, or type that
 comes back under 11 at the narrowest column a record page gives a picture — twice, the
 second time in a deliberately wider face. Also fails on an <svg> root with no
 width/height (an <img> has no size for it), on a scene no record references, and on a
-reference to a scene that is not there.`);
+reference to a scene that is not there. --asset checks just that draft, even before
+a record cites it. Passing checks geometry, not explanatory quality.`);
   process.exit(0);
 }
 
@@ -68,6 +69,8 @@ const VERBOSE = args.includes("--verbose") || args.includes("-v");
 const dirArg = args.indexOf("--dir");
 const projectDir = dirArg >= 0 && args[dirArg + 1] ? args[dirArg + 1] : join(root, "AgentMonitoring");
 const assets = join(projectDir, "assets");
+const assetArg = args.indexOf("--asset");
+const selectedAsset = assetArg >= 0 ? args[assetArg + 1] : null;
 
 /** How close a label may come to the edge of its own drawing. */
 const MARGIN = 14;
@@ -80,10 +83,7 @@ const NARROW = 395;
 const MAX_HEIGHT = 560;
 /** The bottom of this app's type scale (tokens.css, `--text-2xs`). */
 const FLOOR = 11;
-/** The size every label in a scene is drawn at on the contract's 700 grid. */
-const GRID_TYPE = 22;
-
-/** `<record>-<beat>-<what it shows>.svg` — the contract's own name for a scene. */
+/** Legacy scene names remain included in a full scan. */
 const SCENE = /^(?:bug|work)-\d{4}-\d{1,2}-.+\.svg$/i;
 
 const log = (...m) => console.log("[check-scenes]", ...m);
@@ -92,13 +92,20 @@ const die = (msg) => {
   process.exit(1);
 };
 
+if (assetArg >= 0 && (!selectedAsset || !/^[^/\\:]+\.svg$/i.test(selectedAsset))) {
+  die("--asset needs an SVG filename within assets/, without a path");
+}
+if (selectedAsset && !existsSync(join(assets, selectedAsset))) {
+  die(`selected asset is not there: ${join(assets, selectedAsset)}`);
+}
+
 if (!existsSync(assets)) {
   log(`no assets folder at ${assets} — nothing to measure`);
   process.exit(0);
 }
 
 /* ── which scenes are there, and does anything point at them ────────────────── */
-const records = ["bugs", "worklogs", "notes", "feedback"]
+const records = (selectedAsset ? [] : ["bugs", "worklogs", "notes", "feedback"])
   .map((d) => join(projectDir, d))
   .filter((d) => existsSync(d))
   .flatMap((d) => readdirSync(d).filter((f) => f.endsWith(".md")).map((f) => join(d, f)));
@@ -126,7 +133,7 @@ for (const file of records) {
  * a note's drawing carries no record id in its name, and skipping it left a whole class
  * of shipped pictures that nothing ever measured.
  */
-const files = readdirSync(assets).filter(
+const files = selectedAsset ? [selectedAsset] : readdirSync(assets).filter(
   (f) => /\.svg$/i.test(f) && (SCENE.test(f) || referenced.has(f)),
 );
 
@@ -137,13 +144,13 @@ for (const [asset, record] of referenced) {
   }
 }
 for (const file of files) {
-  if (!referenced.has(file)) {
+  if (!selectedAsset && !referenced.has(file)) {
     problems.push(`${file} is a scene no record points at — a rework left it behind`);
   }
 }
 
 if (!files.length) {
-  log(`no per-beat scenes in ${assets} — nothing to measure`);
+  log(`no referenced diagrams in ${assets} — nothing to measure`);
   if (problems.length) problems.forEach((p) => console.error(`        ${p}`));
   process.exit(problems.length ? 1 : 0);
 }
@@ -151,43 +158,75 @@ if (!files.length) {
 /* ── and do their labels hold, in two faces ─────────────────────────────────── */
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
+let smallestDisplayed = Infinity;
 
 try {
   for (const file of files) {
     const svg = readFileSync(join(assets, file), "utf8");
     for (const wide of [false, true]) {
-      const doc = wide
-        ? svg.replace(
-            "</style>",
-            `.s { font-family: Verdana, sans-serif !important; }
-             .m { font-family: "Lucida Console", monospace !important; }</style>`,
-          )
-        : svg;
-      await page.setContent(`<body style="margin:0">${doc}</body>`);
-      const found = await page.evaluate(() => {
+      await page.setContent(`<body style="margin:0">${svg}</body>`);
+      const found = await page.evaluate(async (wide) => {
         const root = document.querySelector("svg");
         if (!root) return null;
+        // Presentation attributes, inline styles and inherited fonts all occur in
+        // real diagrams. Overriding only .s/.m silently skipped many wide-font checks.
+        const labels = [...root.querySelectorAll("text")];
+        if (wide) {
+          for (const label of labels) {
+            for (const node of [label, ...label.querySelectorAll("tspan")]) {
+              const mono = /monospace|console|courier|consolas/i.test(getComputedStyle(node).fontFamily);
+              node.style.setProperty("font-family", mono ? '"Lucida Console", monospace' : "Verdana, sans-serif", "important");
+            }
+          }
+        }
+        await document.fonts.ready;
         const vb = root.viewBox.baseVal;
+        const width = root.width.baseVal, height = root.height.baseVal;
+        const fixedSize = [width, height].every(length => length.value > 0 && ![0, 2, 3, 4].includes(length.unitType));
+        const rootMatrix = root.getCTM();
+        const rootInverse = root.getCTM()?.inverse();
+        const smallestScale = matrix => {
+          const sum = matrix.a ** 2 + matrix.b ** 2 + matrix.c ** 2 + matrix.d ** 2;
+          const det = matrix.a * matrix.d - matrix.b * matrix.c;
+          return Math.sqrt(Math.max(0, (sum - Math.sqrt(Math.max(0, sum ** 2 - 4 * det ** 2))) / 2));
+        };
         return {
           w: vb.width,
           h: vb.height,
+          pixelWidth: width.value,
+          pixelHeight: height.value,
+          fixedSize,
           sized: root.hasAttribute("width") && root.hasAttribute("height"),
-          texts: [...root.querySelectorAll("text")].map((t) => {
+          texts: !fixedSize || !rootMatrix || !(vb.width > 0 && vb.height > 0) ? [] : labels.map((t) => {
             const b = t.getBBox();
+            const rendered = t.getCTM();
+            const matrix = rootInverse.multiply(rendered);
+            const corners = [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]
+              .map(([x, y]) => new DOMPoint(x, y).matrixTransform(matrix));
+            const xs = corners.map(p => p.x), ys = corners.map(p => p.y);
+            // Smallest singular value includes ancestor scales (and shear), so a
+            // 22px label inside scale(.5) cannot pass as if it were still 22px.
+            // Include the root's viewport/viewBox transform too: different aspect
+            // ratios can letterbox the drawing far below its apparent canvas size.
+            const fontScale = smallestScale(rendered);
             return {
               text: t.textContent.trim().slice(0, 40),
-              size: parseFloat(getComputedStyle(t).fontSize),
-              x: b.x,
-              y: b.y,
-              w: b.width,
-              h: b.height,
+              size: Math.min(...[t, ...t.querySelectorAll("tspan")].map(node => parseFloat(getComputedStyle(node).fontSize))) * fontScale,
+              x: Math.min(...xs) - vb.x,
+              y: Math.min(...ys) - vb.y,
+              w: Math.max(...xs) - Math.min(...xs),
+              h: Math.max(...ys) - Math.min(...ys),
             };
           }),
         };
-      });
+      }, wide);
       const where = `${file}${wide ? " (wide face)" : ""}`;
       if (!found) {
         problems.push(`${where}: no <svg> element — the file is not a drawing`);
+        continue;
+      }
+      if (!(found.w > 0 && found.h > 0)) {
+        problems.push(`${where}: a positive viewBox width and height are required`);
         continue;
       }
       // The root's own size, once per file: a viewBox-only root gives an <img> no
@@ -198,8 +237,13 @@ try {
             `write the grid onto the root (width="${found.w}" height="${found.h}")`,
         );
       }
-      const scale = Math.min(NARROW / found.w, MAX_HEIGHT / found.h);
+      if (!found.fixedSize) {
+        if (found.sized) problems.push(`${where}: width/height must be positive fixed lengths, not percentages or font-relative units`);
+        continue;
+      }
+      const scale = Math.min(NARROW / found.pixelWidth, MAX_HEIGHT / found.pixelHeight);
       for (const t of found.texts) {
+        smallestDisplayed = Math.min(smallestDisplayed, t.size * scale);
         if (t.size * scale < FLOOR - 0.001) {
           problems.push(
             `${where}: “${t.text}” is ${t.size} on the grid → ${(t.size * scale).toFixed(1)}px at ${NARROW} wide`,
@@ -221,7 +265,7 @@ try {
       if (VERBOSE) {
         log(
           `${where}: ${found.texts.length} labels, ${found.w}x${found.h}, ` +
-            `${GRID_TYPE} on the grid → ${(GRID_TYPE * scale).toFixed(1)}px at ${NARROW}`,
+            `smallest displayed label ${Math.min(...found.texts.map(t => t.size * scale)).toFixed(1)}px at ${NARROW}`,
         );
       }
     }
@@ -233,14 +277,13 @@ try {
 if (problems.length) {
   for (const p of problems) console.error(`        ${p}`);
   die(
-    `${problems.length} problem(s) in ${files.length} scene(s). A scene is bands — icons, ` +
-      `then their labels, then the closing line — and nothing may cross one at any width ` +
-      `(docs/HUMAN_STYLE.md).`,
+    `${problems.length} problem(s) in ${files.length} diagram(s). Keep labels readable ` +
+      `and separate in the displayed layout (docs/HUMAN_STYLE.md).`,
   );
 }
 
 log(
-  `clean: ${files.length} scene(s) in ${assets}, each measured in two faces — no overlap, ` +
-    `nothing past the edge, and ${GRID_TYPE} on the grid comes back at ` +
-    `${(GRID_TYPE * Math.min(NARROW / 700, 1)).toFixed(1)}px or more at the ${NARROW}-wide column`,
+  `clean: ${files.length} diagram(s) in ${assets}, measured in two faces — no label overlap ` +
+    `or edge intrusion; ${Number.isFinite(smallestDisplayed) ? `smallest displayed label ${smallestDisplayed.toFixed(1)}px` : "no text labels"}. ` +
+    `This checks geometry, not explanatory quality.`,
 );

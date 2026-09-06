@@ -72,22 +72,28 @@ export function renderBugList(records, { total, limit }) {
   );
 }
 
-export function renderNoteList(records, { total }) {
-  if (!records.length) return "no notes match. Leave one: note(action=\"write\", …).";
+export function renderNoteList(records, { total = records.length, limit = DEFAULT_LIMIT, offset = 0 } = {}) {
+  if (!records.length) return "no notes match.";
+  if (offset >= total) return `no notes at offset ${offset}; ${plural(total, "matching note")}.`;
   // The description IS the row: a note list exists so an agent can decide what to read
   // without opening bodies, and the author wrote that one line for exactly this. The
   // agent shown is whoever the current words belong to — the last rewriter, else the
   // author — since notes are shared and mutable.
-  const rows = records.flatMap((n) => [
-    `  ${trunc(`${n.name} ${n.type} ${trunc(n.updatedBy || n.agent, 12)}`, ROW_CAP)}`,
-    `    ${trunc(n.description, ROW_CAP + 8)}`,
-  ]);
+  // Names are addresses (up to 64 chars), never prose to truncate. Keep each name and
+  // description together so fitting a page cannot leave an orphan half-row. Even the
+  // longest valid name plus the bounded metadata/description fits with the footer.
+  const rows = records.slice(offset, offset + limit).map((n) =>
+    `  ${n.name} ${n.type} ${trunc(n.updatedBy || n.agent, 12)}\n` +
+    `    ${trunc(n.description, ROW_CAP + 8)}`
+  );
   // Essential notes sort first (the store's contract); the header states the obligation.
   const essentials = records.filter((n) => n.type === "essential").length;
   const must = essentials ? ` · read the ${essentials} essential first` : "";
   const header = `notes — ${plural(total, "note")} (name type author / description)${must}`;
   return fit(header, rows, (shown) =>
-    shown < rows.length ? `more exist; filter by type or query` : null
+    offset + shown < total
+      ? `showing ${offset + 1}–${offset + shown}; next offset=${offset + shown} (same filters)`
+      : `showing ${offset + 1}–${offset + shown}; end`
   );
 }
 

@@ -355,8 +355,8 @@ fn split_comment_heading(head: &str) -> (String, String) {
 // ---------------------------------------------------------------------------
 
 /// Render sections back to markdown: one blank line after each `##` heading, one blank
-/// line between sections. Content inside a section is untouched, so code fences, lists
-/// and tables survive a rewrite byte for byte.
+/// line between sections, and one final newline. Content inside a section is untouched,
+/// so code fences, lists and tables survive a rewrite byte for byte.
 pub fn render(sections: &[Section]) -> String {
     let mut out = String::new();
     for s in sections {
@@ -375,6 +375,11 @@ pub fn render(sections: &[Section]) -> String {
                 out.push_str("\n\n");
             }
         }
+    }
+    // A section separator belongs between sections, never at EOF: the extra blank line
+    // makes generated WORK/BUG records fail `git diff --check` (FB-0002).
+    if out.ends_with("\n\n") {
+        out.pop();
     }
     out
 }
@@ -642,6 +647,34 @@ pub fn excerpt(text: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rendered_sections_end_with_one_newline_and_keep_internal_spacing() {
+        for source in [
+            "",
+            "\n\n",
+            "A preamble.\n\n",
+            "## Empty\n\n",
+            "## What\n\nFirst paragraph.\n\nSecond paragraph.\n\n## Empty\n\n",
+            "Preamble.\n\n## How\n\n```text\nfirst  \n\nlast\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n",
+        ] {
+            let parsed = sections(source);
+            let text = render(&parsed);
+            if text.is_empty() {
+                assert!(source.trim().is_empty());
+            } else {
+                assert!(text.ends_with('\n'), "missing final newline: {text:?}");
+                assert!(!text.ends_with("\n\n"), "blank line at EOF: {text:?}");
+            }
+            let roundtrip = sections(&text);
+            assert_eq!(roundtrip.len(), parsed.len());
+            for (before, after) in parsed.iter().zip(&roundtrip) {
+                assert_eq!(before.title, after.title);
+                assert_eq!(before.body, after.body);
+            }
+            assert_eq!(render(&roundtrip), text);
+        }
+    }
 
     const DOC: &str = "---\nid: WORK-0001\n---\n## What\nBuilt the parser.\n\nSecond para.\n\n## Why\nBecause.\n\n## Updates\n### 2026-08-18T10:00:00Z\nProgress note.\n\n### 2026-08-18T12:00:00Z\nMore.\n\n## Outcome\nShipped.\n";
 

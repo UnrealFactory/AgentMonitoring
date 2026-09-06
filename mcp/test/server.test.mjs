@@ -50,7 +50,8 @@ const BUDGET = {
   // This number is published in docs/MCP.md, so `humanArea` below holds it to the schemas.
   // It had rotted before anything measured it: the doc and this comment both said 251 when
   // the surface cost 265.
-  toolsList: 7250,
+  // Purpose boundaries and paginated note lookup are always available in the schema.
+  toolsList: 7600,
   // What the human area is allowed to cost that frame, and what docs/MCP.md publishes.
   // Exact, not a ceiling: a figure in prose is only true if something fails when it drifts.
   humanArea: 265,
@@ -66,21 +67,9 @@ const BUDGET = {
   // whichever call produced it — before any draft, because `required: [..., "human"]` means
   // the refusal that carries them through a shell almost never fires through MCP. Sized to
   // that block with room to grow, and budgeted apart from the result it is appended to:
-  // that result must still fit `result`. It moves when the contract moves, and only then:
-  // 4400 -> 5200 when the compact block took on the note/decision variant of the five beats
-  // (docs/HUMAN_STYLE.md), so an agent drafting a note is not left holding rules written for
-  // a fixed bug. 5200 -> 5800 when it took on the replace rule — an update's retelling covers
-  // the whole record so far, one telling per update — after agents in the field replaced a
-  // record's accumulated tellings with the newest round's and the old text survived nowhere.
-  // 5800 -> 6200 when the picture default landed (owner decision, 2026-08-25: every beat
-  // opens on its scene, and a skip is a per-beat claim) — agents in the field were drawing
-  // no scenes at all, and rules that never reach the drafter do not exist.
-  // 6200 -> 6400 when the citation's spelling grew teeth (owner feedback, 2026-08-25): a
-  // scene cited with no blank line under its lead-in, from an SVG root carrying no
-  // width/height, rendered at the height of a letter and passed every check — so the
-  // compact block now names the blank lines and the root size.
-  // Raise this deliberately, with the doc change that earned it — nothing else
-  // caps the block, and a handover nobody reads teaches as little as none.
+  // that result must still fit `result`. The v4 rules replace fixed narrative/image
+  // counts with purpose boundaries, relevant memory and explanatory visual choices.
+  // A rules edit must stay within this budget and update the measured size in docs/MCP.md.
   primer: 6400,
   // The style contract, which is a document rather than a record: `status(mode=
   // "human_style")` returns docs/HUMAN_STYLE.md whole, because it is what an agent reads
@@ -855,6 +844,95 @@ let noteName = "";
   check("a second note stays behind for doctor", () => assert(!keep.isError, keep.text));
 }
 
+section("note pagination: complete names, atomic entries, every matching note reachable");
+{
+  const pagedLocation = path.join(tmpRoot, "paged-notes");
+  const init = cli(["init", "--name", "Paginated note fixture"], pagedLocation);
+  check("pagination fixture initializes in the scratch registry", () => assert(init.code === 0, init.stderr));
+  const expected = [];
+  for (let i = 0; i < 15; i += 1) {
+    const name = i === 0 ? "work-boundaries-and-explanatory-visuals-proposal"
+      : i === 1 ? "bug-investigation-memory"
+      : `pagination-${String(i).padStart(2, "0")}-${"long-name-".repeat(5)}`.slice(0, 64).replace(/-$/, "z");
+    const type = i < 6 ? "essential" : i % 2 ? "memory" : "reference";
+    const description = `entry-${i}: ${"긴 설명을 잘라도 노트 이름과 쌍은 유지합니다. ".repeat(6)}`;
+    expected.push({ name, type, description });
+    const written = await client.call("note", {
+      dir: pagedLocation, action: "write", name, type,
+      title: `Pagination fixture ${i}`, description,
+      body: `pagination-fixture ${i}: 내용과 이름이 긴 노트도 다음 페이지를 통해 조회할 수 있어야 합니다.`,
+      human: "목록에서 긴 이름이 잘리거나 뒷부분의 노트를 못 찾는 문제를 검증하기 위한 임시 노트입니다.",
+    });
+    check(`pagination fixture note ${i} is written`, () => assert(!written.isError, written.text));
+  }
+  const linked = await client.call("note", {
+    dir: pagedLocation, action: "write", name: expected[2].name,
+    refs: [expected[0].name, expected[1].name],
+  });
+  check("WORK-/BUG-prefixed note names resolve through MCP refs", () => assert(!linked.isError, linked.text));
+  const linkedRead = await client.call("note", { dir: pagedLocation, action: "read", name: expected[2].name, full: true });
+  check("MCP refs preserve both prefixed note addresses", () => {
+    assertIncludes(linkedRead.text, expected[0].name, "refs");
+    assertIncludes(linkedRead.text, expected[1].name, "refs");
+  });
+
+  async function crawl(filters = {}, limit) {
+    const seen = [];
+    let offset = 0;
+    for (let page = 0; page <= expected.length; page += 1) {
+      const result = await client.call("note", { dir: pagedLocation, action: "list", ...filters, ...(limit ? { limit } : {}), offset });
+      budgeted(`note page ${page} ${JSON.stringify(filters)}`, result);
+      const rows = [...result.text.matchAll(/^  ([a-z0-9-]+) (essential|memory|handoff|decision|reference) ([^\n]*)\n    ([^\n]*)$/gm)];
+      check(`page ${page} keeps complete names paired with their own descriptions`, () => {
+        assert(!result.isError, result.text);
+        assert(rows.length > 0, `page made no progress: ${result.text}`);
+        const rowLines = result.text.split("\n").filter(line => line.startsWith("  "));
+        assert(rowLines.length === rows.length * 2, `orphan name or description: ${result.text}`);
+        if (limit) assert(rows.length <= limit, `limit ${limit} exceeded`);
+        for (const row of rows) {
+          const source = expected.find(n => n.name === row[1]);
+          assert(source, `address truncated or invented: ${row[1]}`);
+          assert(source.type === row[2], `type changed: ${row[0]}`);
+          assert(source.description.startsWith(row[4].replace(/…$/, "")), `description belongs to another note: ${row[0]}`);
+        }
+      });
+      seen.push(...rows.map(row => row[1]));
+      const next = /next offset=(\d+)/.exec(result.text);
+      if (!next) break;
+      const nextOffset = Number(next[1]);
+      check(`page ${page} continuation counts complete notes`, () => {
+        assert(nextOffset === offset + rows.length && nextOffset > offset, result.text);
+      });
+      if (nextOffset <= offset) break;
+      offset = nextOffset;
+    }
+    return seen;
+  }
+  const all = await crawl();
+  check("default pages reach every note exactly once, all essentials before ordinary notes", () => {
+    assert(all.length === expected.length && new Set(all).size === expected.length, all.join(", "));
+    assert(expected.every(n => all.includes(n.name)), all.join(", "));
+    assert(all.slice(0, 6).every(name => expected.find(n => n.name === name)?.type === "essential"), all.join(", "));
+  });
+  const filtered = await crawl({ type: "reference", query: "pagination-fixture" }, 1);
+  check("type/query filters survive continuation with an explicit one-note limit", () => {
+    const wanted = expected.filter(n => n.type === "reference").map(n => n.name);
+    assert(filtered.length === wanted.length && wanted.every(name => filtered.includes(name)), filtered.join(", "));
+  });
+  const exhausted = await client.call("note", { dir: pagedLocation, action: "list", offset: expected.length });
+  check("an offset at the end returns an explicit empty page", () => {
+    assert(!exhausted.isError, exhausted.text);
+    assertIncludes(exhausted.text, `no notes at offset ${expected.length}`, "page");
+    assert(!exhausted.text.includes("next offset="), exhausted.text);
+  });
+  const empty = await client.call("note", { dir: pagedLocation, action: "list", query: "does-not-exist" });
+  check("empty searches neither invent a continuation nor ask for a new note", () => assert(empty.text === "no notes match.", empty.text));
+  for (const fields of [{ offset: -1 }, { offset: 1.5 }, { limit: 0 }, { limit: 51 }]) {
+    const invalid = await client.call("note", { dir: pagedLocation, action: "list", ...fields });
+    check(`invalid pagination is refused: ${JSON.stringify(fields)}`, () => assert(invalid.isError, invalid.text));
+  }
+}
+
 /* ------------------------------------------------------------- app feedback */
 
 section("app feedback: about the app itself, machine-level");
@@ -1528,7 +1606,7 @@ section("whichever call a session opens with, the rules come back with it");
   opener.close();
 
   // Reading the contract on purpose *is* the handover. Appending the compact block to the
-  // document it was cut from would charge a session 3,800 characters to repeat itself.
+  // document it was cut from would charge a session for the same rules twice.
   const reader = spawnClient();
   await reader.initialize();
   const contract = await reader.call("status", { mode: "human_style" });
@@ -1658,11 +1736,12 @@ section("status: every mode inside the result budget");
   });
   check("human_style is the contract whole, byte for byte with the CLI's own", () => {
     const printed = cli(["human-style"], location).stdout.trim();
-    assert(printed.length > BUDGET.fullResult, `the CLI printed ${printed.length} chars`);
     assert(contract.text === printed, "the tool and the CLI disagree about the contract");
     // Not the compact rules the refusal already carries: the worked example is the half
     // an agent cannot get any other way, and a clamp here would cut it off mid-rule.
-    assertIncludes(contract.text, "One worked example", "contract");
+    assertIncludes(contract.text, "## Worked examples", "contract");
+    assertIncludes(contract.text, "A short progress update", "contract");
+    assertIncludes(contract.text, "A current fact and an unaccepted proposal", "contract");
     assert(!contract.text.includes("(truncated"), "the contract came back clamped");
   });
   const listed = await client.request("tools/list", {});

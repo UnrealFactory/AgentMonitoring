@@ -15,6 +15,7 @@ import { api } from "./api";
 import { highlightCode } from "./highlight";
 import { t } from "./i18n";
 import { recordKind, useRecordMenu } from "./menus";
+import { recordPath } from "./record-ref";
 import { useModalLock } from "./modal";
 import { parseBlocks, parseInline, type CalloutTone, type Inline } from "./markdown-parse";
 
@@ -48,15 +49,7 @@ interface Opts {
   projectId?: string | null;
 }
 
-export function recordPath(projectId: string, id: string): string {
-  const upper = id.toUpperCase();
-  if (upper.startsWith("BUG")) return `/p/${projectId}/bugs/${id}`;
-  if (upper.startsWith("WORK")) return `/p/${projectId}/work/${id}`;
-  // Anything else is a note's kebab name — the third shape a ref can take. Prose chips
-  // never carry one (the ref regex matches WORK/BUG ids only, deliberately: kebab words in
-  // sentences would false-positive constantly); this branch serves the Related rows.
-  return `/p/${projectId}/notes/${id}`;
-}
+export { recordPath };
 
 /** A number, with the unit an agent writes against it: `3`, `11ms`, `2,900`, `30s`. */
 const FIGURE = /\d[\d,]*(?:\.\d+)?(?:ms|s|m|h|%|x|k|MB|GB)?/g;
