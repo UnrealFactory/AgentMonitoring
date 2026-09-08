@@ -874,3 +874,48 @@
 {"ts":"2026-09-06T10:24:43Z","actor":"codex","type":"note_updated","ref":"work-boundaries-and-explanatory-visuals-proposal","summary":"Updated note work-boundaries-and-explanatory-visuals-proposal: refs, body, human area"}
 {"ts":"2026-09-06T10:25:15Z","actor":"codex","type":"work_done","ref":"WORK-0110","summary":"v1.5.2 공개 배포를 완료했습니다. package.json, src-tauri/tauri.conf.json, Cargo.toml 및 package-lock.json/Cargo.lock을 1.5.2로 맞췄습니다. 기능 커밋…"}
 {"ts":"2026-09-06T10:26:00Z","actor":"codex","type":"work_updated","ref":"WORK-0110","summary":"Correction: outcome의 '앱 피드백 4건의 사람 설명에도 공개 버전과 검증 사실을 추가' 문장은 잘못됐습니다. 갱신 직전 app-feedback list가 빈 목록을 반환하여 반복문은 0건을 처리했습니다. 후속 읽기에서도 환경변수 AGENTMON_REGISTRY_DIR가…"}
+{"ts":"2026-09-08T09:21:49Z","actor":"codex","type":"work_started","ref":"WORK-0111","summary":"새 프로젝트 기본값과 사용자 폴더별 프로젝트 정리를 구현합니다"}
+{"ts":"2026-09-08T09:28:10Z","actor":"codex","type":"work_updated","ref":"WORK-0111","summary":"생성 기본값을 AGENTS.md 한국어 + Codex MCP로 변경하고, 프로젝트 목록과 사이드바에 정리 폴더를 연결했습니다. 정리 정보는 데스크톱 app_config_dir/project-folders.json에 원자적으로 저장하며, 브라우저에서는 localStorage를…"}
+{"ts":"2026-09-08T09:29:00Z","actor":"codex","type":"note_created","ref":"project-organization-and-create-defaults","summary":"새 프로젝트 기본값과 로컬 정리 폴더"}
+{"ts":"2026-09-08T09:29:37Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: title, description, refs, body, human area"}
+{"ts":"2026-09-08T09:29:37Z","actor":"codex","type":"work_done","ref":"WORK-0111","summary":"새 프로젝트 기본값을 AGENTS.md 한국어·Codex MCP 추가, CLAUDE.md·Claude MCP 추가 안 함으로 바꿨습니다. 고정 목록 소제목을 제거하고 사용자 폴더 생성·이름 변경·접기·삭제, 프로젝트 소속 이동과 사이드바 분류를 구현했습니다. 폴더 삭제 시 미분류…"}
+{"ts":"2026-09-08T10:39:56Z","actor":"codex","type":"work_started","ref":"WORK-0112","summary":"변경된 개발 앱을 별도 포트로 실행했습니다"}
+{"ts":"2026-09-08T10:39:56Z","actor":"codex","type":"work_done","ref":"WORK-0112","summary":"5175 개발 서버가 새 폴더 UI를 포함한 소스와 프로젝트 목록을 정상 응답했습니다. 개발 빌드가 완료되고 target/debug/agentmonitoring.exe의 AgentMonitoring 창(프로세스 38392)이 생성된 것을 확인했습니다. 개발 프로세스는 계속 실행…"}
+{"ts":"2026-09-08T10:54:51Z","actor":"codex","type":"work_started","ref":"WORK-0113","summary":"프로젝트 사이드바를 제목과 폴더 우클릭 중심으로 바꿉니다"}
+{"ts":"2026-09-08T11:00:15Z","actor":"codex","type":"note_updated","ref":"project-organization-and-create-defaults","summary":"Updated note project-organization-and-create-defaults: title, description, refs, body, human area"}
+{"ts":"2026-09-08T11:00:40Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: title, description, refs, body, human area"}
+{"ts":"2026-09-08T11:00:40Z","actor":"codex","type":"work_done","ref":"WORK-0113","summary":"사이드바 로컬 제목을 프로젝트로 바꾸고 폴더 아이콘이 붙은 기존 프로젝트 행을 제거했습니다. 프로젝트 제목 클릭은 목록으로 이동하고 우클릭은 폴더 생성을 제공합니다. 사이드바와 프로젝트 화면의 기존 폴더 우클릭에는 이름 변경·삭제가 있으며 공통 대화상자로 모든 화면에서 조작할 수…"}
+{"ts":"2026-09-08T11:01:12Z","actor":"codex","type":"work_started","ref":"WORK-0114","summary":"최신 변경으로 개발 앱과 서버를 재시작했습니다"}
+{"ts":"2026-09-08T11:01:40Z","actor":"codex","type":"work_done","ref":"WORK-0114","summary":"새 개발 앱 프로세스 18208과 프로젝트 · AgentMonitoring 창을 확인했습니다. 5175 서버가 HTTP 200으로 수정된 프로젝트 제목 코드를 응답합니다. 앱과 서버는 계속 실행 중입니다."}
+{"ts":"2026-09-08T11:03:32Z","actor":"codex","type":"work_started","ref":"WORK-0115","summary":"프로젝트를 끌어 폴더로 옮기는 동작을 추가합니다"}
+{"ts":"2026-09-08T11:07:20Z","actor":"codex","type":"work_updated","ref":"WORK-0115","summary":"포인터 기반 끌기 레이어를 구현하고 프로젝트 행·사이드바 링크와 폴더·프로젝트 제목을 연결했습니다. 6px 이동부터 끌기를 시작하며 대상 강조·프로젝트 이름 안내·클릭 억제·Esc 및 외부 놓기 취소를 지원합니다. 접힌 사이드바 폴더는 저장 성공 후 펼칩니다. 실제 Playwright…"}
+{"ts":"2026-09-08T11:09:29Z","actor":"codex","type":"note_updated","ref":"project-organization-and-create-defaults","summary":"Updated note project-organization-and-create-defaults: title, description, refs, body, human area"}
+{"ts":"2026-09-08T11:09:29Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: title, description, refs, body, human area"}
+{"ts":"2026-09-08T11:09:29Z","actor":"codex","type":"work_done","ref":"WORK-0115","summary":"사이드바와 프로젝트 목록에서 기존 프로젝트를 마우스로 잡아 끌어 폴더로 이동하는 기능을 구현했습니다. 프로젝트 제목과 폴더 밖 목록은 소속 제거 대상이며, 연결 불가 프로젝트도 이동할 수 있습니다. 드래그 중 원본 흐림·대상 강조·프로젝트 및 대상 안내를 표시하고, 접힌 사이드바…"}
+{"ts":"2026-09-08T11:10:18Z","actor":"codex","type":"work_started","ref":"WORK-0116","summary":"개발 중 패치 후 검은 화면이 되는 문제를 수정합니다"}
+{"ts":"2026-09-08T11:10:18Z","actor":"codex","type":"bug_created","ref":"BUG-0030","summary":"개발 앱이 코드 패치 후 검은 화면으로 남습니다"}
+{"ts":"2026-09-08T11:12:29Z","actor":"codex","type":"bug_claimed","ref":"BUG-0030","summary":"Claimed BUG-0030 — 개발 앱이 코드 패치 후 검은 화면으로 남습니다"}
+{"ts":"2026-09-08T11:12:29Z","actor":"codex","type":"bug_commented","ref":"BUG-0030","summary":"실제 실행 파일을 WebView2 CDP로 연결한 뒤 ko.ts/en.ts에 주석을 동시에 추가해 재현했습니다. 정상 렌더링된 #root 내용 36,745자가 패치 후 0자가 되었고, useWindowTitle → useApp에서 'useApp must be used inside…"}
+{"ts":"2026-09-08T11:18:24Z","actor":"codex","type":"work_updated","ref":"WORK-0116","summary":"실제 WebView2에서 번역 파일 동시 주석 패치만으로 useApp 컨텍스트 연결 오류와 #root 비움을 재현했습니다. 개발 교체 시 컨텍스트 객체를 보존하는 stableContext.ts를 추가하고 앱·우클릭 메뉴·프로젝트 삭제·폴더 편집·레코드 제목의 다섯 컨텍스트에…"}
+{"ts":"2026-09-08T11:20:20Z","actor":"codex","type":"bug_claimed","ref":"BUG-0030","summary":"Re-confirmed the claim on BUG-0030 — 개발 앱이 코드 패치 후 검은 화면으로 남습니다"}
+{"ts":"2026-09-08T11:20:20Z","actor":"codex","type":"bug_commented","ref":"BUG-0030","summary":"다섯 React 컨텍스트를 stableContext로 생성하도록 바꿨습니다. 개발 모드에서는 Vite hot.data에 컨텍스트 객체를 보관하므로 제공자와 소비자의 모듈이 다른 갱신 묶음으로 교체되어도 같은 객체를 참조합니다. 빌드된 앱에서는 기존 createContext 동작을…"}
+{"ts":"2026-09-08T11:20:20Z","actor":"codex","type":"bug_resolved","ref":"BUG-0030","summary":"실제 WebView2에서 번역·공유 모듈을 세 차례 변경하고 복원하는 총 6회 갱신 동안 화면 문구 변경, 오류 0건, 재로딩 없음, 작성 중 폴더 이름 유지를 확인했습니다. check:hmr 자동 검사도 6회 통과하고, --without-fix 대조 실행은 첫 패치에서 같은…"}
+{"ts":"2026-09-08T11:20:20Z","actor":"codex","type":"note_created","ref":"dev-hmr-context-identity","summary":"개발 코드 갱신 중 검은 화면과 공유 컨텍스트 유지"}
+{"ts":"2026-09-08T11:20:46Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: title, description, refs, body, human area"}
+{"ts":"2026-09-08T11:20:46Z","actor":"codex","type":"work_done","ref":"WORK-0116","summary":"BUG-0030을 실제 WebView2에서 재현하고 수정했습니다. 번역 파일 동시 주석 변경으로 #root가 36,745자에서 0자가 되고 useApp must be used inside <AppProvider>가 발생했습니다. HMR 묶음 간 교체로 React 컨텍스트 객체가…"}
+{"ts":"2026-09-08T11:24:16Z","actor":"codex","type":"work_started","ref":"WORK-0117","summary":"폴더 드래그 순서 변경과 사이드바 정렬을 추가합니다"}
+{"ts":"2026-09-08T11:28:55Z","actor":"codex","type":"note_updated","ref":"project-organization-and-create-defaults","summary":"Updated note project-organization-and-create-defaults: title, description, refs, body, human area"}
+{"ts":"2026-09-08T11:29:40Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: title, description, refs, body, human area"}
+{"ts":"2026-09-08T11:29:40Z","actor":"codex","type":"work_done","ref":"WORK-0117","summary":"폴더 제목을 마우스로 끌어 다른 폴더의 앞·뒤에 놓으면 순서를 변경하도록 구현했습니다. 목표 제목 위·아래 절반으로 위치를 고르고 삽입선을 표시합니다. 폴더 배열 순서를 저장해 사이드바·프로젝트 화면과 재실행 뒤 순서가 일치하며, 포함 프로젝트 소속과 기존 펼침 상태는 유지합니다.…"}
+{"ts":"2026-09-08T11:32:12Z","actor":"codex","type":"work_started","ref":"WORK-0118","summary":"폴더 안 프로젝트의 드래그 순서 변경을 추가합니다"}
+{"ts":"2026-09-08T11:37:48Z","actor":"codex","type":"note_updated","ref":"project-organization-and-create-defaults","summary":"Updated note project-organization-and-create-defaults: title, description, refs, body, human area"}
+{"ts":"2026-09-08T11:37:48Z","actor":"codex","type":"work_done","ref":"WORK-0118","summary":"폴더 안 프로젝트 위·아래 드래그 순서 변경과 삽입선을 추가했습니다. 폴더별 projectOrder를 저장하고 두 화면에서 수동 순서를 우선 적용해 활동 순서 변경과 재실행 후에도 유지합니다. 기존 설정은 새 필드 없이 읽으며 Rust serde 기본값과 브라우저 검증을 보강했습니다.…"}
+{"ts":"2026-09-08T11:39:21Z","actor":"codex","type":"work_started","ref":"WORK-0119","summary":"한국어 전용 UI와 프로젝트 정리 기능을 v1.6.0으로 배포합니다"}
+{"ts":"2026-09-08T11:44:52Z","actor":"codex","type":"work_updated","ref":"WORK-0119","summary":"영어 사전·선택 UI·언어 설정 IPC와 읽기·쓰기 경로를 제거하고 한국어 사전에 함수 매개변수 타입을 직접 유지했습니다. 트레이·업데이트 스플래시·오류 안내와 날짜·차트를 한국어로 고정했고 새 지침 생성에는 한국어/추가 안 함만 남겼습니다. 기존 영어…"}
+{"ts":"2026-09-08T11:47:15Z","actor":"codex","type":"note_created","ref":"korean-only-ui","summary":"앱은 한국어만 사용합니다"}
+{"ts":"2026-09-08T12:18:28Z","actor":"codex","type":"work_updated","ref":"WORK-0119","summary":"2026-09-08 21:18 KST 재확인 결과 20:47:34에 v1.6.0 NSIS 설치 파일(8,257,665바이트)과 앱 바이너리가 생성됐습니다. 실행 중인 빌드·배포 프로세스는 없고 main/원격 main은 1b289a5, v1.6.0 원격 태그·릴리스는 없으며 누적 변경은…"}
+{"ts":"2026-09-08T12:23:50Z","actor":"codex","type":"bug_created","ref":"BUG-0031","summary":"한국어 줄바꿈 검사가 코드 뒤의 정상 단어를 잘못 감지합니다"}
+{"ts":"2026-09-08T12:24:36Z","actor":"codex","type":"bug_claimed","ref":"BUG-0031","summary":"Claimed BUG-0031 — 한국어 줄바꿈 검사가 코드 뒤의 정상 단어를 잘못 감지합니다"}
+{"ts":"2026-09-08T12:24:36Z","actor":"codex","type":"bug_commented","ref":"BUG-0031","summary":"WORK-0119 배포 검증 중 발견했습니다. BREAK_PROBE.locate가 시작 offset과 이전 노드 끝 offset이 같을 때 이전 노드를 선택한 것이 원인입니다. 시작은 다음 포함 텍스트 노드, 끝은 이전 노드를 선택하도록 경계 규칙을 분리했습니다."}
+{"ts":"2026-09-08T12:24:36Z","actor":"codex","type":"bug_resolved","ref":"BUG-0031","summary":"scripts/check-i18n.mjs의 단어 시작/끝 경계만 수정했습니다. 실제 1600px 노트 캡처에서 '입니다'가 한 줄임을 확인했습니다. Playwright로 구 코드에서 오탐이 발생함을 재현했고, 수정 코드에서 앞/뒤 다중 줄 인라인 코드 제외와 텍스트 노드 내부/인라인…"}
+{"ts":"2026-09-08T12:25:12Z","actor":"codex","type":"work_updated","ref":"WORK-0119","summary":"중단 이후 현재 소스로 CLI·앱·NSIS 재빌드를 완료했습니다(종료 0). 새 설치 파일은 8,261,051바이트, SHA-256 2e4f559ddf83306dfcf6afbb616cef89dce3cc47b5a51879722ad9f91e91263b입니다. 앱/설치 파일…"}

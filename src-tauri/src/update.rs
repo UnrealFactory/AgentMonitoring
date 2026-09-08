@@ -193,19 +193,11 @@ fn update_script(
     exe: &str,
     pid: u32,
     splash_pid: u32,
-    ko: bool,
 ) -> String {
-    let (failed, retry) = if ko {
-        (
-            "업데이트에 실패했습니다.",
-            "앱을 다시 실행한 뒤, 업데이트를 다시 시도해 주세요.",
-        )
-    } else {
-        (
-            "The update failed.",
-            "Start the app again and retry the update.",
-        )
-    };
+    let (failed, retry) = (
+        "업데이트에 실패했습니다.",
+        "앱을 다시 실행한 뒤, 업데이트를 다시 시도해 주세요.",
+    );
     let q_url = ps_quote(url);
     let q_exe = ps_quote(exe);
     let setup_name = ps_quote(&format!("AgentMonitoring_{version}_setup.exe"));
@@ -245,23 +237,16 @@ try {{
 /// `proc_name` process start (the relaunch), and gives up after 180 s so a crashed worker
 /// cannot leave it on screen forever. The window styling mirrors the app's tokens
 /// (surface `#16171A`, accent `#5E6AD2`).
-fn splash_script(version: &str, proc_name: &str, ko: bool) -> String {
+fn splash_script(version: &str, proc_name: &str) -> String {
     // The version reaches XAML text; keep it to characters that cannot close an attribute.
     let ver: String = version
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-')
         .collect();
-    let (title, sub) = if ko {
-        (
-            "새 버전으로 업데이트하는 중".to_string(),
-            format!("v{ver} 설치가 끝나면 자동으로 다시 열려요"),
-        )
-    } else {
-        (
-            "Updating to the new version".to_string(),
-            format!("Reopens automatically once v{ver} is installed"),
-        )
-    };
+    let (title, sub) = (
+        "새 버전으로 업데이트하는 중".to_string(),
+        format!("v{ver} 설치가 끝나면 자동으로 다시 열려요"),
+    );
     let q_proc = ps_quote(proc_name);
     format!(
         r##"Add-Type -AssemblyName PresentationFramework
@@ -334,7 +319,6 @@ pub async fn install_app_update(app: AppHandle, url: String, version: String) ->
     let exe = std::env::current_exe()
         .map_err(|e| format!("cannot locate the running app to relaunch it: {e}"))?;
     let current = app.package_info().version.to_string();
-    let ko = crate::locale_of(&app) != "en";
 
     // The process name the splash watches for the relaunch — the exe's own stem, so dev
     // builds and renamed installs watch the right name without a hardcode.
@@ -346,7 +330,7 @@ pub async fn install_app_update(app: AppHandle, url: String, version: String) ->
     // The splash is decoration: if it cannot start, the update still runs — the worker
     // then gets pid 0, and its on-error `Stop-Process` quietly finds nobody.
     let splash_path = std::env::temp_dir().join("agentmonitoring-update-splash.ps1");
-    let splash_pid = write_ps1(&splash_path, &splash_script(&version, &proc_name, ko))
+    let splash_pid = write_ps1(&splash_path, &splash_script(&version, &proc_name))
         .and_then(|()| spawn_hidden_powershell(&splash_path))
         .map(|child| child.id())
         .unwrap_or(0);
@@ -358,7 +342,6 @@ pub async fn install_app_update(app: AppHandle, url: String, version: String) ->
         &exe.display().to_string(),
         std::process::id(),
         splash_pid,
-        ko,
     );
     let path = std::env::temp_dir().join("agentmonitoring-update.ps1");
     write_ps1(&path, &script)?;
@@ -448,7 +431,6 @@ mod tests {
             r"C:\Apps\Agent's\AgentMonitoring.exe",
             4242,
             7777,
-            true,
         );
         assert!(s.contains("It''s_x64-setup.exe"), "quotes in the URL are doubled");
         assert!(s.contains(r"C:\Apps\Agent''s\AgentMonitoring.exe"));
@@ -463,20 +445,20 @@ mod tests {
         assert!(s.contains("Stop-Process -Id 7777"));
         assert!(s.contains("MessageBox"));
         assert!(s.contains("실패했습니다"), "ko: the error speaks the app's language");
-        assert!(update_script("u", "1", "0", "e", 1, 0, false).contains("The update failed."));
+        assert!(update_script("u", "1", "0", "e", 1, 0).contains("업데이트에 실패했습니다."));
     }
 
     #[test]
     fn the_splash_watches_the_relaunch_and_gives_up_eventually() {
-        let s = splash_script("1.0.2", "AgentMonitoring", true);
+        let s = splash_script("1.0.2", "AgentMonitoring");
         assert!(s.contains("Get-Process -Name 'AgentMonitoring'"), "watches for the fresh process");
         assert!(s.contains("$p.StartTime -gt $script:t0"), "only a *new* process counts");
         assert!(s.contains("TotalSeconds -gt 180"), "a crashed worker cannot pin it forever");
         assert!(s.contains("v1.0.2 설치가 끝나면"), "ko text carries the version");
         // Whatever a tag brings, nothing may close the XAML attribute around the version.
-        let odd = splash_script("1.0.2\"/><evil", "AgentMonitoring", false);
-        assert!(odd.contains("v1.0.2evil is installed"));
+        let odd = splash_script("1.0.2\"/><evil", "AgentMonitoring");
+        assert!(odd.contains("v1.0.2evil 설치가 끝나면"));
         assert!(!odd.contains("\"/><evil"));
-        assert!(splash_script("1", "A", false).contains("Updating to the new version"));
+        assert!(splash_script("1", "A").contains("새 버전으로 업데이트하는 중"));
     }
 }

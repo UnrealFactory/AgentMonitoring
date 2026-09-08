@@ -8,7 +8,7 @@
  * those records — an agent writing "see BUG-0004" is making a cross-reference, and a
  * reader should be able to follow it. Ids inside code spans stay literal.
  */
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useContextMenu } from "../components/ContextMenu";
 import { api } from "./api";
@@ -17,6 +17,7 @@ import { t } from "./i18n";
 import { recordKind, useRecordMenu } from "./menus";
 import { recordPath } from "./record-ref";
 import { useModalLock } from "./modal";
+import { stableContext } from "./stableContext";
 import { parseBlocks, parseInline, type CalloutTone, type Inline } from "./markdown-parse";
 
 /** Resolves a record id to a route, or null when we are not inside a project. */
@@ -36,7 +37,7 @@ type ChipMenu = (id: string, title: string | undefined) => ReturnType<ReturnType
  * for the Related block; `null` means nothing has been loaded yet, which is not the same as
  * "this id does not exist" and must not be drawn as if it were.
  */
-export const RecordTitles = createContext<Map<string, string> | null>(null);
+export const RecordTitles = stableContext<Map<string, string> | null>("record-titles", null);
 
 interface Opts {
   link: RefLinker;

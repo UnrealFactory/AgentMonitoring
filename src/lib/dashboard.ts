@@ -18,7 +18,7 @@
  *     went into it, so a tooltip can say *which* three work logs finished on the 12th
  *     rather than only that three did.
  */
-import { getLocale, t } from "./i18n";
+import { t } from "./i18n";
 import type { BugSummary, EventType, Severity, VaultEvent, WorklogSummary } from "./types";
 
 export const HOUR = 3_600_000;
@@ -149,7 +149,7 @@ export function timeAxis(from: number, to: number): TimeAxis {
 }
 
 /* Dates on a chart are read at a glance and compared with the ones two cards away, so they
-   are assembled from local-time parts in both languages rather than handed to a locale
+   are assembled from local-time parts rather than handed to a locale
    formatter — only the timezone varies by machine, never the shape of the string. Korean
    puts the year first and the unit after each number — "8월 12일" — which is also a little
    wider than "12 Aug", and `axisTicks` is told so through `minTickPx` below. */
@@ -162,35 +162,16 @@ const HOUR_FMT = { format: (ts: number) => {
   const h = d.getHours();
   const m = d.getMinutes();
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return getLocale() === "ko"
-    ? `${h < 12 ? "오전" : "오후"} ${h12}${m ? `:${pad2(m)}` : "시"}`
-    : `${h12}${m ? `:${pad2(m)}` : ""} ${h < 12 ? "am" : "pm"}`;
+  return `${h < 12 ? "오전" : "오후"} ${h12}${m ? `:${pad2(m)}` : "시"}`;
 } };
 
 const KO_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
-
-const EN_DAY = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-});
-const EN_DAY_FULL = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-});
-const EN_DATE = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
 
 /** "12 Aug" / "8월 12일" */
 const DAY_FMT = {
   format: (ts: number) => {
     const d = new Date(ts);
-    return getLocale() === "ko"
-      ? `${d.getMonth() + 1}월 ${d.getDate()}일`
-      : EN_DAY.format(d);
+    return `${d.getMonth() + 1}월 ${d.getDate()}일`;
   },
 };
 
@@ -198,9 +179,7 @@ const DAY_FMT = {
 const DAY_FULL_FMT = {
   format: (ts: number) => {
     const d = new Date(ts);
-    return getLocale() === "ko"
-      ? `${d.getMonth() + 1}월 ${d.getDate()}일 (${KO_WEEKDAY[d.getDay()]})`
-      : EN_DAY_FULL.format(d);
+    return `${d.getMonth() + 1}월 ${d.getDate()}일 (${KO_WEEKDAY[d.getDay()]})`;
   },
 };
 
@@ -208,9 +187,7 @@ const DAY_FULL_FMT = {
 const DATE_FMT = {
   format: (ts: number) => {
     const d = new Date(ts);
-    return getLocale() === "ko"
-      ? `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`
-      : EN_DATE.format(d);
+    return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
   },
 };
 
@@ -219,7 +196,7 @@ export const axisLabel = (ts: number, granularity: "hour" | "day"): string =>
   granularity === "hour" ? HOUR_FMT.format(ts) : DAY_FMT.format(ts);
 
 /** How much room one tick label needs. Korean dates are wider than "12 Aug". */
-export const minTickPx = (): number => (getLocale() === "ko" ? 84 : 64);
+export const minTickPx = (): number => 84;
 
 /* --------------------------------------------------------------------------
    Ticks
@@ -898,7 +875,7 @@ export const eventVerb = (type: string): string => {
 };
 
 /** Does this language put the verb after the record it is about? Korean does. */
-export const verbAfterRef = (): boolean => getLocale() === "ko";
+export const verbAfterRef = (): boolean => true;
 
 /**
  * An event's summary as a feed line.

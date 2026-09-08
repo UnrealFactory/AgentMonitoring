@@ -2,8 +2,8 @@
 /**
  * Read every screen in one language and fail on any word the app itself wrote in the other.
  *
- *   npm run check:i18n                          both languages, in turn
- *   node scripts/check-i18n.mjs [--port 5173] [--url ORIGIN] [--locale ko|en]
+ *   npm run check:i18n                          Korean UI
+ *   node scripts/check-i18n.mjs [--port 5173] [--url ORIGIN] [--locale ko]
  *
  * A translation is not done when the dictionary is full; it is done when nothing on screen
  * is still in the other language. Those two are different by exactly the strings somebody
@@ -81,9 +81,7 @@
  * empty one is a finding (see {@link FILLED_PROBE}): a gate that cannot reach a surface must
  * say so rather than report it clean.
  *
- * Everything else must be Korean — and `--locale en` is the same walk with the alphabets
- * swapped, because a Korean string typed into a component is just as invisible to `tsc` as
- * an English one, and the app ships in two languages. Runs against the live vault read-only.
+ * Everything else must be Korean. Runs against the live vault read-only.
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { register } from "node:module";
@@ -127,13 +125,11 @@ const SWEEP_DEFAULT = "960,1060,1110,1150,1190,1200,1280,1360,1440,1520,1600";
 if (flag("--help") || flag("-h")) {
   console.log(`Fail on a word the app prints in the language the screen is not in.
 
-  npm run check:i18n                 ko then en
-  node scripts/check-i18n.mjs --locale en
+  npm run check:i18n                 Korean
+  node scripts/check-i18n.mjs --locale ko
 
 Options:
-  --locale <ko|en>   the language to read the screens in; the gate then looks for the
-                     other one — English on a Korean screen, Hangul on an English one
-                     (default ko)
+  --locale <ko>     Korean is the only supported UI language
   --port <n>         dev-server port to boot on / check against (default 5173)
   --url <origin>     check an already-running server instead of booting one
   --ko-port <n>      port for the Korean-content fixture vault's own server (default port+4)
@@ -154,7 +150,7 @@ const PORT = Number(value("--port", process.env.SHOT_PORT || 5173));
 const ORIGIN = value("--url", `http://localhost:${PORT}`).replace(/\/$/, "");
 /** The Korean-content fixture gets its own server, because a vault is a whole server's. */
 const KO_PORT = Number(value("--ko-port", PORT + 4));
-const LOCALE = value("--locale", "ko");
+const LOCALE = "ko";
 const VERBOSE = flag("--verbose");
 /** The two widths every reflowing screen is read at: roomy, and the narrowest the app may be. */
 const WIDE = 1600;
@@ -285,18 +281,6 @@ const AUTHOR = [
  */
 const CHROME = [".ref-inline.is-unknown"];
 
-/**
- * Where a language names itself, whichever language the window is in.
- *
- * The picker's two segments are 한국어 and English, each written in its own language, which
- * is the one rule every language picker keeps: a reader who landed in the wrong one has to
- * be able to read their way out. So it is the one place Hangul is allowed on an English
- * screen, and the tooltip on each segment carries the same name. The New project form's
- * Instruction-file choices keep the same rule for the same reason: the label tells you what the
- * generated file will read like, in that file's own language.
- */
-const OTHER_TONGUE = [".locale-toggle", ".instruction-md-choice"];
-
 /** Values that are data rather than language, and are the same in every locale. */
 const TOKENS = [
   /\b(WORK|BUG|FB)-(?:\d+|N{4})\b/g, // an id — and the shape of one, which a bad address is told
@@ -315,7 +299,6 @@ const TOKENS = [
   /--[a-z-]+/g,
   /\bv\d+\b/g,
   /##\s*\w+/g,
-  /\bEnglish\b/g, // the language toggle names the other language in its own language
   /\bID\b/g, // written in Latin in Korean product UIs, like URL and CLI
   /\bCLI\b/g, // …and CLI itself, which is what the onboarding calls the thing agents run
   /\bMCP\b/g, // the protocol name, printed as-is like CLI
@@ -407,14 +390,7 @@ const VOCAB_PROBE = (vocabularies) => {
   return found;
 };
 
-/**
- * …and the mirror of it: Hangul on an English screen.
- *
- * The app ships in two languages, and only one of them was ever gated. A Korean word typed
- * straight into a component — the easy mistake to make in this repository now — is invisible
- * to `tsc` and to the Korean run of this gate, which is looking for the opposite alphabet.
- * `--locale en` looks for this instead; everything else about the walk is identical.
- */
+/** Korean abbreviations must not split off a syllable of a word. */
 const HANGUL = /[가-힣]+/g;
 
 /**
@@ -786,9 +762,12 @@ const BREAK_PROBE = ({ counters, words, exempt, hangul }) => {
       map.push({ node, start: flat.length, length: node.textContent.length });
       flat += node.textContent;
     }
-    const locate = (offset) => {
+    const locate = (offset, end = false) => {
       for (const entry of map) {
-        if (offset >= entry.start && offset <= entry.start + entry.length) {
+        // A start on a boundary belongs to the next included text node. Choosing the
+        // previous node's end would pull an exempt <code> between them into the Range.
+        const limit = entry.start + entry.length;
+        if (offset >= entry.start && (offset < limit || (end && offset === limit))) {
           return { node: entry.node, offset: offset - entry.start };
         }
       }
@@ -797,7 +776,7 @@ const BREAK_PROBE = ({ counters, words, exempt, hangul }) => {
     re.lastIndex = 0;
     for (let m = re.exec(flat); m; m = re.exec(flat)) {
       const from = locate(m.index);
-      const to = locate(m.index + m[0].length);
+      const to = locate(m.index + m[0].length, true);
       if (!from || !to) continue;
       const range = document.createRange();
       range.setStart(from.node, from.offset);
@@ -1137,12 +1116,12 @@ const residue = (text) => {
 
 /** The words in `text` that belong to the language this screen is *not* in. */
 const foreignIn = (text) => {
-  const words = LOCALE === "en" ? text.match(HANGUL) : residue(text).match(LATIN);
+  const words = residue(text).match(LATIN);
   return words ? [...new Set(words)] : null;
 };
 
 /** What the findings are called, in the run's own terms. */
-const OTHER = LOCALE === "en" ? "Korean" : "English";
+const OTHER = "English";
 
 let browser = null;
 let server = null;
@@ -1398,46 +1377,6 @@ try {
     },
   );
 
-  /* ---- and the same screens reached by pressing the toggle ------------------
-   *
-   * Landing in a language is not the same event as changing to it. A value that carries
-   * words and is cached on anything but the language survives the switch, and the reader
-   * who tried the control is the one who meets it: the dashboard repainted around a
-   * 24-hour line still reading "started 16 · done 16 · notes 30 · 에이전트 8명", and a
-   * record's contents rail stayed in the language it was built in (P9 round 1 critic).
-   * Nothing in a reload can show that, so these three arrive in the *other* language and
-   * click their way into this one. */
-  const other = LOCALE === "ko" ? "en" : "ko";
-  const switchTo = async (page, waitFor) => {
-    await page.waitForSelector(waitFor, { state: "visible", timeout: 15_000 });
-    await page.waitForFunction(() => !document.querySelector(".skeleton"));
-    await page.locator(`.locale-option[data-value="${LOCALE}"]`).click();
-    await page.waitForFunction(
-      (want) => document.documentElement.lang === want,
-      LOCALE,
-      { timeout: 5_000 },
-    );
-  };
-  for (const [name, path, wait] of [
-    ["dashboard", `/p/${projects[0].id}`, ".now-strip .now-hero-value"],
-    ...(firstWork ? [["work detail", `/p/${projects[0].id}/work/${firstWork}`, ".record-title"]] : []),
-    ...(firstBug ? [["bug detail", `/p/${projects[0].id}/bugs/${firstBug}`, ".record-title"]] : []),
-    /* The 404, which this gate only ever loaded cold (the `not found` screen above). Loading
-       it is not the test: NotFound() calls t() and, until round 5, read nothing that changes,
-       while its route element is built once in App() — so the window repainted around it and
-       left “화면이 없습니다” under an English sidebar for as long as the reader stayed
-       (P9 round 4 critic). The reader who presses the toggle on a bad address is exactly the
-       reader who meets it, so the toggle is pressed here. */
-    ["not found", "/nope/nope", ".page-title"],
-  ]) {
-    screens.push({
-      name: `${name}, switched to ${LOCALE} in place`,
-      path: `${path}${path.includes("?") ? "&" : "?"}lang=${other}`,
-      wait,
-      prepare: (page) => switchTo(page, wait),
-    });
-  }
-
   /* ---- the screens a reader reaches by being wrong -------------------------
    *
    * Everything above is the app working. The app failing is a screen too — five of them
@@ -1587,7 +1526,7 @@ try {
       await page.waitForSelector(screen.wait, { state: "visible", timeout: 15_000 });
       await page.waitForFunction(() => !document.querySelector(".skeleton"));
       const printed = await page.evaluate(PROBE, {
-        exemptSelectors: [...AUTHOR, ...OTHER_TONGUE],
+        exemptSelectors: AUTHOR,
         chromeSelectors: CHROME,
       });
       checked += 1;

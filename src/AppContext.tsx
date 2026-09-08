@@ -1,5 +1,4 @@
 import {
-  createContext,
   useCallback,
   useContext,
   useEffect,
@@ -10,9 +9,10 @@ import {
 } from "react";
 import { useParams } from "react-router-dom";
 import { api, subscribeProjectChanges, transport, type DataHealth } from "./lib/api";
-import { loadDesktopLocale, useLocale, type Locale } from "./lib/i18n";
 import { useAsync } from "./lib/useAsync";
 import type { Project, ProjectRow } from "./lib/types";
+import { useProjectFolders } from "./lib/projectFolders";
+import { stableContext } from "./lib/stableContext";
 
 /**
  * The data layer stopped answering while the app was showing it.
@@ -29,6 +29,7 @@ export interface DataTrouble {
 }
 
 interface AppData {
+  organization: ReturnType<typeof useProjectFolders>;
   /** Every registered project row, available or not — what the Projects screen lists. */
   rows: ProjectRow[];
   /** The readable projects, most recently active first — what the sidebar lists. */
@@ -47,31 +48,14 @@ interface AppData {
   refresh: () => void;
   /** Set while the data cannot be read and the app is showing the last good copy. */
   trouble: DataTrouble | null;
-  /**
-   * The language on screen.
-   *
-   * Held here for the same reason the nonce is: it is a fact the *whole* window depends
-   * on. `t()` reads the locale from a module-level store rather than from this context
-   * (lib/i18n), so that lib/words.ts and lib/format.ts — which are not components — can
-   * call it too; subscribing once at the root is what turns a change to that store into
-   * one repaint of every screen, instead of a sidebar in Korean above a board in English.
-   */
-  locale: Locale;
 }
 
-const Ctx = createContext<AppData | null>(null);
+const Ctx = stableContext<AppData | null>("app", null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const organization = useProjectFolders();
   const [nonce, setNonce] = useState(0);
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
-
-  /* The whole window's language, subscribed once. The desktop app's remembered choice
-     arrives a beat later, out of settings.json; in browser mode (and on every run after the
-     first, because the answer is mirrored into localStorage) it is already right. */
-  const locale = useLocale();
-  useEffect(() => {
-    void loadDesktopLocale();
-  }, []);
 
   const rows = useAsync(() => api.listProjects(), [], nonce);
   const [health, setHealth] = useState<DataHealth>({ ok: true });
@@ -100,6 +84,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppData>(() => {
     const allRows = rows.data ?? [];
     return {
+      organization,
       rows: allRows,
       projects: allRows.flatMap((r) => (r.available && r.project ? [r.project] : [])),
       loading: rows.loading,
@@ -109,9 +94,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dataNonce: nonce,
       refresh,
       trouble,
-      locale,
     };
   }, [
+    organization,
     rows.data,
     rows.loading,
     rows.error,
@@ -120,7 +105,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refresh,
     trouble?.message,
     trouble?.since,
-    locale,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

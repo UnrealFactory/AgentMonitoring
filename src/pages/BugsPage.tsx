@@ -41,7 +41,7 @@ import {
   Tag,
 } from "../components/ui";
 import { formatDateTimeUtc, formatRelative } from "../lib/format";
-import { t, useLocale } from "../lib/i18n";
+import { t } from "../lib/i18n";
 import {
   bugCount,
   bugStatusLabel,
@@ -180,12 +180,9 @@ export function BugsPage() {
   /* The word for an empty assignee is measured with the names, because it is drawn in the
      same column and it is the app's own vocabulary rather than a projectId: "unassigned" is ten
      narrow characters, `담당자 없음` is five wide ones (see lib/columns.ts). */
-  const locale = useLocale();
   const peopleWidth = useMemo(
     () => agentColumnWidth(bugs.map((b) => b.assignee ?? unassigned()), { chrome: 62, min: 118 }),
-    // …which is why the language is in this list: the column is sized for a word, and the
-    // word changes with it.
-    [bugs, locale]
+    [bugs]
   );
 
   /**

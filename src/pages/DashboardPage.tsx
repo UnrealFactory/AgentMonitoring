@@ -928,7 +928,7 @@ function LastDay({
           <span className={`now-figure-value${recent.total === 0 ? " is-quiet" : ""}`}>
             {recent.total}
           </span>
-          <span className="now-figure-unit">{t("dash.eventsRecorded", recent.total)}</span>
+          <span className="now-figure-unit">{t("dash.eventsRecorded")}</span>
         </p>
         <p className="now-note">
           {recent.total === 0 ? (
@@ -1211,4 +1211,3 @@ function FeedRow({
     </li>
   );
 }
-

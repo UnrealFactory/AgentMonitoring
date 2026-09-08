@@ -31,7 +31,7 @@ import {
   Tag,
 } from "../components/ui";
 import { formatDateTime, formatDateTimeUtc, formatRelative } from "../lib/format";
-import { t, useLocale } from "../lib/i18n";
+import { t } from "../lib/i18n";
 
 /** A stable empty array, so the related-index memo is not invalidated every render. */
 const EMPTY: string[] = [];
@@ -69,9 +69,6 @@ export function NoteDetailPage() {
     note?.name ?? id
   );
   const human = view === "human";
-  /* No memoized words on this page, but the sentences below are built at render and the
-     subscription keeps a language change from leaving the last one behind. */
-  useLocale();
 
   if (error) {
     const noRetry = nothingToRetry(error, status);

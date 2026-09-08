@@ -28,6 +28,7 @@ export function Select({
   onChange,
   label,
   width,
+  disabled = false,
 }: {
   value: string;
   options: SelectOption[];
@@ -35,6 +36,7 @@ export function Select({
   /** Accessible name, e.g. "Filter by severity". */
   label: string;
   width?: number;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
@@ -118,6 +120,7 @@ export function Select({
     <div className="select-root" ref={rootRef} style={width ? { width } : undefined}>
       <button
         type="button"
+        disabled={disabled}
         className={`select-button${open ? " is-open" : ""}${current?.value !== options[0]?.value ? " is-set" : ""}`}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -138,7 +141,7 @@ export function Select({
         </svg>
       </button>
 
-      {open && (
+      {open && !disabled && (
         <ul
           className="select-menu"
           role="listbox"

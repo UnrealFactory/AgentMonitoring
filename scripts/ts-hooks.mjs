@@ -7,7 +7,7 @@
  *
  * Node 24 runs TypeScript by stripping the types, which is all a gate needs — but it
  * resolves specifiers by the ESM rules, and the app is written against Vite's: `./i18n` for
- * a directory with an `index.ts` in it, `./en` for `en.ts`. Twenty lines here is the price
+ * a directory with an `index.ts` in it, `./ko` for `ko.ts`. Twenty lines here is the price
  * of a gate testing the real `src/lib/api.ts` instead of a copy of it, and a copy is exactly
  * how the desktop app came to answer a stale link with the wrong sentence for a whole round.
  */

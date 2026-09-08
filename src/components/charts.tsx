@@ -28,7 +28,7 @@ import {
   type RefObject,
 } from "react";
 import { axisLabel, axisTicks, bucketLabel, type CumulativeSeries } from "../lib/dashboard";
-import { getLocale, t } from "../lib/i18n";
+import { t } from "../lib/i18n";
 
 /* --------------------------------------------------------------------------
    Measuring
@@ -96,7 +96,7 @@ function niceTicks(max: number): { top: number; ticks: number[] } {
  * their own `gap`, the gap line is running text in a `<p>` and needs a real space.
  */
 function counted(value: ReactNode, label: ReactNode, space = false): ReactNode[] {
-  const parts = getLocale() === "ko" ? [label, value] : [value, label];
+  const parts = [label, value];
   return space ? [parts[0], " ", parts[1]] : parts;
 }
 
@@ -589,7 +589,7 @@ export function HourBars({
       <p className="hour-scale">
         {t("chart.busiestHourPre")}
         <span className="hour-scale-max tabular">{peak}</span>
-        {t("chart.busiestHour", peak)}
+        {t("chart.busiestHour")}
       </p>
     </div>
   );

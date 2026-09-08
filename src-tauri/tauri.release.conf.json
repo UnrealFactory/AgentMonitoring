@@ -2,6 +2,12 @@
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
     "targets": ["nsis"],
+    "windows": {
+      "nsis": {
+        "languages": ["Korean"],
+        "displayLanguageSelector": false
+      }
+    },
     "externalBin": ["binaries/agentmon"],
     "resources": {
       "../mcp/server.mjs": "mcp/server.mjs",

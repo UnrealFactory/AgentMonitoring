@@ -4,7 +4,7 @@
  * transports** where both can reach the condition.
  *
  *   npm run check:errors
- *   node scripts/check-errors.mjs [--port 5173] [--locale ko|en] [-v]
+ *   node scripts/check-errors.mjs [--port 5173] [--locale ko] [-v]
  *
  * ## Why this gate exists
  *
@@ -51,7 +51,7 @@ register("./ts-hooks.mjs", import.meta.url);
 const { failureKind, failureTitle, nothingToRetry, projectErrorMessage } = await import(
   "../src/lib/api.ts"
 );
-const { setLocale, LOCALES } = await import("../src/lib/i18n/index.ts");
+const LOCALES = ["ko"];
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -67,7 +67,7 @@ if (flag("--help") || flag("-h")) {
   node scripts/check-errors.mjs --locale ko -v
 
 Options:
-  --locale <ko|en>   check one language only (default: both)
+  --locale <ko|en>   Korean (the only supported UI language)
   --port <n>         dev-server port to boot on / reuse (default 5173)
   --bin <path>       the agentmon binary (default target/release, then target/debug)
   -v                 print every sentence, not only the failing ones`);
@@ -310,7 +310,6 @@ try {
 
     /* 3. Both sentences, in every language the app ships. */
     for (const locale of LANGS) {
-      setLocale(locale, { persist: false });
       const cards = [];
       if (desktop) {
         cards.push(["desktop", failureTitle(desktop.message, undefined, testCase.id), projectErrorMessage(desktop.message), desktop.message]);
@@ -347,7 +346,6 @@ try {
     }
 
     if (!VERBOSE) {
-      setLocale("ko", { persist: false });
       const sample = desktop ?? browser;
       const got = gotDesktop ?? gotBrowser;
       console.log(

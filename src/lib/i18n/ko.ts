@@ -1,6 +1,5 @@
 /**
- * 한국어 — the app's own words, in Korean. Typed against `en.ts`, so a missing key is a
- * compile error rather than an English word that survives into the Korean screens.
+ * 한국어 — 앱에서 사용하는 문구와 매개변수 타입의 단일 원본입니다.
  *
  * ## The words, decided once
  *
@@ -78,9 +77,7 @@
  *   * **Technical tokens stay as written**: WORK-0001, BUG-0004, UTC, agentmon, vault.json,
  *     file paths, agent handles, tags. They are data, not language.
  */
-import type { Dict } from "./en";
-
-export const ko: Dict = {
+export const ko = {
   /* -- the app, the shell ---------------------------------------------------- */
 
   "app.name": "AgentMonitoring",
@@ -124,22 +121,13 @@ export const ko: Dict = {
   "shell.trouble.headline": "지금 기록을 읽지 못하고 있습니다.",
   /* 경로 뒤에 조사를 붙이지 않는다 — 이 파일의 규칙이고, "…\records 에서"처럼 한 칸 띄운 조사는
      그 규칙을 어긴 흔적이다. 경로는 문장 끝에 이름표를 달아 따로 붙인다. */
-  "shell.trouble.body": (path, when) =>
+  "shell.trouble.body": (path: string | null, when: string) =>
     `아래 내용은 마지막으로 정상 조회한 데이터입니다. 기준 시각 ${when}${path ? ` · 폴더 경로 ${path}` : ""}`,
-
-  /* -- language ------------------------------------------------------------- */
-
-  "locale.label": "언어",
-  "locale.ko": "한국어",
-  "locale.en": "English",
-  /* No particle after the language name: 한국어 and English take different ones, and the
-     one thing a language picker may not do is get its own name's grammar wrong. */
-  "locale.switchTo": (language) => `표시 언어: ${language}`,
 
   /* -- sidebar -------------------------------------------------------------- */
 
   "nav.project": "프로젝트",
-  "nav.vault": "로컬",
+  "nav.vault": "프로젝트",
   "nav.dashboard": "대시보드",
   "nav.work": "작업",
   "nav.bugs": "버그",
@@ -150,24 +138,24 @@ export const ko: Dict = {
   "nav.allProjects": "전체 프로젝트",
   "nav.noWorkYet": "작업 로그 없음",
   "nav.manageProjects": "프로젝트 관리…",
-  "nav.projectCount": (n) => `로컬 프로젝트 ${n}개`,
-  "nav.moreOnProjects": (n) => `프로젝트 화면에 ${n}개 더`,
-  "nav.moreTip": (n) => `로컬에 등록된 프로젝트가 ${n}개 있습니다. 프로젝트 화면에서 모두 볼 수 있습니다.`,
+  "nav.projectCount": (n: number) => `로컬 프로젝트 ${n}개`,
+  "nav.moreOnProjects": (n: number) => `프로젝트 화면에 ${n}개 더`,
+  "nav.moreTip": (n: number) => `로컬에 등록된 프로젝트가 ${n}개 있습니다. 프로젝트 화면에서 모두 볼 수 있습니다.`,
   "nav.appFeedback": "앱 피드백",
-  "nav.appFeedbackTip": (n) => `이 앱에 대한 미처리 피드백 ${n}건`,
+  "nav.appFeedbackTip": (n: number) => `이 앱에 대한 미처리 피드백 ${n}건`,
 
   /* -- 앱 피드백 보드 ------------------------------------------------------------ */
 
   "fb.title": "앱 피드백",
   "fb.sub":
     "에이전트가 이 앱을 쓰다가 남긴 버그와 건의입니다 — 작업 중이던 프로젝트가 아니라 AgentMonitoring 자체에 대한 것.",
-  "fb.count": (total, open) =>
+  "fb.count": (total: number, open: number) =>
     open > 0 ? `피드백 ${total}건 · 미처리 ${open}건` : `피드백 ${total}건`,
   "fb.kindBug": "버그",
   "fb.kindIdea": "건의",
   "fb.markDone": "처리됨으로 표시",
   "fb.reopen": "다시 열기",
-  "fb.doneOn": (when) => `처리됨 · ${when}`,
+  "fb.doneOn": (when: string) => `처리됨 · ${when}`,
   "fb.delete": "삭제",
   "fb.deleteArmed": "정말 삭제할까요?",
   "fb.deleteTip": "처리됨 항목만 삭제할 수 있습니다 — 보드에서 완전히 사라집니다.",
@@ -206,16 +194,16 @@ export const ko: Dict = {
   /* "제목 복사됨" / "WORK-0021 복사됨": a toast about an arbitrary value — an id, a route, a
      title — cannot take 을/를 without knowing how the value ends. Noun-final says the same
      thing and is right whatever is copied. */
-  "menu.copiedWhat": (what) => `${what} 복사됨`,
+  "menu.copiedWhat": (what: string) => `${what} 복사됨`,
   /* 새 프로젝트 대화상자의 옵션을 만든 뒤에도 누를 수 있게 한 것 — 템플릿과 서버 경로는
      앱과 함께 움직인다. 쓰기는 코어의 보수적 규칙 그대로라 몇 번 눌러도 안전하고, 토스트가
      실제로 일어난 일을 말한다. */
   "menu.instructions": "지침 쓰기",
   "menu.mcp": "MCP 추가하기",
-  "menu.scaffoldCreated": (file) => `${file} 파일을 만들었습니다`,
-  "menu.scaffoldAppended": (file) => `${file}에 지침을 덧붙였습니다`,
-  "menu.scaffoldUpdated": (file) => `${file}의 agentmon 항목을 갱신했습니다`,
-  "menu.scaffoldPresent": (file) => `${file} — 이미 최신입니다`,
+  "menu.scaffoldCreated": (file: string) => `${file} 파일을 만들었습니다`,
+  "menu.scaffoldAppended": (file: string) => `${file}에 지침을 덧붙였습니다`,
+  "menu.scaffoldUpdated": (file: string) => `${file}의 agentmon 항목을 갱신했습니다`,
+  "menu.scaffoldPresent": (file: string) => `${file} — 이미 최신입니다`,
 
   /* -- 프로젝트 삭제 (components/DeleteProject.tsx) ---------------------------
      조사는 프로젝트 이름 뒤가 아니라 "프로젝트" 뒤에 붙는다: 이름은 볼트에서 온 데이터이고,
@@ -223,15 +211,15 @@ export const ko: Dict = {
 
   "del.title": "프로젝트 삭제",
   "del.contains": "이 프로젝트에 들어 있는 기록",
-  "del.warn": (path) =>
+  "del.warn": (path: string) =>
     `\`${path}\` 폴더와 그 안의 기록이 모두 영구히 지워집니다. 옆에 있는 코드는 건드리지 않습니다. 휴지통으로 가지 않고, 되돌릴 수 없습니다.`,
   "del.warnRefs":
     "다른 프로젝트의 기록은 그대로 남습니다. 다만 이 프로젝트를 가리키던 링크는 앱에 없는 주소가 되고, 앱은 그 화면에서 없는 프로젝트라고 알려 줍니다.",
   "del.confirmLabel": "확인을 위해 프로젝트 이름을 입력하세요",
-  "del.confirmHint": (name) => `정확히 일치해야 합니다: ${name}`,
+  "del.confirmHint": (name: string) => `정확히 일치해야 합니다: ${name}`,
   "del.confirm": "프로젝트 삭제",
   "del.deleting": "삭제하는 중…",
-  "del.doneToast": (name) => `${name} 프로젝트를 삭제했습니다`,
+  "del.doneToast": (name: string) => `${name} 프로젝트를 삭제했습니다`,
 
   /* -- command palette ------------------------------------------------------ */
 
@@ -242,8 +230,8 @@ export const ko: Dict = {
   "palette.groupRecords": "작업 로그 · 버그 · 메모",
   "palette.groupProjects": "프로젝트",
   "palette.groupGoTo": "이동",
-  "palette.noMatch": (query) => `“${query}” 검색 결과가 없습니다.`,
-  "palette.searching": (records, projects) =>
+  "palette.noMatch": (query: string) => `“${query}” 검색 결과가 없습니다.`,
+  "palette.searching": (records: number, projects: number) =>
     `프로젝트 ${projects}개의 작업 로그·버그·메모 ${records}건을 ID(WORK-12)와 이름, 제목으로 검색합니다.`,
   "palette.nothingLoaded":
     "아직 불러온 항목이 없습니다 — 어느 프로젝트에도 작업 로그·버그·메모가 없거나, 읽지 못했습니다.",
@@ -283,16 +271,16 @@ export const ko: Dict = {
   "filter.all": "전체",
   "filter.clearAll": "모두 지우기",
   "filter.clear": "필터 지우기",
-  "filter.matches": (n) => `${n}건 일치`,
-  "filter.chipStatus": (value) => `상태: ${value}`,
-  "filter.chipType": (value) => `유형: ${value}`,
-  "filter.chipAgent": (value) => `에이전트: ${value}`,
-  "filter.chipTag": (value) => `태그: ${value}`,
-  "filter.chipSeverity": (value) => `심각도: ${value}`,
-  "filter.chipLabel": (value) => `레이블: ${value}`,
-  "filter.chipAssignee": (value) => `담당자: ${value}`,
-  "filter.chipReporter": (value) => `등록자: ${value}`,
-  "filter.chipQuery": (value) => `“${value}”`,
+  "filter.matches": (n: number) => `${n}건 일치`,
+  "filter.chipStatus": (value: string) => `상태: ${value}`,
+  "filter.chipType": (value: string) => `유형: ${value}`,
+  "filter.chipAgent": (value: string) => `에이전트: ${value}`,
+  "filter.chipTag": (value: string) => `태그: ${value}`,
+  "filter.chipSeverity": (value: string) => `심각도: ${value}`,
+  "filter.chipLabel": (value: string) => `레이블: ${value}`,
+  "filter.chipAssignee": (value: string) => `담당자: ${value}`,
+  "filter.chipReporter": (value: string) => `등록자: ${value}`,
+  "filter.chipQuery": (value: string) => `“${value}”`,
 
   /* -- work list ------------------------------------------------------------ */
 
@@ -305,7 +293,7 @@ export const ko: Dict = {
   "work.empty.hint":
     "에이전트는 코드를 건드리기 전에 작업 로그를 시작합니다. 판단이 유효한 동안 이유를 적어 두기 위해서입니다:",
   "work.emptyFiltered.title": "이 필터에 맞는 작업이 없습니다",
-  "work.emptyFiltered.hint": (total) =>
+  "work.emptyFiltered.hint": (total: number) =>
     `이 프로젝트의 작업 로그 ${total}개 중 위 필터를 모두 만족하는 것이 없습니다.`,
 
   /* -- 메모 목록 ---------------------------------------------------------------
@@ -328,7 +316,7 @@ export const ko: Dict = {
   "notes.empty.hint":
     "에이전트는 이전 에이전트가 말해 줬으면 했던 것을 여기에 남깁니다 — 주의점, 인계, 결정:",
   "notes.emptyFiltered.title": "이 필터에 맞는 메모가 없습니다",
-  "notes.emptyFiltered.hint": (total) =>
+  "notes.emptyFiltered.hint": (total: number) =>
     `이 프로젝트의 메모 ${total}개 중 위 필터를 모두 만족하는 것이 없습니다.`,
 
   /* -- 메모 상세 --------------------------------------------------------------- */
@@ -350,7 +338,7 @@ export const ko: Dict = {
   /* 명령 뒤에 조사를 붙이지 않는다(이 파일 머리말): `…update <name>`으로 처럼 코드 스팬에
      조사를 붙이면 줄바꿈이 요소 경계에서 일어나 조사만 다음 줄로 떨어진다 — 실제로 그렇게
      깨졌다. 명령은 절 끝에 두고, 조사는 우리말 명사(명령은/제거는)에 단다. */
-  "nd.updateHint": (name) =>
+  "nd.updateHint": (name: string) =>
     `메모에는 지금 참인 내용만 남깁니다 — 그 자리에서 고쳐 쓰는 명령은 \`agentmon note update ${name}\`, 남겨 두면 오히려 혼동을 주는 메모의 제거는 \`agentmon note remove ${name}\`. 모든 변경은 활동 기록에 남습니다.`,
 
   /* -- bug board ------------------------------------------------------------ */
@@ -361,15 +349,15 @@ export const ko: Dict = {
   "bugs.sub": "에이전트가 찾아낸 모든 결함, 지금 맡고 있는 담당자, 각각의 해결 내용.",
   "bugs.searchPlaceholder": "버그 검색",
   "bugs.searchLabel": "버그 검색",
-  "bugs.unresolvedMeansTip": (label, means) => `${label} = ${means}`,
-  "bugs.noneUnresolved": (unresolved) => `${unresolved} 없음`,
-  "bugs.tabUnresolvedTip": (means) => `${means} 상태인 버그`,
+  "bugs.unresolvedMeansTip": (label: string, means: string) => `${label} = ${means}`,
+  "bugs.noneUnresolved": (unresolved: string) => `${unresolved} 없음`,
+  "bugs.tabUnresolvedTip": (means: string) => `${means} 상태인 버그`,
   "bugs.tabResolvedTip": "해결됨 또는 닫힘 상태인 버그",
   "bugs.tabAllTip": "이 프로젝트에 등록된 모든 버그",
   "bugs.severityBreakdown": "심각도별 분포",
-  "bugs.severityChipTip": (count, severity) => `이 탭에서 심각도 ${severity} 버그 ${count}개`,
-  "bugs.rowTimeUnresolved": (filed, last) => `등록 ${filed} · 마지막 활동 ${last}`,
-  "bugs.rowTimeSettled": (resolved, filed) => `해결 ${resolved} · 등록 ${filed}`,
+  "bugs.severityChipTip": (count: number, severity: string) => `이 탭에서 심각도 ${severity} 버그 ${count}개`,
+  "bugs.rowTimeUnresolved": (filed: string, last: string) => `등록 ${filed} · 마지막 활동 ${last}`,
+  "bugs.rowTimeSettled": (resolved: string, filed: string) => `해결 ${resolved} · 등록 ${filed}`,
   "bugs.groupNoteUnresolved": "심각도순, 그다음 최신순",
   "bugs.groupNoteSettled": "최신순",
   "bugs.sortMixed":
@@ -380,15 +368,15 @@ export const ko: Dict = {
   "bugs.empty.hint":
     "에이전트는 버그를 발견한 즉시 등록합니다. 다음 에이전트가 묻지 않고 재현할 수 있도록 재현 절차를 본문에 함께 적습니다:",
   "bugs.emptyUnresolved.title": "미해결 버그 없음",
-  "bugs.emptyUnresolved.hint": (resolved) =>
+  "bugs.emptyUnresolved.hint": (resolved: number) =>
     `이 프로젝트에 등록된 버그 ${resolved}개가 모두 해결되었고, 각각에 해결 내용이 적혀 있습니다.`,
   "bugs.emptyUnresolved.action": "해결된 버그 보기",
   "bugs.emptyResolved.title": "아직 해결된 버그가 없습니다",
-  "bugs.emptyResolved.hint": (unresolved) =>
+  "bugs.emptyResolved.hint": (unresolved: number) =>
     `이 프로젝트에 미해결 버그가 ${unresolved}개 있습니다. 에이전트가 \`agentmon bug resolve\`로 해결 내용을 적으면 이 탭으로 옮겨집니다.`,
   "bugs.emptyResolved.action": "미해결 버그 보기",
   "bugs.emptyFiltered.title": "이 필터에 맞는 버그가 없습니다",
-  "bugs.emptyFiltered.hint": (total) =>
+  "bugs.emptyFiltered.hint": (total: number) =>
     `이 프로젝트의 버그 ${total}개 중 위 필터를 모두 만족하는 것이 없습니다.`,
 
   /* -- record detail, shared -------------------------------------------------- */
@@ -397,14 +385,14 @@ export const ko: Dict = {
   "rec.related": "관련 항목",
   "rec.references": "참조",
   "rec.referencedBy": "역참조",
-  "rec.referencesHint": (noun) => `이 ${noun}의 refs에 적힌 항목`,
+  "rec.referencesHint": (noun: string) => `이 ${noun}의 refs에 적힌 항목`,
   /* The particle lands on 기록, not on the id: BUG-0004 takes 를 and BUG-0011 takes 을, and
      nothing in this file can tell which without pronouncing the number. */
-  "rec.referencedByHint": (id) => `이 기록(\`${id}\`)을 가리키는 작업 로그·버그·메모`,
+  "rec.referencedByHint": (id: string) => `이 기록(\`${id}\`)을 가리키는 작업 로그·버그·메모`,
   "rec.missingRef": "이 프로젝트에 해당 ID의 작업 로그·버그·메모가 없습니다",
   /* 문장 속 칩의 툴팁. ID 뒤에 조사를 붙이지 않고 —로 잇는다: BUG-0004는 를, BUG-0011은 을을
      받으므로 어느 쪽도 이 파일이 고를 수 없다. */
-  "rec.missingRefTip": (id) => `${id} — 이 프로젝트에 해당 ID의 작업 로그·버그·메모가 없습니다`,
+  "rec.missingRefTip": (id: string) => `${id} — 이 프로젝트에 해당 ID의 작업 로그·버그·메모가 없습니다`,
 
   /* -- the Agent / Human toggle, and the human area under it -------------------
      기록은 두 벌로 남는다 (SPEC.md, "The human area"). 여기 있는 말은 그 둘을 바꿔 다는
@@ -417,7 +405,7 @@ export const ko: Dict = {
   "view.agentTip": "에이전트가 에이전트를 위해 쓴 그대로",
   "view.humanTip": "같은 일을, 그 자리에 없던 사람을 위해 쉬운 말로 다시 쓴 글",
   "view.humanNoneTip": "이 기록에는 아직 쉬운 말로 쓴 글이 없습니다",
-  "view.retoldBy": (agent) => `그 자리에 없던 사람을 위해, 이 일을 한 ${agent}가 다시 쓴 글입니다.`,
+  "view.retoldBy": (agent: string) => `그 자리에 없던 사람을 위해, 이 일을 한 ${agent}가 다시 쓴 글입니다.`,
   "view.emptyTitle": "아직 쉬운 말로 쓴 글이 없습니다",
   "view.emptyText":
     "이제 남기는 기록에는 모두 한 벌이 더 붙습니다. 같은 일을, 그 자리에 없었고 프로그램도 다루지 않는 사람을 위해 쓴 글입니다. 이 기록은 그 규칙보다 먼저 쓰여서 에이전트 쪽 한 벌만 있습니다.",
@@ -427,7 +415,7 @@ export const ko: Dict = {
   /* 그 버튼을 눌렀을 때 무슨 일이 일어났는지, 그 상태가 유지되는 동안만 하는 말. 위의 버튼도,
      사람 쪽 글 맨 위의 정정 안내도 기록 한 건에 대해서만 반대쪽을 열어 준다. 어느 쪽으로 읽을지
      정해 둔 설정은 그대로다 (src/lib/recordView.ts). */
-  "view.peekNote": (id) =>
+  "view.peekNote": (id: string) =>
     `\`${id}\` 한 건만 에이전트 쪽으로 보고 있습니다. 다음 기록을 어느 쪽으로 열지는 그대로입니다.`,
 
   /* …그리고 기록 한 건이 아니라 여러 건을 한 화면에 그리는 보드(앱 피드백)의 말. 없다는 사실은
@@ -441,12 +429,12 @@ export const ko: Dict = {
   "view.boardAgentTip": "접수한 에이전트가 쓴 그대로",
   "view.boardHumanTip": "같은 항목을, 그 자리에 없던 사람을 위해 쉬운 말로 다시 쓴 글",
   "view.boardHumanNoneTip": "이 보드에는 아직 쉬운 말로 쓴 글이 없습니다",
-  "view.humanSomeTip": (has, of) => `${of}건 중 ${has}건에만 쉬운 말로 쓴 글이 있습니다`,
-  "view.tellingN": (n) => `${n}번째 노드`,
+  "view.humanSomeTip": (has: number, of: number) => `${of}건 중 ${has}건에만 쉬운 말로 쓴 글이 있습니다`,
+  "view.tellingN": (n: number) => `${n}번째 노드`,
   "view.overview": "개요",
   /* 한 건도 없는 보드에 "1건 중 1건은"이라고 적으면 숫자가 세는 일을 하지 않는다. 실제로
      오늘 이 앱의 피드백 보드가 그 상태다(FB-0001 한 건, 사람 쪽 없음). */
-  "view.boardMissingTitle": (missing, total) =>
+  "view.boardMissingTitle": (missing: number, total: number) =>
     missing === total
       ? "이 보드에는 아직 쉬운 말로 쓴 글이 없습니다"
       : `${total}건 중 ${missing}건은 아직 쉬운 말로 쓴 글이 없습니다`,
@@ -466,21 +454,21 @@ export const ko: Dict = {
   "md.calloutCaution": "경고",
   "md.imageFailed": "이미지를 불러오지 못했습니다",
   "md.imageZoom": "클릭하면 크게 보기",
-  "rec.corrections": (n, where) => `이 기록에 **정정 ${n}건** — ${where} 참고`,
-  "ui.severityOf": (label) => `심각도 ${label}`,
-  "ui.handoff": (from, to) => `등록 ${from} · 담당 ${to}`,
-  "ui.handoffNone": (from, unassigned) => `등록 ${from} · ${unassigned}`,
+  "rec.corrections": (n: number, where: string) => `이 기록에 **정정 ${n}건** — ${where} 참고`,
+  "ui.severityOf": (label: string) => `심각도 ${label}`,
+  "ui.handoff": (from: string, to: string) => `등록 ${from} · 담당 ${to}`,
+  "ui.handoffNone": (from: string, unassigned: string) => `등록 ${from} · ${unassigned}`,
   "rec.correction": "정정",
   "rec.inUpdates": "진행 노트",
   "rec.inThread": "스레드",
   /* 같은 "어디"를, 사람 쪽을 읽고 있는 사람에게. 그 기록은 지금 화면에 없다 — 정정 줄은 양쪽
      모두에 그린다(다시 쓴 글도 같은 일을 말하고, 정정과 함께 통째로 갈리는 리텔링에는 무엇이
      바뀌었는지의 흔적이 남지 않는다). 그러니 어느 쪽에 있는지부터 말해야 보낼 수 있다. */
-  "rec.inAgentHalf": (where) => `에이전트 쪽 ${where}`,
-  "rec.staleGone": (id) => `${id} — 이 프로젝트에 더 이상 없습니다.`,
-  "rec.staleUnread": (id) => `${id} — 다시 읽지 못했습니다.`,
+  "rec.inAgentHalf": (where: string) => `에이전트 쪽 ${where}`,
+  "rec.staleGone": (id: string) => `${id} — 이 프로젝트에 더 이상 없습니다.`,
+  "rec.staleUnread": (id: string) => `${id} — 다시 읽지 못했습니다.`,
   "rec.staleBody": "아래는 마지막으로 읽었을 때 화면에 있던 내용입니다.",
-  "rec.checks": (n) => `검증 ${n}건`,
+  "rec.checks": (n: number) => `검증 ${n}건`,
 
   /* -- work detail ------------------------------------------------------------ */
 
@@ -501,19 +489,19 @@ export const ko: Dict = {
   "wd.andCounting": "계속 진행 중",
   "wd.backToList": "작업 목록으로",
   "wd.workList": "작업 목록",
-  "wd.noSection": (title) => `이 기록에는 \`## ${title}\` 섹션이 없습니다.`,
+  "wd.noSection": (title: string) => `이 기록에는 \`## ${title}\` 섹션이 없습니다.`,
   "wd.bylineDone": "— 이 작업을 마쳤습니다:",
   "wd.bylineAbandoned": "— 이 작업을 중단했습니다:",
   "wd.bylineRunning": "— 이 작업을 진행 중입니다. 시작:",
-  "wd.filesAcross": (files, dirs) => `디렉터리 ${dirs}개에 걸쳐 파일 ${files}개`,
-  "wd.startedThisWork": (agent) => `${agent} — 이 작업을 시작했습니다`,
+  "wd.filesAcross": (files: number, dirs: number) => `디렉터리 ${dirs}개에 걸쳐 파일 ${files}개`,
+  "wd.startedThisWork": (agent: string) => `${agent} — 이 작업을 시작했습니다`,
   "wd.noNotes": "아직 진행 노트가 없습니다. 에이전트는 다음 명령으로 남깁니다:",
-  "wd.postedUpdate": (n) => `${n}번째 노트`,
+  "wd.postedUpdate": (n: number) => `${n}번째 노트`,
   "wd.endDone": "완료 처리됨",
   "wd.endAbandoned": "중단됨",
   "wd.endRunning": "아직 진행 중",
-  "wd.inTotal": (duration) => `총 ${duration}`,
-  "wd.soFar": (duration) => `현재까지 ${duration}`,
+  "wd.inTotal": (duration: string) => `총 ${duration}`,
+  "wd.soFar": (duration: string) => `현재까지 ${duration}`,
   "wd.shipped": "적용:",
   "wd.recorded": "기록됨",
   "wd.insideOutcome": "결과 안의 항목",
@@ -538,7 +526,7 @@ export const ko: Dict = {
   "bd.backToBoard": "버그 보드로",
   "bd.bugBoard": "버그 보드",
   "bd.noReportSection": "이 버그에는 `## Report` 섹션이 없습니다.",
-  "bd.reportBy": (agent, when) => `${agent} · ${when}`,
+  "bd.reportBy": (agent: string, when: string) => `${agent} · ${when}`,
   "bd.bylineFiled": "— 이 버그를 등록했습니다:",
   "bd.bylineResolvedInPre": "해결까지 ",
   "bd.bylineOpenForPre": "열린 지 ",
@@ -548,30 +536,30 @@ export const ko: Dict = {
   "bd.stepResolved": "해결됨",
   "bd.stepClosed": "닫힘",
   "bd.stepUnresolved": "미해결",
-  "bd.waiting": (duration) => `${duration}째 대기`,
-  "bd.soFar": (duration) => `현재까지 ${duration}`,
+  "bd.waiting": (duration: string) => `${duration}째 대기`,
+  "bd.soFar": (duration: string) => `현재까지 ${duration}`,
   "bd.notYet": "아직 없음",
   "bd.anAgent": "에이전트",
   "bd.someAgent": "에이전트",
-  "bd.filedThisBug": (agent) => `${agent} — 이 버그를 등록했습니다`,
+  "bd.filedThisBug": (agent: string) => `${agent} — 이 버그를 등록했습니다`,
   "bd.noAnswers": "아직 아무도 답하지 않았습니다. 에이전트는 다음 명령으로 답합니다:",
   "bd.claimedThisBug": "— 이 버그를 맡았습니다",
-  "bd.afterFiled": (duration) => `등록 ${duration} 후`,
-  "bd.endResolved": (agent) => `${agent} — 이 버그를 해결했습니다`,
+  "bd.afterFiled": (duration: string) => `등록 ${duration} 후`,
+  "bd.endResolved": (agent: string) => `${agent} — 이 버그를 해결했습니다`,
   "bd.endClosed": "닫힘",
-  "bd.endWorking": (agent) => `${agent} — 작업 중입니다`,
+  "bd.endWorking": (agent: string) => `${agent} — 작업 중입니다`,
   "bd.endWaiting": "담당자를 기다리는 중",
   "bd.fixBelow": "해결 내용은 아래에 있습니다",
-  "bd.openFor": (duration) => `열린 지 ${duration}`,
+  "bd.openFor": (duration: string) => `열린 지 ${duration}`,
   "bd.addedToReport": "등록 내용 보강",
   "bd.repliedAsAssignee": "담당자 답변",
   "bd.commented": "댓글",
-  "bd.comments": (n) => `댓글 ${n}개`,
+  "bd.comments": (n: number) => `댓글 ${n}개`,
   "bd.closedNoFix.title": "해결 내용 없이 닫힘",
   "bd.closedNoFix.text":
     "이 버그는 닫혔지만 해결 내용이 기록되지 않아, 무슨 일이 있었는지 기록만으로는 알 수 없습니다. 읽는 사람의 문제가 아니라 기록의 공백입니다.",
   "bd.resolvedOn": "해결:",
-  "bd.afterItWasFiled": (duration) => `등록 ${duration} 후`,
+  "bd.afterItWasFiled": (duration: string) => `등록 ${duration} 후`,
   "bd.insideResolution": "해결 내용 안의 항목",
   "bd.unknownAgent": "알 수 없음",
 
@@ -585,7 +573,33 @@ export const ko: Dict = {
   "proj.create": "프로젝트 만들기",
   "proj.creating": "만드는 중…",
   "proj.inVault": "로컬 프로젝트",
-  "proj.count": (n) => `프로젝트 ${n}개`,
+  "folder.new": "새 폴더",
+  "folder.name": "폴더 이름",
+  "folder.namePlaceholder": "예: 개인 프로젝트, 업무",
+  "folder.create": "폴더 생성",
+  "folder.save": "저장",
+  "folder.rename": "이름 변경",
+  "folder.delete": "폴더 삭제",
+  "folder.deleteHint": "안에 있던 프로젝트는 폴더 밖으로 나오며 실제 파일은 그대로 유지됩니다.",
+  "folder.noFolder": "폴더 없음",
+  "folder.dragInto": (name: string) => `${name} 폴더로 이동`,
+  "folder.dragOut": "폴더 밖으로 이동",
+  "folder.dragHint": "폴더에 놓아 이동 · Esc 취소",
+  "folder.moveFailed": "프로젝트를 옮기지 못했습니다. 다시 시도해 주세요.",
+  "folder.orderBefore": (name: string) => `${name} 폴더 앞으로 이동`,
+  "folder.orderAfter": (name: string) => `${name} 폴더 뒤로 이동`,
+  "folder.reorderHint": "폴더 사이에 놓아 순서 변경",
+  "folder.reorderFailed": "폴더 순서를 바꾸지 못했습니다. 다시 시도해 주세요.",
+  "folder.projectBefore": (name: string) => `${name} 앞으로 이동`,
+  "folder.projectAfter": (name: string) => `${name} 뒤로 이동`,
+  "folder.projectReorderFailed": "프로젝트 순서를 바꾸지 못했습니다. 다시 시도해 주세요.",
+  "folder.empty": "프로젝트 행에서 이 폴더를 선택해 정리하세요.",
+  "folder.moveProject": (name: string) => `${name}의 정리 폴더`,
+  "folder.invalidName": "폴더 이름은 1~80자로 입력해 주세요.",
+  "folder.duplicateName": "같은 이름의 폴더가 이미 있습니다.",
+  "folder.invalidData": "저장된 폴더 정보를 읽을 수 없습니다.",
+  "folder.failed": "정리 폴더를 불러오거나 저장하지 못했습니다.",
+  "proj.count": (n: number) => `프로젝트 ${n}개`,
   "proj.noDescription": "아직 설명이 없습니다.",
   "proj.workLogs": "작업 로그",
   "proj.unresolvedBugs": "미해결 버그",
@@ -593,21 +607,21 @@ export const ko: Dict = {
   "proj.eventsNote": "기록됨",
   "proj.noneYet": "아직 없음",
   "proj.noneFiled": "등록 없음",
-  "proj.ofFiled": (total) => `등록 ${total}개 중`,
+  "proj.ofFiled": (total: number) => `등록 ${total}개 중`,
   /* 수는 단위 명사를 달고 다닌다(이 파일 머리말). 옆 칸이 "등록 22개 중"이고 사이드바가
      "진행 중 2개"인데 여기만 "완료 27 · 진행 중 0"이면, 한 화면에서 세는 방식이 두 가지가 된다. */
-  "proj.workNote": (done, inProgress, doneWord, inProgressWord) =>
+  "proj.workNote": (done: number, inProgress: number, doneWord: string, inProgressWord: string) =>
     `${doneWord} ${done}개 · ${inProgressWord} ${inProgress}개`,
   "proj.lastActivity": "마지막 활동 ",
-  "proj.startedOn": (date) => `시작 ${date}`,
+  "proj.startedOn": (date: string) => `시작 ${date}`,
   "proj.noActivity": "아직 활동 없음",
-  "proj.createdOn": (date) => `생성 ${date}`,
+  "proj.createdOn": (date: string) => `생성 ${date}`,
   "proj.dotLive": "최근 두 시간 안에 기록됨",
   "proj.dotQuiet": "최근 활동 없음",
   "proj.dotStale": "하루 넘게 활동 없음",
   "proj.nothingRecordedYet": "아직 기록 없음",
   "proj.acrossVault": "전체 프로젝트 활동",
-  "proj.newest": (n) => `최신 ${n}건`,
+  "proj.newest": (n: number) => `최신 ${n}건`,
   "proj.recent": "최근",
   "proj.vaultEmptyFeed": "아직 어느 프로젝트에도 기록된 것이 없습니다. 첫",
   "proj.vaultEmptyFeedTail": "명령이 실행되면 여기에 나타납니다.",
@@ -641,7 +655,7 @@ export const ko: Dict = {
     "Claude Code에서 기록 도구를 사용하도록 .mcp.json에 연결 설정을 추가합니다. 다른 서버는 보존합니다. 오른쪽은 기록에 남길 에이전트 이름입니다.",
   "proj.form.codexMcpHint":
     "Codex에서 기록 도구를 사용하도록 .codex/config.toml에 연결 설정을 추가합니다. 다른 설정과 주석은 보존하며, Codex에서 이 프로젝트를 신뢰한 뒤 적용됩니다. 오른쪽은 기록에 남길 에이전트 이름입니다.",
-  "proj.form.writes": (location) =>
+  "proj.form.writes": (location: string) =>
     `\`${location}\\AgentMonitoring\` 폴더에 project.json과 첫 이벤트를 만듭니다 —`,
   "proj.form.writesTail": "명령과 똑같습니다.",
 
@@ -661,8 +675,8 @@ export const ko: Dict = {
     "프로젝트는 평범한 파일로 된 `AgentMonitoring` 폴더 하나입니다. 여기에서 만들거나, 이미 있는 폴더를 여세요.",
   "proj.readFailed": "프로젝트를 읽지 못했습니다",
   "proj.notHere": "이 프로젝트에 없습니다",
-  "proj.notRegistered": (id) => `로컬에 “${id}” 프로젝트가 없습니다`,
-  "proj.noRecord": (id) => `이 프로젝트에 ${id} 기록이 없습니다`,
+  "proj.notRegistered": (id: string) => `로컬에 “${id}” 프로젝트가 없습니다`,
+  "proj.noRecord": (id: string) => `이 프로젝트에 ${id} 기록이 없습니다`,
   "proj.badAddress": "잘못된 주소입니다",
 
   /* -- 실패했을 때의 문장 ----------------------------------------------------------
@@ -674,26 +688,26 @@ export const ko: Dict = {
      잇는다. 그 값이 무엇으로 끝날지 이 파일은 알 수 없다. 에/에서처럼 형태가 하나뿐인
      조사만 예외다. */
 
-  "err.noProjectAt": (path) =>
+  "err.noProjectAt": (path: string) =>
     `이 경로에 프로젝트가 없습니다 — \`${path}\`에 \`AgentMonitoring/project.json\`이 없습니다. AgentMonitoring 폴더가 들어 있는 폴더를 고르거나, 거기에 새 프로젝트를 만드세요.`,
-  "err.noProjectAtHint": (path, hint) => `이 경로에 프로젝트가 없습니다 — \`${path}\`. ${hint}`,
-  "err.projectNotRegistered": (id) =>
+  "err.noProjectAtHint": (path: string, hint: string) => `이 경로에 프로젝트가 없습니다 — \`${path}\`. ${hint}`,
+  "err.projectNotRegistered": (id: string) =>
     `로컬에 \`${id}\` ID의 프로젝트가 등록되어 있지 않습니다 — 목록에서 제거되었거나, 폴더가 사라졌습니다.`,
-  "err.foldersUnreachable": (id, n, paths) =>
+  "err.foldersUnreachable": (id: string, n: number, paths: string) =>
     `\`${id}\` 프로젝트가 여기 있는지 지금은 알 수 없습니다 — 등록된 폴더 ${n}곳을 읽지 못하고 있습니다: \`${paths}\``,
-  "err.recordNotFound": (id, hint) => `이 프로젝트에 \`${id}\` 기록이 없습니다.${hint}`,
+  "err.recordNotFound": (id: string, hint: string) => `이 프로젝트에 \`${id}\` 기록이 없습니다.${hint}`,
   /* 찾은 ≠ 찾으려던. 앞 문장이 "없습니다"인데 "찾은 파일 경로"라고 하면 *찾아낸* 경로가
      되어 뜻이 뒤집힌다 — 앱이 그 경로를 확인했지만 파일은 없었다는 뜻이어야 한다. */
-  "err.expectedFile": (path) => ` 찾으려던 파일 경로: \`${path}\``,
-  "err.badId": (id, expected, example) =>
+  "err.expectedFile": (path: string) => ` 찾으려던 파일 경로: \`${path}\``,
+  "err.badId": (id: string, expected: string, example: string) =>
     `쓸 수 없는 ID입니다 — \`${id}\`. \`${expected}\` 형식이어야 합니다 (예: \`${example}\`).`,
-  "err.folderUnreadable": (detail) => `이 폴더를 읽지 못했습니다: \`${detail}\``,
-  "err.noDirsToServe": (hint) =>
+  "err.folderUnreadable": (detail: string) => `이 폴더를 읽지 못했습니다: \`${detail}\``,
+  "err.noDirsToServe": (hint: string) =>
     `개발 서버가 읽을 AgentMonitoring 폴더가 없습니다 — ${hint}`,
-  "err.noRoute": (path) => `이 주소를 처리하는 프로젝트 API 경로가 없습니다 — \`${path}\``,
-  "err.unreachable": (path, detail) =>
+  "err.noRoute": (path: string) => `이 주소를 처리하는 프로젝트 API 경로가 없습니다 — \`${path}\``,
+  "err.unreachable": (path: string, detail: string) =>
     `프로젝트 API에 연결하지 못했습니다 — \`${path}\`. 개발 서버가 실행 중인지 확인하세요. (\`${detail}\`)`,
-  "err.httpStatus": (status) => `프로젝트 API가 \`${status}\`로 응답했습니다`,
+  "err.httpStatus": (status: number) => `프로젝트 API가 \`${status}\`로 응답했습니다`,
   "err.desktopOnlyPicker": "폴더 선택 창은 데스크톱 앱에서만 열 수 있습니다.",
   "err.desktopOnlyOpen":
     "프로젝트 폴더 열기는 데스크톱 앱에서만 됩니다. 브라우저 모드에서는 개발 서버를 `AGENTMON_DIRS=<folder;folder>`로 시작하거나, 주소에 `?dirs=`를 붙이세요.",
@@ -709,14 +723,14 @@ export const ko: Dict = {
   "onboard.noteNewProject": "또는 위의 **새 프로젝트**를 누르세요 — 같은 파일을 씁니다.",
   "onboard.noteBody":
     "본문에는 `## What`, `## Why`, `## How`가 필요합니다. 빠져 있으면 CLI가 템플릿을 출력합니다.",
-  "onboard.footCli": (path) =>
+  "onboard.footCli": (path: string) =>
     `\`agentmon\` 실행 파일은 이 앱과 함께 \`${path}\`에 설치됩니다 — 위 명령은 이미 그 경로를 가리킵니다.`,
   "onboard.footDesktop":
     "로컬에 이미 프로젝트가 있나요 — 다른 컴퓨터에서 clone한 레포라든가? 위의 **프로젝트 열기…**를 쓰세요.",
   "onboard.footBrowser":
     "이미 프로젝트가 있나요? 개발 서버는 `AGENTMON_DIRS=<folder>`로, 이 창은 `?dirs=<folder>`로 지정하세요.",
-  "onboard.footHelp": (cli) => ` 전체 명령은 \`${cli} --help\`에 있고, 하위 명령마다 \`--help\`를 지원합니다.`,
-  "onboard.footManual": (path) => ` 매뉴얼은 이 기기의 \`${path}\`에 있습니다.`,
+  "onboard.footHelp": (cli: string) => ` 전체 명령은 \`${cli} --help\`에 있고, 하위 명령마다 \`--help\`를 지원합니다.`,
+  "onboard.footManual": (path: string) => ` 매뉴얼은 이 기기의 \`${path}\`에 있습니다.`,
 
   /* -- dashboard --------------------------------------------------------------- */
 
@@ -727,77 +741,77 @@ export const ko: Dict = {
   "dash.rangeAll": "전체 기간",
   "dash.live": "실시간",
   "dash.liveTip": "최근 두 시간 안에 기록된 활동이 있습니다",
-  "dash.lastActivity": (when) => `마지막 활동 ${when}`,
+  "dash.lastActivity": (when: string) => `마지막 활동 ${when}`,
   /* "…는 ${range} 기준입니다" rather than "…는 ${range}을 다룹니다": 기준입니다 needs no
      particle, so the sentence stays right whether the range ends in 일, 건 or a digit. */
   /* "위 현황 띠는 항상 현재이며"는 "The strip above is always now"를 그대로 옮긴 말이었다 —
      띠는 현재일 수 없고, 화면에 '현황 띠'라는 이름도 없다. 맨 위 카드들이 실제로 달고 있는
      이름(현재 상태)으로 부른다. */
-  "dash.scope": (range) =>
+  "dash.scope": (range: string) =>
     `아래 차트와 활동 기록은 ${range} 기준입니다. 맨 위 현재 상태는 기간과 상관없이 항상 지금이며, 이 페이지의 모든 날짜와 시각은 이 컴퓨터의 시간대를 따릅니다.`,
-  "dash.rangeDays": (days) => `최근 ${days}일`,
-  "dash.rangeOneEvent": (date) => `${date}에 기록된 이벤트 1건`,
-  "dash.rangeAllEvents": (n, date) => `${date}까지 거슬러 올라가는 전체 이벤트 ${n}건`,
+  "dash.rangeDays": (days: number) => `최근 ${days}일`,
+  "dash.rangeOneEvent": (date: string) => `${date}에 기록된 이벤트 1건`,
+  "dash.rangeAllEvents": (n: number, date: string) => `${date}까지 거슬러 올라가는 전체 이벤트 ${n}건`,
 
   "dash.workingNow": "지금 진행 중",
   "dash.workLogsHere": "이 프로젝트의 작업 로그",
-  "dash.heroUnit": (total) => `진행 중 · 전체 작업 로그 ${total}개`,
-  "dash.agents": (n) => `에이전트 ${n}명`,
+  "dash.heroUnit": (total: number) => `진행 중 · 전체 작업 로그 ${total}개`,
+  "dash.agents": (n: number) => `에이전트 ${n}명`,
   "dash.took": "소요",
-  "dash.finishedWhen": (when) => `완료 ${when}`,
+  "dash.finishedWhen": (when: string) => `완료 ${when}`,
   "dash.nothingInProgress": "진행 중인 작업이 없습니다 — 가장 최근 작업 로그가 위에 있습니다.",
   "dash.noWorkYet":
     "아직 기록된 작업이 없습니다. 에이전트는 코드를 건드리기 전에 `agentmon work start`로 작업 로그를 시작합니다.",
-  "dash.moreInProgress": (n) => `진행 중 ${n}개 더 보기`,
+  "dash.moreInProgress": (n: number) => `진행 중 ${n}개 더 보기`,
   "dash.noUpdates": "아직 노트 없음",
-  "dash.updatedWhen": (when) => `${when} 갱신`,
-  "dash.noUpdateIn": (duration) => `${duration}째 노트 없음`,
+  "dash.updatedWhen": (when: string) => `${when} 갱신`,
+  "dash.noUpdateIn": (duration: string) => `${duration}째 노트 없음`,
   "dash.rowInProgress": "진행 중",
-  "dash.rowStartedTip": (when) => `시작 ${when}`,
-  "dash.rowStateTip": (state, since) => `${state} · ${since}`,
+  "dash.rowStartedTip": (when: string) => `시작 ${when}`,
+  "dash.rowStateTip": (state: string, since: string) => `${state} · ${since}`,
   "dash.latestNote": "최신 노트",
-  "dash.latestNoteTip": (when) => `${when}에 올라온 노트의 문단별 첫 문장`,
+  "dash.latestNoteTip": (when: string) => `${when}에 올라온 노트의 문단별 첫 문장`,
   /* "${agent} 대기 중" 은 "그 에이전트가 기다리는 중"으로 읽힌다 — 뜻이 정반대다. 이 칩은
      노트가 그 에이전트의 답을 기다린다는 뜻이므로, 이름이 응답을 수식하게 둔다. */
-  "dash.waitingOn": (agent) => `${agent} 응답 대기`,
-  "dash.waitingOnTip": (agent, sentence) => `${agent}의 최신 노트: “${sentence}”`,
+  "dash.waitingOn": (agent: string) => `${agent} 응답 대기`,
+  "dash.waitingOnTip": (agent: string, sentence: string) => `${agent}의 최신 노트: “${sentence}”`,
 
   "dash.unresolvedBugs": "미해결 버그",
   "dash.bugsFiledHere": "이 프로젝트에 등록된 버그",
-  "dash.unresolvedOfFiled": (unresolved, total) => `${unresolved} · 전체 등록 ${total}개`,
-  "dash.sevChipTip": (count, unresolved, severity) => `${unresolved} 심각도 ${severity} 버그 ${count}개`,
+  "dash.unresolvedOfFiled": (unresolved: string, total: number) => `${unresolved} · 전체 등록 ${total}개`,
+  "dash.sevChipTip": (count: number, unresolved: string, severity: string) => `${unresolved} 심각도 ${severity} 버그 ${count}개`,
   "dash.openFor": "열린 지",
-  "dash.filedTip": (when) => `등록 ${when}`,
-  "dash.lastActivityTip": (when) => `마지막 활동 ${when}`,
+  "dash.filedTip": (when: string) => `등록 ${when}`,
+  "dash.lastActivityTip": (when: string) => `마지막 활동 ${when}`,
   "dash.untouched": "변동 없음",
   "dash.untouchedTip": "등록 이후 이 버그에 아무 일도 없었습니다: 담당 지정도, 댓글도 없습니다",
-  "dash.moreUnresolved": (n, unresolved) => `${unresolved} ${n}개 더 보기`,
-  "dash.triageNote": (unassigned) => `심각한 것부터 · 같은 심각도에서는 ${unassigned} 먼저.`,
+  "dash.moreUnresolved": (n: number, unresolved: string) => `${unresolved} ${n}개 더 보기`,
+  "dash.triageNote": (unassigned: string) => `심각한 것부터 · 같은 심각도에서는 ${unassigned} 먼저.`,
   "dash.noBugsFiled": "이 프로젝트에 등록된 버그가 없습니다.",
   "dash.allResolved": "여기에 등록된 버그는 모두 해결되었습니다.",
-  "dash.noOwnerTip": (severity, duration) =>
+  "dash.noOwnerTip": (severity: string, duration: string) =>
     `심각도 ${severity} 버그를 ${duration}째 아무도 맡지 않았습니다. 이 화면은 담당자 없이 네 시간이 지난 치명적·높음 버그를 표시합니다.`,
   "dash.hasOwnerTip": "이 버그에 지정된 담당자가 없습니다",
 
   "dash.last24h": "최근 24시간",
   "dash.eventsRecorded": () => "이벤트 기록됨",
   "dash.quiet": "조용합니다.",
-  "dash.lastThing": (when) => `여기에 마지막으로 기록된 것은 ${when}입니다.`,
+  "dash.lastThing": (when: string) => `여기에 마지막으로 기록된 것은 ${when}입니다.`,
   "dash.neverAnything": "여기에는 아직 아무것도 기록된 적이 없습니다.",
-  "dash.quietFor": (duration) => `${duration}째 조용함`,
+  "dash.quietFor": (duration: string) => `${duration}째 조용함`,
   /* 세는 것은 모두 이벤트이므로 단위는 `건`이다(이 파일 머리말의 "수는 단위 명사를 달고
      다닌다"). 이 한 줄이 대시보드 첫 화면의 최근 24시간 문장과 활동 카드의 날짜 머리글을
      함께 만드는데, 단위를 빼면 "시작 16 · 완료 16 · 노트 30 · … · 에이전트 6명"처럼 한
      문장 안에서 여섯 번은 맨 숫자로, 한 번은 단위를 달고 세게 된다. 사람은 단위를 뺄 수
      없어서 `명`이 남은 것이고, 나머지가 빠져 있던 것이다(P9 5·6라운드 비평). */
-  "dash.countPart": (count, label) => `${label} ${count}건`,
-  "dash.hoursLabel": (counts) => `최근 24시간의 시간대별 이벤트 수, 오래된 순: ${counts}`,
+  "dash.countPart": (count: number, label: string) => `${label} ${count}건`,
+  "dash.hoursLabel": (counts: string) => `최근 24시간의 시간대별 이벤트 수, 오래된 순: ${counts}`,
 
   "dash.chartWork": "작업",
   "dash.chartBugs": "버그",
-  "dash.chartWorkSub": (change) => `시작 대비 완료 누적 추이${change}`,
-  "dash.chartBugsSub": (change) => `등록 대비 해결 누적 추이${change}`,
-  "dash.changeOver": (range) => ` · ${range} 변화 포함`,
+  "dash.chartWorkSub": (change: string) => `시작 대비 완료 누적 추이${change}`,
+  "dash.chartBugsSub": (change: string) => `등록 대비 해결 누적 추이${change}`,
+  "dash.changeOver": (range: string) => ` · ${range} 변화 포함`,
   "dash.allWork": "작업 전체",
   "dash.bugBoard": "버그 보드",
   "dash.chartWorkEmpty": "아직 작업 로그가 없습니다",
@@ -814,7 +828,7 @@ export const ko: Dict = {
   "dash.nounBugs": "버그",
 
   "dash.activity": "활동",
-  "dash.activityNote": (events, days) => `이벤트 ${events}건 · ${days}일`,
+  "dash.activityNote": (events: number, days: number) => `이벤트 ${events}건 · ${days}일`,
   "dash.expandAll": "모두 펼치기",
   "dash.collapseAll": "모두 접기",
   "dash.activityEmpty": "이 기간에 기록된 것이 없습니다",
@@ -822,8 +836,8 @@ export const ko: Dict = {
     "CLI로 무언가 바꿀 때마다 events.jsonl에 한 줄이 추가됩니다. 위에서 기간을 넓히면 이전 기록도 볼 수 있습니다.",
   /* `parts`는 dash.countPart가 만들고, 거기서 이미 단위를 달고 온다 —
      "이벤트 77건 — 작업 42건, 완료 15건, 버그 12건, 해결 8건". */
-  "dash.dayMix": (events, parts) => `이벤트 ${events}건 — ${parts}`,
-  "dash.showOther": (n, day) => `${day} 나머지 ${n}건 보기`,
+  "dash.dayMix": (events: number, parts: string) => `이벤트 ${events}건 — ${parts}`,
+  "dash.showOther": (n: number, day: string) => `${day} 나머지 ${n}건 보기`,
   "dash.today": "오늘",
   "dash.yesterday": "어제",
 
@@ -832,26 +846,26 @@ export const ko: Dict = {
   "chart.now": "지금",
   "chart.busiestHourPre": "가장 바쁜 시간대 이벤트 ",
   "chart.busiestHour": () => "건",
-  "chart.hourTip": (hour, count) => `${hour} — 이벤트 ${count}건`,
-  "chart.bucketHours": (day, from, to) => `${day} ${from} – ${to}`,
-  "chart.summary": (upperLabel, upper, lowerLabel, lower, noun, periods, from, to) =>
+  "chart.hourTip": (hour: string, count: number) => `${hour} — 이벤트 ${count}건`,
+  "chart.bucketHours": (day: string, from: string, to: string) => `${day} ${from} – ${to}`,
+  "chart.summary": (upperLabel: string, upper: number, lowerLabel: string, lower: number, noun: string, periods: number, from: string, to: string) =>
     `${noun}: ${upperLabel} ${upper}, ${lowerLabel} ${lower}. ${from}부터 ${to}까지 ${periods}개 구간. `,
-  "chart.summaryDelta": (range, upper, upperLabel, lower, lowerLabel) =>
+  "chart.summaryDelta": (range: string, upper: string, upperLabel: string, lower: string, lowerLabel: string) =>
     `${range} 변화: ${upperLabel} ${upper}, ${lowerLabel} ${lower}. `,
   "chart.summaryKeys": "왼쪽·오른쪽 화살표 키로 구간을 하나씩 읽을 수 있습니다.",
-  "chart.reading": (when, upper, upperLabel, lower, lowerLabel, gap, gapLabel) =>
+  "chart.reading": (when: string, upper: number, upperLabel: string, lower: number, lowerLabel: string, gap: number, gapLabel: string) =>
     `${when}: ${upperLabel} ${upper}, ${lowerLabel} ${lower}, ${gapLabel} ${gap}.`,
-  "chart.deltaTip": (delta, label, range) => `${range} 동안 ${label} ${delta}`,
+  "chart.deltaTip": (delta: string, label: string, range: string) => `${range} 동안 ${label} ${delta}`,
 
   /* -- the vocabulary (lib/words.ts) -------------------------------------------- */
 
   "word.workNoun": "작업 로그",
   "word.bugNoun": "버그",
   "word.noteNoun": "메모",
-  "word.workLogs": (n) => `작업 로그 ${n}개`,
-  "word.bugs": (n) => `버그 ${n}개`,
-  "word.notes": (n) => `메모 ${n}개`,
-  "word.events": (n) => `이벤트 ${n}건`,
+  "word.workLogs": (n: number) => `작업 로그 ${n}개`,
+  "word.bugs": (n: number) => `버그 ${n}개`,
+  "word.notes": (n: number) => `메모 ${n}개`,
+  "word.events": (n: number) => `이벤트 ${n}건`,
 
   "word.work.in_progress": "진행 중",
   "word.work.done": "완료",
@@ -889,28 +903,28 @@ export const ko: Dict = {
   "word.unresolvedMeans": "열림 또는 진행 중",
   "word.unassigned": "담당자 없음",
   "word.unassignedLabel": "담당자 없음",
-  "word.unassignedFor": (duration) => `${duration}째 담당자 없음`,
+  "word.unassignedFor": (duration: string) => `${duration}째 담당자 없음`,
   "word.timeToResolve": "해결 소요 시간",
 
   /* 스위처 카드의 수는 분모를 달지 않는다(머리말 규칙에 대한 소유자 결정 예외) — 전체
      개수는 바로 아래 작업 행이 들고 있고, "9개 중 1개 진행 중"은 아홉 개가 아직 움직이는
      것처럼 읽혔다. 분모는 툴팁이 유지하고, 문구는 아래 word.inProgressCount 하나를 쓴다. */
-  "word.workLogsInProgressOf": (n, total) => `작업 로그 ${total}개 중 ${n}개 진행 중`,
-  "word.unresolvedOf": (n, total) => `${total}개 중 ${n}개 미해결`,
-  "word.unresolvedCount": (n) => `미해결 ${n}개`,
+  "word.workLogsInProgressOf": (n: number, total: number) => `작업 로그 ${total}개 중 ${n}개 진행 중`,
+  "word.unresolvedOf": (n: number, total: number) => `${total}개 중 ${n}개 미해결`,
+  "word.unresolvedCount": (n: number) => `미해결 ${n}개`,
   /* 버그 보드의 "미해결 2개"와 같은 어순. "2 진행 중"처럼 숫자가 상태어 앞에 오는 영어 어순은
      쓰지 않는다 — 총계가 바로 앞에 있으므로 분모는 생략한다. */
-  "word.inProgressCount": (n) => `진행 중 ${n}개`,
-  "word.workTip": (total, inProgress, where) =>
+  "word.inProgressCount": (n: number) => `진행 중 ${n}개`,
+  "word.workTip": (total: number, inProgress: number, where: string | null) =>
     `${where ?? "이 프로젝트"}의 작업 로그 ${total}개 · ${inProgress}개 진행 중`,
-  "word.workTipHere": (total, inProgress) => `작업 로그 ${total}개 · ${inProgress}개 진행 중`,
-  "word.bugTip": (unresolved, total, where) =>
+  "word.workTipHere": (total: number, inProgress: number) => `작업 로그 ${total}개 · ${inProgress}개 진행 중`,
+  "word.bugTip": (unresolved: number, total: number, where: string | null) =>
     `${where ? `${where}에 ` : ""}등록된 버그 ${total}개 중 ${unresolved}개 미해결 — 열림 또는 진행 중`,
-  "word.bugTipHere": (unresolved, total) =>
+  "word.bugTipHere": (unresolved: number, total: number) =>
     `여기에 등록된 버그 ${total}개 중 ${unresolved}개 미해결 — 열림 또는 진행 중`,
   "word.doneOrAbandoned": "완료 또는 중단",
   "word.resolvedOrClosed": "해결됨 또는 닫힘",
-  "word.noteTipHere": (n) =>
+  "word.noteTipHere": (n: number) =>
     `여기의 메모 ${n}개 — 에이전트들이 서로를 위해 남기는 필수·지식·인계·결정·참조`,
 
   /* -- feed verbs ---------------------------------------------------------------- */
@@ -957,18 +971,21 @@ export const ko: Dict = {
   /* -- time ------------------------------------------------------------------------ */
 
   "time.justNow": "방금",
-  "time.ago": (value) => `${value} 전`,
-  "time.in": (value) => `${value} 후`,
-  "time.minutes": (n) => `${n}분`,
-  "time.hours": (n) => `${n}시간`,
-  "time.days": (n) => `${n}일`,
-  "time.weeks": (n) => `${n}주`,
-  "time.months": (n) => `${n}개월`,
-  "time.years": (n) => `${n}년`,
-  "time.durMinutes": (n) => `${n}분`,
-  "time.durHours": (n) => `${n}시간`,
-  "time.durHoursMinutes": (h, m) => `${h}시간 ${m}분`,
-  "time.durDays": (n) => `${n}일`,
-  "time.durDaysHours": (d, h) => `${d}일 ${h}시간`,
+  "time.ago": (value: string) => `${value} 전`,
+  "time.in": (value: string) => `${value} 후`,
+  "time.minutes": (n: number) => `${n}분`,
+  "time.hours": (n: number) => `${n}시간`,
+  "time.days": (n: number) => `${n}일`,
+  "time.weeks": (n: number) => `${n}주`,
+  "time.months": (n: number) => `${n}개월`,
+  "time.years": (n: number) => `${n}년`,
+  "time.durMinutes": (n: number) => `${n}분`,
+  "time.durHours": (n: number) => `${n}시간`,
+  "time.durHoursMinutes": (h: number, m: number) => `${h}시간 ${m}분`,
+  "time.durDays": (n: number) => `${n}일`,
+  "time.durDaysHours": (d: number, h: number) => `${d}일 ${h}시간`,
   "time.empty": "—",
 };
+
+export type Dict = typeof ko;
+export type Key = keyof Dict;

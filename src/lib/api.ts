@@ -9,6 +9,7 @@
  * by Playwright without building the desktop app; the desktop app is the product.
  */
 import { t } from "./i18n";
+import type { ProjectFolders } from "./projectFolders";
 import type {
   BugDetail,
   BugSummary,
@@ -158,6 +159,28 @@ function assetMime(path: string): string {
 export type ScaffoldOutcome = "created" | "appended" | "updated" | "already_present";
 
 export const api = {
+  getProjectFolders: async (): Promise<ProjectFolders> => {
+    if (isTauri()) return invokeCommand<ProjectFolders>("get_project_folders", {});
+    const saved = localStorage.getItem("agentmon.projectFolders");
+    if (!saved) return { folders: [], assignments: {}, projectOrder: {} };
+    const data = JSON.parse(saved) as ProjectFolders;
+    if (!data || !Array.isArray(data.folders) || data.folders.some((folder) => !folder || typeof folder.id !== "string" || typeof folder.name !== "string") ||
+        !data.assignments || typeof data.assignments !== "object" || Array.isArray(data.assignments) ||
+        Object.values(data.assignments).some((id) => typeof id !== "string")) {
+      throw new ApiError(t("folder.invalidData"));
+    }
+    if (data.projectOrder !== undefined && (!data.projectOrder || typeof data.projectOrder !== "object" || Array.isArray(data.projectOrder) ||
+        Object.values(data.projectOrder).some((paths) => !Array.isArray(paths) || paths.some((path) => typeof path !== "string")))) {
+      throw new ApiError(t("folder.invalidData"));
+    }
+    return data;
+  },
+
+  setProjectFolders: async (data: ProjectFolders): Promise<void> => {
+    if (isTauri()) await invokeCommand<void>("set_project_folders", { data });
+    else localStorage.setItem("agentmon.projectFolders", JSON.stringify(data));
+  },
+
   /** Every registered project, available or not, most recently active first. */
   listProjects: () => call<ProjectRow[]>("list_projects", {}, "/project-api/projects"),
 
@@ -444,24 +467,6 @@ export const api = {
   manualPath: async (): Promise<string | null> => {
     if (!isTauri()) return "docs/AGENT_MANUAL.md";
     return invokeCommand<string | null>("manual_path", {});
-  },
-
-  /**
-   * The language the human last chose, out of the desktop app's `settings.json`.
-   *
-   * A preference the app asks for once is a preference it must still have tomorrow.
-   * Browser mode answers null — there the choice lives in localStorage, which is the
-   * browser's own equivalent and needs no round trip (src/lib/i18n/index.ts).
-   */
-  getLocale: async (): Promise<string | null> => {
-    if (!isTauri()) return null;
-    return invokeCommand<string | null>("get_locale", {});
-  },
-
-  /** Remember it. Desktop only, for the same reason. */
-  setLocale: async (locale: string): Promise<void> => {
-    if (!isTauri()) return;
-    await invokeCommand<null>("set_locale", { locale });
   },
 
   /**

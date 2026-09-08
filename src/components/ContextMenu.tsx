@@ -29,7 +29,6 @@
  * this fixes, so a right-click inside a selection offers Copy, drawn by the app.
  */
 import {
-  createContext,
   Fragment,
   useCallback,
   useContext,
@@ -48,6 +47,7 @@ import { projectErrorMessage } from "../lib/api";
 import { writeClipboard } from "../lib/clipboard";
 import { t } from "../lib/i18n";
 import { plainMarks } from "./ui";
+import { stableContext } from "../lib/stableContext";
 
 /** One line of a menu. Deliberately data, not JSX: the same item is built in three places. */
 interface MenuItemBase {
@@ -103,7 +103,7 @@ interface ContextMenuApi {
   toast: (text: string, options?: ToastOptions) => void;
 }
 
-const Ctx = createContext<ContextMenuApi | null>(null);
+const Ctx = stableContext<ContextMenuApi | null>("context-menu", null);
 
 /** Never touch the window edge; sit just off the cursor, the way every desktop menu does. */
 const MARGIN = 8;

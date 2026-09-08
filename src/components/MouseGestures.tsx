@@ -42,7 +42,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../AppContext";
 import { isTauri } from "../lib/api";
-import { t, useLocale } from "../lib/i18n";
+import { t } from "../lib/i18n";
 import { isDialogOpen } from "../lib/modal";
 import { ask } from "./Titlebar";
 
@@ -103,8 +103,6 @@ function scrollMain(top: boolean): void {
 }
 
 export function MouseGestureLayer() {
-  /* The bubble's words follow the language like any other text in the window. */
-  useLocale();
   const navigate = useNavigate();
   const { reload } = useApp();
   const [trail, setTrail] = useState<Trail | null>(null);
@@ -113,7 +111,7 @@ export function MouseGestureLayer() {
      gesture arms (below) — by the time two strokes have been drawn, the answer is in. */
   const maximizedRef = useRef(false);
 
-  /* Rebuilt every render (labels track the language; →↑ tracks the window) and read
+  /* Rebuilt every render (→↑ tracks the window) and read
      through a ref at pointerup, so the engine effect never has to re-bind. */
   const actionsRef = useRef<GestureAction[]>([]);
   actionsRef.current = [

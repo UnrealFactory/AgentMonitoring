@@ -53,7 +53,7 @@ import {
   formatDuration,
   formatRelative,
 } from "../lib/format";
-import { t, useLocale } from "../lib/i18n";
+import { t } from "../lib/i18n";
 import { timeToResolve, unassigned, unassignedLabel } from "../lib/words";
 import type { BugComment, BugDetail } from "../lib/types";
 
@@ -100,8 +100,6 @@ export function BugDetailPage() {
    */
   const resolution = useLabelledParts(bug?.resolution);
 
-  /* Words, so the language is an input — see the twin of this memo in WorkDetailPage. */
-  const locale = useLocale();
   const sections = useMemo(() => {
     if (!bug) return [] as TocEntry[];
     const out: TocEntry[] = [{ id: "report", label: t("bd.report"), count: 0 }];
@@ -111,7 +109,7 @@ export function BugDetailPage() {
     }
     if (related.count) out.push({ id: "related", label: t("rec.related"), count: related.count });
     return out;
-  }, [bug, related.count, resolution, locale]);
+  }, [bug, related.count, resolution]);
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {

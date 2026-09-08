@@ -33,7 +33,6 @@
  * raised from the other five.
  */
 import {
-  createContext,
   useCallback,
   useContext,
   useEffect,
@@ -51,11 +50,12 @@ import { bugCount, eventCount, workLogs } from "../lib/words";
 import { useContextMenuApi } from "./ContextMenu";
 import { InlineCode, RichText } from "./ui";
 import type { Project } from "../lib/types";
+import { stableContext } from "../lib/stableContext";
 
 /** Ask for a project to be deleted: opens the dialog. Nothing happens without the human. */
 type Request = (project: Project) => void;
 
-const Ctx = createContext<Request | null>(null);
+const Ctx = stableContext<Request | null>("delete-project", null);
 
 export function useDeleteProject(): Request {
   const request = useContext(Ctx);

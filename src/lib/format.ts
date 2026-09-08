@@ -5,11 +5,10 @@
  * record's exact UTC string ({@link formatDateTimeUtc}) for when two machines must agree.
  *
  * Words live next door in lib/words.ts and lib/i18n — this file turns data into text, those
- * decide what the text is called. Every function here is written twice, once per language,
- * and both halves are hand-assembled from date parts rather than handed to a locale
- * formatter, so only the timezone varies by machine, never the shape of the string.
+ * decide what the text is called. Korean dates are assembled from date parts, so only
+ * the timezone varies by machine.
  */
-import { getLocale, t } from "./i18n";
+import { t } from "./i18n";
 
 const parse = (iso: string | null | undefined): Date | null => {
   if (!iso) return null;
@@ -23,31 +22,14 @@ const pad = (n: number): string => String(n).padStart(2, "0");
 const clock12 = (d: Date): string => {
   const h = d.getHours();
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return getLocale() === "ko"
-    ? `${h < 12 ? "오전" : "오후"} ${h12}:${pad(d.getMinutes())}`
-    : `${h12}:${pad(d.getMinutes())} ${h < 12 ? "am" : "pm"}`;
+  return `${h < 12 ? "오전" : "오후"} ${h12}:${pad(d.getMinutes())}`;
 };
-
-const EN_DATE = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
-
-const EN_DATE_UTC = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 /** "18 Aug 2026, 6:32 pm" / "2026년 8월 18일 오후 6:32" — in the reader's timezone. */
 export function formatDateTime(iso: string | null | undefined): string {
   const d = parse(iso);
   if (!d) return t("time.empty");
-  return getLocale() === "ko"
-    ? `${formatDate(iso)} ${clock12(d)}`
-    : `${EN_DATE.format(d)}, ${clock12(d)}`;
+  return `${formatDate(iso)} ${clock12(d)}`;
 }
 
 /**
@@ -58,18 +40,14 @@ export function formatDateTimeUtc(iso: string | null | undefined): string {
   const d = parse(iso);
   if (!d) return t("time.empty");
   const clockUtc = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-  return getLocale() === "ko"
-    ? `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 ${clockUtc} UTC`
-    : `${EN_DATE_UTC.format(d)}, ${clockUtc} UTC`;
+  return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 ${clockUtc} UTC`;
 }
 
 /** "18 Aug 2026" / "2026년 8월 18일" — the reader's local date. */
 export function formatDate(iso: string | null | undefined): string {
   const d = parse(iso);
   if (!d) return t("time.empty");
-  return getLocale() === "ko"
-    ? `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`
-    : EN_DATE.format(d);
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
 /** "3h ago" / "3시간 전" / "just now" / "방금" — for feeds, where recency is what matters. */

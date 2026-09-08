@@ -24,6 +24,8 @@ import { useApp, useDataNonce } from "../AppContext";
 import { CommandLine, ErrorState, InlineCode, RichText, Skeleton, Tag } from "../components/ui";
 import { useContextMenu } from "../components/ContextMenu";
 import { useDeleteProject } from "../components/DeleteProject";
+import { FolderSection, MoveToFolder, useFolderMenu } from "../components/ProjectFolders";
+import { folderFor, orderedProjects } from "../lib/projectFolders";
 import { recordKind, useProjectMenu, useRecordMenu, type RecordRef } from "../lib/menus";
 import { EventIcon } from "../components/EventIcon";
 import { useNow } from "../components/charts";
@@ -36,10 +38,12 @@ import { useAsync } from "../lib/useAsync";
 import type { Project, ProjectRow as Row, VaultEvent } from "../lib/types";
 
 export function ProjectsPage() {
-  const { rows, projects, loading, error, reload, refresh, transport } = useApp();
+  const { rows, projects, loading, error, reload, refresh, transport, organization } = useApp();
   const navigate = useNavigate();
   const now = useNow(60_000);
   const [creating, setCreating] = useState(false);
+  const contextMenu = useContextMenu();
+  const folderMenu = useFolderMenu();
   const [actionError, setActionError] = useState<string | null>(null);
 
   /* The list itself failing to load is not an empty list: the screen says so, with the
@@ -50,7 +54,7 @@ export function ProjectsPage() {
       <div className="page">
         <header className="page-head">
           <div>
-            <h1 className="page-title">{t("proj.title")}</h1>
+            <h1 className="page-title" tabIndex={0} data-project-drop-folder="" {...contextMenu(() => folderMenu())}>{t("proj.title")}</h1>
             <p className="page-sub">{t("proj.sub")}</p>
           </div>
         </header>
@@ -78,7 +82,7 @@ export function ProjectsPage() {
     <div className="page">
       <header className="page-head">
         <div>
-          <h1 className="page-title">{t("proj.title")}</h1>
+          <h1 className="page-title" tabIndex={0} data-project-drop-folder="" {...contextMenu(() => folderMenu())}>{t("proj.title")}</h1>
           <p className="page-sub">
             <RichText text={t("proj.sub")} />
           </p>
@@ -105,6 +109,11 @@ export function ProjectsPage() {
         </p>
       )}
 
+      {organization.error && <p className="form-error" role="alert">
+        {t("folder.failed")} <InlineCode text={organization.error} />{" "}
+        <button className="link-button" disabled={organization.loading || organization.busy} onClick={() => { void organization.reload(); }}>{t("app.retry")}</button>
+      </p>}
+
       {creating && (
         <CreateProject
           transport={transport}
@@ -121,20 +130,19 @@ export function ProjectsPage() {
 
       {loading && rows.length === 0 ? (
         <Skeleton rows={3} />
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && organization.data.folders.length === 0 ? (
         <Onboarding hasProjects={false} canCreate transport={transport} />
       ) : (
         <>
-          <section className="project-section">
-            <header className="project-section-head">
-              <h2 className="section-title">{t("proj.inVault")}</h2>
-              <span className="section-count tabular">{t("proj.count", rows.length)}</span>
-            </header>
+          {[...organization.data.folders, undefined].map((folder) => {
+            const grouped = orderedProjects(rows.filter((row) => folderFor(organization.data, row.path) === (folder?.id ?? "")), organization.data, folder?.id ?? "");
+            if (!folder && grouped.length === 0) return null;
+            const content = (
             <ul className="project-rows">
-              {rows.map((row) =>
+              {grouped.map((row) =>
                 row.available && row.project ? (
                   <AvailableRow
-                    key={row.project.id}
+                    key={row.path}
                     project={row.project}
                     now={now}
                     transport={transport}
@@ -152,7 +160,11 @@ export function ProjectsPage() {
                 )
               )}
             </ul>
-          </section>
+            );
+            return !folder ? <section className="project-section" key="root" data-folder-id="" data-project-drop-folder="">{content}</section> : (
+              <FolderSection key={folder.id} folder={folder} count={grouped.length}>{content}</FolderSection>
+            );
+          })}
 
           {projects.length === 0 && rows.length > 0 ? null : (
             <AllProjectsActivity projects={projects} now={now} />
@@ -239,10 +251,11 @@ function AvailableRow({
 
   return (
     <li>
-      <article className="project-row" {...contextMenu(() => projectMenu(p))}>
+      <article className="project-row" data-project-drag-path={p.path} data-project-drag-name={p.name}
+        {...contextMenu(() => projectMenu(p))}>
         <div className="project-row-main">
           <div className="project-row-head">
-            <Link className="project-link" to={`/p/${p.id}`}>
+            <Link className="project-link" to={`/p/${p.id}`} draggable={false}>
               <span
                 className={`sdot sdot-${state}`}
                 title={
@@ -313,6 +326,7 @@ function AvailableRow({
         </dl>
 
         <div className="project-row-end">
+          <MoveToFolder path={p.path} name={p.name} />
           <span className="project-when tabular">
             {c.lastActivity ? (
               <>
@@ -373,7 +387,8 @@ function UnavailableRow({
 }) {
   return (
     <li>
-      <article className="project-row is-unavailable" title={t("proj.unavailableHint")}>
+      <article className="project-row is-unavailable" title={t("proj.unavailableHint")}
+        data-project-drag-path={row.path} data-project-drag-name={row.name ?? row.path}>
         <div className="project-row-main">
           <div className="project-row-head">
             <span className="project-link">
@@ -391,6 +406,7 @@ function UnavailableRow({
           </p>
         </div>
         <div className="project-row-end">
+          <MoveToFolder path={row.path} name={row.name ?? row.path} />
           <span className="project-actions">
             {transport === "tauri" && (
               <RemoveButton path={row.path} onError={onError} onChanged={onChanged} />
@@ -588,14 +604,11 @@ function CreateProject({
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [claudeMd, setClaudeMd] = useState<"" | "ko" | "en">("");
-  const [agentsMd, setAgentsMd] = useState<"" | "ko" | "en">("");
-  /* On by default: the app is the one party that knows where its bundled mcp/server.mjs
-     lives, so registering it here is the difference between tools that are simply there
-     and a CLAUDE.md that assigns the agent homework. */
-  const [mcpJson, setMcpJson] = useState(true);
+  const [claudeMd, setClaudeMd] = useState<"" | "ko">("");
+  const [agentsMd, setAgentsMd] = useState<"" | "ko">("ko");
+  const [mcpJson, setMcpJson] = useState(false);
   const [mcpAgent, setMcpAgent] = useState("claude");
-  const [codexMcp, setCodexMcp] = useState(false);
+  const [codexMcp, setCodexMcp] = useState(true);
   const [codexAgent, setCodexAgent] = useState("codex");
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -715,13 +728,13 @@ function CreateProject({
             <span className="field-label" id={`${kind}-md-label`}>
               {t(kind === "claude" ? "proj.form.claudeMd" : "proj.form.agentsMd")}
             </span>
-            {/* Each language names itself: the label describes the generated file. */}
+            {/* 지침 파일은 한국어로 생성합니다. */}
             <div
               className="segmented instruction-md-choice"
               role="radiogroup"
               aria-labelledby={`${kind}-md-label`}
             >
-              {(["", "ko", "en"] as const).map((v) => (
+              {(["", "ko"] as const).map((v) => (
                 <button
                   key={v || "none"}
                   type="button"
@@ -730,7 +743,7 @@ function CreateProject({
                   className={`segment${value === v ? " is-active" : ""}`}
                   onClick={() => set(v)}
                 >
-                  {v === "" ? t("proj.form.instructionMdNone") : v === "ko" ? "한국어" : "English"}
+                  {v === "" ? t("proj.form.instructionMdNone") : "한국어"}
                 </button>
               ))}
             </div>

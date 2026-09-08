@@ -4,6 +4,8 @@ import { AppProvider, useApp } from "./AppContext";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { DeleteProjectProvider } from "./components/DeleteProject";
+import { ProjectFoldersProvider } from "./components/ProjectFolders";
+import { ProjectDragLayer } from "./components/ProjectDrag";
 import { MouseGestureLayer } from "./components/MouseGestures";
 import { Sidebar } from "./components/Sidebar";
 import { Titlebar } from "./components/Titlebar";
@@ -11,7 +13,7 @@ import { TooltipLayer } from "./components/Tooltip";
 import { InlineCode, plainMarks, Skeleton } from "./components/ui";
 import { isTauri, projectErrorMessage } from "./lib/api";
 import { formatDateTime } from "./lib/format";
-import { t, useLocale } from "./lib/i18n";
+import { t } from "./lib/i18n";
 import { isModalOpen } from "./lib/modal";
 import { useScrollRestoration } from "./lib/useScrollRestoration";
 import { useWindowTitle } from "./lib/useWindowTitle";
@@ -108,6 +110,7 @@ function Shell() {
           on the desktop →↑ maximizes and ↓→ closes to the tray. A plain right-click is
           untouched — the menu above still owns it (components/MouseGestures.tsx). */}
       <MouseGestureLayer />
+      <ProjectDragLayer />
     </>
   );
 }
@@ -153,22 +156,8 @@ function VaultTroubleBar() {
   );
 }
 
-/**
- * The screen for an address that is not one — and the only screen that has to say so itself.
- *
- * It subscribes to the language, which every other screen gets for free. A repaint reaches a
- * component two ways: its parent re-renders it, or it reads something that changed. Neither
- * happened here. `<Route path="*" element={<NotFound />} />` below is built once, when App()
- * runs, so the element object never changes; and changing the language re-renders AppProvider
- * around the *same* children, which React skips — except for the components that consume the
- * context (`useApp`) or the locale store (`useLocale`). Every other route element does one of
- * those for its data. This one has no data: it called `t()` twice and read nothing, so
- * pressing English on /nope left two Korean sentences in an English window — and the mirror —
- * until the reader navigated away. One `useLocale()` is the subscription, and the gate now
- * presses the toggle on this screen instead of only loading it (scripts/check-i18n.mjs).
- */
+/** 주소와 일치하는 화면이 없을 때 표시합니다. */
 function NotFound() {
-  useLocale();
   return (
     <div className="page">
       <div className="page-head">
@@ -191,21 +180,23 @@ export default function App() {
             dialog owned by /projects could not be raised from any of them
             (components/DeleteProject.tsx). */}
         <DeleteProjectProvider>
-          <Routes>
-            <Route element={<Shell />}>
-              <Route index element={<Home />} />
-              <Route path="projects" element={<ProjectsPage />} />
-              <Route path="app-feedback" element={<AppFeedbackPage />} />
-              <Route path="p/:project" element={<DashboardPage />} />
-              <Route path="p/:project/work" element={<WorkListPage />} />
-              <Route path="p/:project/work/:id" element={<WorkDetailPage />} />
-              <Route path="p/:project/bugs" element={<BugsPage />} />
-              <Route path="p/:project/bugs/:id" element={<BugDetailPage />} />
-              <Route path="p/:project/notes" element={<NotesPage />} />
-              <Route path="p/:project/notes/:id" element={<NoteDetailPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
+          <ProjectFoldersProvider>
+            <Routes>
+              <Route element={<Shell />}>
+                <Route index element={<Home />} />
+                <Route path="projects" element={<ProjectsPage />} />
+                <Route path="app-feedback" element={<AppFeedbackPage />} />
+                <Route path="p/:project" element={<DashboardPage />} />
+                <Route path="p/:project/work" element={<WorkListPage />} />
+                <Route path="p/:project/work/:id" element={<WorkDetailPage />} />
+                <Route path="p/:project/bugs" element={<BugsPage />} />
+                <Route path="p/:project/bugs/:id" element={<BugDetailPage />} />
+                <Route path="p/:project/notes" element={<NotesPage />} />
+                <Route path="p/:project/notes/:id" element={<NoteDetailPage />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
+          </ProjectFoldersProvider>
         </DeleteProjectProvider>
         {/* Draws every `title` in the app, so the WebView never draws one of its own — one
             layer, document-level delegation, no component opts in (components/Tooltip.tsx). */}

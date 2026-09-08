@@ -38,7 +38,7 @@
  * nothing is the same failure with a bigger blast radius.
  */
 import { useEffect, useState } from "react";
-import { t, useLocale } from "../lib/i18n";
+import { t } from "../lib/i18n";
 
 /** Ask the window to do something, and say so out loud when it will not.
  *  Exported for the mouse-gesture layer, whose RU/DR strokes are these same two commands
@@ -57,9 +57,6 @@ export async function ask(action: "minimize" | "toggleMaximize" | "close", permi
 }
 
 export function Titlebar() {
-  /* The buttons are words to a screen reader, so the strip repaints with the language —
-     the shell around it does not re-render this component for anything else. */
-  useLocale();
   const [maximized, setMaximized] = useState(false);
 
   /*

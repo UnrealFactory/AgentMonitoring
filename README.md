@@ -31,12 +31,11 @@ screen below is drawn from work logs the agents that built it wrote as they went
 - **A dashboard** — what is in progress right now, which bugs still need somebody, what
   moved in the last 24 hours, and two burn-ups over the range you pick.
 - **Every project at once** — each repo keeps its own records; the app lists them all,
-  and an unplugged drive dims its row instead of freezing the window.
+  and an unplugged drive dims its row instead of freezing the window. Create your own
+  folders to organize projects in the list and sidebar.
 - **Live updates** — a record an agent writes appears in the open window in about a second,
   with no reload and without losing your scroll position.
-- **한국어 / English** — the whole interface, in either language, switched from the foot of
-  the sidebar and remembered. Only the app's own words change: a record stays exactly as its
-  author wrote it.
+- **한국어 전용** — 화면과 트레이 메뉴는 한국어로 표시하며, 예전 영어 설정과 링크로 열어도 한국어를 사용합니다.
 
 ![A work log: what, why, how, the update timeline and the outcome](progress/shots/work-detail.png)
 
@@ -69,6 +68,20 @@ project** asks where the records should live (typically your repo) and creates a
 — a repo cloned from another machine, a drive you plugged back in. **Remove from list**
 unregisters a row and touches no files; Delete (behind a typed-name dialog) removes the
 folder from disk.
+
+The new-project form starts with **AGENTS.md → 한국어** and **Add Codex MCP → Add**;
+CLAUDE.md and Claude MCP start off. Each option can be changed before creating the project.
+Right-click the sidebar's **Projects** heading and choose **Create folder** to make a
+personal folder. Right-click a folder to rename or delete it. Drag a project from the sidebar
+or project list onto a folder to move it there; drop it on the **Projects** heading to move
+it out. Press **Esc** to cancel a drag. The folder selector on each project row also works.
+Drag a folder above or below another folder to change their order. The insertion line
+shows where it will go, and its projects stay inside it.
+Projects inside a folder can also be dragged above or below each other. Their saved order
+appears in both views and is preserved when activity changes or the app reopens.
+Projects outside folders appear directly under the Projects heading;
+deleting a folder places its projects back there. Organization is remembered on this
+machine and leaves project files at their existing paths.
 
 **The CLI**
 
@@ -177,7 +190,7 @@ The full schema, the CLI surface and the quality bar for each screen are in
 ```
 src/                    React 18 + TypeScript frontend (plain CSS, tokens in styles/)
 src/lib/words.ts        the app's vocabulary: one word per state, one noun per object
-src/lib/i18n/           those words in 한국어 and English, and the t() that picks one
+src/lib/i18n/           Korean UI words, their parameter types, and t()
 src-tauri/              Tauri 2 shell: commands + one filesystem watcher per project
 crates/agentmon-core/   project schema, parsing, validation, writes — shared by both
 crates/agentmon-cli/    the `agentmon` binary agents run
@@ -212,6 +225,7 @@ npm run check:urlstate   # view state survives reload, Back and a pasted link
 npm run check:keys       # keyboard: lists, palette, context menus, focus, delete flows,
                          # and a 12-project roster with windows parked in what gets deleted
 npm run check:live       # a CLI write reaches an open window without a reload
+npm run check:hmr        # source patches preserve the open window and unsaved dialog
 npm run check:projects   # the app serves the folders it was configured with — and only those;
                          # a moved or CRLF copy serves identical payloads
 npm run check:mcp        # the MCP server over stdio: lifecycle, errors, context budgets
@@ -219,31 +233,29 @@ npm run check:i18n       # every screen in Korean: no English left in the app's 
                          # no Korean word broken across a line — on this repo's records and on
                          # Korean-content fixtures built for the run with the release CLI
 npm run check:errors     # every backend failure, read through the app's words, on both transports
-npm run check:locale     # the language a window opens in: a toggle press inside the boot read of
-                         # settings.json wins it, and the two stores never split
+npm run check:locale     # old English profiles/URLs, reloads and blocked storage still show Korean
 npm run check:scenes     # the pictures inside records: every label measured in two faces — no
                          # overlap, nothing past an edge, nothing under the type floor at the
                          # narrowest column a record page gives a picture
 ```
 
-Every gate that reads words off the screen takes `--locale ko|en` and reads its
-expectations from the same dictionaries the window does (`src/lib/i18n/`), so both
-languages are walked rather than one being tested and the other assumed.
+Screen-language gates read the same Korean dictionary as the app (`src/lib/i18n/ko.ts`).
 
-`check:errors` and `check:locale` are the two that do not drive a browser, on purpose.
-Every other gate here talks to the Vite dev server, and the dev server is not the product:
+Shared React contexts use `stableContext` from `src/lib/stableContext.ts` with a unique
+name, so Vite updates do not split providers from consumers. `check:hmr` edits a scratch
+source copy and verifies visible updates, no page reload, and an unsaved dialog across
+patches. `node scripts/check-hmr.mjs --without-fix` restores the previous context behavior
+in that copy and is expected to fail, confirming the regression check catches the bug.
+
+`check:errors` also calls the CLI directly.
+Browser gates talk to the Vite dev server, and the dev server is not the product:
 the desktop app calls `agentmon-core` in process, so it meets sentences (and a missing HTTP
 status) that no Playwright run can reach. `check:errors` provokes each failure twice — once
 from the real `agentmon` binary, once from the dev server — and requires the two to arrive
 at the same headline in the reader's language.
 
-`check:locale` skips the browser for the opposite reason. What it holds still is a race
-between the boot read of `settings.json` and a reader's hand, and a gate that drives screens
-presses the toggle long after boot — the one moment the defect cannot happen in. So it
-imports the real `src/lib/i18n/index.ts` (through `scripts/ts-hooks.mjs`, not a copy) with a
-stubbed `window` whose `get_locale` reads the file when the command runs and answers
-milliseconds later, which is the shape of the bug: the value in flight predates the press it
-used to overwrite.
+`check:locale` opens old English profiles and URLs, reloads them, and checks Korean text,
+dates, creation options and missing routes even when browser storage is unavailable.
 
 Tests that write records only ever write to copies in the temp directory; the
 `AgentMonitoring/` folder in this repository is real history and is never written to by a

@@ -352,6 +352,16 @@
   margin-top: 0;
 }
 
+.nav-projects-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px 0;
+}
+.nav-projects-heading:hover,
+.nav-projects-heading.active { color: var(--text-primary); }
+.nav > .nav-sub { padding-left: var(--space-2); }
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -604,48 +614,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* ---------------------------------------------------------------------------
-   The language, at the foot of the shell
-
-   The board's segmented control at the size the column has room for. Each option
-   names itself in its own language, so the way out of the wrong one is legible
-   from inside it — which means this control is the one place in the app where two
-   languages are on screen at once, on purpose.
-   ------------------------------------------------------------------------ */
-
-.locale-toggle {
-  display: flex;
-  gap: 2px;
-  margin: 0 var(--space-2) var(--space-2);
-  padding: 2px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-}
-
-.locale-option {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
-}
-
-.locale-option:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-
-.locale-option.is-active {
-  background: var(--bg-active);
-  color: var(--text-primary);
 }
 
 /* ===========================================================================
@@ -5785,6 +5753,86 @@ a.feed-row:hover .feed-ref {
   flex: 1;
 }
 
+.folder-section-head { flex-wrap: wrap; }
+.folder-title { flex: 1; min-width: 0; margin: 0; font-size: var(--text-sm); }
+.folder-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.folder-heading .section-count { flex-shrink: 0; }
+.folder-empty { padding: var(--space-4); color: var(--text-tertiary); font-size: var(--text-sm); }
+.project-folder-move { position: relative; z-index: 2; max-width: 180px; }
+.project-folder-move .select-root { width: 100%; }
+.project-folder-move .select-menu { right: 0; left: auto; }
+[data-project-drag-path], [data-folder-drag-id] { cursor: grab; }
+html[data-project-dragging] * { cursor: grabbing !important; user-select: none !important; }
+[data-project-drag-source] { opacity: 0.5; }
+[data-project-drag-over] {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+[data-folder-order-edge="before"], [data-project-order-edge="before"] { box-shadow: inset 0 2px 0 var(--accent); }
+[data-folder-order-edge="after"], [data-project-order-edge="after"] { box-shadow: inset 0 -2px 0 var(--accent); }
+.project-drag-preview {
+  position: fixed;
+  z-index: 95;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 240px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-xs);
+}
+.project-drag-preview strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-drag-preview span { color: var(--accent-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-row:focus-within { z-index: 3; }
+.sidebar-folder > summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 7px var(--space-2);
+  color: var(--text-tertiary);
+  cursor: grab;
+  font-size: var(--text-base);
+  font-weight: var(--weight-normal);
+  border-radius: var(--radius-sm);
+  list-style: none;
+}
+.sidebar-folder > summary:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sidebar-folder > summary::-webkit-details-marker { display: none; }
+.sidebar-folder > summary::before {
+  content: "▸";
+  position: absolute;
+  left: -2px;
+  width: 8px;
+  text-align: center;
+  font-size: 10px;
+}
+.sidebar-folder[open] > summary::before { content: "▾"; }
+.sidebar-folder .nav-sub { padding-left: 28px; }
+.sidebar-folder-empty { padding: 7px 8px 7px 51px; color: var(--text-tertiary); font-size: var(--text-xs); }
+
 .project-rows {
   display: flex;
   flex-direction: column;
@@ -5793,8 +5841,12 @@ a.feed-row:hover .feed-ref {
   background: var(--border-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
 }
+
+.project-rows > li:first-child .project-row { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.project-rows > li:last-child .project-row { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.project-rows > li:only-child .project-row { border-radius: var(--radius-lg); }
 
 /* The row is not itself a link — it holds one, plus the buttons that act on the project.
    The name's ::after covers the row, so the whole thing is still clickable and the

@@ -47,7 +47,7 @@ import {
   formatDuration,
   formatRelative,
 } from "../lib/format";
-import { t, useLocale } from "../lib/i18n";
+import { t } from "../lib/i18n";
 import type { WorklogDetail } from "../lib/types";
 
 /** A stable empty array, so the related-index memo is not invalidated every render. */
@@ -95,11 +95,6 @@ export function WorkDetailPage() {
   const corrections = countCorrections(work?.updates ?? []);
   /** The outcome's own parts (Shipped / Verified / Known gaps), as its author labelled them. */
   const outcome = useLabelledParts(work?.outcome);
-  /* The contents rail is words, so the language is one of its inputs. Left out of this
-     list, a rail built in English stayed English under a Korean record when the reader
-     changed the language, because nothing else it depends on had changed (P9 round 1
-     critic, who caught the same omission on the dashboard). */
-  const locale = useLocale();
   const sections = useMemo(() => {
     if (!work) return [] as TocEntry[];
     const out: TocEntry[] = [
@@ -116,7 +111,7 @@ export function WorkDetailPage() {
     }
     if (related.count) out.push({ id: "related", label: t("rec.related"), count: related.count });
     return out;
-  }, [work, related.count, outcome, locale]);
+  }, [work, related.count, outcome]);
   const active = useActiveSection(sections.map((s) => s.id));
 
   if (error) {

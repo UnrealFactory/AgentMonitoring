@@ -28,8 +28,9 @@ import {
 } from "../lib/words";
 import { t } from "../lib/i18n";
 import { AppUpdate } from "./AppUpdate";
-import { LocaleToggle } from "./LocaleToggle";
 import type { Project } from "../lib/types";
+import { FolderIcon, useFolderMenu } from "./ProjectFolders";
+import { folderFor, orderedProjects } from "../lib/projectFolders";
 
 /** How many projects the nav lists before it stops and points at the Projects screen. */
 const NAV_PROJECT_LIMIT = 8;
@@ -48,7 +49,7 @@ const AppMark = () => (
 );
 
 export function Sidebar() {
-  const { projects, transport } = useApp();
+  const { projects, transport, organization } = useApp();
   const current = useCurrentProject();
   /* The App feedback board's open count. Errors stay silent here — the board's own page
      reports them; a column of navigation is no place for a load failure. */
@@ -64,6 +65,7 @@ export function Sidebar() {
      another does not. */
   const contextMenu = useContextMenu();
   const projectMenu = useProjectMenu();
+  const folderMenu = useFolderMenu();
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   /** The menu's items in screen order, for the arrow keys. */
@@ -130,7 +132,7 @@ export function Sidebar() {
      filed away. Unavailable rows (an unplugged drive) live on the Projects screen, which
      can explain them; a nav row that goes nowhere belongs nowhere. */
   const switchable: Project[] = projects;
-  const listed = switchable.slice(0, NAV_PROJECT_LIMIT);
+  const listed = organization.data.folders.length > 0 ? switchable : orderedProjects(switchable, organization.data, "").slice(0, NAV_PROJECT_LIMIT);
 
   return (
     <aside className="sidebar">
@@ -307,10 +309,10 @@ export function Sidebar() {
           </>
         )}
 
-        <p className="nav-section">{t("nav.vault")}</p>
-        <NavLink to="/projects" className="nav-item">
-          <NavIcon name="projects" />
-          {t("nav.projects")}
+        <NavLink to="/projects" className="nav-section nav-projects-heading" aria-label={t("nav.projects")}
+          data-project-drop-folder=""
+          {...contextMenu(() => folderMenu())}>
+          <span>{t("nav.vault")}</span>
           <span className="nav-count tabular" title={t("nav.projectCount", projects.length)}>
             {projects.length}
           </span>
@@ -321,10 +323,16 @@ export function Sidebar() {
             "page" to the nav item above that names the screen you are actually on. As
             NavLinks they matched by prefix, so standing on /p/relay/work lit both "Work" and
             "Relay" as the current page: two rows, two claims, one reader. */}
-        {listed.map((p) => (
+        {[...organization.data.folders, undefined].map((folder) => {
+          const grouped = orderedProjects(listed.filter((p) => folderFor(organization.data, p.path) === (folder?.id ?? "")), organization.data, folder?.id ?? "");
+          const links = grouped.map((p) => (
           <Link
             key={p.id}
             to={`/p/${p.id}`}
+            draggable={false}
+            data-project-drag-path={p.path}
+            data-project-drag-name={p.name}
+            data-project-drop-folder={folder ? undefined : ""}
             className={`nav-item nav-sub${p.id === current?.id ? " is-current" : ""}`}
             aria-current={p.id === current?.id ? "location" : undefined}
             title={`${p.name} — ${workTipHere(
@@ -346,7 +354,17 @@ export function Sidebar() {
               </span>
             )}
           </Link>
-        ))}
+          ));
+          if (!folder) return links;
+          return <details className="sidebar-folder" key={folder.id} data-project-drop-folder={folder.id} data-folder-order-id={folder.id} open>
+            <summary title={folder.name} tabIndex={0} data-folder-drag-id={folder.id} {...contextMenu(() => folderMenu(folder))}>
+              <FolderIcon />
+              <span className="nav-sub-name">{folder.name}</span>
+              <span className="nav-count tabular">{grouped.length}</span>
+            </summary>
+            {links.length > 0 ? links : <Link className="nav-item sidebar-folder-empty" to="/projects">{t("nav.manageProjects")}</Link>}
+          </details>;
+        })}
         {/* Deliberately a plain link, not a NavLink: it points at the Projects screen, and
             a NavLink would mark itself current there — so standing on /projects lit two rows
             at once and the shell told the reader they were in two places. It is a pointer to
@@ -385,10 +403,6 @@ export function Sidebar() {
             otherwise (src/components/AppUpdate.tsx). First in the foot: it is news about
             the app the foot describes, and it leaves when acted on. */}
         <AppUpdate />
-        {/* The language, where a reader looks for it: at the bottom of the shell, under the
-            vault it names. One control, two words, applied to the whole window on click
-            (src/components/LocaleToggle.tsx). */}
-        <LocaleToggle />
         {/* Where the projects are managed, one click away. Every path is on the Projects
             screen, which is where the reader can act on them. A plain Link: as a NavLink
             this footer marked itself the current page on /projects, which lit two rows in
@@ -415,14 +429,13 @@ export function Sidebar() {
   );
 }
 
-function NavIcon({ name }: { name: "dashboard" | "work" | "bug" | "notes" | "projects" | "feedback" }) {
+function NavIcon({ name }: { name: "dashboard" | "work" | "bug" | "notes" | "feedback" }) {
   const paths: Record<string, string> = {
     dashboard: "M2.5 9.5 L6 5.5 L8.5 8 L13.5 3",
     work: "M3 3.5 H13 M3 8 H13 M3 12.5 H9",
     bug: "M8 3.5 a3 3 0 0 1 3 3 v3 a3 3 0 0 1 -6 0 v-3 a3 3 0 0 1 3 -3 z M3 7 H5 M11 7 H13 M3 11 H5 M11 11 H13",
     // A page with a folded corner — the same glyph the feed draws for a note event.
     notes: "M4 2.5 h5.5 l2.5 2.5 v8.5 h-8 z M9.5 2.5 v2.5 h2.5 M6 8 h4 M6 10.5 h4",
-    projects: "M2.5 4.5 h4 l1.2 1.6 h5.8 v6.4 h-11 z",
     // A speech bubble: feedback is agents talking to the app's maintainer.
     feedback: "M2.5 3.5 h11 v7 h-6.5 l-2.5 2.5 v-2.5 h-2 z M5.5 7 h5",
   };

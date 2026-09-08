@@ -29,7 +29,7 @@ const screenName = (segment: string): string =>
 
 export function useWindowTitle() {
   const location = useLocation();
-  const { projects, locale } = useApp();
+  const { projects } = useApp();
 
   useEffect(() => {
     const parts = location.pathname.split("/").filter(Boolean);
@@ -74,7 +74,5 @@ export function useWindowTitle() {
           );
         });
     }
-    // `locale` is in the dependency list because the title is words: the window in the task
-    // switcher has to change language with the screen it names.
-  }, [location.pathname, projects, locale]);
+  }, [location.pathname, projects]);
 }

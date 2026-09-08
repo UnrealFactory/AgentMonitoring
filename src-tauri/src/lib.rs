@@ -10,6 +10,7 @@
 //! (`/project-api/*`) serves in browser mode; `src/lib/api.ts` picks a transport at runtime.
 
 mod update;
+mod project_folders;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -572,66 +573,6 @@ fn delete_project(
     Ok(gone)
 }
 
-// ---------------------------------------------------------------------------
-// settings (locale)
-// ---------------------------------------------------------------------------
-
-/// One file holds every choice the human has made about this window. In v2 that is just
-/// the language — the project list has its own home in ~/.AgentMonitoring, because the
-/// CLI writes it too and this file is Tauri's.
-fn settings_file(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join("settings.json"))
-}
-
-fn read_settings(app: &AppHandle) -> serde_json::Map<String, serde_json::Value> {
-    settings_file(app)
-        .and_then(|f| std::fs::read_to_string(f).ok())
-        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default()
-}
-
-fn write_settings(app: &AppHandle, settings: &serde_json::Map<String, serde_json::Value>) {
-    let Some(file) = settings_file(app) else { return };
-    if let Some(dir) = file.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    let json = serde_json::Value::Object(settings.clone());
-    if let Err(e) = std::fs::write(&file, format!("{}\n", serde_json::to_string_pretty(&json).unwrap()))
-    {
-        eprintln!(
-            "agentmonitoring: could not write {} ({e}); this window's choices will be used \
-             for this session only",
-            file.display()
-        );
-    }
-}
-
-/// The language the human last chose. `None` on a machine that has never answered — the
-/// window then keeps its default, which is Korean (src/lib/i18n/index.ts).
-#[tauri::command]
-fn get_locale(app: AppHandle) -> Option<String> {
-    read_settings(&app)
-        .get("locale")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-}
-
-#[tauri::command]
-fn set_locale(app: AppHandle, locale: String) {
-    let mut settings = read_settings(&app);
-    settings.insert("locale".into(), serde_json::Value::String(locale.clone()));
-    write_settings(&app, &settings);
-    // The tray menu is the one piece of this app's text the WebView does not draw, so the
-    // language toggle has to reach it by hand. Best effort: a tray that failed to build
-    // at startup has nothing to relabel.
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        if let Ok(menu) = tray_menu(&app, &locale) {
-            let _ = tray.set_menu(Some(menu));
-        }
-    }
-}
-
 /// The `agentmon` CLI shipped beside the app, if this build has one.
 ///
 /// The installer puts the binary next to `agentmonitoring.exe` (bundle.externalBin in
@@ -677,29 +618,14 @@ fn manual_path() -> Option<String> {
 // tray — closing the window keeps the app (and every watcher) running
 // ---------------------------------------------------------------------------
 
-/// The one tray icon's stable id: `set_locale` looks it up to rebuild the menu, and the
-/// close handler looks it up to decide whether hiding is safe at all.
+/// The close handler checks this tray id before hiding the window.
 const TRAY_ID: &str = "agentmonitoring-tray";
-
-/// The language the tray speaks — the same settings.json the window reads, with the same
-/// default (Korean, src/lib/i18n/index.ts), so the menu and the window never disagree.
-fn locale_of(app: &AppHandle) -> String {
-    read_settings(app)
-        .get("locale")
-        .and_then(|v| v.as_str())
-        .unwrap_or("ko")
-        .to_string()
-}
 
 /// Open / ─ / Quit. "열기" names the app because a tray is a row of anonymous 16px icons
 /// from every app on the machine; "완전히 종료" says *completely* because the X button no
 /// longer quits — this menu item is now the only way out, and its label carries that.
-fn tray_menu(app: &AppHandle, locale: &str) -> tauri::Result<Menu<Wry>> {
-    let (open, quit) = if locale == "en" {
-        ("Open AgentMonitoring", "Quit completely")
-    } else {
-        ("AgentMonitoring 열기", "완전히 종료")
-    };
+fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
+    let (open, quit) = ("AgentMonitoring 열기", "완전히 종료");
     let open = MenuItem::with_id(app, "tray-open", open, true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "tray-quit", quit, true, None::<&str>)?;
@@ -715,7 +641,7 @@ fn show_main_window(app: &AppHandle) {
 }
 
 fn init_tray(app: &AppHandle) -> tauri::Result<()> {
-    let menu = tray_menu(app, &locale_of(app))?;
+    let menu = tray_menu(app)?;
     let mut tray = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("AgentMonitoring")
         .menu(&menu)
@@ -1055,8 +981,8 @@ pub fn run() {
             pick_project_location,
             cli_path,
             manual_path,
-            get_locale,
-            set_locale,
+            project_folders::get_project_folders,
+            project_folders::set_project_folders,
             list_worklogs,
             get_worklog,
             list_bugs,

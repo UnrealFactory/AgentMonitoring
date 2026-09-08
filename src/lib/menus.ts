@@ -48,7 +48,7 @@ import {
 import { useDeleteProject } from "../components/DeleteProject";
 import { plainMarks } from "../components/ui";
 import { api, isTauri, projectErrorMessage, type ScaffoldOutcome } from "./api";
-import { getLocale, t } from "./i18n";
+import { t } from "./i18n";
 import { noteCount, unresolvedCount, workLogs } from "./words";
 import type { Project } from "./types";
 
@@ -170,9 +170,9 @@ export function useProjectMenu() {
         try {
           outcome =
             kind === "claude"
-              ? await api.writeClaudeMd(p.id, getLocale())
+              ? await api.writeClaudeMd(p.id, "ko")
               : kind === "agents"
-                ? await api.writeAgentsMd(p.id, getLocale())
+                ? await api.writeAgentsMd(p.id, "ko")
                 : kind === "codex-mcp"
                   ? await api.writeCodexMcp(p.id)
                   : await api.writeMcpJson(p.id);

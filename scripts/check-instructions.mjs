@@ -145,7 +145,7 @@ try {
   await waitForServer(server, origin);
   browser = await chromium.launch();
   mkdirSync(shots, { recursive: true });
-  for (const locale of ["ko", "en"]) {
+  for (const locale of ["ko"]) {
     const page = await browser.newPage({ viewport: { width: 1200, height: 1000 } });
     await useLocale(page, locale);
     const pageErrors = [];
@@ -155,9 +155,10 @@ try {
     await page.getByRole("button", { name: T("proj.new"), exact: true }).click();
     const form = page.locator(".create-panel");
     const group = (kind) => form.locator(`[role="radiogroup"][aria-labelledby="${kind}-md-label"]`);
-    for (const kind of ["claude", "agents"]) {
-      assert.equal(await group(kind).locator('[aria-checked="true"]').textContent(), T("proj.form.instructionMdNone"));
-    }
+    assert.equal(await group("claude").locator('[aria-checked="true"]').textContent(), T("proj.form.instructionMdNone"));
+    assert.equal(await group("agents").locator('[aria-checked="true"]').textContent(), "한국어");
+    assert.equal(await form.locator('[aria-labelledby="mcp-json-label"] [aria-checked="true"]').textContent(), T("proj.form.mcpJsonOff"));
+    assert.equal(await form.locator('[aria-labelledby="codex-mcp-label"] [aria-checked="true"]').textContent(), T("proj.form.mcpJsonOn"));
     const location = join(scratch, `UI ${locale}`);
     mkdirSync(location);
     const existing = "# Team conventions\n\nPreserve our review rules.\n";
@@ -168,8 +169,8 @@ try {
     await form.getByLabel(T("proj.form.name"), { exact: true }).fill(`Claude + Codex (${locale})`);
     await form.getByPlaceholder(T("proj.form.locationPlaceholder"), { exact: true }).fill(location);
     await group("claude").getByRole("radio", { name: "한국어", exact: true }).click();
-    await group("agents").getByRole("radio", { name: "English", exact: true }).click();
-    const withClaude = locale === "en";
+    await group("agents").getByRole("radio", { name: "한국어", exact: true }).click();
+    const withClaude = true;
     await form.locator('[aria-labelledby="mcp-json-label"]').getByRole("radio", { name: T(withClaude ? "proj.form.mcpJsonOn" : "proj.form.mcpJsonOff"), exact: true }).click();
     await form.locator('[aria-labelledby="codex-mcp-label"]').getByRole("radio", { name: T("proj.form.mcpJsonOn"), exact: true }).click();
     await form.getByPlaceholder("codex", { exact: true }).fill("codex-ui");
@@ -187,7 +188,7 @@ try {
     check(`${locale} form creates both files and preserves existing AGENTS.md`, () => {
       assert.equal(read(location, "CLAUDE.md"), template("ko"));
       assert(read(location, "AGENTS.md").startsWith(existing));
-      assert(read(location, "AGENTS.md").endsWith(template("en")));
+      assert(read(location, "AGENTS.md").endsWith(template("ko")));
       assert.equal(existsSync(join(location, ".mcp.json")), withClaude);
       const config = read(location, ".codex/config.toml");
       assert(config.startsWith(originalConfig));

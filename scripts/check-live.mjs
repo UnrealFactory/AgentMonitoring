@@ -626,7 +626,7 @@ try {
     (page) =>
       page.evaluate(
         (label) =>
-          [...document.querySelectorAll(".nav-item")]
+          [...document.querySelectorAll(".nav-projects-heading")]
             .find((n) => n.textContent?.trim().startsWith(label))
             ?.querySelector(".nav-count")?.textContent ?? "",
         T("nav.projects"),
