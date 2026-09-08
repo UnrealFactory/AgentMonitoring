@@ -2,52 +2,48 @@
 name: start-here
 title: 시작 색인 — 현재 상태와 필요한 지침을 찾는 곳
 type: essential
-description: "공개 버전은 v1.5.2입니다. 기본값·프로젝트와 폴더 드래그·정렬은 project-organization-and-create-defaults, 패치 검은 화면은 dev-hmr-context-identity, 배포는 handoff-v1-release를 읽으세요."
+description: "공개 버전은 v1.6.0입니다. 배포는 handoff-v1-release, 한국어 전용 결정은 korean-only-ui, 프로젝트·폴더 정리는 project-organization-and-create-defaults를 읽으세요."
 agent: fable-updater-splash
 updated_by: codex
 created: 2026-08-21T13:21:48Z
-updated: 2026-09-08T11:29:40Z
+updated: 2026-09-08T12:30:18Z
 tags: []
-refs: [handoff-v1-release, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, scene-geometry-is-measured, quality-bars, event-reconciliation, work-boundaries-and-explanatory-visuals-proposal, project-organization-and-create-defaults, dev-hmr-context-identity, WORK-0108, WORK-0110, WORK-0111, WORK-0113, WORK-0115, WORK-0116, BUG-0030, WORK-0117]
+refs: [handoff-v1-release, korean-only-ui, project-organization-and-create-defaults, dev-hmr-context-identity, registry-sandbox-in-gates, python-is-a-store-stub, record-screens-have-two-halves, human-area-enforcement, notes-are-knowledge-not-history, verify-desktop-via-cdp, chart-note-series-colour, scene-geometry-is-measured, quality-bars, event-reconciliation, work-boundaries-and-explanatory-visuals-proposal, WORK-0119]
 ---
 
-# 먼저 확인하세요
+이 노트는 세션마다 읽는 기억 색인입니다. status로 현재 작업과 열린 버그를 확인하고 이번 주제의 관련 노트를 여세요. 목록이 잘리면 같은 조건의 note limit/offset으로 이어 읽습니다.
 
-이 노트는 세션마다 읽는 기억 색인입니다. `status`로 현재 작업과 열린 버그를 확인하고 이번 주제에 필요한 노트만 여세요. 목록이 잘렸으면 현재 소스 MCP의 note limit/offset으로 다음 페이지를 읽을 수 있습니다.
+## 현재 상태
 
-- **공개 배포 상태·다음 배포 절차**: `handoff-v1-release`를 먼저 읽으세요. 공개 버전은 v1.5.2이며 개발 소스 변경과 구분합니다.
-- **배포 전 개발 소스 변경(2026-09-08)**: [[project-organization-and-create-defaults]]에 새 프로젝트 기본값(AGENTS.md 한국어·Codex MCP)과 사용자 정리 폴더 기능, 검증 범위를 정리했습니다(WORK-0111, WORK-0113, WORK-0115, WORK-0117). 제목·폴더 우클릭 메뉴와 프로젝트 드래그 이동과 폴더 순서 변경을 지원하며 미분류 그룹은 없습니다. 설치본을 배포하거나 설치하지 않았습니다.
-- **현재 소스의 WORK·메모리·그림 정책(2026-09-06)**: [[work-boundaries-and-explanatory-visuals-proposal]]을 읽으세요. 사용자 승인 후 WORK-0108에서 구현·행동 검증한 v4 정책입니다. 이름에 proposal이 남아 있지만 현재 노트 유형은 decision입니다.
-- **v1.5.2 적용 범위**: 기록 정책·지침 갱신과 피드백 수정을 공개했습니다(WORK-0110). 이 기기의 설치 프로그램 실행과 다른 프로젝트 지침 일괄 갱신은 하지 않았습니다. 앱 업데이트 뒤 각 프로젝트에서 지침 쓰기 → Codex / Claude를 실행하고 MCP 연결을 다시 연결하세요. `.codex/config.toml`은 기기별 설정으로 커밋하지 않았습니다.
+- **공개 버전은 v1.6.0입니다(2026-09-08).** [[handoff-v1-release]]에 소스·태그·설치 파일과 공개 다운로드 검증, 다음 배포 절차를 정리했습니다. WORK-0119를 완료했으며 이 기기의 설치 프로그램 실행은 하지 않았습니다.
+- **한국어 전용 앱**: [[korean-only-ui]]는 사용자가 채택한 결정과 적용 범위를 설명합니다. 영어 UI·언어 설정 경로를 제거했지만 기존 기록·파일은 번역하지 않습니다.
+- **프로젝트·폴더 정리**: [[project-organization-and-create-defaults]]에 드래그 이동·폴더 및 내부 프로젝트 순서 저장·우클릭 관리, AGENTS.md 한국어·Codex MCP 기본값을 정리했습니다. v1.6.0에 포함됐습니다.
+- **WORK·메모리·그림 정책**: [[work-boundaries-and-explanatory-visuals-proposal]]은 WORK-0108에서 구현·검증한 현재 v4 결정입니다. 이름에 proposal이 남았어도 유형은 decision입니다. 기존 프로젝트 지침은 앱의 지침 쓰기에서 갱신하고 MCP는 다시 연결합니다. .codex/config.toml은 기기별 설정으로 커밋하지 않았습니다.
 
-# 스크립트·검사 전에
+## 작업 전에
 
-- `dev-hmr-context-identity`: 패치 후 검은 화면을 고친 BUG-0030의 원인과 stableContext 사용, check:hmr 검사를 설명합니다. 새 창만 열어 보는 것으로 코드 갱신 검증을 대신하지 마세요.
+- [[dev-hmr-context-identity]]: 패치 뒤 검은 화면을 고친 BUG-0030, stableContext와 check:hmr를 설명합니다. 새 창만 열어 보는 것으로 코드 갱신 검증을 대신하지 마세요.
+- [[registry-sandbox-in-gates]]: agentmon init을 쓰는 검사는 별도의 AGENTMON_REGISTRY_DIR를 설정합니다.
+- [[python-is-a-store-stub]]: Python 실행 별칭 함정과 Node 스크립트 사용 안내입니다.
+- [[record-screens-have-two-halves]]: 화면 검사 전에 기술·사람 영역 중 확인할 영역을 선택합니다.
+- 전체 한국어 검사의 인라인 코드 경계 오탐은 WORK-0119에서 BUG-0031로 수정했습니다. 단어 시작과 끝의 텍스트 노드 경계를 다르게 처리해야 검사 제외된 코드가 다시 범위에 들어오지 않습니다.
 
-- `registry-sandbox-in-gates`: agentmon init을 쓰는 검사는 별도의 AGENTMON_REGISTRY_DIR를 설정해야 합니다.
-- `python-is-a-store-stub`: Python 실행 별칭 함정과 Node 스크립트 사용 안내입니다.
-- `record-screens-have-two-halves`: 화면 검사 전에 기술/사람 영역 중 검사할 영역을 선택하세요.
-
-# 관련 기능을 다룰 때
+## 관련 지침
 
 | 대상 | 노트 |
 |---|---|
-| 개발 코드 갱신·검은 화면·컨텍스트 유지 | `dev-hmr-context-identity` |
-| 새 프로젝트 기본값·개인 정리 폴더·저장 위치 | `project-organization-and-create-defaults` |
-| human 필수·날짜별 추가·전체 교체·v4 전달 | `human-area-enforcement` |
-| 그림 형식·초안 검사·실제 크기와 의미 검증의 차이 | `scene-geometry-is-measured` |
-| 실제 데스크톱 앱 Playwright 검사 | `verify-desktop-via-cdp` |
-| 이벤트 로그·활동 목록·doctor의 과거 불일치 | `event-reconciliation` |
-| 차트 색상 | `chart-note-series-colour` |
-| 화면·제품 품질 기준 | `quality-bars` |
-| 노트 갱신·삭제와 작업 이력의 차이 | `notes-are-knowledge-not-history` |
+| human 필수·날짜별 추가·전체 교체·v4 전달 | human-area-enforcement |
+| 그림·실제 크기·의미 검증 | scene-geometry-is-measured |
+| 실제 데스크톱 앱 Playwright 검사 | verify-desktop-via-cdp |
+| 이벤트 로그·활동 목록·doctor | event-reconciliation |
+| 차트 색상 | chart-note-series-colour |
+| 화면·제품 품질 | quality-bars |
+| 노트 갱신·삭제와 작업 이력 | notes-are-knowledge-not-history |
 
-# 기억을 유지하는 기준
-
-WORK는 목적과 완료 조건을 가진 개발·수정·검증 또는 별도로 맡긴 조사에 사용합니다. 질문·설명·정정마다 새 기록을 만들지 않습니다. 필요한 현재 지식이 바뀌면 기존 주제 노트를 갱신하고, 채택 전 제안은 decision으로 확정하지 않습니다. 미완료 작업은 다음 세션에도 같은 WORK와 handoff로 이어갑니다.
-
-상세 결과와 근거는 해당 WORK·노트에 두고 이 색인은 길잡이로 유지하세요. 관련 사실이 바뀌면 노트와 색인을 함께 최신화하세요.
+WORK는 목적과 완료 조건이 있는 개발·수정·검증 또는 독립 조사 단위입니다. 설명 대화마다 기록을 쪼개지 않고 같은 목적의 미완료 WORK를 이어갑니다. 상세 이력은 WORK, 현재 유효한 지식은 주제별 노트에 두고 이 색인은 길잡이로 유지하세요.
 
 ## For humans
 
-공개 버전은 1.5.2입니다. 개발 소스에는 프로젝트와 폴더를 끌어 정리하는 기능, 같은 단계 항목의 위치 정렬이 반영되어 있습니다. 패치 뒤 검은 화면이 되는 문제를 막는 갱신 검사도 유지하고 있습니다. 설치본 배포 전 상태이며 자세한 내용은 기능별 노트에서 확인하실 수 있습니다.
+공개 버전은 1.6.0입니다. 한국어 전용 화면과 프로젝트·폴더 드래그, 순서 저장을 배포했고 공개 설치 파일까지 확인했습니다. 이 기기에 설치 프로그램을 실행하지는 않았습니다.
+
+작업을 시작할 때 진행 중인 기록을 확인하고, 배포·언어 결정·프로젝트 정리 등 주제에 맞는 노트를 읽으시면 됩니다.

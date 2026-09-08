@@ -919,3 +919,8 @@
 {"ts":"2026-09-08T12:24:36Z","actor":"codex","type":"bug_commented","ref":"BUG-0031","summary":"WORK-0119 배포 검증 중 발견했습니다. BREAK_PROBE.locate가 시작 offset과 이전 노드 끝 offset이 같을 때 이전 노드를 선택한 것이 원인입니다. 시작은 다음 포함 텍스트 노드, 끝은 이전 노드를 선택하도록 경계 규칙을 분리했습니다."}
 {"ts":"2026-09-08T12:24:36Z","actor":"codex","type":"bug_resolved","ref":"BUG-0031","summary":"scripts/check-i18n.mjs의 단어 시작/끝 경계만 수정했습니다. 실제 1600px 노트 캡처에서 '입니다'가 한 줄임을 확인했습니다. Playwright로 구 코드에서 오탐이 발생함을 재현했고, 수정 코드에서 앞/뒤 다중 줄 인라인 코드 제외와 텍스트 노드 내부/인라인…"}
 {"ts":"2026-09-08T12:25:12Z","actor":"codex","type":"work_updated","ref":"WORK-0119","summary":"중단 이후 현재 소스로 CLI·앱·NSIS 재빌드를 완료했습니다(종료 0). 새 설치 파일은 8,261,051바이트, SHA-256 2e4f559ddf83306dfcf6afbb616cef89dce3cc47b5a51879722ad9f91e91263b입니다. 앱/설치 파일…"}
+{"ts":"2026-09-08T12:29:32Z","actor":"codex","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, refs, body, human area"}
+{"ts":"2026-09-08T12:29:32Z","actor":"codex","type":"note_updated","ref":"project-organization-and-create-defaults","summary":"Updated note project-organization-and-create-defaults: title, description, refs, body, human area"}
+{"ts":"2026-09-08T12:30:18Z","actor":"codex","type":"note_updated","ref":"korean-only-ui","summary":"Updated note korean-only-ui: title, description, refs, body, human area"}
+{"ts":"2026-09-08T12:30:18Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: title, description, refs, body, human area"}
+{"ts":"2026-09-08T12:30:19Z","actor":"codex","type":"work_done","ref":"WORK-0119","summary":"한국어 전용 UI·트레이·업데이트·NSIS와 누적 프로젝트·폴더 정리·순서 저장·HMR 수정을 v1.6.0으로 공개했습니다. 기능 커밋 be43b732e774a26f0cfeb1731176c9847b056c89의 main·주석 태그를 원자적으로 푸시하고 gh release create…"}
