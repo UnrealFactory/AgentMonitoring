@@ -927,3 +927,6 @@
 {"ts":"2026-09-11T02:39:46Z","actor":"fable-fb-dash","type":"work_started","ref":"WORK-0120","summary":"MCP가 대시로 시작하는 문자열 값을 CLI 옵션으로 넘기지 않도록 수정"}
 {"ts":"2026-09-11T02:42:00Z","actor":"fable-fb-dash","type":"work_done","ref":"WORK-0120","summary":"mcp/lib/tools.mjs에 opt(name, value) 헬퍼를 추가해 값이 있는 모든 옵션(--agent, --title, --type, --description, --severity, --human, --tags, --refs, --files, --at 계열 등)을…"}
 {"ts":"2026-09-11T02:43:07Z","actor":"fable-fb-dash","type":"work_started","ref":"WORK-0121","summary":"v1.6.1 배포 — MCP 대시 값 전달 수정을 공개"}
+{"ts":"2026-09-11T02:46:35Z","actor":"fable-fb-dash","type":"work_done","ref":"WORK-0121","summary":"v1.6.1을 공개했습니다. 기능 커밋 f986a70ead22a0f32f98850f6c865db3a045416a, 주석 태그 v1.6.1이 같은 커밋을 가리키며 main과 함께 원자적으로 푸시했습니다. 릴리스:…"}
+{"ts":"2026-09-11T02:47:10Z","actor":"fable-fb-dash","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, refs, body, human area"}
+{"ts":"2026-09-11T02:47:38Z","actor":"fable-fb-dash","type":"note_updated","ref":"start-here","summary":"Updated note start-here: description, refs, body, human area"}
