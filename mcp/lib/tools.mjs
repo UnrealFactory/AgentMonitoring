@@ -299,8 +299,20 @@ function ident(args, ctx, wantAgent = true) {
   return { at, who };
 }
 
+/**
+ * One value-carrying option, always as a single `--name=value` argument.
+ *
+ * Never `--name`, `value` as two: clap reads a separate value that begins with `-`
+ * as the next option and refuses the call (`unexpected argument '--verify …'`). The
+ * joined form is unambiguous for any value — a description that opens with `--verify`,
+ * a title that opens with `-x` — and the CLI has always accepted it (FB-0001).
+ */
+function opt(name, value) {
+  return `${name}=${String(value)}`;
+}
+
 function flag(args, name, value) {
-  if (value != null && value !== "") args.push(name, String(value));
+  if (value != null && value !== "") args.push(opt(name, value));
 }
 
 /**
@@ -347,7 +359,7 @@ function sectionHeading(text) {
  */
 function replaceListFlag(args, name, value) {
   if (value == null) return;
-  args.push(name, listArg(value) ?? "");
+  args.push(opt(name, listArg(value) ?? ""));
 }
 
 function recordPath(at, id) {
@@ -529,7 +541,7 @@ async function logWork(args, ctx) {
   // unchanged telling (`append_telling`, agentmon-core/src/human.rs).
   const human = humanText(args, "log_work");
 
-  const startArgs = ["work", "start", "--agent", who, "--title", oneLine(args.title), "--body-file", "-", "--json"];
+  const startArgs = ["work", "start", opt("--agent", who), opt("--title", oneLine(args.title)), "--body-file", "-", "--json"];
   flag(startArgs, "--human", human);
   flag(startArgs, "--tags", listArg(args.tags));
   flag(startArgs, "--refs", listArg(args.refs));
@@ -556,7 +568,7 @@ async function logWork(args, ctx) {
     );
   }
 
-  const doneArgs = ["work", "done", id, "--agent", who, "--outcome-file", "-", "--json"];
+  const doneArgs = ["work", "done", id, opt("--agent", who), "--outcome-file", "-", "--json"];
   flag(doneArgs, "--human", human);
   flag(doneArgs, "--files", listArg(args.files));
   flag(doneArgs, "--finished-at", args.finished_at);
@@ -600,7 +612,7 @@ async function updateWork(args, ctx) {
 
   if (note || (human && !outcome && !abandon)) {
     // A note with no message is the refresh: `work update --human` alone.
-    const a = ["work", "update", id, "--agent", who, "--json"];
+    const a = ["work", "update", id, opt("--agent", who), "--json"];
     if (note) a.push("--message-file", "-");
     flag(a, "--human", human);
     flag(a, "--at", args.at);
@@ -620,7 +632,7 @@ async function updateWork(args, ctx) {
   }
 
   if (outcome) {
-    const a = ["work", "done", id, "--agent", who, "--outcome-file", "-", "--json"];
+    const a = ["work", "done", id, opt("--agent", who), "--outcome-file", "-", "--json"];
     flag(a, "--human", human);
     flag(a, "--files", listArg(args.files));
     flag(a, "--finished-at", args.at);
@@ -633,7 +645,7 @@ async function updateWork(args, ctx) {
   }
 
   if (abandon) {
-    const a = ["work", "abandon", id, "--agent", who, "--reason-file", "-", "--json"];
+    const a = ["work", "abandon", id, opt("--agent", who), "--reason-file", "-", "--json"];
     flag(a, "--human", human);
     flag(a, "--at", args.at);
     const r = await runCli(at, a, abandon);
@@ -658,9 +670,9 @@ async function reportBug(args, ctx) {
   const { at, who } = ident(args, ctx);
   need(args, ["title", "severity", "report"], "report_bug");
   const a = [
-    "bug", "create", "--agent", who,
-    "--title", oneLine(args.title),
-    "--severity", String(args.severity).trim(),
+    "bug", "create", opt("--agent", who),
+    opt("--title", oneLine(args.title)),
+    opt("--severity", String(args.severity).trim()),
     "--body-file", "-", "--json",
   ];
   const human = humanText(args, "report_bug");
@@ -702,7 +714,7 @@ async function resolveBug(args, ctx) {
   let state = "";
 
   if (wantClaim) {
-    const a = ["bug", "claim", id, "--agent", who, "--json"];
+    const a = ["bug", "claim", id, opt("--agent", who), "--json"];
     flag(a, "--human", human);
     flag(a, "--at", args.at);
     const r = await runCli(at, a);
@@ -721,7 +733,7 @@ async function resolveBug(args, ctx) {
 
   if (comment || (human && !wantClaim && !resolution)) {
     // A comment with no message is the refresh: `bug comment --human` alone.
-    const a = ["bug", "comment", id, "--agent", who, "--json"];
+    const a = ["bug", "comment", id, opt("--agent", who), "--json"];
     if (comment) a.push("--message-file", "-");
     flag(a, "--human", human);
     flag(a, "--at", args.at);
@@ -736,7 +748,7 @@ async function resolveBug(args, ctx) {
   }
 
   if (resolution) {
-    const a = ["bug", "resolve", id, "--agent", who, "--resolution-file", "-", "--json"];
+    const a = ["bug", "resolve", id, opt("--agent", who), "--resolution-file", "-", "--json"];
     flag(a, "--human", human);
     flag(a, "--at", args.at);
     const r = await runCli(at, a, resolution);
@@ -872,7 +884,7 @@ async function note(args, ctx) {
     if (existing && !existing.ok && existing.exitCode !== 3) return fail(cliErrorText(existing));
 
     if (existing?.ok) {
-      const a = ["note", "update", name, "--agent", who, "--json"];
+      const a = ["note", "update", name, opt("--agent", who), "--json"];
       flag(a, "--title", args.title ? oneLine(args.title) : null);
       flag(a, "--type", args.type);
       flag(a, "--description", args.description ? oneLine(args.description) : null);
@@ -914,10 +926,10 @@ async function note(args, ctx) {
       name ? `no note named '${name}' here — this is a first write, and it` : "note(action=write)"
     );
     const a = [
-      "note", "add", "--agent", who,
-      "--title", oneLine(args.title),
-      "--type", String(args.type).trim(),
-      "--description", oneLine(args.description),
+      "note", "add", opt("--agent", who),
+      opt("--title", oneLine(args.title)),
+      opt("--type", String(args.type).trim()),
+      opt("--description", oneLine(args.description)),
       "--body-file", "-", "--json",
     ];
     const human = humanText(args, "note(action=write)");
@@ -942,7 +954,7 @@ async function note(args, ctx) {
   if (action === "remove") {
     const { at, who } = ident(args, ctx);
     need(args, ["name"], "note(action=remove)");
-    const r = await runCli(at, ["note", "remove", name, "--agent", who, "--json"]);
+    const r = await runCli(at, ["note", "remove", name, opt("--agent", who), "--json"]);
     if (!r.ok) return fail(cliErrorText(r));
     return lines(
       `${r.json?.name} removed · ${who}`,
@@ -962,7 +974,7 @@ async function appFeedback(args, ctx) {
   const id = String(args?.id ?? "").trim();
   const human = humanText(args, "app_feedback");
   if (id) {
-    const u = ["app-feedback", "update", id, "--agent", who, "--json"];
+    const u = ["app-feedback", "update", id, opt("--agent", who), "--json"];
     flag(u, "--human", human);
     flag(u, "--at", args.at);
     const r = await runCli(at, u);
@@ -983,9 +995,9 @@ async function appFeedback(args, ctx) {
   if (!String(args.type ?? "").trim() || !String(args.title ?? "").trim())
     throw new ToolError("app_feedback needs type and title to file a new item, or id to rewrite an existing one's human area.");
   const a = [
-    "app-feedback", "add", "--agent", who,
-    "--type", String(args.type).trim(),
-    "--title", oneLine(args.title),
+    "app-feedback", "add", opt("--agent", who),
+    opt("--type", String(args.type).trim()),
+    opt("--title", oneLine(args.title)),
     "--json",
   ];
   flag(a, "--human", human);

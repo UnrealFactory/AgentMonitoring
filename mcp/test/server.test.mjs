@@ -844,6 +844,44 @@ let noteName = "";
   check("a second note stays behind for doctor", () => assert(!keep.isError, keep.text));
 }
 
+section("values that open with a dash reach the CLI as values, not options");
+{
+  // FB-0001: a description that began with `--verify` came back as
+  // "unexpected argument '--verify …' found" — the server had passed it as its own argv
+  // entry after `--description`, and clap read it as an option. Every value-carrying
+  // option now travels as one `--name=value` argument, so the first character of a
+  // sentence never decides whether the write lands.
+  const dashName = "dash-leading-values";
+  const written = await client.call("note", {
+    action: "write",
+    name: dashName,
+    type: "memory",
+    title: "-x 대시로 시작하는 제목",
+    description: "--verify [file.cs]로 기본 검사에 사용자 검사를 추가합니다.",
+    body: "옵션 이름처럼 보이는 문장도 값으로 저장돼야 합니다. 이 노트는 그 회귀 검사를 위해 존재합니다.",
+    human: "-p 같은 옵션 이야기로 시작하는 문장도 그대로 기록되는지 확인하는 노트입니다.",
+  });
+  check("a description opening with --verify is stored, not parsed", () => {
+    assert(!written.isError, written.text);
+    const md = readFileSync(path.join(DATA, "notes", `${dashName}.md`), "utf8");
+    assertIncludes(md, "--verify [file.cs]로 기본 검사에 사용자 검사를 추가합니다.", "frontmatter"); // quoted by the YAML writer for the brackets
+    assertIncludes(md, "title: -x 대시로 시작하는 제목", "frontmatter");
+    assertIncludes(md, "-p 같은 옵션 이야기로 시작하는 문장도", "human area");
+  });
+  const rewritten = await client.call("note", {
+    action: "write",
+    name: dashName,
+    description: "--another 대시 설명으로 바꿉니다.",
+  });
+  check("a rewrite whose description opens with a dash lands too", () => {
+    assert(!rewritten.isError, rewritten.text);
+    const md = readFileSync(path.join(DATA, "notes", `${dashName}.md`), "utf8");
+    assertIncludes(md, "--another 대시 설명으로 바꿉니다.", "frontmatter");
+  });
+  const cleared = await client.call("note", { action: "remove", name: dashName });
+  check("the dash fixture note is removed again", () => assert(!cleared.isError, cleared.text));
+}
+
 section("note pagination: complete names, atomic entries, every matching note reachable");
 {
   const pagedLocation = path.join(tmpRoot, "paged-notes");
@@ -983,6 +1021,21 @@ section("app feedback: about the app itself, machine-level");
     assert(shapeless.isError, shapeless.text);
     assertIncludes(shapeless.text, "type and title", "error");
     assertIncludes(shapeless.text, "id to rewrite", "error");
+  });
+
+  // FB-0001 (the real board): a title or body that opens with a dash is a value, not an
+  // option — filed as FB-0003 here, after the two ids the checks above pin down.
+  const dashed = await client.call("app_feedback", {
+    type: "idea",
+    title: "--dry-run 옵션이 있으면 좋겠습니다",
+    body: "-n 처럼 짧은 옵션 이야기로 시작하는 본문입니다. 대시로 시작해도 값으로 전달돼야 합니다.",
+    human: "--dry-run 같은 말로 시작하는 요청도 그대로 접수되는지 확인하는 항목입니다.",
+  });
+  check("a title and body opening with a dash are filed, not parsed as options", () => {
+    assert(!dashed.isError, dashed.text);
+    const md = readFileSync(path.join(tmpRoot, ".registry", "feedback", "FB-0003.md"), "utf8");
+    assertIncludes(md, "title: --dry-run 옵션이 있으면 좋겠습니다", "frontmatter");
+    assertIncludes(md, "-n 처럼 짧은 옵션 이야기로", "body");
   });
 }
 

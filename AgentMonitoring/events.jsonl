@@ -924,3 +924,6 @@
 {"ts":"2026-09-08T12:30:18Z","actor":"codex","type":"note_updated","ref":"korean-only-ui","summary":"Updated note korean-only-ui: title, description, refs, body, human area"}
 {"ts":"2026-09-08T12:30:18Z","actor":"codex","type":"note_updated","ref":"start-here","summary":"Updated note start-here: title, description, refs, body, human area"}
 {"ts":"2026-09-08T12:30:19Z","actor":"codex","type":"work_done","ref":"WORK-0119","summary":"한국어 전용 UI·트레이·업데이트·NSIS와 누적 프로젝트·폴더 정리·순서 저장·HMR 수정을 v1.6.0으로 공개했습니다. 기능 커밋 be43b732e774a26f0cfeb1731176c9847b056c89의 main·주석 태그를 원자적으로 푸시하고 gh release create…"}
+{"ts":"2026-09-11T02:39:46Z","actor":"fable-fb-dash","type":"work_started","ref":"WORK-0120","summary":"MCP가 대시로 시작하는 문자열 값을 CLI 옵션으로 넘기지 않도록 수정"}
+{"ts":"2026-09-11T02:42:00Z","actor":"fable-fb-dash","type":"work_done","ref":"WORK-0120","summary":"mcp/lib/tools.mjs에 opt(name, value) 헬퍼를 추가해 값이 있는 모든 옵션(--agent, --title, --type, --description, --severity, --human, --tags, --refs, --files, --at 계열 등)을…"}
+{"ts":"2026-09-11T02:43:07Z","actor":"fable-fb-dash","type":"work_started","ref":"WORK-0121","summary":"v1.6.1 배포 — MCP 대시 값 전달 수정을 공개"}
