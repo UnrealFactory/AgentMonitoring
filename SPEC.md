@@ -318,21 +318,32 @@ migrated project arrives as legacy records and gains its human areas on first to
 
 ```
 agentmon init [--dir <folder>] --name <n> [--description <d>] [--tags a,b] [--at T] [--claude-md ko|en]
-              [--agents-md ko|en] [--mcp-json [--mcp-agent h]]
+              [--agents-md ko|en] [--claude-mcp [--mcp-agent h]] [--codex-mcp [--codex-agent h]]
                                           # creates <folder>/AgentMonitoring; --claude-md also
-                                          # writes agent instructions to <folder>/CLAUDE.md
-                                          # (append if the file exists; skip if already there);
+                                          # writes agent instructions to <folder>/.claude/CLAUDE.md
+                                          # (append if the file exists; skip if already there;
+                                          # a root CLAUDE.md that already carries the section is
+                                          # refreshed in place instead);
                                           # --agents-md does the same for <folder>/AGENTS.md;
                                           # both flags may be used together, with independent languages
-                                          # --mcp-json also writes <folder>/.mcp.json registering
-                                          # the agentmon MCP server (only the agentmon entry is
-                                          # ever added or replaced in an existing file)
+                                          # --claude-mcp (alias --mcp-json) also writes <folder>/.mcp.json
+                                          # registering the agentmon MCP server for Claude Code — that
+                                          # is the only project-scoped location Claude Code reads, so it
+                                          # stays at the root; --codex-mcp writes <folder>/.codex/config.toml
+                                          # (only the agentmon entry is ever added or replaced in an
+                                          # existing file)
+                                          # The app's New-project form exposes these as one choice,
+                                          # 추가 / 추가 안 함: 추가 writes all four files with the
+                                          # default record authors (claude, codex).
 agentmon project view [--json]
 agentmon project update [--name <n>] [--description <d>] [--tags a,b] [--at T]
 agentmon project list                     # the machine's registry (informational)
-agentmon project claude-md --lang ko|en    # add instructions to CLAUDE.md for an existing project
+agentmon project claude-md --lang ko|en    # add instructions to .claude/CLAUDE.md for an existing project
 agentmon project agents-md --lang ko|en    # add instructions to AGENTS.md for an existing project
-agentmon project mcp-json [--agent h]     # write/refresh .mcp.json for an existing project
+agentmon project claude-mcp [--agent h]   # write/refresh .mcp.json for an existing project (alias: mcp-json)
+agentmon project codex-mcp [--agent h]    # write/refresh .codex/config.toml for an existing project
+                                          # The app's project menu runs both instruction writes from one
+                                          # item (지침 쓰기) and both MCP writes from another (MCP 추가하기).
 agentmon work start   --agent <name> --title <t> (--body s | --body-file f) --human s|--human-file f [--tags] [--started-at T]
 agentmon work update  <WORK-ID> --agent <name> --human s|--human-file f [--message s | --body-file|--message-file f] [--at T] [--replayed]
                       # --human alone is a refresh (replaces the page); with --message it is one telling, appended

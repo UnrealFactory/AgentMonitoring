@@ -36,6 +36,9 @@ screen below is drawn from work logs the agents that built it wrote as they went
 - **Live updates** — a record an agent writes appears in the open window in about a second,
   with no reload and without losing your scroll position.
 - **한국어 전용** — 화면과 트레이 메뉴는 한국어로 표시하며, 예전 영어 설정과 링크로 열어도 한국어를 사용합니다.
+- **Starts with the login** — the installed app registers itself to start when you sign in
+  to Windows, in the tray only (click the tray icon for the window). The switch at the foot
+  of the sidebar, **시작 시 자동 실행**, turns it off or on; the app remembers your choice.
 
 ![A work log: what, why, how, the update timeline and the outcome](progress/shots/work-detail.png)
 
@@ -69,8 +72,14 @@ project** asks where the records should live (typically your repo) and creates a
 unregisters a row and touches no files; Delete (behind a typed-name dialog) removes the
 folder from disk.
 
-The new-project form starts with **AGENTS.md → 한국어** and **Add Codex MCP → Add**;
-CLAUDE.md and Claude MCP start off. Each option can be changed before creating the project.
+The new-project form has one choice for the agent files, **에이전트 지침·MCP → 추가 / 추가 안 함**,
+and starts on 추가: it writes `.claude/CLAUDE.md` and `AGENTS.md` (Korean instructions) and
+registers the MCP server for Claude Code (`.mcp.json`) and Codex (`.codex/config.toml`) in
+one go, with `claude` and `codex` as the default record authors. Claude's instruction file
+lives in `.claude/`, the way Codex's settings live in `.codex/`; `.mcp.json` stays at the
+root because that is the only project-scoped location Claude Code reads. The CLI keeps the
+four independent flags. A project's context menu offers the same two writes for later:
+**지침 쓰기** (both instruction files) and **MCP 추가하기** (both registrations).
 Right-click the sidebar's **Projects** heading and choose **Create folder** to make a
 personal folder. Right-click a folder to rename or delete it. Drag a project from the sidebar
 or project list onto a folder to move it there; drop it on the **Projects** heading to move
@@ -153,9 +162,10 @@ exit codes and `--json` output.
 
 `mcp/` is an MCP server that puts the CLI in an agent's tool list, so it records work by
 calling a tool instead of writing a shell command. You rarely register it by hand: the
-app's **New project** dialog (and `agentmon init --mcp-json`, or `agentmon project
-mcp-json` for an existing project) writes a `.mcp.json` into the repo pointing at the
-server this machine has — Claude Code reads that file on its own. The manual line, for
+app's **New project** dialog (and `agentmon init --claude-mcp`, or `agentmon project
+claude-mcp` for an existing project) writes a `.mcp.json` into the repo pointing at the
+server this machine has — Claude Code reads that file on its own — and `--codex-mcp` /
+`project codex-mcp` does the same for Codex in `.codex/config.toml`. The manual line, for
 any other client:
 
 ```bash

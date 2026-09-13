@@ -156,9 +156,10 @@ enum Command {
         /// When the project was created (UTC ISO8601). Defaults to now.
         #[arg(long, value_name = "ISO8601")]
         at: Option<String>,
-        /// Also write agent instructions to <location>/CLAUDE.md, pointing coding
-        /// agents at these records. Appends if the file exists; skips if the section
-        /// is already there.
+        /// Also write agent instructions to <location>/.claude/CLAUDE.md, pointing
+        /// coding agents at these records. Appends if the file exists; skips if the
+        /// section is already there. A root CLAUDE.md that already carries the section
+        /// is refreshed in place instead.
         #[arg(long, value_name = "ko|en")]
         claude_md: Option<String>,
         /// Also write AGENTS.md instructions for Codex and compatible tools.
@@ -316,9 +317,10 @@ enum ProjectCmd {
         #[arg(long, value_name = "handle", default_value = "codex")]
         agent: String,
     },
-    /// Write the agentmon instructions into this repo's CLAUDE.md — what
+    /// Write the agentmon instructions into this repo's .claude/CLAUDE.md — what
     /// `init --claude-md` does, for a project that already exists. Conservative: a file
-    /// already there keeps its custom rules. Refreshes managed instructions, retaining
+    /// already there keeps its custom rules, and a root CLAUDE.md that already carries
+    /// the section is refreshed in place. Refreshes managed instructions, retaining
     /// the existing section's language. Edited legacy sections require a manual merge.
     #[command(name = "claude-md", after_help = "EXAMPLE\n  agentmon project claude-md --lang ko\n\n  \
         Re-run it after an app update to pick up a refreshed template: an unchanged \

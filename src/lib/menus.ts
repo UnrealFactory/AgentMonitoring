@@ -157,43 +157,51 @@ export function useProjectMenu() {
   const { refresh } = useApp();
   const { toast } = useContextMenuApi();
 
-  /* The New-project options, reachable after creation: the instruction templates and the
-     .mcp.json server path move with the app, and a project made last month has no other
-     way to catch up. These writes are core's conservative ones (create / append / touch
-     only the agentmon entry), so the item is safe to press twice — the toast conjugates
-     what actually happened. Instruction files use the app's current language. */
+  /* The New-project option, reachable after creation: the instruction templates and the
+     MCP server path move with the app, and a project made last month has no other way to
+     catch up. One press writes for both tools, Claude and Codex — the earlier submenu made
+     every catch-up two trips, and nobody wanted half. Each write is core's conservative
+     one (create / append / touch only the agentmon entry), so the item is safe to press
+     twice; both run even if one fails, and the toast conjugates what happened to each
+     file. Instruction files use the app's current language. */
   const scaffold = useCallback(
-    (p: Project, kind: "claude" | "agents" | "mcp" | "codex-mcp") => {
+    (p: Project, kind: "instructions" | "mcp") => {
       void (async () => {
-        const file = { claude: "CLAUDE.md", agents: "AGENTS.md", mcp: ".mcp.json", "codex-mcp": ".codex/config.toml" }[kind];
-        let outcome: ScaffoldOutcome;
-        try {
-          outcome =
-            kind === "claude"
-              ? await api.writeClaudeMd(p.id, "ko")
-              : kind === "agents"
-                ? await api.writeAgentsMd(p.id, "ko")
-                : kind === "codex-mcp"
-                  ? await api.writeCodexMcp(p.id)
-                  : await api.writeMcpJson(p.id);
-        } catch (err) {
-          toast(
-            plainMarks(
-              projectErrorMessage(err instanceof Error ? err.message : String(err))
-            ),
-            { tone: "warn" }
-          );
-          return;
-        }
-        toast(
+        const writes: Array<[string, () => Promise<ScaffoldOutcome>]> =
+          kind === "instructions"
+            ? [
+                ["CLAUDE.md", () => api.writeClaudeMd(p.id, "ko")],
+                ["AGENTS.md", () => api.writeAgentsMd(p.id, "ko")],
+              ]
+            : [
+                [".mcp.json", () => api.writeMcpJson(p.id)],
+                [".codex/config.toml", () => api.writeCodexMcp(p.id)],
+              ];
+        const results = await Promise.allSettled(writes.map(([, run]) => run()));
+        const describe = (outcome: ScaffoldOutcome, file: string) =>
           outcome === "created"
             ? t("menu.scaffoldCreated", file)
             : outcome === "appended"
               ? t("menu.scaffoldAppended", file)
               : outcome === "updated"
                 ? t("menu.scaffoldUpdated", file)
-                : t("menu.scaffoldPresent", file)
-        );
+                : t("menu.scaffoldPresent", file);
+        const failed = results.some((r) => r.status === "rejected");
+        const outcomes = results.map((r) => (r.status === "fulfilled" ? r.value : null));
+        // Both files, same fate: one sentence naming both. Otherwise one clause per file.
+        if (!failed && outcomes[0] === outcomes[1] && outcomes[0]) {
+          toast(describe(outcomes[0], writes.map(([file]) => file).join("·")));
+          return;
+        }
+        const lines = results.map((r, i) => {
+          const file = writes[i][0];
+          if (r.status === "fulfilled") return describe(r.value, file);
+          const err: unknown = r.reason;
+          return plainMarks(
+            projectErrorMessage(err instanceof Error ? err.message : String(err))
+          );
+        });
+        toast(lines.join(" · "), failed ? { tone: "warn" } : undefined);
       })();
     },
     [toast]
@@ -237,19 +245,15 @@ export function useProjectMenu() {
         {
           id: "instructions",
           label: t("menu.instructions"),
+          hint: ".claude/CLAUDE.md · AGENTS.md",
           separator: true,
-          children: [
-            { id: "claude-md", label: "Claude", hint: "CLAUDE.md", run: () => scaffold(p, "claude") },
-            { id: "agents-md", label: "Codex", hint: "AGENTS.md", run: () => scaffold(p, "agents") },
-          ],
+          run: () => scaffold(p, "instructions"),
         },
         {
           id: "mcp",
           label: t("menu.mcp"),
-          children: [
-            { id: "mcp-json", label: "Claude", hint: ".mcp.json", run: () => scaffold(p, "mcp") },
-            { id: "codex-mcp", label: "Codex", hint: ".codex/config.toml", run: () => scaffold(p, "codex-mcp") },
-          ],
+          hint: ".mcp.json · .codex/config.toml",
+          run: () => scaffold(p, "mcp"),
         },
         /* The undoable way off the list, above the destructive one and nothing like it:
            removing unregisters the path and touches no files. Desktop only — browser

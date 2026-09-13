@@ -930,3 +930,12 @@
 {"ts":"2026-09-11T02:46:35Z","actor":"fable-fb-dash","type":"work_done","ref":"WORK-0121","summary":"v1.6.1을 공개했습니다. 기능 커밋 f986a70ead22a0f32f98850f6c865db3a045416a, 주석 태그 v1.6.1이 같은 커밋을 가리키며 main과 함께 원자적으로 푸시했습니다. 릴리스:…"}
 {"ts":"2026-09-11T02:47:10Z","actor":"fable-fb-dash","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, refs, body, human area"}
 {"ts":"2026-09-11T02:47:38Z","actor":"fable-fb-dash","type":"note_updated","ref":"start-here","summary":"Updated note start-here: description, refs, body, human area"}
+{"ts":"2026-09-13T11:16:23Z","actor":"fable-unified-scaffold","type":"work_started","ref":"WORK-0122","summary":"새 프로젝트 지침·MCP 통합 버튼, .claude/CLAUDE.md 이동, 우클릭 메뉴 단일화"}
+{"ts":"2026-09-13T11:26:03Z","actor":"fable-unified-scaffold","type":"note_updated","ref":"mcp-client-registration","summary":"Updated note mcp-client-registration: title, description, refs, body, human area"}
+{"ts":"2026-09-13T11:26:56Z","actor":"fable-unified-scaffold","type":"note_updated","ref":"project-organization-and-create-defaults","summary":"Updated note project-organization-and-create-defaults: title, description, refs, body, human area"}
+{"ts":"2026-09-13T11:28:15Z","actor":"fable-unified-scaffold","type":"note_updated","ref":"start-here","summary":"Updated note start-here: description, refs, body, human area"}
+{"ts":"2026-09-13T11:32:57Z","actor":"fable-unified-scaffold","type":"work_started","ref":"WORK-0123","summary":"로그인 시 자동 실행(트레이 시작)과 사이드바 스위치"}
+{"ts":"2026-09-13T11:34:12Z","actor":"fable-unified-scaffold","type":"work_done","ref":"WORK-0122","summary":"새 프로젝트 화면의 지침·MCP 네 선택지를 \"에이전트 지침·MCP → 추가 / 추가 안 함\" 하나로 통합했습니다(기본 추가). 추가는 .claude/CLAUDE.md, AGENTS.md(한국어), .mcp.json(작성자 claude), .codex/config.toml(작성자…"}
+{"ts":"2026-09-13T11:40:10Z","actor":"fable-unified-scaffold","type":"work_done","ref":"WORK-0123","summary":"Windows 로그인 시 자동 실행을 추가했습니다."}
+{"ts":"2026-09-13T11:40:58Z","actor":"fable-unified-scaffold","type":"note_created","ref":"autostart-at-login","summary":"로그인 시 자동 실행 — Run 키, --autostart 숨김 시작, 배포 빌드 첫 실행 기본값"}
+{"ts":"2026-09-13T11:42:57Z","actor":"fable-unified-scaffold","type":"work_started","ref":"WORK-0124","summary":"v1.7.0 배포 — 지침·MCP 통합 버튼과 로그인 시 자동 실행 공개"}

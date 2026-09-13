@@ -42,9 +42,8 @@ try {
     await page.goto(`${origin}/projects`);
     await page.getByRole("button", { name: T("proj.new"), exact: true }).click();
     const form = page.locator(".create-panel");
-    for (const [label, choice] of [["agents-md", "한국어"], ["claude-md", T("proj.form.instructionMdNone")], ["codex-mcp", T("proj.form.mcpJsonOn")], ["mcp-json", T("proj.form.mcpJsonOff")]]) {
-      assert.equal(await form.locator(`[aria-labelledby="${label}-label"] [aria-checked="true"]`).textContent(), choice);
-    }
+    assert.equal(await form.locator('[aria-labelledby="scaffold-label"] [aria-checked="true"]').textContent(), T("proj.form.scaffoldOn"));
+    assert.equal(await form.locator('[role="radiogroup"]').count(), 1, "one choice covers every agent file");
     const location = join(scratch, `Default ${locale}`);
     mkdirSync(location);
     await form.getByLabel(T("proj.form.name"), { exact: true }).fill(`Default ${locale}`);
@@ -54,10 +53,11 @@ try {
     const response = await responsePromise;
     assert(response.ok(), await response.text());
     assert.match(readFileSync(join(location, "AGENTS.md"), "utf8"), /lang=ko/);
+    assert.match(readFileSync(join(location, ".claude", "CLAUDE.md"), "utf8"), /lang=ko/);
+    assert(!existsSync(join(location, "CLAUDE.md")), "Claude's file lives in .claude/, not the root");
     assert.match(readFileSync(join(location, ".codex", "config.toml"), "utf8"), /\[mcp_servers\.agentmon\]/);
-    assert(!existsSync(join(location, "CLAUDE.md")));
-    assert(!existsSync(join(location, ".mcp.json")));
-    checked(`${locale}: unchanged form defaults create only Korean AGENTS.md and Codex MCP`);
+    assert.equal(JSON.parse(readFileSync(join(location, ".mcp.json"), "utf8")).mcpServers.agentmon.args.at(-1), "claude");
+    checked(`${locale}: unchanged form defaults create both Korean instruction files and both MCP registrations`);
     await page.goto(`${origin}/projects`);
 
     const heading = () => page.locator(".nav-projects-heading");

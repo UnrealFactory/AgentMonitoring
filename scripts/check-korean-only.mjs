@@ -35,9 +35,7 @@ try {
       assert.equal(await page.locator(".locale-toggle, .locale-option").count(), 0);
       await page.getByRole("button", { name: "새 프로젝트", exact: true }).click();
       const form = page.locator(".create-panel");
-      for (const kind of ["agents", "claude"]) {
-        assert.deepEqual(await form.locator(`[aria-labelledby="${kind}-md-label"] [role="radio"]`).allTextContents(), ["추가 안 함", "한국어"]);
-      }
+      assert.deepEqual(await form.locator('[aria-labelledby="scaffold-label"] [role="radio"]').allTextContents(), ["추가", "추가 안 함"]);
       const dates = await page.evaluate(async () => {
         const { formatDate, formatDateTimeUtc } = await import("/src/lib/format.ts");
         return [formatDate("2026-09-08T11:00:00Z"), formatDateTimeUtc("2026-09-08T11:00:00Z")];

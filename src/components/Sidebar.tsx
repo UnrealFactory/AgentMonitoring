@@ -28,6 +28,7 @@ import {
 } from "../lib/words";
 import { t } from "../lib/i18n";
 import { AppUpdate } from "./AppUpdate";
+import { Autostart } from "./Autostart";
 import type { Project } from "../lib/types";
 import { FolderIcon, useFolderMenu } from "./ProjectFolders";
 import { folderFor, orderedProjects } from "../lib/projectFolders";
@@ -403,6 +404,9 @@ export function Sidebar() {
             otherwise (src/components/AppUpdate.tsx). First in the foot: it is news about
             the app the foot describes, and it leaves when acted on. */}
         <AppUpdate />
+        {/* Whether the app comes up with the login — desktop only, a switch that reads
+            the real registration (src/components/Autostart.tsx). */}
+        <Autostart />
         {/* Where the projects are managed, one click away. Every path is on the Projects
             screen, which is where the reader can act on them. A plain Link: as a NavLink
             this footer marked itself the current page on /projects, which lit two rows in

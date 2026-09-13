@@ -27,6 +27,7 @@ use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent, Wry};
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
 use tauri_plugin_dialog::DialogExt;
 
 type CmdResult<T> = std::result::Result<T, String>;
@@ -675,6 +676,81 @@ fn init_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// autostart — the app comes up with the login, in the tray
+// ---------------------------------------------------------------------------
+
+/// The login-time launch is `<exe> --autostart`. Seeing the flag, setup leaves the window
+/// hidden and lets the tray icon stand for the app; a click there, or a second launch from
+/// the desktop icon, brings the window up as it always did.
+const AUTOSTART_ARG: &str = "--autostart";
+
+fn launched_by_autostart() -> bool {
+    std::env::args().skip(1).any(|arg| arg == AUTOSTART_ARG)
+}
+
+/// Whether this app is registered to start with the login (Windows: the HKCU Run key).
+/// Read from the registration itself, not a saved preference, so the switch shows what
+/// will actually happen at the next login.
+#[tauri::command]
+fn get_autostart(app: AppHandle) -> CmdResult<bool> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// Register or unregister the login-time launch, answering the state that resulted.
+#[tauri::command]
+fn set_autostart(app: AppHandle, enabled: bool) -> CmdResult<bool> {
+    let launcher = app.autolaunch();
+    if enabled {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    }
+    .map_err(|e| e.to_string())?;
+    remember_autostart_decision(&app);
+    launcher.is_enabled().map_err(|e| e.to_string())
+}
+
+/// The marker that says the question has been answered once — by the first release run
+/// turning it on, or by the reader flipping the switch — so no later launch re-enables
+/// what the reader turned off.
+fn autostart_marker(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("autostart.json"))
+}
+
+fn remember_autostart_decision(app: &AppHandle) {
+    // Debug builds never default on, so they have no decision to remember — and a marker
+    // left behind by trying the switch in `tauri dev` must not stop the installed app's
+    // first run from turning it on.
+    if cfg!(debug_assertions) {
+        return;
+    }
+    if let Some(path) = autostart_marker(app) {
+        let _ = agentmon_core::fsx::write_atomic(&path, "{ \"decided\": true }\n");
+    }
+}
+
+/// First run of a release build: on by default, because a monitor that only runs when
+/// somebody remembers to start it misses exactly the sessions it was for. Debug builds
+/// skip this — a Run key pointing at target/debug is a trap for the next `cargo clean` —
+/// though the switch still works there for trying it out.
+fn default_autostart_on_first_run(app: &AppHandle) {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let Some(marker) = autostart_marker(app) else { return };
+    if marker.exists() {
+        return;
+    }
+    match app.autolaunch().enable() {
+        Ok(()) => remember_autostart_decision(app),
+        Err(e) => eprintln!("agentmonitoring: could not register the login-time start ({e})"),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // live updates — one watcher per registered project
 // ---------------------------------------------------------------------------
 
@@ -928,6 +1004,12 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // The login-time start (see "autostart" above): the registration launches this
+        // executable with --autostart, and setup reads that flag to stay in the tray.
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec![AUTOSTART_ARG]),
+        ))
         .manage(ExtraRoots(discover_extra_roots()))
         .manage(WatcherState::default())
         .on_window_event(|window, event| {
@@ -962,6 +1044,14 @@ pub fn run() {
                     "agentmonitoring: no tray icon ({e}); closing the window will quit the app"
                 );
             }
+            default_autostart_on_first_run(app.handle());
+            // The window is created hidden (tauri.conf.json `visible: false`) so that a
+            // launch coming from the login-time registration can stay in the tray. Every
+            // other launch shows it here, at once — and so does an autostart without a
+            // tray icon, since a hidden window with nothing to click would be unreachable.
+            if !launched_by_autostart() || app.tray_by_id(TRAY_ID).is_none() {
+                show_main_window(app.handle());
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -994,6 +1084,8 @@ pub fn run() {
             get_record_asset,
             update::check_app_update,
             update::install_app_update,
+            get_autostart,
+            set_autostart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running AgentMonitoring");

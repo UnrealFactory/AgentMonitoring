@@ -291,7 +291,7 @@ export const api = {
     description?: string;
     tags?: string[];
     agent?: string;
-    /** Also write agent instructions to `<location>/CLAUDE.md`, in this language. */
+    /** Also write agent instructions to `<location>/.claude/CLAUDE.md`, in this language. */
     claudeMd?: "ko" | "en";
     /** Also write `<location>/AGENTS.md`; may be selected together with CLAUDE.md. */
     agentsMd?: "ko" | "en";
@@ -323,8 +323,9 @@ export const api = {
         }),
 
   /**
-   * Write (or refresh) an existing project's CLAUDE.md instructions — the New-project
-   * option, reachable after creation, because the template moves with the app. The
+   * Write (or refresh) an existing project's `.claude/CLAUDE.md` instructions — the
+   * New-project option, reachable after creation, because the template moves with the
+   * app. A root CLAUDE.md that already carries the section is refreshed in place. The
    * write preserves custom rules and the existing language, refreshing only the
    * managed section. Outcomes: `created`, `appended`, `updated`, `already_present`.
    */
@@ -491,6 +492,20 @@ export const api = {
    */
   installAppUpdate: (url: string, version: string): Promise<void> =>
     invokeCommand<null>("install_app_update", { url, version }).then(() => undefined),
+
+  /**
+   * Whether the app is registered to start with the login — read from the registration
+   * itself (Windows: the HKCU Run key), so it is what the next login will do. Desktop
+   * only; the browser twin has no login to start with and answers false.
+   */
+  getAutostart: async (): Promise<boolean> => {
+    if (!isTauri()) return false;
+    return invokeCommand<boolean>("get_autostart", {});
+  },
+
+  /** Register or unregister the login-time start; resolves to the state that resulted. */
+  setAutostart: (enabled: boolean): Promise<boolean> =>
+    invokeCommand<boolean>("set_autostart", { enabled }),
 };
 
 /** What `check_app_update` answers — src-tauri/src/update.rs `UpdateInfo`. */

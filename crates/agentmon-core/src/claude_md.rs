@@ -3,8 +3,15 @@
 //! A project's records are only as good as the agents' habit of writing them, and the
 //! habit comes from the repo's own agent instructions. This module owns the two
 //! canonical instruction texts (Korean and English) and the one way they reach a repo:
-//! written to `<location>/CLAUDE.md` or `<location>/AGENTS.md` — the repo root,
-//! *next to* the AgentMonitoring folder. Both files use the same templates.
+//! written to `<location>/.claude/CLAUDE.md` or `<location>/AGENTS.md`, where
+//! `location` is the repo root *next to* the AgentMonitoring folder. Claude Code reads
+//! `.claude/CLAUDE.md` exactly like a root `CLAUDE.md`, and the folder keeps Claude's
+//! files together the way `.codex/` keeps Codex's. Codex reads `AGENTS.md` only at the
+//! root, so that one stays there. Both files use the same templates.
+//!
+//! A root `CLAUDE.md` that already carries the agentmon section (from a project made
+//! before the folder existed) is refreshed in place: Claude Code loads both locations,
+//! and a second copy under `.claude/` would double the instructions.
 //!
 //! Only the versioned managed section is refreshed. Exact historical templates can
 //! be migrated; edited legacy sections or malformed markers require a manual merge.
@@ -81,11 +88,25 @@ pub enum ClaudeMdOutcome {
     AlreadyPresent,
 }
 
-/// Write the agent instructions to `<location>/CLAUDE.md`. `location` is the folder
-/// that holds the `AgentMonitoring` folder ([`Store::location`](crate::Store::location)),
-/// not the data folder itself.
+/// Write the agent instructions to `<location>/.claude/CLAUDE.md`. `location` is the
+/// folder that holds the `AgentMonitoring` folder
+/// ([`Store::location`](crate::Store::location)), not the data folder itself.
+///
+/// A root `<location>/CLAUDE.md` that already holds the agentmon section is refreshed
+/// where it is instead (see the module doc); a root file without one is the user's and
+/// is left alone.
 pub fn write_claude_md(location: &Path, lang: ClaudeMdLang) -> Result<(PathBuf, ClaudeMdOutcome)> {
-    write_instructions(location, "CLAUDE.md", lang)
+    let root = location.join("CLAUDE.md");
+    match fs::read_to_string(&root) {
+        Ok(text) => {
+            if instruction_section(&root, &text)?.is_some() {
+                return write_instructions(location, "CLAUDE.md", lang);
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(CoreError::io(&root, e)),
+    }
+    write_instructions(&location.join(".claude"), "CLAUDE.md", lang)
 }
 
 /// Write the same instructions for Codex and other AGENTS.md-compatible tools.
@@ -328,9 +349,11 @@ mod tests {
     fn creates_then_holds_then_appends_to_a_foreign_file() {
         let dir = tmp("lifecycle");
 
-        // No file: created verbatim.
+        // No file: created verbatim, inside .claude/ like Codex's .codex/.
         let (path, outcome) = write_claude_md(&dir, ClaudeMdLang::Ko).unwrap();
         assert_eq!(outcome, ClaudeMdOutcome::Created);
+        assert_eq!(path, dir.join(".claude").join("CLAUDE.md"));
+        assert!(!dir.join("CLAUDE.md").exists(), "the root stays clear");
         assert_eq!(
             fs::read_to_string(&path).unwrap(),
             ClaudeMdLang::Ko.template()
@@ -348,7 +371,7 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), before);
 
-        // A CLAUDE.md the human already owns: the section is appended, theirs kept.
+        // A .claude/CLAUDE.md the human already owns: the section is appended, theirs kept.
         let theirs = "# My repo\n\nRun `make dev`.";
         fs::write(&path, theirs).unwrap();
         let (_, outcome) = write_claude_md(&dir, ClaudeMdLang::En).unwrap();
@@ -357,6 +380,52 @@ mod tests {
         assert!(joined.starts_with("# My repo\n\nRun `make dev`.\n\n<!-- agentmon:instructions"));
         assert!(joined.ends_with(ClaudeMdLang::En.template()));
 
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_root_claude_md_without_the_section_is_the_users_and_stays_untouched() {
+        let dir = tmp("root-foreign");
+        let root = dir.join("CLAUDE.md");
+        let theirs = "# Their rules\n\nNo agentmon here.\n";
+        fs::write(&root, theirs).unwrap();
+        let (path, outcome) = write_claude_md(&dir, ClaudeMdLang::Ko).unwrap();
+        assert_eq!(outcome, ClaudeMdOutcome::Created);
+        assert_eq!(path, dir.join(".claude").join("CLAUDE.md"));
+        assert_eq!(fs::read_to_string(&root).unwrap(), theirs);
+        assert_eq!(fs::read_to_string(&path).unwrap(), TEMPLATE_KO);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_root_claude_md_that_carries_the_section_is_refreshed_in_place() {
+        let dir = tmp("root-managed");
+        let root = dir.join("CLAUDE.md");
+        for original in [
+            LEGACY_EN.to_string(),
+            format!("# Mine\n\n{START}1 lang=en -->\nOld managed text.\n{END}\n"),
+            TEMPLATE_EN.to_string(),
+        ] {
+            fs::write(&root, &original).unwrap();
+            let (path, outcome) = write_claude_md(&dir, ClaudeMdLang::Ko).unwrap();
+            assert_eq!(path, root, "{original:?}");
+            assert!(
+                !dir.join(".claude").exists(),
+                "no second copy under .claude/ for {original:?}"
+            );
+            let text = fs::read_to_string(&root).unwrap();
+            assert!(text.contains(TEMPLATE_EN.trim_end()), "{original:?}");
+            if original == TEMPLATE_EN {
+                assert_eq!(outcome, ClaudeMdOutcome::AlreadyPresent);
+            } else {
+                assert_eq!(outcome, ClaudeMdOutcome::Updated);
+            }
+        }
+        // A root file with broken markers is refused, not shadowed by a fresh copy.
+        fs::write(&root, TEMPLATE_EN.replace(END, "")).unwrap();
+        let err = write_claude_md(&dir, ClaudeMdLang::Ko).unwrap_err().to_string();
+        assert!(err.contains("manually merge"), "{err}");
+        assert!(!dir.join(".claude").exists());
         fs::remove_dir_all(&dir).unwrap();
     }
 

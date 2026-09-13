@@ -1058,21 +1058,28 @@ directory), holding `project.json`, `worklogs/`, `bugs/` and the `project_create
 and registers it in the machine's project list, so it appears in the app. Refuses (exit
 `5`) if that folder already holds a project — it will never reset a live one.
 
-`--claude-md ko|en` writes work-recording instructions for Claude Code to `CLAUDE.md`.
+`--claude-md ko|en` writes work-recording instructions for Claude Code to
+`.claude/CLAUDE.md` — Claude Code reads that location exactly like a root `CLAUDE.md`, and
+the folder keeps Claude's files together the way `.codex/` keeps Codex's. A root
+`CLAUDE.md` that already carries the AgentMonitoring section (from a project made before
+the folder existed) is refreshed in place instead, so the instructions are never loaded
+twice; a root `CLAUDE.md` without the section is the user's and is left alone.
 `--agents-md ko|en` writes the same instructions for Codex and compatible tools to
-`AGENTS.md`. Both files live at the repo root, next to the `AgentMonitoring` folder.
-Use either flag or both together; each file can have its own language. Existing content
-is preserved outside the versioned AgentMonitoring section, which is refreshed when
-the template changes. The files are independent copies of the same template, so
-creating either one does not modify the other. Existing sections keep their language.
+`AGENTS.md` at the repo root, next to the `AgentMonitoring` folder, which is where Codex
+reads it. Use either flag or both together; each file can have its own language.
+Existing content is preserved outside the versioned AgentMonitoring section, which is
+refreshed when the template changes. The files are independent copies of the same
+template, so creating either one does not modify the other. Existing sections keep
+their language.
 
-These instructions refer to the agentmon MCP tools. `--mcp-json` separately creates the
-MCP registration used by Claude Code. Select **Add Codex MCP** to create
-`.codex/config.toml` as well, or use `init --codex-mcp` / `project codex-mcp`.
-Codex loads it only in trusted projects. **Add Claude MCP** uses `init --claude-mcp` /
-`project claude-mcp`; the old `--mcp-json` / `project mcp-json` names remain aliases.
-Both registrations can be selected together (see [MCP setup](MCP.md)).
-Creating `AGENTS.md` alone does not register a server in Codex.
+These instructions refer to the agentmon MCP tools. `--claude-mcp` separately creates the
+MCP registration used by Claude Code in `.mcp.json` at the repo root — the only
+project-scoped location Claude Code reads, which is why that file does not move into
+`.claude/`. `--codex-mcp` creates `.codex/config.toml` for Codex, which loads it only in
+trusted projects; `project claude-mcp` / `project codex-mcp` do the same for an existing
+project. The old `--mcp-json` / `project mcp-json` names remain aliases. Both
+registrations can be selected together (see [MCP setup](MCP.md)). Creating `AGENTS.md`
+alone does not register a server in Codex.
 
 ```bash
 cd /your/repo && agentmon init --name "Checkout rewrite" \
@@ -1080,9 +1087,12 @@ cd /your/repo && agentmon init --name "Checkout rewrite" \
   --claude-md ko --agents-md ko
 ```
 
-The app's **New project** form offers the same independent choices: skip, Korean or
-English for each file. Existing projects expose both writes in their project menu,
-using the app's current language.
+The app's **New project** form folds all four into one choice, **에이전트 지침·MCP →
+추가 / 추가 안 함** (default 추가): 추가 writes `.claude/CLAUDE.md`, `AGENTS.md`,
+`.mcp.json` and `.codex/config.toml` with Korean instructions and the default record
+authors `claude` and `codex`. Existing projects expose the same two writes in their
+project menu — **지침 쓰기** writes both instruction files, **MCP 추가하기** both
+registrations — in the app's language.
 
 ### `agentmon project claude-md` / `agentmon project agents-md`
 
@@ -1091,8 +1101,9 @@ agentmon project claude-md --lang ko
 agentmon project agents-md --lang en
 ```
 
-Add or refresh instructions after a project has been created. Both commands preserve
-custom content outside the `agentmon:instructions` marker pair and keep an existing
+Add or refresh instructions after a project has been created (`claude-md` targets
+`.claude/CLAUDE.md`, or a root `CLAUDE.md` that already carries the section). Both
+commands preserve custom content outside the `agentmon:instructions` marker pair and keep an existing
 section's language, even if you request another language. The managed section is
 replaced when its template changes; put custom rules outside it. Exact legacy
 templates are migrated to managed sections. Edited legacy sections, duplicate or

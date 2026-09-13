@@ -174,6 +174,10 @@ export const ko = {
   "update.go": "업데이트",
   "update.applying": "설치 창이 열립니다 — 이 앱은 곧 닫히고, 설치가 끝나면 자동으로 다시 열립니다.",
   "update.failed": "업데이트를 시작하지 못했습니다",
+  "autostart.label": "시작 시 자동 실행",
+  "autostart.hint":
+    "Windows에 로그인하면 창 없이 트레이에서 시작합니다. 창은 트레이 아이콘을 누르면 열립니다.",
+  "autostart.failed": "자동 실행 설정을 바꾸지 못했습니다",
 
   /* -- the two menus (right button) ----------------------------------------- */
 
@@ -639,22 +643,11 @@ export const ko = {
     "이 프로젝트를 처음 보는 사람이 출발점으로 삼을 수 있는 한두 문장.",
   "proj.form.tags": "태그",
   "proj.form.tagsPlaceholder": "frontend, payments",
-  "proj.form.claudeMd": "CLAUDE.md",
-  "proj.form.agentsMd": "AGENTS.md",
-  "proj.form.instructionMdNone": "추가 안 함",
-  "proj.form.claudeMdHint":
-    "Claude Code용 작업 기록 지침을 저장소 루트에 만들거나 갱신합니다. 사용자 규칙은 보존하며, AGENTS.md와 함께 만들 수 있습니다.",
-  "proj.form.agentsMdHint":
-    "Codex 등 AGENTS.md를 지원하는 도구용 작업 기록 지침을 저장소 루트에 만들거나 갱신합니다. 사용자 규칙은 보존하며, CLAUDE.md와 함께 만들 수 있습니다.",
-  "proj.form.mcpJson": "Claude MCP 추가하기",
-  "proj.form.codexMcp": "Codex MCP 추가하기",
-  "proj.form.mcpJsonOn": "추가",
-  "proj.form.mcpJsonOff": "추가 안 함",
-  "proj.form.mcpAgent": "기록에 남길 에이전트 이름",
-  "proj.form.mcpJsonHint":
-    "Claude Code에서 기록 도구를 사용하도록 .mcp.json에 연결 설정을 추가합니다. 다른 서버는 보존합니다. 오른쪽은 기록에 남길 에이전트 이름입니다.",
-  "proj.form.codexMcpHint":
-    "Codex에서 기록 도구를 사용하도록 .codex/config.toml에 연결 설정을 추가합니다. 다른 설정과 주석은 보존하며, Codex에서 이 프로젝트를 신뢰한 뒤 적용됩니다. 오른쪽은 기록에 남길 에이전트 이름입니다.",
+  "proj.form.scaffold": "에이전트 지침·MCP",
+  "proj.form.scaffoldOn": "추가",
+  "proj.form.scaffoldOff": "추가 안 함",
+  "proj.form.scaffoldHint":
+    "Claude Code와 Codex가 이 기록을 쓰도록 지침 파일(.claude/CLAUDE.md, AGENTS.md)과 MCP 연결(.mcp.json, .codex/config.toml)을 한 번에 만듭니다. 기존 규칙과 다른 서버 설정은 보존하며, 기록 작성자는 claude·codex로 남습니다. Codex는 이 프로젝트를 신뢰한 뒤 적용됩니다.",
   "proj.form.writes": (location: string) =>
     `\`${location}\\AgentMonitoring\` 폴더에 project.json과 첫 이벤트를 만듭니다 —`,
   "proj.form.writesTail": "명령과 똑같습니다.",

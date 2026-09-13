@@ -56,10 +56,12 @@ Names are never truncated, and a name and its description stay together.
 
 ## Install
 
-In **New project**, select **Add Claude MCP**, **Add Codex MCP**, or both. For an existing
-project, choose **Add MCP → Claude / Codex** in its context menu. Instructions are grouped
-separately under **Write instructions → Claude / Codex**. Each registration uses the
-server bundled with this app and absolute paths for this machine.
+In **New project**, leave **에이전트 지침·MCP** on **추가**: it registers the server for
+Claude Code and Codex together (and writes both instruction files). For an existing
+project, choose **MCP 추가하기** in its context menu — one item, both clients. Instructions
+are a separate item, **지침 쓰기**, which likewise writes `.claude/CLAUDE.md` and `AGENTS.md`
+in one press. Each registration uses the server bundled with this app and absolute paths
+for this machine. The CLI keeps the per-client flags below for scripts.
 
 | Client | Project configuration | CLI at creation | CLI for an existing project |
 |---|---|---|---|
@@ -76,7 +78,9 @@ and comments are preserved. An identical registration leaves the file unchanged;
 JSON or TOML is refused. Re-run the action after moving the app or project to refresh paths.
 Codex loads project configuration only after you trust the project. This action does not
 alter global configuration or grant trust. See the [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
-Instruction files (`CLAUDE.md` / `AGENTS.md`) and MCP connections are independent options.
+Instruction files (`.claude/CLAUDE.md` / `AGENTS.md`) and MCP connections are independent
+on the CLI; the app writes them from two menu items. `.mcp.json` stays at the repo root
+rather than moving into `.claude/` because project-scoped MCP servers are read only from there.
 
 The rest of this section covers manual registration and other scopes.
 

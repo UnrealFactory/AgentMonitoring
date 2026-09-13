@@ -604,12 +604,11 @@ function CreateProject({
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [claudeMd, setClaudeMd] = useState<"" | "ko">("");
-  const [agentsMd, setAgentsMd] = useState<"" | "ko">("ko");
-  const [mcpJson, setMcpJson] = useState(false);
-  const [mcpAgent, setMcpAgent] = useState("claude");
-  const [codexMcp, setCodexMcp] = useState(true);
-  const [codexAgent, setCodexAgent] = useState("codex");
+  /* One switch for the four agent files (.claude/CLAUDE.md, AGENTS.md, .mcp.json,
+     .codex/config.toml): the earlier split into Claude/Codex × instructions/MCP made
+     every new project four decisions, and nobody chose half. The CLI keeps the
+     independent flags for the rare case. */
+  const [scaffold, setScaffold] = useState(true);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -644,12 +643,10 @@ function CreateProject({
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean),
-        claudeMd: claudeMd || undefined,
-        agentsMd: agentsMd || undefined,
-        mcpJson,
-        mcpAgent: mcpJson ? mcpAgent.trim() || undefined : undefined,
-        codexMcp,
-        codexAgent: codexMcp ? codexAgent.trim() || undefined : undefined,
+        claudeMd: scaffold ? "ko" : undefined,
+        agentsMd: scaffold ? "ko" : undefined,
+        mcpJson: scaffold,
+        codexMcp: scaffold,
       });
       onCreated(project.id);
     } catch (err) {
@@ -720,78 +717,31 @@ function CreateProject({
             onChange={(e) => setTags(e.target.value)}
           />
         </label>
-        {([
-          { kind: "claude", value: claudeMd, set: setClaudeMd },
-          { kind: "agents", value: agentsMd, set: setAgentsMd },
-        ] as const).map(({ kind, value, set }) => (
-          <div className="field field-wide instruction-md-field" key={kind}>
-            <span className="field-label" id={`${kind}-md-label`}>
-              {t(kind === "claude" ? "proj.form.claudeMd" : "proj.form.agentsMd")}
-            </span>
-            {/* 지침 파일은 한국어로 생성합니다. */}
-            <div
-              className="segmented instruction-md-choice"
-              role="radiogroup"
-              aria-labelledby={`${kind}-md-label`}
-            >
-              {(["", "ko"] as const).map((v) => (
-                <button
-                  key={v || "none"}
-                  type="button"
-                  role="radio"
-                  aria-checked={value === v}
-                  className={`segment${value === v ? " is-active" : ""}`}
-                  onClick={() => set(v)}
-                >
-                  {v === "" ? t("proj.form.instructionMdNone") : "한국어"}
-                </button>
-              ))}
-            </div>
-            <span className="field-hint">
-              {t(kind === "claude" ? "proj.form.claudeMdHint" : "proj.form.agentsMdHint")}
-            </span>
-          </div>
-        ))}
-        {([
-          { kind: "mcp-json", label: "proj.form.mcpJson", hint: "proj.form.mcpJsonHint", enabled: mcpJson, setEnabled: setMcpJson, agent: mcpAgent, setAgent: setMcpAgent, placeholder: "claude" },
-          { kind: "codex-mcp", label: "proj.form.codexMcp", hint: "proj.form.codexMcpHint", enabled: codexMcp, setEnabled: setCodexMcp, agent: codexAgent, setAgent: setCodexAgent, placeholder: "codex" },
-        ] as const).map(({ kind, label, hint, enabled, setEnabled, agent, setAgent, placeholder }) => (
-          <div className="field field-wide instruction-md-field" key={kind}>
-            <span className="field-label" id={`${kind}-label`}>
-              {t(label)}
-            </span>
-            <div className="mcp-json-row">
-              <div
-                className="segmented instruction-md-choice"
-                role="radiogroup"
-                aria-labelledby={`${kind}-label`}
+        {/* 지침 파일은 한국어로, 기록 작성자는 claude·codex 기본값으로 생성합니다. */}
+        <div className="field field-wide instruction-md-field">
+          <span className="field-label" id="scaffold-label">
+            {t("proj.form.scaffold")}
+          </span>
+          <div
+            className="segmented instruction-md-choice"
+            role="radiogroup"
+            aria-labelledby="scaffold-label"
+          >
+            {([true, false] as const).map((v) => (
+              <button
+                key={String(v)}
+                type="button"
+                role="radio"
+                aria-checked={scaffold === v}
+                className={`segment${scaffold === v ? " is-active" : ""}`}
+                onClick={() => setScaffold(v)}
               >
-                {([true, false] as const).map((v) => (
-                  <button
-                    key={String(v)}
-                    type="button"
-                    role="radio"
-                    aria-checked={enabled === v}
-                    className={`segment${enabled === v ? " is-active" : ""}`}
-                    onClick={() => setEnabled(v)}
-                  >
-                    {v ? t("proj.form.mcpJsonOn") : t("proj.form.mcpJsonOff")}
-                  </button>
-                ))}
-              </div>
-              {enabled && (
-                <input
-                  className="input mcp-agent-input"
-                  value={agent}
-                  aria-label={`${t(label)} — ${t("proj.form.mcpAgent")}`}
-                  placeholder={placeholder}
-                  onChange={(e) => setAgent(e.target.value)}
-                />
-              )}
-            </div>
-            <span className="field-hint">{t(hint)}</span>
+                {v ? t("proj.form.scaffoldOn") : t("proj.form.scaffoldOff")}
+              </button>
+            ))}
           </div>
-        ))}
+          <span className="field-hint">{t("proj.form.scaffoldHint")}</span>
+        </div>
       </div>
 
       {error && (

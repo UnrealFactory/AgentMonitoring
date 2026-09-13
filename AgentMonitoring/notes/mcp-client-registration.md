@@ -1,35 +1,32 @@
 ---
 name: mcp-client-registration
-title: MCP 지원 범위는 Claude·Codex — Cursor 제외
+title: MCP 지원 범위는 Claude·Codex(항상 함께) — Cursor 제외
 type: decision
-description: 2026-09-05 사용자께서 Cursor는 사용하지 않으므로 제외하셨습니다. WORK-0104의 추가분은 전부 철회했으며 기존 Claude·Codex 구현을 유지합니다.
+description: "Claude Code·Codex MCP를 앱에서는 항상 함께 등록합니다(WORK-0122). .mcp.json은 Claude Code가 루트에서만 읽어 이동하지 않으며, Cursor는 사용자 결정으로 제외합니다."
 agent: codex
-updated_by: codex
+updated_by: fable-unified-scaffold
 created: 2026-09-05T11:52:08Z
-updated: 2026-09-05T11:53:44Z
+updated: 2026-09-13T11:26:03Z
 tags: []
-refs: [WORK-0104, WORK-0105, handoff-v1-release]
+refs: [WORK-0104, WORK-0105, WORK-0122, project-organization-and-create-defaults, handoff-v1-release]
 ---
 
 2026-09-05 사용자께서 **Cursor는 필요하지 않고 사용하지 않는다**고 명시하셨습니다. 참고 문서 언급을 지원 범위로 해석하여 WORK-0104에서 추가했던 Cursor 코드는 WORK-0105에서 모두 철회했습니다. 다음 세션에서 Cursor 지원을 다시 추가하지 마세요.
 
-현재 소스는 기존 v1.5.1의 Claude·Codex 개별 선택 기능을 유지합니다.
+지원 범위는 Claude Code와 Codex 두 도구이며, 2026-09-13 WORK-0122부터 앱은 두 도구를 **항상 함께** 처리합니다.
 
-- Claude Code: `.mcp.json`의 `mcpServers.agentmon`, `init --claude-mcp` / `project claude-mcp`입니다. `--mcp-json` / `project mcp-json`은 기존 별칭입니다.
-- Codex: `.codex/config.toml`의 `[mcp_servers.agentmon]`, `init --codex-mcp` / `project codex-mcp`입니다. 다른 TOML 설정·주석을 보존하며 신뢰한 프로젝트에서만 읽힙니다.
-- 새 프로젝트 화면과 기존 프로젝트 MCP 하위 메뉴에서 각각 선택합니다. 작성자 핸들은 기록 작성자만 바꿉니다.
-- AGENTS.md·CLAUDE.md 생성과 MCP 등록은 독립적입니다.
+- Claude Code: `.mcp.json`의 `mcpServers.agentmon`, CLI `init --claude-mcp` / `project claude-mcp`(`--mcp-json` / `project mcp-json`은 별칭). Claude Code는 프로젝트 범위 MCP를 저장소 루트 `.mcp.json`에서만 읽으므로 이 파일은 `.claude/` 안으로 옮기지 않습니다(공식 문서 확인).
+- Codex: `.codex/config.toml`의 `[mcp_servers.agentmon]`, CLI `init --codex-mcp` / `project codex-mcp`. 다른 TOML 설정·주석을 보존하며 신뢰한 프로젝트에서만 읽힙니다.
+- 앱: 새 프로젝트 화면의 단일 선택 **에이전트 지침·MCP → 추가**가 두 등록을 함께 만들고, 기존 프로젝트 우클릭의 **MCP 추가하기** 한 항목이 두 등록을 병렬로 실행해 파일별 결과를 한 토스트로 보고합니다. 화면에는 Claude/Codex 하위 메뉴가 없습니다. 개별 선택은 CLI 플래그로만 합니다.
+- 기록 작성자 기본값은 claude·codex이며 화면에서는 바꾸지 않습니다(CLI `--mcp-agent`, `--codex-agent`, `--agent`로만 변경).
+- AGENTS.md·CLAUDE.md 생성과 MCP 등록은 CLI에서 독립적이고, 앱에서는 각각 **지침 쓰기**·**MCP 추가하기** 항목으로 나뉩니다. 지침 파일 위치는 [[project-organization-and-create-defaults]]를 보세요.
 
-복원한 개발 CLI·프런트엔드 빌드와 `AGENTMON_BIN=target/debug/agentmon.exe`를 사용한 `check:instructions` 23개가 통과했습니다. 기존 `.codex/config.toml`은 수정하지 않았습니다. Cursor 추가와 철회 작업에서 커밋·배포 또는 실제 클라이언트 접속 시험은 수행하지 않았습니다.
+검증은 WORK-0122의 `check:instructions` 28개(CLI·폼·메뉴 실제 파일 쓰기)로 했습니다. 실제 클라이언트 접속 시험은 하지 않았습니다.
 
-WORK-0104의 세 클라이언트 그림과 완료 내용은 철회 전 이력입니다. 현재 기능 판단에는 이 노트와 WORK-0105를 사용하세요.
+WORK-0104의 세 클라이언트 그림과 완료 내용은 철회 전 이력입니다. 현재 기능 판단에는 이 노트와 WORK-0105, WORK-0122를 사용하세요.
 
 ## For humans
 
-2026년 9월 5일, 사용자께서 Cursor는 사용하지 않으므로 제외한다고 정하셨습니다. 추가했던 기능은 되돌렸고 기존 Claude·Codex 선택을 유지합니다.
+2026년 9월 5일, 사용자께서 Cursor는 사용하지 않으므로 제외한다고 정하셨습니다. 지원 대상은 Claude Code와 Codex 두 도구입니다.
 
-**참고로 등장한 도구를 구현 대상으로 넓게 해석했습니다.** 이제 지원 범위는 사용자께서 사용하는 두 도구입니다. 선택지 목록에서 불필요한 항목을 다시 거둔 것과 같습니다.
-
-**복원한 기능의 검사 23개가 통과했습니다.** 화면과 명령줄에서 설정 파일을 생성하는 검사입니다. 실제 클라이언트 접속이나 배포는 수행하지 않았습니다.
-
-Cursor는 현재 지원 범위에 포함하지 않습니다.
+2026년 9월 13일부터는 두 도구를 따로 고르지 않습니다. 새 프로젝트를 만들 때 "추가"를 고르거나, 기존 프로젝트에서 "MCP 추가하기"를 한 번 누르면 두 도구의 연결 설정이 함께 만들어집니다. Claude용 연결 파일은 Claude Code가 저장소 맨 위에서만 읽기 때문에 그 자리에 그대로 둡니다.
