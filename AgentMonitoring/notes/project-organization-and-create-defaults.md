@@ -2,16 +2,16 @@
 name: project-organization-and-create-defaults
 title: "새 프로젝트 기본값(지침·MCP 통합), .claude/CLAUDE.md 위치와 사이드바 정리 폴더"
 type: memory
-description: "WORK-0122: 새 프로젝트는 추가/추가 안 함 한 선택으로 .claude/CLAUDE.md·AGENTS.md·.mcp.json·.codex/config.toml을 함께 만들고, 우클릭 지침 쓰기·MCP 추가하기는 Claude·Codex를 한 번에 처리합니다. v1.6.0의 드래그·순서 저장·우클릭 관리는 그대로입니다."
+description: "v1.7.0: 새 프로젝트는 추가/추가 안 함 한 선택으로 .claude/CLAUDE.md·AGENTS.md·.mcp.json·.codex/config.toml을 함께 만들고, 우클릭 지침 쓰기·MCP 추가하기는 Claude·Codex를 한 번에 처리합니다. v1.6.0의 드래그·순서 저장·우클릭 관리는 그대로입니다."
 agent: codex
 updated_by: fable-unified-scaffold
 created: 2026-09-08T09:29:00Z
-updated: 2026-09-13T11:26:56Z
+updated: 2026-09-13T11:47:42Z
 tags: []
 refs: [WORK-0111, WORK-0113, WORK-0115, WORK-0116, WORK-0117, WORK-0118, WORK-0119, WORK-0122, dev-hmr-context-identity, korean-only-ui, handoff-v1-release, mcp-client-registration]
 ---
 
-2026-09-08 공개한 **v1.6.0**의 동작에 2026-09-13 WORK-0122의 새 프로젝트 기본값 변경을 반영한 현재 상태입니다. WORK-0111~0118에서 구현하고 WORK-0119에서 한국어 전용 UI와 함께 배포했으며, WORK-0122는 아직 배포 전 소스입니다. 배포 근거는 [[handoff-v1-release]], 언어 결정은 [[korean-only-ui]]를 확인하세요.
+2026-09-08 공개한 **v1.6.0**의 동작에 2026-09-13 WORK-0122의 새 프로젝트 기본값 변경을 반영한 현재 상태입니다. WORK-0111~0118에서 구현하고 WORK-0119에서 한국어 전용 UI와 함께 배포했으며, WORK-0122는 v1.7.0(2026-09-13)에 포함됐습니다. 배포 근거는 [[handoff-v1-release]], 언어 결정은 [[korean-only-ui]]를 확인하세요.
 
 - **새 프로젝트 기본값(WORK-0122)**: 화면의 지침·MCP 선택은 **에이전트 지침·MCP → 추가 / 추가 안 함** 하나뿐이며 기본은 추가입니다. 추가는 `.claude/CLAUDE.md`(한국어), `AGENTS.md`(한국어), `.mcp.json`(작성자 claude), `.codex/config.toml`(작성자 codex)을 한 번에 만듭니다. 화면에서 작성자 이름은 바꾸지 않습니다. CLI `init`의 독립 플래그(`--claude-md`, `--agents-md`, `--claude-mcp`, `--codex-mcp`)와 언어 옵션, 기존 지침 언어 보존은 유지합니다. 이전(v1.6.0) 기본값 "AGENTS.md 한국어 + Codex MCP만"은 더 이상 유효하지 않습니다.
 - **Claude 지침 파일 위치(WORK-0122)**: `write_claude_md`는 `<repo>/.claude/CLAUDE.md`에 씁니다(Codex의 `.codex/`처럼 폴더로 모음. Claude Code는 `./CLAUDE.md`와 `./.claude/CLAUDE.md`를 모두 읽습니다). 루트 `CLAUDE.md`에 이미 agentmon 구역(관리 마커 또는 정확한 구버전)이 있으면 그 자리에서 갱신하고 `.claude/`에 복사본을 만들지 않습니다(두 파일이 모두 로드되면 지침이 중복). 루트 `CLAUDE.md`가 사용자 소유(구역 없음)면 손대지 않고 `.claude/CLAUDE.md`를 새로 만듭니다. `AGENTS.md`는 Codex가 루트에서만 읽으므로 루트에 둡니다. `.mcp.json`도 루트에 남기는 이유는 [[mcp-client-registration]]에 있습니다.
@@ -35,4 +35,4 @@ refs: [WORK-0111, WORK-0113, WORK-0115, WORK-0116, WORK-0117, WORK-0118, WORK-01
 
 프로젝트와 폴더를 끌어 정리하고 순서를 저장하는 기능을 1.6.0에 공개했습니다. 사이드바와 프로젝트 화면에서 같은 순서를 사용하며, 실제 프로젝트 파일의 위치는 바뀌지 않습니다.
 
-2026년 9월 13일부터 새 프로젝트를 만들 때 지침 파일과 MCP 연결은 "추가 / 추가 안 함" 하나로 고릅니다. 추가를 고르면 Claude와 Codex용 파일이 모두 만들어지고, Claude용 지침 파일은 Codex처럼 전용 폴더(.claude) 안에 들어갑니다. 기존 프로젝트에서 우클릭할 때도 한 번에 두 도구를 처리합니다. 이 변경은 아직 공개 배포 전입니다.
+2026년 9월 13일부터 새 프로젝트를 만들 때 지침 파일과 MCP 연결은 "추가 / 추가 안 함" 하나로 고릅니다. 추가를 고르면 Claude와 Codex용 파일이 모두 만들어지고, Claude용 지침 파일은 Codex처럼 전용 폴더(.claude) 안에 들어갑니다. 기존 프로젝트에서 우클릭할 때도 한 번에 두 도구를 처리합니다. 이 변경은 1.7.0에 포함됐습니다.

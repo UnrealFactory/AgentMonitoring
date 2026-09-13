@@ -2,16 +2,16 @@
 name: autostart-at-login
 title: "로그인 시 자동 실행 — Run 키, --autostart 숨김 시작, 배포 빌드 첫 실행 기본값"
 type: memory
-description: "WORK-0123: tauri-plugin-autostart로 HKCU Run 키에 --autostart를 등록하고, 그렇게 뜬 창은 트레이에만 둡니다. 배포 빌드 첫 실행은 기본 켬, 디버그 빌드는 기본 끔·표식 없음. check:autostart가 실제 데스크톱 앱에서 검증합니다."
+description: "v1.7.0: tauri-plugin-autostart로 HKCU Run 키에 --autostart를 등록하고, 그렇게 뜬 창은 트레이에만 둡니다. 배포 빌드 첫 실행은 기본 켬, 디버그 빌드는 기본 끔·표식 없음. check:autostart가 실제 데스크톱 앱에서 검증합니다."
 agent: fable-unified-scaffold
-updated_by: null
+updated_by: fable-unified-scaffold
 created: 2026-09-13T11:40:58Z
-updated: 2026-09-13T11:40:58Z
+updated: 2026-09-13T11:48:14Z
 tags: []
 refs: [WORK-0123, verify-desktop-via-cdp, handoff-v1-release]
 ---
 
-2026-09-13 WORK-0123에서 추가한 로그인 시 자동 실행의 현재 동작입니다(배포 전 소스).
+2026-09-13 WORK-0123에서 추가한 로그인 시 자동 실행의 현재 동작입니다. v1.7.0(2026-09-13)에 포함됐습니다.
 
 - **등록 방식**: tauri-plugin-autostart가 Windows HKCU `Software\Microsoft\Windows\CurrentVersion\Run`에 `AgentMonitoring = "<exe>" --autostart` 값을 씁니다. macOS는 LaunchAgent 방식으로 설정했지만 검증하지 않았습니다.
 - **`--autostart`로 뜰 때는 창을 숨깁니다**: `tauri.conf.json`의 창이 `visible: false`로 만들어지고, setup에서 `--autostart` 인자가 없을 때만 `show_main_window`를 호출합니다. 트레이 아이콘을 만들지 못한 경우에는 인자와 무관하게 창을 보여 줍니다(숨긴 창 + 트레이 없음 = 되돌릴 수 없음). 단일 인스턴스 콜백과 트레이 클릭은 기존처럼 창을 띄웁니다.
@@ -22,7 +22,7 @@ refs: [WORK-0123, verify-desktop-via-cdp, handoff-v1-release]
 
 ## For humans
 
-컴퓨터에 로그인하면 AgentMonitoring이 스스로 켜지도록 했습니다. 이때는 창을 띄우지 않고 화면 오른쪽 아래 트레이에만 자리 잡으며, 트레이 아이콘을 누르면 창이 열립니다.
+1.7.0(2026년 9월 13일 공개)부터 컴퓨터에 로그인하면 AgentMonitoring이 스스로 켜집니다. 이때는 창을 띄우지 않고 화면 오른쪽 아래 트레이에만 자리 잡으며, 트레이 아이콘을 누르면 창이 열립니다.
 
 설치해서 쓰는 앱은 처음 실행할 때 자동 실행을 한 번 켜 두고, 그 뒤로는 사용자가 사이드바 아래 "시작 시 자동 실행" 스위치로 정한 대로 둡니다. 개발용으로 실행할 때는 자동으로 켜지 않습니다.
 

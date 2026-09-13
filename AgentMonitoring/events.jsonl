@@ -939,3 +939,9 @@
 {"ts":"2026-09-13T11:40:10Z","actor":"fable-unified-scaffold","type":"work_done","ref":"WORK-0123","summary":"Windows 로그인 시 자동 실행을 추가했습니다."}
 {"ts":"2026-09-13T11:40:58Z","actor":"fable-unified-scaffold","type":"note_created","ref":"autostart-at-login","summary":"로그인 시 자동 실행 — Run 키, --autostart 숨김 시작, 배포 빌드 첫 실행 기본값"}
 {"ts":"2026-09-13T11:42:57Z","actor":"fable-unified-scaffold","type":"work_started","ref":"WORK-0124","summary":"v1.7.0 배포 — 지침·MCP 통합 버튼과 로그인 시 자동 실행 공개"}
+{"ts":"2026-09-13T11:47:21Z","actor":"fable-unified-scaffold","type":"note_updated","ref":"handoff-v1-release","summary":"Updated note handoff-v1-release: title, description, refs, body, human area"}
+{"ts":"2026-09-13T11:47:32Z","actor":"fable-unified-scaffold","type":"note_updated","ref":"start-here","summary":"Updated note start-here: description, body, human area"}
+{"ts":"2026-09-13T11:47:42Z","actor":"fable-unified-scaffold","type":"note_updated","ref":"project-organization-and-create-defaults","summary":"Updated note project-organization-and-create-defaults: description, body, human area"}
+{"ts":"2026-09-13T11:47:53Z","actor":"fable-unified-scaffold","type":"work_done","ref":"WORK-0124","summary":"v1.7.0을 공개했습니다. 기능 커밋 b6401846dfb99d557e63fcb51d4e8de096799cc1, 주석 태그 v1.7.0(main과 원자적 푸시, 원격 태그가 같은 커밋을 가리킴 확인), 릴리스…"}
+{"ts":"2026-09-13T11:48:14Z","actor":"fable-unified-scaffold","type":"note_updated","ref":"mcp-client-registration","summary":"Updated note mcp-client-registration: body, human area"}
+{"ts":"2026-09-13T11:48:14Z","actor":"fable-unified-scaffold","type":"note_updated","ref":"autostart-at-login","summary":"Updated note autostart-at-login: description, body, human area"}
